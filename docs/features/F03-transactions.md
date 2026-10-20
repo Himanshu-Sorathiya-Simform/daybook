@@ -9,12 +9,12 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 - **The list:** found again in an infinite list whose filters live in the URL. A header shows Count, In, Out and To Goals for exactly the rows the filter selects.
 - **Pending changes:** changes not yet confirmed show as pending and never enter confirmed totals.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M1, with parts in M2 and M5 (section 2) |
-| Plan | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`) |
+| Item       | Value                                                                                                                                                                                                                                                   |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
+| Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270 |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270                                                                                                      |
 
 ## 1. User stories
 
@@ -29,8 +29,8 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
+| In                                                                                                                                                                                                                                                                                                                                  | Stretch (M8)                                                | Out                                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | The entry dialog (create, edit, duplicate); the infinite, virtualized list; filters in the URL; sort; header totals; payee suggestions; delete with Undo; deep links; pending, rejected and conflict display; how Subscription charges and demo rows behave in the list; the server rules for Goal Transactions; keyboard shortcuts | Bulk delete with one Undo (D-85, `transactions.bulkDelete`) | Import (D-86); attachments and receipts; split Transactions (D-22); tags (D-23); accounts and transfers (D-24); multi-currency; recurring income (D-72); linking a refund to its original expense; changing a charge's date; per-day totals in the list; export (F01, Stretch) |
 
 **Milestones (D-241).** Each acceptance criterion names its milestone when it is not M1.
@@ -46,58 +46,58 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 
 **Transaction**
 
-| Field | Meaning | Required | Rules | Example |
-| --- | --- | --- | --- | --- |
-| `id` | UUIDv7 | Yes | Client-generated for creates (ID-1) | `0192f0c4-…` |
-| `type` | TXN-1 | Yes | Changes per BR-F03-02 | `expense` |
-| `amountMinor` | Positive integer, minor units | Yes | MON-1, MON-5; BR-F03-03 | `185000` |
-| `occurredAt` | UTC instant | Yes | Minute precision; BR-F03-06 to BR-F03-11 | `2026-09-03T07:50:00Z` |
-| `occurredOn` | Local date fixed at entry | Yes | TIME-2; BR-F03-10 | `2026-09-03` |
-| `category` | Category key | Income, expense, refund | TXN-3 | `food` |
-| `goalId` | Goal | Goal types | TXN-3; BR-F03-13 | |
-| `payee` | Counterparty | Income, expense, refund | TXN-4; 1 to 80 | `Swiggy` |
-| `description` | Short text under the payee | No | Up to 120 | `Monthly groceries` |
-| `note` | Longer text | No | Up to 500; line breaks allowed | |
-| `source` | `manual` or `subscription` | System | TXN-8; never sent by the client | `manual` |
-| `demo` | Loaded as demo data | System | TXN-8; F15 | `false` |
-| `subscriptionId`, `dueOn` | The charge's Subscription and due date | System | Charges only (F05) | |
-| `edited` | Changed by the user since it was created | System | Charges only: set true by the user's first edit and never reset. F05 never reprices or deletes an edited charge | `false` |
-| `version` | P2 | System | API-4 | `1` |
-| `createdAt` | When it was first recorded | Yes, on create | Client-set, at most 5 minutes after `ctx.now` (TIME-7). The recording date is this instant in the profile zone | |
-| `updatedAt` | P2 | System | | |
+| Field                     | Meaning                                  | Required                | Rules                                                                                                           | Example                |
+| ------------------------- | ---------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| `id`                      | UUIDv7                                   | Yes                     | Client-generated for creates (ID-1)                                                                             | `0192f0c4-…`           |
+| `type`                    | TXN-1                                    | Yes                     | Changes per BR-F03-02                                                                                           | `expense`              |
+| `amountMinor`             | Positive integer, minor units            | Yes                     | MON-1, MON-5; BR-F03-03                                                                                         | `185000`               |
+| `occurredAt`              | UTC instant                              | Yes                     | Minute precision; BR-F03-06 to BR-F03-11                                                                        | `2026-09-03T07:50:00Z` |
+| `occurredOn`              | Local date fixed at entry                | Yes                     | TIME-2; BR-F03-10                                                                                               | `2026-09-03`           |
+| `category`                | Category key                             | Income, expense, refund | TXN-3                                                                                                           | `food`                 |
+| `goalId`                  | Goal                                     | Goal types              | TXN-3; BR-F03-13                                                                                                |                        |
+| `payee`                   | Counterparty                             | Income, expense, refund | TXN-4; 1 to 80                                                                                                  | `Swiggy`               |
+| `description`             | Short text under the payee               | No                      | Up to 120                                                                                                       | `Monthly groceries`    |
+| `note`                    | Longer text                              | No                      | Up to 500; line breaks allowed                                                                                  |                        |
+| `source`                  | `manual` or `subscription`               | System                  | TXN-8; never sent by the client                                                                                 | `manual`               |
+| `demo`                    | Loaded as demo data                      | System                  | TXN-8; F15                                                                                                      | `false`                |
+| `subscriptionId`, `dueOn` | The charge's Subscription and due date   | System                  | Charges only (F05)                                                                                              |                        |
+| `edited`                  | Changed by the user since it was created | System                  | Charges only: set true by the user's first edit and never reset. F05 never reprices or deletes an edited charge | `false`                |
+| `version`                 | P2                                       | System                  | API-4                                                                                                           | `1`                    |
+| `createdAt`               | When it was first recorded               | Yes, on create          | Client-set, at most 5 minutes after `ctx.now` (TIME-7). The recording date is this instant in the profile zone  |                        |
+| `updatedAt`               | P2                                       | System                  |                                                                                                                 |                        |
 
 Requests also carry `currency` (BR-F03-05). Responses add `goal: { id, name, icon, color }` to Goal Transactions and `subscription: { id, name }` to linked charges, so the list needs no extra lookups.
 
 **Rules by type**
 
-| Type | Category from | Goal | Payee | Header column | Amount shown |
-| --- | --- | --- | --- | --- | --- |
-| `income` | Income categories (CAT-3) | No | Required | In | +85,000.00 |
-| `expense` | Expense categories (CAT-2) | No | Required | Out, added | −1,850.00 |
-| `refund` | Expense categories | No | Required | Out, subtracted | +1,500.00 |
-| `goal_contribution` | None | Required | None | To Goals, added | −5,000.00 |
-| `goal_withdrawal` | None | Required | None | To Goals, subtracted | +1,000.00 |
+| Type                | Category from              | Goal     | Payee    | Header column        | Amount shown |
+| ------------------- | -------------------------- | -------- | -------- | -------------------- | ------------ |
+| `income`            | Income categories (CAT-3)  | No       | Required | In                   | +85,000.00   |
+| `expense`           | Expense categories (CAT-2) | No       | Required | Out, added           | −1,850.00    |
+| `refund`            | Expense categories         | No       | Required | Out, subtracted      | +1,500.00    |
+| `goal_contribution` | None                       | Required | None     | To Goals, added      | −5,000.00    |
+| `goal_withdrawal`   | None                       | Required | None     | To Goals, subtracted | +1,000.00    |
 
 A plus sign means money becomes free to spend: income, a refund, money back from a Goal. A minus sign means it stops being free (D-231). Positive amounts also use the positive color token, but the sign always carries the meaning, never the color alone.
 
 **Filter object.** Root section 6.9, plus two interface parameters that are not filters and never enter query keys (D-229):
 
-| Parameter | Effect |
-| --- | --- |
+| Parameter  | Effect                                             |
+| ---------- | -------------------------------------------------- |
 | `txn=<id>` | Opens that Transaction in the dialog over the list |
-| `new=1` | Opens an empty entry dialog |
+| `new=1`    | Opens an empty entry dialog                        |
 
 **Date presets (D-227).** Each preset writes explicit dates into the URL. Examples are for today, 2026-11-02.
 
-| Preset | `from` to `to` | Example |
-| --- | --- | --- |
-| All time (default) | No dates | |
-| This month | First to last day of the current month | 2026-11-01 to 2026-11-30 |
-| Last month | The previous calendar month | 2026-10-01 to 2026-10-31 |
-| Last 3 months | The current month and the two before | 2026-09-01 to 2026-11-30 |
-| Year to date | 1 January to today | 2026-01-01 to 2026-11-02 |
-| Last 12 months | The current month and the 11 before | 2025-12-01 to 2026-11-30 |
-| Custom | Any inclusive range | |
+| Preset             | `from` to `to`                         | Example                  |
+| ------------------ | -------------------------------------- | ------------------------ |
+| All time (default) | No dates                               |                          |
+| This month         | First to last day of the current month | 2026-11-01 to 2026-11-30 |
+| Last month         | The previous calendar month            | 2026-10-01 to 2026-10-31 |
+| Last 3 months      | The current month and the two before   | 2026-09-01 to 2026-11-30 |
+| Year to date       | 1 January to today                     | 2026-01-01 to 2026-11-02 |
+| Last 12 months     | The current month and the 11 before    | 2025-12-01 to 2026-11-30 |
+| Custom             | Any inclusive range                    |                          |
 
 **Cursor.** Opaque base64url JSON holding the sort, the direction of travel, and the boundary row's sort key and id. A cursor used with a different sort, or one that fails to decode, gets 400 `bad_request`.
 
@@ -115,11 +115,11 @@ A plus sign means money becomes free to spend: income, a refund, money back from
 
 - **BR-F03-03** `amountMinor` is an integer from 1 to the MON-5 maximum for the profile currency:
 
-    | Currency | Maximum `amountMinor` | Shown as |
-    | --- | --- | --- |
-    | INR, USD, EUR, GBP | 99,999,999,999 | 999,999,999.99 |
-    | JPY | 999,999,999 | 999,999,999 |
-    | KWD | 999,999,999,999 | 999,999,999.999 |
+    | Currency           | Maximum `amountMinor` | Shown as        |
+    | ------------------ | --------------------- | --------------- |
+    | INR, USD, EUR, GBP | 99,999,999,999        | 999,999,999.99  |
+    | JPY                | 999,999,999           | 999,999,999     |
+    | KWD                | 999,999,999,999       | 999,999,999.999 |
 
 - **BR-F03-04** The amount field takes major units in the user's own format (F02, BR-F02-18; D-214, D-230):
     - **The signs:** the decimal sign is the `decimal` part of `Intl.NumberFormat(numberLocale, { style: 'currency', currency }).formatToParts(…)`. The grouping signs are the `group` parts of that formatter and of the plain-number formatter; Austria has two. A space group accepts U+0020, U+00A0 and U+202F alike, and `'` and `’` count as the same sign.
@@ -179,6 +179,7 @@ A plus sign means money becomes free to spend: income, a refund, money back from
     3. Refuses with 422 `validation_failed` on `amountMinor` if any would be negative.
 
     Two concurrent withdrawals therefore cannot both pass.
+
 - **BR-F03-15** A contribution larger than all-time unallocated savings shows a warning in the dialog and is still allowed (D-102). The figure comes from F06's Goals summary. Golden: more than 89,363.00 warns; exactly 89,363.00 does not.
 
 **Charges and demo rows**
@@ -193,6 +194,7 @@ A plus sign means money becomes free to spend: income, a refund, money back from
     - **An unlinked charge:** a charge whose Subscription was deleted is deleted without a tombstone or lock.
     - **The charge is already gone (404):** a charge delete carries the cached `{ subscriptionId, dueOn }` as a hint, the one exception to BR-F03-19. If that Subscription still exists and the date has no charge, the handler writes the tombstone, commits, and answers 204, so the delete counts as done (D-239). A skip is therefore never lost when an end date removed the charge first and was later moved back.
     - **The Subscription is deleted meanwhile:** if the Subscription is gone when step 1 locks it, the handler re-reads the charge. Now unlinked, it is deleted without a tombstone. If it is gone too (F05, BR-F05-14 deleted it), the delete counts as done.
+
 - **BR-F03-18** Demo rows are edited and deleted like other rows, apart from BR-F03-11 (date and time) and BR-F03-13 (no move to a non-demo Goal), and stay demo rows after an edit (F15).
 - **BR-F03-19** The API never accepts `source`, `demo`, `edited`, `subscriptionId` or `dueOn` from the client (a charge delete's hint is the one exception, BR-F03-17), and never accepts `createdAt` on an edit, so the window's anchor cannot move. Every create through this API has source `manual` and `demo` false.
 
@@ -210,6 +212,7 @@ A plus sign means money becomes free to spend: income, a refund, money back from
     - **Keep theirs:** discards the change.
 
     Online saves and queued replays use the same view.
+
 - **BR-F03-25** A 404 on an edit shows "This Transaction was deleted on another device." and the row leaves the list. A 404 on a delete counts as done, with no message (D-239).
 
 **Deleting**
@@ -242,6 +245,7 @@ A plus sign means money becomes free to spend: income, a refund, money back from
     - **Amount sort:** `amountMinor`, then `occurredOn`, `occurredAt` and `id` in the same direction.
 
     Day groups therefore never interleave, even after a time-zone change. Cursors stay stable when rows are inserted (API-7).
+
 - **BR-F03-30** Pages hold 50 rows. The list behaves like this (D-36, D-171):
     - it keeps at most 5 pages in memory (`maxPages`) and reloads pages trimmed from the top through `prevCursor`;
     - it is a virtualized React Aria GridList;
@@ -264,6 +268,7 @@ A plus sign means money becomes free to spend: income, a refund, money back from
     - defaults omitted (`sort=date`, `dir=desc`, no dates for all time).
 
     The normalized object is the query key, so equivalent URLs share one cache entry.
+
 - **BR-F03-34** An invalid parameter is dropped and the page says "Some filters in this link weren't valid and were removed." (FIL-5). Invalid means any of:
     - an unknown type or category;
     - a malformed date;
@@ -275,12 +280,14 @@ A plus sign means money becomes free to spend: income, a refund, money back from
     - an unknown `sort` or `dir`.
 
     A well-formed Goal or Subscription id that is not the user's simply matches no rows.
+
 - **BR-F03-35** Text search (FIL-3):
     - **Text:** `q` matches the expression `coalesce(payee, '') || U+001F || coalesce(description, '') || U+001F || coalesce(note, '')`, case-insensitively, as a substring, through one trigram index on that expression. Stored text never holds U+001F (BR-F03-12), and `q` may not contain control characters, so a match never spans two fields. `%`, `_` and `\` in `q` match literally.
     - **Numbers:** a numeric `q` also matches `amountMinor` exactly. A numeric `q` is one that the amount field would accept (BR-F03-04): digits, commas only in a valid grouping, one `.`, and no more decimals than the currency allows.
     - **Short numbers:** a numeric `q` under 3 characters matches amounts only.
 
     Golden checks D, G and H.
+
 - **BR-F03-36** `min` and `max` are inclusive bounds on `amountMinor`, given in major units with `.` (root 6.9). They apply to every type.
 - **BR-F03-37** A category filter excludes Goal rows (FIL-6), and the filter control says so: "Category filters hide Goal Transactions." A Goal filter shows only that Goal's rows. A Subscription filter (`sub`, D-255) shows only that Subscription's charges; F05's View charges opens it, and its chip reads "Netflix charges".
 - **BR-F03-38** The text box commits its draft 300 ms after typing stops (FIL-4). Enter, or clearing the box, commits at once.
@@ -307,6 +314,7 @@ A plus sign means money becomes free to spend: income, a refund, money back from
     - each with its last type and last category.
 
     The answer is persisted for offline use (STATE-3).
+
 - **BR-F03-45** The payee field filters that list on the device (D-225). From the first character it suggests up to 8 payees that start with the typed text, or that have a word starting with it, case-insensitively. Choosing one fills the payee only.
     - **The category chip:** when that payee's last category is valid for the current type, a chip "Last time: Food" appears. Tapping it sets the category.
     - **Never automatic:** the category is never filled in on its own (D-89).
@@ -335,16 +343,16 @@ A plus sign means money becomes free to spend: income, a refund, money back from
 
 - **BR-F03-52** Shortcuts run through the one Hotkeys wrapper (D-171) and do nothing while a text field has focus.
 
-    | Key | Where | Does |
-    | --- | --- | --- |
-    | `N` | Any logged-in page | Opens a new Transaction |
-    | `/` | Transactions | Focuses the search box |
-    | Ctrl or Cmd+Enter | Dialog | Saves |
-    | Esc | Dialog | Closes, with BR-F03-49 |
-    | Arrow keys | List | Move between rows (GridList) |
-    | Enter | List | Opens the row |
-    | Delete or Backspace | List | Deletes the row, with Undo |
-    | `D` | List | Duplicates the row |
+    | Key                 | Where              | Does                         |
+    | ------------------- | ------------------ | ---------------------------- |
+    | `N`                 | Any logged-in page | Opens a new Transaction      |
+    | `/`                 | Transactions       | Focuses the search box       |
+    | Ctrl or Cmd+Enter   | Dialog             | Saves                        |
+    | Esc                 | Dialog             | Closes, with BR-F03-49       |
+    | Arrow keys          | List               | Move between rows (GridList) |
+    | Enter               | List               | Opens the row                |
+    | Delete or Backspace | List               | Deletes the row, with Undo   |
+    | `D`                 | List               | Duplicates the row           |
 
 **Deep links**
 
@@ -369,43 +377,48 @@ To Goals  = Σ goal_contribution − Σ goal_withdrawal
 ```
 
 Every check in [03-golden-dataset.md, Transactions list checks](../03-golden-dataset.md#transactions-list-checks) must hold. For example:
+
 - **Check A**, `from=2026-10-01&to=2026-10-31`, gives 14 rows, In 85,000.00, Out 31,168.00 and To Goals 7,000.00.
 - **Check I** gives Out 18,420.00, with the pending P1 shown as "+300.00 pending" beside Out.
 
 **Amount parsing** (locale per F02)
 
-| Typed | Profile (`numberLocale`, currency) | `amountMinor` |
-| --- | --- | --- |
-| `1,240.50` | IN (`hi-IN-u-nu-latn`, INR) | 124050 |
-| `1240.5` | IN | 124050 |
-| `1,23,456.50` | IN | 12345650 |
-| `1.234,50` | DE (`de-DE-u-nu-latn`, EUR) | 123450 |
-| `12,5` | DE | 1250 |
-| `12.50` | DE | refused: Use , for decimals, like 12,50. |
-| `12,50` | US (`en-US-u-nu-latn`, USD) | refused: Use . for decimals, like 12.50. |
-| `1240` | JP (`ja-JP-u-nu-latn`, JPY) | 1240 |
-| `1240.5` | JP | refused: no decimals |
-| `1.25` | KW (`en-KW-u-nu-latn`, KWD) | 1250 |
-| `0.004` | KW | 4 |
+| Typed         | Profile (`numberLocale`, currency) | `amountMinor`                            |
+| ------------- | ---------------------------------- | ---------------------------------------- |
+| `1,240.50`    | IN (`hi-IN-u-nu-latn`, INR)        | 124050                                   |
+| `1240.5`      | IN                                 | 124050                                   |
+| `1,23,456.50` | IN                                 | 12345650                                 |
+| `1.234,50`    | DE (`de-DE-u-nu-latn`, EUR)        | 123450                                   |
+| `12,5`        | DE                                 | 1250                                     |
+| `12.50`       | DE                                 | refused: Use , for decimals, like 12,50. |
+| `12,50`       | US (`en-US-u-nu-latn`, USD)        | refused: Use . for decimals, like 12.50. |
+| `1240`        | JP (`ja-JP-u-nu-latn`, JPY)        | 1240                                     |
+| `1240.5`      | JP                                 | refused: no decimals                     |
+| `1.25`        | KW (`en-KW-u-nu-latn`, KWD)        | 1250                                     |
+| `0.004`       | KW                                 | 4                                        |
 
 **Entry window.** Recorded on 2026-10-16, the allowed dates are 2026-10-06 to 2026-10-16. An edit two months later can still move the date only within that range.
 
 **`occurredOn` check** (BR-F03-10). Row 26 has `occurredAt` 2026-10-31T19:00:00Z.
+
 - Minus 12 hours is 07:00 UTC on 31 October; plus 14 hours is 09:00 UTC on 1 November.
 - So 2026-10-31 and 2026-11-01 are both accepted, and the stored 2026-11-01 passes.
 
 **Goal floor** (BR-F03-14)
+
 - Vacation's progress is 5,000.00, so a 6,000.00 withdrawal is refused: "You can withdraw at most 5,000.00 from Vacation."
 - Deleting row 9 (a 3,000.00 contribution) is allowed: progress goes from 5,000.00 to 2,000.00.
 - Then deleting row 22 as well would leave −1,000.00, so it is refused.
 
 **Order.** The golden order checks hold:
+
 - Newest first gives P1 (in the waiting group), then #26, #27, #25, #24.
 - October by amount, largest first, starts with #13 and #12, as listed in the golden file.
 
 ## 6. Screens and states
 
 **`/transactions`**, top to bottom:
+
 - **Search box and filter controls.**
 - **Active-filter chips** with Clear all.
 - **Header:** Count · In · Out · To Goals, with pending annotations, and an "as of" time offline.
@@ -420,16 +433,16 @@ On desktop, each row also has a menu (⋯) with Edit, Duplicate and Delete. On p
 
 **Conflict view.** BR-F03-24.
 
-| State | List | Header | Dialog |
-| --- | --- | --- | --- |
-| Loading | Skeleton rows | Skeleton figures | Goal picker and payee suggestions use cached data at once |
-| Empty, no Transactions at all | "No Transactions yet." with Add Transaction, plus Load demo data while the account is empty (F15, BR-F15-01) | Zeros | n/a |
-| Empty, filtered | "No Transactions match these filters." with Clear filters | Zeros | n/a |
-| Error | "Transactions could not be loaded." with Retry | "Totals could not be loaded." with Retry | Field messages, or "Your change wasn't saved. Try again." |
-| Offline | Cached first pages of the default filter. For any other filter: "You're offline. Filters need a connection." with Clear filters | Cached figures with "as of" | Works; saving queues the change |
-| Pending | "Waiting to sync" group; "Pending sync" badges | Pending annotations | n/a |
-| Locked (Premium) | n/a | n/a | n/a |
-| Read-only | n/a | n/a | Charge fields (BR-F03-16); read-only Goals (BR-F03-50) |
+| State                         | List                                                                                                                            | Header                                   | Dialog                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------------- |
+| Loading                       | Skeleton rows                                                                                                                   | Skeleton figures                         | Goal picker and payee suggestions use cached data at once |
+| Empty, no Transactions at all | "No Transactions yet." with Add Transaction, plus Load demo data while the account is empty (F15, BR-F15-01)                    | Zeros                                    | n/a                                                       |
+| Empty, filtered               | "No Transactions match these filters." with Clear filters                                                                       | Zeros                                    | n/a                                                       |
+| Error                         | "Transactions could not be loaded." with Retry                                                                                  | "Totals could not be loaded." with Retry | Field messages, or "Your change wasn't saved. Try again." |
+| Offline                       | Cached first pages of the default filter. For any other filter: "You're offline. Filters need a connection." with Clear filters | Cached figures with "as of"              | Works; saving queues the change                           |
+| Pending                       | "Waiting to sync" group; "Pending sync" badges                                                                                  | Pending annotations                      | n/a                                                       |
+| Locked (Premium)              | n/a                                                                                                                             | n/a                                      | n/a                                                       |
+| Read-only                     | n/a                                                                                                                             | n/a                                      | Charge fields (BR-F03-16); read-only Goals (BR-F03-50)    |
 
 ## 7. Flows
 
@@ -492,37 +505,37 @@ On desktop, each row also has a menu (⋯) with Edit, Duplicate and Delete. On p
 
 ## 8. Validation and messages
 
-| Field or action | Rule | Message shown |
-| --- | --- | --- |
-| Amount | Required | Enter an amount. |
-| Amount | Not a number | Enter a number, like 1,240.50. (The example is formatted with the user's `numberLocale`) |
-| Amount | The non-decimal mark outside a digit grouping | Use . for decimals, like 12.50. (Comma-decimal locales: Use , for decimals, like 12,50.) |
-| Goal | Demo Transaction to a non-demo Goal | Demo Transactions can only move between demo Goals. |
-| Delete | Network failure before M5 | Couldn't delete. Check your connection and try again. |
-| Save | Offline before M5 | You are offline. Connect to save. |
-| Amount | Above zero | Enter an amount above zero. |
-| Amount | Too many decimals | Use at most 2 decimal places. (JPY: Yen amounts have no decimals. KWD: Use at most 3 decimal places.) |
-| Amount | Above MON-5 | The largest amount is 999,999,999.99. (Formatted for the currency) |
-| Payee | Required (income, expense, refund) | Enter who you paid, or who paid you. |
-| Payee | Length | Use 80 characters or fewer. |
-| Description | Length | Use 120 characters or fewer. |
-| Note | Length | Use 500 characters or fewer. |
-| Any text | Control characters | Remove unsupported characters. |
-| Category | Required | Choose a category. |
-| Goal | Required | Choose a Goal. |
-| Date | `date_out_of_window` on create | Choose today or one of the 10 days before. |
-| Date | `date_out_of_window` on edit | Choose a date from 6 Oct to 16 Oct. (The row's own window) |
-| Time | In the future | The time can't be in the future. |
-| Goal | `goal_read_only` | Vacation is completed, so its Transactions can't be changed. (Archived: Vacation is archived, so its Transactions can't be changed. Locked: Vacation is locked. Upgrade, or choose it as one of your 3 editable Goals.) |
-| Withdrawal | Above progress | You can withdraw at most 5,000.00 from Vacation. |
-| Edit or delete | Would take a Goal below zero | This would take Vacation below zero. Change or remove a withdrawal first. |
-| Contribution | Above all-time unallocated (warning, not an error) | This is more than your unallocated savings of 89,363.00. You can still save it. |
-| Save | `currency_mismatch` | Not saved: your currency changed after this was made. |
-| Edit or delete | `not_found` | This Transaction was deleted on another device. |
-| Search box | Under 3 characters, not numeric | Type at least 3 characters, or an amount. (No request is sent) |
-| Link | Invalid parameters | Some filters in this link weren't valid and were removed. |
-| Save | Hidden by the filter | Saved. It's hidden by your filters. |
-| Deep link | `txn` not found | We couldn't find that Transaction. |
+| Field or action | Rule                                               | Message shown                                                                                                                                                                                                           |
+| --------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Amount          | Required                                           | Enter an amount.                                                                                                                                                                                                        |
+| Amount          | Not a number                                       | Enter a number, like 1,240.50. (The example is formatted with the user's `numberLocale`)                                                                                                                                |
+| Amount          | The non-decimal mark outside a digit grouping      | Use . for decimals, like 12.50. (Comma-decimal locales: Use , for decimals, like 12,50.)                                                                                                                                |
+| Goal            | Demo Transaction to a non-demo Goal                | Demo Transactions can only move between demo Goals.                                                                                                                                                                     |
+| Delete          | Network failure before M5                          | Couldn't delete. Check your connection and try again.                                                                                                                                                                   |
+| Save            | Offline before M5                                  | You are offline. Connect to save.                                                                                                                                                                                       |
+| Amount          | Above zero                                         | Enter an amount above zero.                                                                                                                                                                                             |
+| Amount          | Too many decimals                                  | Use at most 2 decimal places. (JPY: Yen amounts have no decimals. KWD: Use at most 3 decimal places.)                                                                                                                   |
+| Amount          | Above MON-5                                        | The largest amount is 999,999,999.99. (Formatted for the currency)                                                                                                                                                      |
+| Payee           | Required (income, expense, refund)                 | Enter who you paid, or who paid you.                                                                                                                                                                                    |
+| Payee           | Length                                             | Use 80 characters or fewer.                                                                                                                                                                                             |
+| Description     | Length                                             | Use 120 characters or fewer.                                                                                                                                                                                            |
+| Note            | Length                                             | Use 500 characters or fewer.                                                                                                                                                                                            |
+| Any text        | Control characters                                 | Remove unsupported characters.                                                                                                                                                                                          |
+| Category        | Required                                           | Choose a category.                                                                                                                                                                                                      |
+| Goal            | Required                                           | Choose a Goal.                                                                                                                                                                                                          |
+| Date            | `date_out_of_window` on create                     | Choose today or one of the 10 days before.                                                                                                                                                                              |
+| Date            | `date_out_of_window` on edit                       | Choose a date from 6 Oct to 16 Oct. (The row's own window)                                                                                                                                                              |
+| Time            | In the future                                      | The time can't be in the future.                                                                                                                                                                                        |
+| Goal            | `goal_read_only`                                   | Vacation is completed, so its Transactions can't be changed. (Archived: Vacation is archived, so its Transactions can't be changed. Locked: Vacation is locked. Upgrade, or choose it as one of your 3 editable Goals.) |
+| Withdrawal      | Above progress                                     | You can withdraw at most 5,000.00 from Vacation.                                                                                                                                                                        |
+| Edit or delete  | Would take a Goal below zero                       | This would take Vacation below zero. Change or remove a withdrawal first.                                                                                                                                               |
+| Contribution    | Above all-time unallocated (warning, not an error) | This is more than your unallocated savings of 89,363.00. You can still save it.                                                                                                                                         |
+| Save            | `currency_mismatch`                                | Not saved: your currency changed after this was made.                                                                                                                                                                   |
+| Edit or delete  | `not_found`                                        | This Transaction was deleted on another device.                                                                                                                                                                         |
+| Search box      | Under 3 characters, not numeric                    | Type at least 3 characters, or an amount. (No request is sent)                                                                                                                                                          |
+| Link            | Invalid parameters                                 | Some filters in this link weren't valid and were removed.                                                                                                                                                               |
+| Save            | Hidden by the filter                               | Saved. It's hidden by your filters.                                                                                                                                                                                     |
+| Deep link       | `txn` not found                                    | We couldn't find that Transaction.                                                                                                                                                                                      |
 
 ## 9. Plan gating
 
@@ -542,26 +555,27 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
 
 ## 11. Server surface
 
-| Endpoint | Method | Input | Output | Errors | Idempotency and versioning |
-| --- | --- | --- | --- | --- | --- |
-| `/api/transactions` | GET | Filter parameters (root 6.9), `sort`, `dir`, `limit` (default 50, maximum 100), `cursor` | `{ items, nextCursor, prevCursor, currency }` | 400, 401, 403 `profile_required` | Read; repeatable read (P2) |
-| `/api/transactions/summary` | GET | Filter parameters | `{ count, incomeMinor, spendingMinor, toGoalsMinor, currency }` | 400, 401, 403 | Read; same filter function as the list |
-| `/api/transactions/[id]` | GET | none | The row | 401, 403, 404 | Read |
-| `/api/transactions` | POST | `{ id, type, amountMinor, currency, occurredAt, occurredOn, createdAt, category or goalId, payee, description, note }` | 201 with the row, or 200 with the existing row | 400, 401, 403, 409 `id_conflict`, 422 `validation_failed`, `date_out_of_window`, `parent_missing`, `goal_read_only`, `currency_mismatch` | `Idempotency-Key` required |
-| `/api/transactions/[id]` | PATCH | Changed fields; `currency` when `amountMinor` is sent | 200 with the row | 400, 401, 403, 404, 409 `version_conflict`, 422 as for POST | `Idempotency-Key` and `If-Match` required |
-| `/api/transactions/[id]` | DELETE | `{}`; for a charge, `{ subscriptionId, dueOn }` as a hint (BR-F03-17) | 204 | 400, 401, 403, 404, 409 `version_conflict`, 422 `goal_read_only` or `validation_failed` (Goal floor) | `Idempotency-Key` and `If-Match` required |
-| `/api/payees` | GET | none | `{ items: [{ payee, count, lastUsedOn, lastType, lastCategory }] }`, at most 200 | 401, 403 | Read |
-| `/api/transactions/bulk-delete` (Stretch) | POST | `{ items: [{ id, version }] }`, 1 to 100 | 200 `{ deleted }` | 401, 403 `feature_off`, 409 `version_conflict` with `details.ids`, 422 | `Idempotency-Key` required |
+| Endpoint                                  | Method | Input                                                                                                                  | Output                                                                           | Errors                                                                                                                                   | Idempotency and versioning                |
+| ----------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `/api/transactions`                       | GET    | Filter parameters (root 6.9), `sort`, `dir`, `limit` (default 50, maximum 100), `cursor`                               | `{ items, nextCursor, prevCursor, currency }`                                    | 400, 401, 403 `profile_required`                                                                                                         | Read; repeatable read (P2)                |
+| `/api/transactions/summary`               | GET    | Filter parameters                                                                                                      | `{ count, incomeMinor, spendingMinor, toGoalsMinor, currency }`                  | 400, 401, 403                                                                                                                            | Read; same filter function as the list    |
+| `/api/transactions/[id]`                  | GET    | none                                                                                                                   | The row                                                                          | 401, 403, 404                                                                                                                            | Read                                      |
+| `/api/transactions`                       | POST   | `{ id, type, amountMinor, currency, occurredAt, occurredOn, createdAt, category or goalId, payee, description, note }` | 201 with the row, or 200 with the existing row                                   | 400, 401, 403, 409 `id_conflict`, 422 `validation_failed`, `date_out_of_window`, `parent_missing`, `goal_read_only`, `currency_mismatch` | `Idempotency-Key` required                |
+| `/api/transactions/[id]`                  | PATCH  | Changed fields; `currency` when `amountMinor` is sent                                                                  | 200 with the row                                                                 | 400, 401, 403, 404, 409 `version_conflict`, 422 as for POST                                                                              | `Idempotency-Key` and `If-Match` required |
+| `/api/transactions/[id]`                  | DELETE | `{}`; for a charge, `{ subscriptionId, dueOn }` as a hint (BR-F03-17)                                                  | 204                                                                              | 400, 401, 403, 404, 409 `version_conflict`, 422 `goal_read_only` or `validation_failed` (Goal floor)                                     | `Idempotency-Key` and `If-Match` required |
+| `/api/payees`                             | GET    | none                                                                                                                   | `{ items: [{ payee, count, lastUsedOn, lastType, lastCategory }] }`, at most 200 | 401, 403                                                                                                                                 | Read                                      |
+| `/api/transactions/bulk-delete` (Stretch) | POST   | `{ items: [{ id, version }] }`, 1 to 100                                                                               | 200 `{ deleted }`                                                                | 401, 403 `feature_off`, 409 `version_conflict` with `details.ids`, 422                                                                   | `Idempotency-Key` required                |
 
 **Error code added by this spec**
 
-| Status | Code | Default message | Write queue does |
-| --- | --- | --- | --- |
-| 422 | `goal_read_only` | This Goal can't be changed right now. | Reject |
+| Status | Code             | Default message                       | Write queue does |
+| ------ | ---------------- | ------------------------------------- | ---------------- |
+| 422    | `goal_read_only` | This Goal can't be changed right now. | Reject           |
 
 `currency_mismatch` is a root code (API-9), since F04 to F06 use it too.
 
 **Shared functions** (the filter-to-SQL module, FIL-2)
+
 - **`rollup(tx, ctx, requests)`:** takes one or more `{ filter, by }` requests and answers all of them in one SQL statement (D-293).
     - **`by`:** `total`, `category`, `day`, `week` (from the profile's week start), `month` (grouped by `occurredOn`) or `subscription` (charges per Subscription, F11); or `bounds`.
     - **Each group:** count, income, spending (Out), To Goals and net.
@@ -571,6 +585,7 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
 - **`matchesFilter(row, filter)`:** mirrors the SQL predicate for pending rows (BR-F03-43).
 
 **Server-side check order for a write** (locks in SRV-7 order). The handler first reads the row, without a lock, to learn its Goal and Subscription. The row's own lock comes only from the versioned write in step 7, after the Goal and Subscription locks.
+
 1. Zod shape.
 2. Type rules.
 3. The profile lock, then the currency check (BR-F03-05).
@@ -584,17 +599,17 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
 
 After a confirmed write, the client invalidates the following, where M is the month of each affected `occurredOn` (old and new, for an edit that moves the date):
 
-| Query | Why |
-| --- | --- |
-| Every Transactions list and summary | Rows and totals changed |
+| Query                                                | Why                                                                                |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Every Transactions list and summary                  | Rows and totals changed                                                            |
 | The whole dashboard prefix, every month (F08, D-295) | Comparisons, the 12-month chart and all-time Goal figures read months other than M |
-| Budgets for M (F04) | Category spending changed |
-| Goals list, summary and the affected Goal (F06) | Progress, and all-time unallocated, change with any write |
-| Analytics (F09) | Every chart reads Transactions |
-| Insights, every month (F10, D-337) | Detectors read the same aggregates, with baselines reaching back 3 months |
-| Payees | New or renamed payees |
-| Subscriptions (F05) | Only when a charge changed: charges this month |
-| Profile and demo status (F02, F15) | Only on a create or delete: currency lock and account emptiness |
+| Budgets for M (F04)                                  | Category spending changed                                                          |
+| Goals list, summary and the affected Goal (F06)      | Progress, and all-time unallocated, change with any write                          |
+| Analytics (F09)                                      | Every chart reads Transactions                                                     |
+| Insights, every month (F10, D-337)                   | Detectors read the same aggregates, with baselines reaching back 3 months          |
+| Payees                                               | New or renamed payees                                                              |
+| Subscriptions (F05)                                  | Only when a charge changed: charges this month                                     |
+| Profile and demo status (F02, F15)                   | Only on a create or delete: currency lock and account emptiness                    |
 
 Search (F13) reads the same rows live. Reports (F11) are never cached.
 
@@ -677,17 +692,17 @@ Illustrative, a create request:
 
 ```json
 {
-  "id": "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c01",
-  "type": "expense",
-  "amountMinor": 64000,
-  "currency": "INR",
-  "occurredAt": "2026-10-19T16:45:00Z",
-  "occurredOn": "2026-10-19",
-  "createdAt": "2026-10-19T16:46:12Z",
-  "category": "food",
-  "payee": "Swiggy",
-  "description": null,
-  "note": null
+	"id": "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c01",
+	"type": "expense",
+	"amountMinor": 64000,
+	"currency": "INR",
+	"occurredAt": "2026-10-19T16:45:00Z",
+	"occurredOn": "2026-10-19",
+	"createdAt": "2026-10-19T16:46:12Z",
+	"category": "food",
+	"payee": "Swiggy",
+	"description": null,
+	"note": null
 }
 ```
 
@@ -695,23 +710,23 @@ Illustrative, a list item for a charge:
 
 ```json
 {
-  "id": "0192…",
-  "type": "expense",
-  "amountMinor": 64900,
-  "occurredAt": "2026-10-04T18:30:00Z",
-  "occurredOn": "2026-10-05",
-  "category": "entertainment",
-  "payee": "Netflix",
-  "description": null,
-  "note": null,
-  "source": "subscription",
-  "demo": false,
-  "subscription": { "id": "0192…", "name": "Netflix" },
-  "dueOn": "2026-10-05",
-  "edited": false,
-  "version": 1,
-  "createdAt": "2026-10-05T00:00:03Z",
-  "updatedAt": "2026-10-05T00:00:03Z"
+	"id": "0192…",
+	"type": "expense",
+	"amountMinor": 64900,
+	"occurredAt": "2026-10-04T18:30:00Z",
+	"occurredOn": "2026-10-05",
+	"category": "entertainment",
+	"payee": "Netflix",
+	"description": null,
+	"note": null,
+	"source": "subscription",
+	"demo": false,
+	"subscription": { "id": "0192…", "name": "Netflix" },
+	"dueOn": "2026-10-05",
+	"edited": false,
+	"version": 1,
+	"createdAt": "2026-10-05T00:00:03Z",
+	"updatedAt": "2026-10-05T00:00:03Z"
 }
 ```
 

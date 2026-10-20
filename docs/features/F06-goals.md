@@ -6,12 +6,12 @@ A Goal is a savings target, such as an emergency fund, a vacation or a car. Mone
 
 Free includes 3 active Goals; Premium is unlimited. When Premium lapses, nothing is deleted: the user's chosen 3 Goals (by default the 3 oldest) stay editable, and the rest become read-only until the user upgrades or changes the choice.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M2 (Goals, states, the cap). Stand-ins (D-241): before M3 the Goal page has no chart (F09); before M4 the limit message has no Upgrade button and no lapse can happen (F12); before M5, writes are online only, as in F03 |
-| Plan | Free: 3 active Goals. Premium: unlimited (`goals.active.max`) |
+| Item       | Value                                                                                                                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Milestone  | M2 (Goals, states, the cap). Stand-ins (D-241): before M3 the Goal page has no chart (F09); before M4 the limit message has no Upgrade button and no lapse can happen (F12); before M5, writes are online only, as in F03      |
+| Plan       | Free: 3 active Goals. Premium: unlimited (`goals.active.max`)                                                                                                                                                                  |
 | Depends on | [F03](F03-transactions.md) (contributions and withdrawals), [P4](../platform/P4-capabilities.md) (the limit and its lock), [P2](../platform/P2-data-access-and-security.md); F12 (plan changes); F08, F09, F11, F13 read Goals |
-| Decisions | D-21, D-25, D-29, D-97 to D-103, D-198, D-213, D-223, D-237, D-241, D-258 to D-269 |
+| Decisions  | D-21, D-25, D-29, D-97 to D-103, D-198, D-213, D-223, D-237, D-241, D-258 to D-269                                                                                                                                             |
 
 ## 1. User stories
 
@@ -25,39 +25,39 @@ Free includes 3 active Goals; Premium is unlimited. When Premium lapses, nothing
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
-| Create, edit, complete, archive, reopen and delete; progress and percentage; required monthly amount; the over-saving warning; the Free cap and its race-safe check; locks after a lapse and the choice of editable Goals; the Goals list and Goal page; icons and colors; offline writes | None | Automatic completion (D-98); automatic contributions or round-ups; Goal balances held anywhere; projected completion dates (H6); sharing Goals; interest on savings |
+| In                                                                                                                                                                                                                                                                                        | Stretch (M8) | Out                                                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create, edit, complete, archive, reopen and delete; progress and percentage; required monthly amount; the over-saving warning; the Free cap and its race-safe check; locks after a lapse and the choice of editable Goals; the Goals list and Goal page; icons and colors; offline writes | None         | Automatic completion (D-98); automatic contributions or round-ups; Goal balances held anywhere; projected completion dates (H6); sharing Goals; interest on savings |
 
 ## 3. Concepts and fields
 
 **Goal** (private)
 
-| Field | Meaning | Required | Rules | Example |
-| --- | --- | --- | --- | --- |
-| `id` | UUIDv7 | Yes | Client-generated (ID-1) | |
-| `name` | The Goal's name | Yes | 1 to 60 characters (root 6.7) | `Vacation` |
-| `targetMinor` | The amount to reach | Yes | MON-5 | `3000000` |
-| `targetDate` | When it should be reached | No | When set to a new value, after today (D-264); `null` clears it | `2027-03-31` |
-| `icon` | One of the fixed icons | Yes | BR-F06-04 | `plane` |
-| `color` | One of the fixed colors | Yes | BR-F06-04 | `teal` |
-| `state` | `active`, `completed` or `archived` | System | Changed by BR-F06-07 to BR-F06-10 | `active` |
-| `completedAt`, `archivedAt` | When it was completed or archived | System | From the change's `changedAt` (BR-F06-10); cleared on Reopen | |
-| `keepEditable` | Picked to stay editable after a lapse | System | BR-F06-13; changing it never bumps `version` | `false` |
-| `demo` | Loaded as demo data | System | F15 | `false` |
-| `version`, `createdAt`, `updatedAt` | P2 | System | `createdAt` is client-set, at most 5 minutes after `ctx.now`; it defines "oldest" | |
+| Field                               | Meaning                               | Required | Rules                                                                             | Example      |
+| ----------------------------------- | ------------------------------------- | -------- | --------------------------------------------------------------------------------- | ------------ |
+| `id`                                | UUIDv7                                | Yes      | Client-generated (ID-1)                                                           |              |
+| `name`                              | The Goal's name                       | Yes      | 1 to 60 characters (root 6.7)                                                     | `Vacation`   |
+| `targetMinor`                       | The amount to reach                   | Yes      | MON-5                                                                             | `3000000`    |
+| `targetDate`                        | When it should be reached             | No       | When set to a new value, after today (D-264); `null` clears it                    | `2027-03-31` |
+| `icon`                              | One of the fixed icons                | Yes      | BR-F06-04                                                                         | `plane`      |
+| `color`                             | One of the fixed colors               | Yes      | BR-F06-04                                                                         | `teal`       |
+| `state`                             | `active`, `completed` or `archived`   | System   | Changed by BR-F06-07 to BR-F06-10                                                 | `active`     |
+| `completedAt`, `archivedAt`         | When it was completed or archived     | System   | From the change's `changedAt` (BR-F06-10); cleared on Reopen                      |              |
+| `keepEditable`                      | Picked to stay editable after a lapse | System   | BR-F06-13; changing it never bumps `version`                                      | `false`      |
+| `demo`                              | Loaded as demo data                   | System   | F15                                                                               | `false`      |
+| `version`, `createdAt`, `updatedAt` | P2                                    | System   | `createdAt` is client-set, at most 5 minutes after `ctx.now`; it defines "oldest" |              |
 
 **Derived values** (never stored)
 
-| Value | Formula |
-| --- | --- |
-| Progress | Σ `goal_contribution` − Σ `goal_withdrawal` linked to the Goal, all time, confirmed only (TXN-5) |
-| Progress at date D | The same sum over Transactions with `occurred_on` ≤ D (for reports) |
-| Percent | Progress ÷ target, as tenths of a percent, rounded half away from zero; may exceed 100.0% |
-| Remaining | Target − progress, floored at 0 |
-| Required monthly | BR-F06-16 |
-| Locked | BR-F06-12 |
-| All-time unallocated | All-time net savings − all-time To Goals (TXN-5), confirmed only |
+| Value                | Formula                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| Progress             | Σ `goal_contribution` − Σ `goal_withdrawal` linked to the Goal, all time, confirmed only (TXN-5) |
+| Progress at date D   | The same sum over Transactions with `occurred_on` ≤ D (for reports)                              |
+| Percent              | Progress ÷ target, as tenths of a percent, rounded half away from zero; may exceed 100.0%        |
+| Remaining            | Target − progress, floored at 0                                                                  |
+| Required monthly     | BR-F06-16                                                                                        |
+| Locked               | BR-F06-12                                                                                        |
+| All-time unallocated | All-time net savings − all-time To Goals (TXN-5), confirmed only                                 |
 
 ## 4. Business rules
 
@@ -71,6 +71,7 @@ Free includes 3 active Goals; Premium is unlimited. When Premium lapses, nothing
     - **Colors** (design tokens): `blue`, `teal`, `green`, `lime`, `amber`, `orange`, `pink`, `purple`.
 
     Category colors are separate tokens, so a Goal never takes a category's chart color (CAT-4).
+
 - **BR-F06-05** A target date sent with a value different from the stored one must be after today; `null` removes it. A date that later passes is kept, and the Goal shows "Target date passed" (BR-F06-16).
 - **BR-F06-06** Contributions and withdrawals are Transactions (D-21), added and edited through F03's dialog with the Goal preselected. F03 enforces the Goal rules:
     - the Goal must be active and not locked (`goal_read_only`, F03, BR-F03-13);
@@ -89,13 +90,13 @@ Free includes 3 active Goals; Premium is unlimited. When Premium lapses, nothing
     - **The timestamp:** `completedAt` or `archivedAt` is `changedAt`, clamped between the Goal's `createdAt` and `ctx.now`. `changedAt` must lie from 90 days before to 5 minutes after `ctx.now` (D-267). An edit synced first therefore never moves a queued archive to the sync time.
     - **Allowed transitions:**
 
-        | From | To | Rule |
-        | --- | --- | --- |
-        | active (unlocked) | completed | BR-F06-07 |
-        | active (locked or not) | archived | BR-F06-08 |
-        | completed or archived | active | BR-F06-09 |
+        | From                   | To        | Rule      |
+        | ---------------------- | --------- | --------- |
+        | active (unlocked)      | completed | BR-F06-07 |
+        | active (locked or not) | archived  | BR-F06-08 |
+        | completed or archived  | active    | BR-F06-09 |
 
-    - **Any other request:** a transition not in the table, including one to the current state, returns 422 `validation_failed` on `state`, for example "Vacation is already archived." 
+    - **Any other request:** a transition not in the table, including one to the current state, returns 422 `validation_failed` on `state`, for example "Vacation is already archived."
 - **BR-F06-11** Completed and archived Goals are read-only: no contributions, withdrawals or edits. They offer only Reopen and Delete.
 
 **Locks after a lapse (D-29, D-258)**
@@ -107,6 +108,7 @@ Free includes 3 active Goals; Premium is unlimited. When Premium lapses, nothing
     - **Locked:** every other Goal in A.
 
     Every endpoint that writes a Goal or its Transactions computes this inside its transaction (P4, BR-P4-03).
+
 - **BR-F06-13** The user chooses the editable Goals with `PUT /api/goals/editable { goalIds }`.
     - **Accepted only:** when locks exist, with exactly L distinct ids, all of them active Goals of the user. Otherwise 422.
     - **Locks, in SRV-7 order:**
@@ -164,10 +166,10 @@ Free includes 3 active Goals; Premium is unlimited. When Premium lapses, nothing
 
 Golden, as of 2 November ([03-golden-dataset.md](../03-golden-dataset.md#goals-as-of-2-november)):
 
-| Goal | Contributions | Withdrawals | Progress | Percent | Required monthly |
-| --- | --- | --- | --- | --- | --- |
-| Emergency fund | 10,000.00 | 0.00 | 10,000.00 | 10.0% | none (no target date) |
-| Vacation | 6,000.00 | 1,000.00 | 5,000.00 | 16.7% | 6,250.00 |
+| Goal           | Contributions | Withdrawals | Progress  | Percent | Required monthly      |
+| -------------- | ------------- | ----------- | --------- | ------- | --------------------- |
+| Emergency fund | 10,000.00     | 0.00        | 10,000.00 | 10.0%   | none (no target date) |
+| Vacation       | 6,000.00      | 1,000.00    | 5,000.00  | 16.7%   | 6,250.00              |
 
 - **Vacation:** 25,000.00 remaining; the months after November up to March 2027 are December, January, February and March, so m = 4, and 25,000.00 ÷ 4 = 6,250.00 exactly.
 - **Rounding up:** 10,000.00 remaining over 3 months is 3,333.333…, which rounds up to 3,333.34.
@@ -176,6 +178,7 @@ Golden, as of 2 November ([03-golden-dataset.md](../03-golden-dataset.md#goals-a
 - **Progress at 31 October:** Emergency fund 10,000.00 and Vacation 5,000.00, for F11's October report.
 
 **Locks: the `lapsed` scenario account (F15).** Five active Goals were created in months 1, 2, 3, 10 and 14, and Premium has ended, so L = 3.
+
 - **No choice made:** the three oldest (months 1, 2 and 3) are editable; the Goals from months 10 and 14 are locked.
 - **The user picks months 1, 10 and 14:** the Goals from months 2 and 3 lock instead.
 - **The user archives the month-1 Goal:** four active Goals remain, two of them picked. They are topped up with the oldest unpicked Goal (month 2), so only month 3 is locked.
@@ -187,15 +190,15 @@ Golden, as of 2 November ([03-golden-dataset.md](../03-golden-dataset.md#goals-a
 
 **The choose dialog.** It lists every active Goal with checkboxes, the oldest pre-checked when no choice exists. It allows exactly L choices: "Choose 3 Goals to keep editable. The others stay visible but can't change until you upgrade." Save is enabled at exactly L.
 
-| State | `/goals` | `/goals/[id]` |
-| --- | --- | --- |
-| Loading | Skeleton header and cards | Skeleton header, chart and list |
-| Empty | "No Goals yet. Save toward a trip, a car or an emergency fund." with New Goal | n/a |
-| Error | "Goals could not be loaded." with Retry | "This Goal could not be loaded." with Retry; 404: "We couldn't find that Goal." |
-| Offline | Cached Goals with "as of"; writes queue; New Goal uses the cached limit | The cached Goal and its cached Transactions |
-| Pending | "Pending sync" on cards; progress shows "+3,000.00 pending" and never offers completion on pending money | The same |
-| Locked (Premium) | Lock badges; the banner or notice (BR-F06-15); New Goal at the cap shows the limit message | Read-only, with the lock message and Archive, Delete, Upgrade |
-| Read-only | Completed and archived Goals: Reopen and Delete only | The same |
+| State            | `/goals`                                                                                                 | `/goals/[id]`                                                                   |
+| ---------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Loading          | Skeleton header and cards                                                                                | Skeleton header, chart and list                                                 |
+| Empty            | "No Goals yet. Save toward a trip, a car or an emergency fund." with New Goal                            | n/a                                                                             |
+| Error            | "Goals could not be loaded." with Retry                                                                  | "This Goal could not be loaded." with Retry; 404: "We couldn't find that Goal." |
+| Offline          | Cached Goals with "as of"; writes queue; New Goal uses the cached limit                                  | The cached Goal and its cached Transactions                                     |
+| Pending          | "Pending sync" on cards; progress shows "+3,000.00 pending" and never offers completion on pending money | The same                                                                        |
+| Locked (Premium) | Lock badges; the banner or notice (BR-F06-15); New Goal at the cap shows the limit message               | Read-only, with the lock message and Archive, Delete, Upgrade                   |
+| Read-only        | Completed and archived Goals: Reopen and Delete only                                                     | The same                                                                        |
 
 ## 7. Flows
 
@@ -232,28 +235,28 @@ Golden, as of 2 November ([03-golden-dataset.md](../03-golden-dataset.md#goals-a
 
 ## 8. Validation and messages
 
-| Field or action | Rule | Message shown |
-| --- | --- | --- |
-| Name | Required, 1 to 60 | Name your Goal, like Vacation. / Use 60 characters or fewer. |
-| Target | F03's amount rules | F03's amount messages |
-| Target date | After today | Choose a date after today. |
-| Icon, color | From the lists | Choose an icon. / Choose a color. |
-| New Goal or Reopen | `premium_required` (limit) | Free includes 3 active Goals. Complete or archive one, or upgrade for unlimited Goals. |
-| Complete | `goal_not_reached` | Vacation is below its target again. |
-| Edit | Completed or archived | Reopen Vacation to change it. |
-| Any write | Locked | Vacation is locked. Upgrade, or choose it as one of your 3 editable Goals. |
-| Choose | Not exactly L | Choose exactly 3 Goals. |
-| State change | `changedAt` out of bounds | This change is too old to apply. Discard it and make it again. |
-| Choose | No locks exist | Every Goal is editable, so there's nothing to choose. |
-| Delete | Has Transactions | Vacation has 3 Transactions. Archive it to keep them, or delete it with its Transactions. |
-| Any write | `version_conflict` | This Goal was changed on another device. (Conflict view) |
-| Any write | `not_found` | This Goal was deleted on another device. |
-| Required monthly | Target date passed | Target date passed |
+| Field or action    | Rule                       | Message shown                                                                             |
+| ------------------ | -------------------------- | ----------------------------------------------------------------------------------------- |
+| Name               | Required, 1 to 60          | Name your Goal, like Vacation. / Use 60 characters or fewer.                              |
+| Target             | F03's amount rules         | F03's amount messages                                                                     |
+| Target date        | After today                | Choose a date after today.                                                                |
+| Icon, color        | From the lists             | Choose an icon. / Choose a color.                                                         |
+| New Goal or Reopen | `premium_required` (limit) | Free includes 3 active Goals. Complete or archive one, or upgrade for unlimited Goals.    |
+| Complete           | `goal_not_reached`         | Vacation is below its target again.                                                       |
+| Edit               | Completed or archived      | Reopen Vacation to change it.                                                             |
+| Any write          | Locked                     | Vacation is locked. Upgrade, or choose it as one of your 3 editable Goals.                |
+| Choose             | Not exactly L              | Choose exactly 3 Goals.                                                                   |
+| State change       | `changedAt` out of bounds  | This change is too old to apply. Discard it and make it again.                            |
+| Choose             | No locks exist             | Every Goal is editable, so there's nothing to choose.                                     |
+| Delete             | Has Transactions           | Vacation has 3 Transactions. Archive it to keep them, or delete it with its Transactions. |
+| Any write          | `version_conflict`         | This Goal was changed on another device. (Conflict view)                                  |
+| Any write          | `not_found`                | This Goal was deleted on another device.                                                  |
+| Required monthly   | Target date passed         | Target date passed                                                                        |
 
 ## 9. Plan gating
 
-| Code | Checked by | Refusal | Client shows |
-| --- | --- | --- | --- |
+| Code               | Checked by                                                                                                                                                                                                                                            | Refusal   | Client shows                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ---------------------------------------------------------------------------------- |
 | `goals.active.max` | Create (BR-F06-02) and Reopen (BR-F06-09): 403 `premium_required` with `{ limit, current }`. The editable choice (BR-F06-13): 422 unless exactly L. The lock computation (BR-F06-12) on every Goal and Goal-Transaction write: `goal_read_only` (F03) | As listed | The limit message with Upgrade (from M4); lock badges and the banner after a lapse |
 
 Locking never deletes or hides data (D-29). A Premium user has no limit, so nothing is ever locked.
@@ -270,29 +273,31 @@ Locking never deletes or hides data (D-29). A Premium user has no limit, so noth
 
 ## 11. Server surface
 
-| Endpoint | Method | Input | Output | Errors | Idempotency and versioning |
-| --- | --- | --- | --- | --- | --- |
-| `/api/goals` | GET | none | `{ items, summary: { activeCount, limit, savedMinor, unallocatedAllTimeMinor, lockedCount, needsChoice }, currency }` | 401, 403 `profile_required` | Read |
-| `/api/goals/[id]` | GET | none | The Goal with derived values | 401, 403, 404 | Read |
-| `/api/goals` | POST | `{ id, name, targetMinor, currency, targetDate, icon, color, createdAt }` | 201 with the Goal; 200 for a repeated id | 401, 403 `premium_required`, 409 `id_conflict`, 422 `validation_failed`, `currency_mismatch` | `Idempotency-Key` required |
-| `/api/goals/[id]` | PATCH | Either `{ state, changedAt }`, or any of `name`, `targetMinor` (with `currency`), `targetDate` (a date or `null`), `icon`, `color` | 200 with the Goal | 401, 403 `premium_required` (reopen), 404, 409 `version_conflict`, 422 `goal_not_reached`, `goal_read_only`, `validation_failed` | `Idempotency-Key` and `If-Match` required |
-| `/api/goals/[id]` | DELETE | `{ withTransactions }` | 200 `{ deletedTransactions }` | 401, 403, 404, 409 `has_dependents` with `details.count`, 409 `version_conflict` | `Idempotency-Key` and `If-Match` required |
-| `/api/goals/editable` | PUT | `{ goalIds }` | 200 with the Goals | 401, 403, 422 `validation_failed` | `Idempotency-Key` required |
+| Endpoint              | Method | Input                                                                                                                              | Output                                                                                                                | Errors                                                                                                                           | Idempotency and versioning                |
+| --------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `/api/goals`          | GET    | none                                                                                                                               | `{ items, summary: { activeCount, limit, savedMinor, unallocatedAllTimeMinor, lockedCount, needsChoice }, currency }` | 401, 403 `profile_required`                                                                                                      | Read                                      |
+| `/api/goals/[id]`     | GET    | none                                                                                                                               | The Goal with derived values                                                                                          | 401, 403, 404                                                                                                                    | Read                                      |
+| `/api/goals`          | POST   | `{ id, name, targetMinor, currency, targetDate, icon, color, createdAt }`                                                          | 201 with the Goal; 200 for a repeated id                                                                              | 401, 403 `premium_required`, 409 `id_conflict`, 422 `validation_failed`, `currency_mismatch`                                     | `Idempotency-Key` required                |
+| `/api/goals/[id]`     | PATCH  | Either `{ state, changedAt }`, or any of `name`, `targetMinor` (with `currency`), `targetDate` (a date or `null`), `icon`, `color` | 200 with the Goal                                                                                                     | 401, 403 `premium_required` (reopen), 404, 409 `version_conflict`, 422 `goal_not_reached`, `goal_read_only`, `validation_failed` | `Idempotency-Key` and `If-Match` required |
+| `/api/goals/[id]`     | DELETE | `{ withTransactions }`                                                                                                             | 200 `{ deletedTransactions }`                                                                                         | 401, 403, 404, 409 `has_dependents` with `details.count`, 409 `version_conflict`                                                 | `Idempotency-Key` and `If-Match` required |
+| `/api/goals/editable` | PUT    | `{ goalIds }`                                                                                                                      | 200 with the Goals                                                                                                    | 401, 403, 422 `validation_failed`                                                                                                | `Idempotency-Key` required                |
 
 Each item carries:
+
 - `progressMinor`, `percentTenths`, `remainingMinor`;
 - `requiredMonthlyMinor` and `requiredStatus` (`none`, `monthly`, `dueThisMonth`, `passed`, `reached`);
 - `locked`, `keepEditable`, `transactionCount`.
 
 **Error codes added by this spec**
 
-| Status | Code | Default message | Write queue does |
-| --- | --- | --- | --- |
-| 422 | `goal_not_reached` | This Goal hasn't reached its target. | Reject |
+| Status | Code               | Default message                      | Write queue does |
+| ------ | ------------------ | ------------------------------------ | ---------------- |
+| 422    | `goal_not_reached` | This Goal hasn't reached its target. | Reject           |
 
 `goal_read_only` is defined by F03.
 
 **Shared functions:**
+
 - `goalProgress(tx, ctx, { asOf })`: every Goal with its progress in one statement, and each Goal's lock from the same rows by BR-F06-12's rule; used by F08 and F11;
 - `goalProgressSeries(tx, ctx, { goalIds, from, to })`: each Goal's cumulative progress at the close of every day from `from` to `to`, used by F09;
 - `goalLocks(tx, ctx)`, used by every Goal and Goal-Transaction write.
@@ -350,23 +355,23 @@ Illustrative, a Goal in `GET /api/goals`:
 
 ```json
 {
-  "id": "0192…",
-  "name": "Vacation",
-  "targetMinor": 3000000,
-  "targetDate": "2027-03-31",
-  "icon": "plane",
-  "color": "teal",
-  "state": "active",
-  "progressMinor": 500000,
-  "percentTenths": 167,
-  "remainingMinor": 2500000,
-  "requiredMonthlyMinor": 625000,
-  "requiredStatus": "monthly",
-  "locked": false,
-  "keepEditable": false,
-  "transactionCount": 3,
-  "version": 1,
-  "demo": false
+	"id": "0192…",
+	"name": "Vacation",
+	"targetMinor": 3000000,
+	"targetDate": "2027-03-31",
+	"icon": "plane",
+	"color": "teal",
+	"state": "active",
+	"progressMinor": 500000,
+	"percentTenths": 167,
+	"remainingMinor": 2500000,
+	"requiredMonthlyMinor": 625000,
+	"requiredStatus": "monthly",
+	"locked": false,
+	"keepEditable": false,
+	"transactionCount": 3,
+	"version": 1,
+	"demo": false
 }
 ```
 

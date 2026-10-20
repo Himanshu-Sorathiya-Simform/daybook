@@ -16,12 +16,12 @@ How to use this template
 
 One paragraph: what the feature does for the user and why it exists.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M? |
-| Plan | Free, Premium, or both (name the capability codes) |
-| Depends on | Specs this one builds on |
-| Decisions | D-IDs this spec implements |
+| Item       | Value                                              |
+| ---------- | -------------------------------------------------- |
+| Milestone  | M?                                                 |
+| Plan       | Free, Premium, or both (name the capability codes) |
+| Depends on | Specs this one builds on                           |
+| Decisions  | D-IDs this spec implements                         |
 
 ## 1. User stories
 
@@ -29,15 +29,15 @@ One paragraph: what the feature does for the user and why it exists.
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
-| | | |
+| In  | Stretch (M8) | Out |
+| --- | ------------ | --- |
+|     |              |     |
 
 ## 3. Concepts and fields
 
 | Field | Meaning | Required | Rules | Example |
-| --- | --- | --- | --- | --- |
-| | | | | |
+| ----- | ------- | -------- | ----- | ------- |
+|       |         |          |       |         |
 
 ## 4. Business rules
 
@@ -51,15 +51,15 @@ Each formula, with a worked example from the golden dataset.
 
 For each screen: purpose, sections, actions. Then the state matrix:
 
-| State | What the user sees |
-| --- | --- |
-| Loading | |
-| Empty | |
-| Error | |
-| Offline | |
-| Pending | |
-| Locked (Premium) | |
-| Read-only | |
+| State            | What the user sees |
+| ---------------- | ------------------ |
+| Loading          |                    |
+| Empty            |                    |
+| Error            |                    |
+| Offline          |                    |
+| Pending          |                    |
+| Locked (Premium) |                    |
+| Read-only        |                    |
 
 ## 7. Flows
 
@@ -68,8 +68,8 @@ Numbered steps for each flow, including every failure branch.
 ## 8. Validation and messages
 
 | Field or action | Rule | Message shown |
-| --- | --- | --- |
-| | | |
+| --------------- | ---- | ------------- |
+|                 |      |               |
 
 ## 9. Plan gating
 
@@ -82,8 +82,8 @@ What is readable offline, what can be written, how it queues, and how conflicts 
 ## 11. Server surface
 
 | Endpoint | Method | Input | Output | Errors | Idempotency and versioning |
-| --- | --- | --- | --- | --- | --- |
-| | | | | | |
+| -------- | ------ | ----- | ------ | ------ | -------------------------- |
+|          |        |       |        |        |                            |
 
 ## 12. Cross-feature effects
 

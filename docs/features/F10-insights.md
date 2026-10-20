@@ -3,6 +3,7 @@
 18 Oct 2026 · @Himanshu
 
 Insights are short, plain-language observations about one month of a user's money:
+
 - a Budget nearly or fully spent;
 - a savings rate that moved;
 - a category that jumped;
@@ -12,12 +13,12 @@ Insights are short, plain-language observations about one month of a user's mone
 
 Six rule-based detectors compute them from the same confirmed figures as the dashboard and charts, so an insight never disagrees with a number on screen. No language model is involved, and every insight is labelled as simulated advice. The dashboard shows the top 5 for its month, and `/insights` shows them all. A user can dismiss an insight, and it stays dismissed for that month.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M6 |
-| Plan | Free and Premium; per-detector flags `insights.detector.<name>` (P4) |
+| Item       | Value                                                                                                                                                                                                                                                                                                                                            |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Milestone  | M6                                                                                                                                                                                                                                                                                                                                               |
+| Plan       | Free and Premium; per-detector flags `insights.detector.<name>` (P4)                                                                                                                                                                                                                                                                             |
 | Depends on | [F03](F03-transactions.md) (`rollup`, list), [F04](F04-budgets.md) (`budgetMonth`, states), [F05](F05-subscriptions.md) (`upcomingDue`), [F02](F02-onboarding-profile-settings.md) (month, locale), [P4](../platform/P4-capabilities.md) (flags), [P1](../platform/P1-offline-and-pwa.md) (saved cache); [F08](F08-dashboard.md) shows the top 5 |
-| Decisions | D-40, D-56, D-120, D-248, D-331 to D-337, D-371 |
+| Decisions  | D-40, D-56, D-120, D-248, D-331 to D-337, D-371                                                                                                                                                                                                                                                                                                  |
 
 ## 1. User stories
 
@@ -29,28 +30,29 @@ Six rule-based detectors compute them from the same confirmed figures as the das
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
-| Six detectors; insight ordering and the top 5; `/insights` with a month picker; dismiss and restore; the dashboard widget; flags per detector; offline reading of saved months | None | A language model (root 16); push or email alerts (P1 push is Stretch); insights about investments; custom thresholds; insights across several months at once; stored insight history |
+| In                                                                                                                                                                             | Stretch (M8) | Out                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Six detectors; insight ordering and the top 5; `/insights` with a month picker; dismiss and restore; the dashboard widget; flags per detector; offline reading of saved months | None         | A language model (root 16); push or email alerts (P1 push is Stretch); insights about investments; custom thresholds; insights across several months at once; stored insight history |
 
 ## 3. Concepts and fields
 
 **Insight** (computed on request, never stored; D-331)
 
-| Field | Meaning | Example |
-| --- | --- | --- |
-| `key` | `<detector>:<subject>:<month>`, stable for the same finding (D-120) | `budgetThreshold:food.over:2026-10` |
-| `detector` | One of the six names below | `budgetThreshold` |
-| `severity` | `critical`, `warning` or `info` | `critical` |
-| `kind` | `alert`, `trend` or `tip` | `alert` |
-| `message` | The sentence shown, formatted in the user's locale | "Food is over budget: ₹6,220.00 of ₹5,000.00 (124.4%)." |
-| `evidence` | The numbers behind it, in minor units and tenths of a percent | `{ "spentMinor": 622000, "limitMinor": 500000, "utilizationTenths": 1244 }` |
-| `action` | A label and a link to the data behind it | "View Budgets" → `/budgets?month=2026-10` |
-| `dismissed` | Present only with `includeDismissed` | `false` |
+| Field       | Meaning                                                             | Example                                                                     |
+| ----------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `key`       | `<detector>:<subject>:<month>`, stable for the same finding (D-120) | `budgetThreshold:food.over:2026-10`                                         |
+| `detector`  | One of the six names below                                          | `budgetThreshold`                                                           |
+| `severity`  | `critical`, `warning` or `info`                                     | `critical`                                                                  |
+| `kind`      | `alert`, `trend` or `tip`                                           | `alert`                                                                     |
+| `message`   | The sentence shown, formatted in the user's locale                  | "Food is over budget: ₹6,220.00 of ₹5,000.00 (124.4%)."                     |
+| `evidence`  | The numbers behind it, in minor units and tenths of a percent       | `{ "spentMinor": 622000, "limitMinor": 500000, "utilizationTenths": 1244 }` |
+| `action`    | A label and a link to the data behind it                            | "View Budgets" → `/budgets?month=2026-10`                                   |
+| `dismissed` | Present only with `includeDismissed`                                | `false`                                                                     |
 
 **Dismissal** (private, one row per dismissed insight): `user_id`, `key` (unique per user), `dismissed_at`. Rows are kept until restored or the account is deleted. Reset my data deletes them (F01).
 
 **The baseline** (D-333), used by the category trend and the savings recommendation:
+
 - **Baseline months:** up to the 3 months before M that fall on or after the month of the user's earliest confirmed Transaction. With none, those detectors are skipped for M.
 - **Baseline of a category:** its mean Out over those months.
 - **Baseline total:** the mean total Out over the same months.
@@ -70,23 +72,27 @@ Six rule-based detectors compute them from the same confirmed figures as the das
     - `warning` (80.0% to below 100.0%): warning, "Transportation has used 90.0% of its Budget: ₹1,800.00 of ₹2,000.00."
 
     The subject is `<category>.<state>`, so an insight dismissed at 80% returns as a new one when the category passes 100%. Action: "View Budgets" → `/budgets?month=M`.
+
 - **BR-F10-05** **Savings rate** (`savingsRate`, trend). It runs only for a complete month; the current month is skipped, since a month to date, with its salary already in, would beat a full month every time. Each month's rate is rounded to tenths of a percent (TXN-5). The first rule that applies fires, and at most one per month:
     1. **Below zero:** income in M above zero and net savings below zero; critical, "You spent more than you earned in October: net savings −₹2,000.00."
     2. **Down 5.0 points or more:** income above zero in M and the month before; warning, "Your savings rate fell to 63.3% from 71.1% in September (−7.8 points)."
     3. **Up 5.0 points or more:** as rule 2; info, "Your savings rate rose to 71.1% from 63.3% in October (+7.8 points)."
 
     The change is the difference of the two rounded rates. The subject is `all`. Action: "View dashboard" → `/dashboard?month=M`.
+
 - **BR-F10-06** **Outlier** (`outlier`, alert, info).
     - **The window:** M and the 2 months before, counting expenses with source `manual` only, so Subscription charges never count. It needs at least 8 such expenses.
     - **The typical expense:** their median. With an even count it is the mean of the two middle amounts, rounded half away from zero.
     - **Firing:** the largest manual expense in M that is at least twice the typical expense fires, at most one per month. Of two equal amounts, the newer fires (list order, TIME-3). "Croma, ₹4,500.00 on 7 Oct, is at least twice your typical expense of ₹2,075.00."
 
     The subject is the Transaction id. Action: "View Transaction" → `/transactions?txn=<id>`.
+
 - **BR-F10-07** **Category trend** (`categoryTrend`, trend). For each expense category with a baseline above zero, the increase is M's Out minus the baseline, and `increaseTenths` is that increase over the baseline, in tenths of a percent, rounded. It fires when both hold:
     - `increaseTenths` is at least 250 (+25.0%);
     - the increase is at least 2.0% of the baseline total (`increase × 1000 ≥ 20 × baselineTotal`, in minor units).
 
     Its severity is warning when `increaseTenths` is at least 500 (+50.0%), else info. "Entertainment spending is ₹2,148.00, up 231.0% on your recent average of ₹649.00." Only increases fire; a fall is good news, not an alert. The subject is the category. Action: "View Transactions" → `/transactions?from=<M's first day>&to=<M's last day>&cat=<c>`.
+
 - **BR-F10-08** **Savings recommendation** (`savingsRecommendation`, tip, info). It takes the category that passes BR-F10-07's test with the largest increase in money (on a tie, the lowest key), and states what returning to the baseline saves: "Spending ₹649.00 on entertainment, your recent average, would save ₹1,499.00 a month." The subject is the category, and the action is the same as the category trend's.
 - **BR-F10-09** **Renewals soon** (`renewalsSoon`, alert, info). It runs only when M is the current month. Each date `upcomingDue(7)` returns (F05, BR-F05-20), from today to today + 7 days inclusive, gives one insight: "Netflix renews on 5 Nov: ₹649.00." The subject is `<subscriptionId>@<due date>`, and its key's month is the due date's month, so a renewal dismissed on 30 October stays dismissed on 1 November. Action: "View Subscriptions" → `/subscriptions`.
 - **BR-F10-10** **The current month.** M's figures are to date (PER-3). A category trend for the current month ends with "(to date)". The savings rate does not run for it (BR-F10-05).
@@ -100,6 +106,7 @@ Six rule-based detectors compute them from the same confirmed figures as the das
     4. any remaining tie: by `key`, ascending.
 
     The order is therefore the same on the server and the client, and the top 5 never flips.
+
 - **BR-F10-12** **The dashboard widget** (F08, BR-F08-10) shows the first 5 undismissed insights for the dashboard month, with "See all" to `/insights?month=M`. With none it says "No insights for October 2026."
 - **BR-F10-13** **`/insights?month=YYYY-MM`** shows:
     - the month picker of the dashboard (F08, BR-F08-01);
@@ -120,22 +127,23 @@ Golden ([03-golden-dataset.md, Insights](../03-golden-dataset.md#insights)), at 
 
 **October** (complete). Baseline months: September only, since the earliest Transaction is in September. Baseline total 28,049.00, so 2.0% of it is 560.98.
 
-| # | Detector | Severity | Finding |
-| --- | --- | --- | --- |
-| 1 | Budget threshold | Critical | entertainment, 2,148.00 of 1,000.00 (214.8%) |
-| 2 | Budget threshold | Critical | food, 6,220.00 of 5,000.00 (124.4%) |
-| 3 | Budget threshold | Critical | shopping, 3,000.00 of 3,000.00 (100.0%) |
-| 4 | Budget threshold | Warning | transportation, 1,800.00 of 2,000.00 (90.0%) |
-| 5 | Savings rate | Warning | 63.3%, from 71.1% in September (−7.8 points) |
-| 6 | Category trend | Warning | entertainment, 2,148.00 against 649.00 (+1,499.00, +231.0%) |
-| 7 | Category trend | Warning | transportation, 1,800.00 against 450.00 (+1,350.00, +300.0%) |
-| 8 | Outlier | Info | Croma, 4,500.00 on 7 Oct; typical expense 2,075.00 |
-| 9 | Category trend | Info | shopping, 3,000.00 against 2,400.00 (+600.00, +25.0%) |
-| 10 | Savings recommendation | Info | entertainment: back to 649.00 saves 1,499.00 a month |
+| #   | Detector               | Severity | Finding                                                      |
+| --- | ---------------------- | -------- | ------------------------------------------------------------ |
+| 1   | Budget threshold       | Critical | entertainment, 2,148.00 of 1,000.00 (214.8%)                 |
+| 2   | Budget threshold       | Critical | food, 6,220.00 of 5,000.00 (124.4%)                          |
+| 3   | Budget threshold       | Critical | shopping, 3,000.00 of 3,000.00 (100.0%)                      |
+| 4   | Budget threshold       | Warning  | transportation, 1,800.00 of 2,000.00 (90.0%)                 |
+| 5   | Savings rate           | Warning  | 63.3%, from 71.1% in September (−7.8 points)                 |
+| 6   | Category trend         | Warning  | entertainment, 2,148.00 against 649.00 (+1,499.00, +231.0%)  |
+| 7   | Category trend         | Warning  | transportation, 1,800.00 against 450.00 (+1,350.00, +300.0%) |
+| 8   | Outlier                | Info     | Croma, 4,500.00 on 7 Oct; typical expense 2,075.00           |
+| 9   | Category trend         | Info     | shopping, 3,000.00 against 2,400.00 (+600.00, +25.0%)        |
+| 10  | Savings recommendation | Info     | entertainment: back to 649.00 saves 1,499.00 a month         |
 
 The dashboard's top 5 are rows 1 to 5.
 
 **How the borderline cases fall:**
+
 - **Food:** 6,220.00 against 5,050.00 is +23.2%, below 125%, so no trend.
 - **Shopping:** exactly 125% (3,000.00 × 100 = 2,400.00 × 125), and +600.00 ≥ 560.98, so it fires, as info since it is below 150%.
 - **Housing:** unchanged. **Health:** fell to 0.00, and falls never fire.
@@ -144,6 +152,7 @@ The dashboard's top 5 are rows 1 to 5.
 - **No renewals:** October is not the current month.
 
 **November** (to date, the current month): one insight, renewals soon for Netflix on 5 November, 649.00. Cult Gym on 10 November is outside the 7 days.
+
 - **Budget threshold:** food is at 8.4%, so none fires.
 - **Savings rate:** skipped: November is the current month (BR-F10-05).
 - **Category trend:** food's 420.00 is far below its 5,635.00 baseline.
@@ -154,15 +163,15 @@ The dashboard's top 5 are rows 1 to 5.
 
 **`/insights`** (BR-F10-13) and the **dashboard widget** (BR-F10-12).
 
-| State | What the user sees |
-| --- | --- |
-| Loading | Three skeleton cards |
-| Empty | "No insights for October 2026." |
-| Error | "Insights could not be loaded." with Retry |
-| Offline | The saved current and last viewed months with "as of" (P1); other months: "You're offline. This month isn't saved on this device." Dismiss and Restore are disabled |
-| Pending | n/a: pending changes never affect insights |
-| Locked (Premium) | n/a |
-| Read-only | Offline |
+| State            | What the user sees                                                                                                                                                  |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Loading          | Three skeleton cards                                                                                                                                                |
+| Empty            | "No insights for October 2026."                                                                                                                                     |
+| Error            | "Insights could not be loaded." with Retry                                                                                                                          |
+| Offline          | The saved current and last viewed months with "as of" (P1); other months: "You're offline. This month isn't saved on this device." Dismiss and Restore are disabled |
+| Pending          | n/a: pending changes never affect insights                                                                                                                          |
+| Locked (Premium) | n/a                                                                                                                                                                 |
+| Read-only        | Offline                                                                                                                                                             |
 
 ## 7. Flows
 
@@ -174,23 +183,23 @@ The dashboard's top 5 are rows 1 to 5.
 
 ## 8. Validation and messages
 
-| Situation | Message shown |
-| --- | --- |
-| Label | Simulated AI insights · not financial advice |
-| Budget over | Food is over budget: ₹6,220.00 of ₹5,000.00 (124.4%). |
-| Budget near | Transportation has used 90.0% of its Budget: ₹1,800.00 of ₹2,000.00. |
-| Savings rate below zero | You spent more than you earned in October: net savings −₹2,000.00. |
-| Savings rate down | Your savings rate fell to 63.3% from 71.1% in September (−7.8 points). |
-| Savings rate up | Your savings rate rose to 71.1% from 63.3% in October (+7.8 points). |
-| Outlier | Croma, ₹4,500.00 on 7 Oct, is at least twice your typical expense of ₹2,075.00. |
-| Category trend | Entertainment spending is ₹2,148.00, up 231.0% on your recent average of ₹649.00. |
-| Savings recommendation | Spending ₹649.00 on entertainment, your recent average, would save ₹1,499.00 a month. |
-| Renewal | Netflix renews on 5 Nov: ₹649.00. |
-| Current month suffix | (to date) |
-| Empty | No insights for October 2026. |
-| Dismissed | Insight dismissed. |
-| Offline dismiss | Connect to dismiss insights. |
-| Load failure | Insights could not be loaded. |
+| Situation               | Message shown                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| Label                   | Simulated AI insights · not financial advice                                          |
+| Budget over             | Food is over budget: ₹6,220.00 of ₹5,000.00 (124.4%).                                 |
+| Budget near             | Transportation has used 90.0% of its Budget: ₹1,800.00 of ₹2,000.00.                  |
+| Savings rate below zero | You spent more than you earned in October: net savings −₹2,000.00.                    |
+| Savings rate down       | Your savings rate fell to 63.3% from 71.1% in September (−7.8 points).                |
+| Savings rate up         | Your savings rate rose to 71.1% from 63.3% in October (+7.8 points).                  |
+| Outlier                 | Croma, ₹4,500.00 on 7 Oct, is at least twice your typical expense of ₹2,075.00.       |
+| Category trend          | Entertainment spending is ₹2,148.00, up 231.0% on your recent average of ₹649.00.     |
+| Savings recommendation  | Spending ₹649.00 on entertainment, your recent average, would save ₹1,499.00 a month. |
+| Renewal                 | Netflix renews on 5 Nov: ₹649.00.                                                     |
+| Current month suffix    | (to date)                                                                             |
+| Empty                   | No insights for October 2026.                                                         |
+| Dismissed               | Insight dismissed.                                                                    |
+| Offline dismiss         | Connect to dismiss insights.                                                          |
+| Load failure            | Insights could not be loaded.                                                         |
 
 ## 9. Plan gating
 
@@ -202,11 +211,11 @@ The current month's and the last viewed month's insights are saved (P1, BR-P1-11
 
 ## 11. Server surface
 
-| Endpoint | Method | Input | Output | Errors | Idempotency |
-| --- | --- | --- | --- | --- | --- |
-| `/api/insights` | GET | `month`, `includeDismissed` (optional, `1`) | `{ month, partial, earliestMonth, items, dismissedCount, currency }` | 400 (also for a month after the current one), 401, 403 `profile_required` | Read |
-| `/api/insights/[key]/dismiss` | POST | `{}` | 204 | 400 (malformed key), 401, 403 | `Idempotency-Key` required; online only |
-| `/api/insights/[key]/restore` | POST | `{}` | 204 | 400, 401, 403 | `Idempotency-Key` required; online only |
+| Endpoint                      | Method | Input                                       | Output                                                               | Errors                                                                    | Idempotency                             |
+| ----------------------------- | ------ | ------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------- |
+| `/api/insights`               | GET    | `month`, `includeDismissed` (optional, `1`) | `{ month, partial, earliestMonth, items, dismissedCount, currency }` | 400 (also for a month after the current one), 401, 403 `profile_required` | Read                                    |
+| `/api/insights/[key]/dismiss` | POST   | `{}`                                        | 204                                                                  | 400 (malformed key), 401, 403                                             | `Idempotency-Key` required; online only |
+| `/api/insights/[key]/restore` | POST   | `{}`                                        | 204                                                                  | 400, 401, 403                                                             | `Idempotency-Key` required; online only |
 
 A key must match `^[a-zA-Z]+:[A-Za-z0-9_.@-]{1,80}:\d{4}-(0[1-9]|1[0-2])$`, URL-encoded in the path. Dismiss and Restore invalidate the `insights` query prefix, which the dashboard widget reads.
 
@@ -251,12 +260,21 @@ Illustrative, one item of `GET /api/insights?month=2026-10`:
 
 ```json
 {
-  "key": "categoryTrend:entertainment:2026-10",
-  "detector": "categoryTrend",
-  "severity": "warning",
-  "kind": "trend",
-  "message": "Entertainment spending is ₹2,148.00, up 231.0% on your recent average of ₹649.00.",
-  "evidence": { "outMinor": 214800, "baselineMinor": 64900, "increaseMinor": 149900, "increaseTenths": 2310, "baselineMonths": ["2026-09"] },
-  "action": { "label": "View Transactions", "href": "/transactions?from=2026-10-01&to=2026-10-31&cat=entertainment" }
+	"key": "categoryTrend:entertainment:2026-10",
+	"detector": "categoryTrend",
+	"severity": "warning",
+	"kind": "trend",
+	"message": "Entertainment spending is ₹2,148.00, up 231.0% on your recent average of ₹649.00.",
+	"evidence": {
+		"outMinor": 214800,
+		"baselineMinor": 64900,
+		"increaseMinor": 149900,
+		"increaseTenths": 2310,
+		"baselineMonths": ["2026-09"]
+	},
+	"action": {
+		"label": "View Transactions",
+		"href": "/transactions?from=2026-10-01&to=2026-10-31&cat=entertainment"
+	}
 }
 ```

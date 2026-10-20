@@ -4,12 +4,12 @@
 
 People create a Daybook account with an email and password, log in and out on any device, and manage their account. Managing means: seeing and revoking sessions, changing their password, resetting their finance data, and deleting the account. Logging out works correctly even offline. There is no email verification and no reset-by-email; a developer script resets a forgotten password.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M0 (auth core), M1 (account settings) |
-| Plan | Free and Premium; export of all Transactions is Stretch (`account.export`) |
+| Item       | Value                                                                                                                                                                                                         |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M0 (auth core), M1 (account settings)                                                                                                                                                                         |
+| Plan       | Free and Premium; export of all Transactions is Stretch (`account.export`)                                                                                                                                    |
 | Depends on | [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F02 (onboarding and display name), F12 (Stripe Customer), F14 (posts on the landing page), P1 (cache and queue wipes) |
-| Decisions | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385 |
+| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385                                                                                                            |
 
 ## 1. User stories
 
@@ -25,31 +25,31 @@ People create a Daybook account with an email and password, log in and out on an
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
+| In                                                                                                                                                                                                                                                                                                             | Stretch (M8)                                         | Out                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Landing page `/`; sign-up; login with `next`; logout online and offline (logout-pending marker); session expiry handling; active sessions list and revoke; change password; display-name updates for F02; reset my data; delete account; developer password-reset script; offline states for every auth screen | Export of all Transactions as CSV (`account.export`) | Email verification; password reset by email; two-factor; passkeys; social login; changing email (D-189); a "remember me" choice (sessions always last 7 days) |
 
 ## 3. Concepts and fields
 
 **Better Auth records** (schema `auth`; read and written only through Better Auth or the auth pool)
 
-| Record | Fields used by Daybook |
-| --- | --- |
-| User | `id`, `email` (unique), `name` (display name), `createdAt` |
+| Record  | Fields used by Daybook                                                                                                               |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| User    | `id`, `email` (unique), `name` (display name), `createdAt`                                                                           |
 | Session | `id`, `token` (the cookie value), `userId`, `expiresAt`, `createdAt`, `updatedAt` (moves at most once a day; BR-F01-17), `userAgent` |
-| Account | The credential: the password hash, by Better Auth's default algorithm |
+| Account | The credential: the password hash, by Better Auth's default algorithm                                                                |
 
 **Form fields**
 
-| Field | Meaning | Required | Rules | Example |
-| --- | --- | --- | --- | --- |
-| Email | Login identifier | Yes | Trimmed and lowercased on the server (BR-F01-01); valid address; at most 254 characters | `asha@example.com` |
-| Password | Secret | Yes | 12 to 128 characters; not found in a known breach (BR-F01-03); paste allowed | |
-| Display name | Shown in the app | Sign-up | 1 to 50 characters after trimming and NFC normalization (INP) | `Asha` |
-| Current password | Re-authentication | Change password, delete account | Must match | |
-| New password | Replacement | Change password | Password rules; must differ from the current one | |
-| Sign out of other devices | Option | Change password | Checkbox, checked by default | |
-| Confirmation text | Typed guard | Reset (`RESET`), delete (`DELETE`) | Exact, uppercase; checked in the browser and, for reset, on the server | `DELETE` |
+| Field                     | Meaning           | Required                           | Rules                                                                                   | Example            |
+| ------------------------- | ----------------- | ---------------------------------- | --------------------------------------------------------------------------------------- | ------------------ |
+| Email                     | Login identifier  | Yes                                | Trimmed and lowercased on the server (BR-F01-01); valid address; at most 254 characters | `asha@example.com` |
+| Password                  | Secret            | Yes                                | 12 to 128 characters; not found in a known breach (BR-F01-03); paste allowed            |                    |
+| Display name              | Shown in the app  | Sign-up                            | 1 to 50 characters after trimming and NFC normalization (INP)                           | `Asha`             |
+| Current password          | Re-authentication | Change password, delete account    | Must match                                                                              |                    |
+| New password              | Replacement       | Change password                    | Password rules; must differ from the current one                                        |                    |
+| Sign out of other devices | Option            | Change password                    | Checkbox, checked by default                                                            |                    |
+| Confirmation text         | Typed guard       | Reset (`RESET`), delete (`DELETE`) | Exact, uppercase; checked in the browser and, for reset, on the server                  | `DELETE`           |
 
 **Logout-pending marker** (D-140, D-367). `{ "at": "<ISO UTC>" }` stored in IndexedDB (database `daybook`, store `meta`, key `logoutPending`), so the service worker can read it. It is mirrored in local storage under `daybook.logoutPending` for a synchronous check at boot, and in the cookie `daybook_logout=1` (`Path=/`, `SameSite=Lax`, `Max-Age=691200`, 8 days, longer than a session), so the server can act on the next page request. It holds no user data.
 
@@ -144,6 +144,7 @@ People create a Daybook account with an email and password, log in and out on an
     2. If step 1 failed, because the lock wait passed 10 seconds or Stripe could not be reached, throw an error with status 503 and code `BILLING_UNAVAILABLE`. Step 1 rolled back, so the deletion is aborted and nothing changed.
 
     Better Auth then deletes the user; sessions, accounts and every private row cascade (P2, 7.6).
+
 - **BR-F01-25** After a successful deletion, the client wipes everything as on logout, without a marker. It then navigates to `/api/session/expired?next=/&reason=deleted`, which clears the cookies and opens `/?deleted=1`. The landing page shows "Your account was deleted."
 - **BR-F01-26** A later Stripe webhook for the deleted customer finds no user and is ignored (F12).
 
@@ -187,15 +188,15 @@ None.
 
 **Settings → Data.** This spec owns Reset my data, Delete account and Export (Stretch). Load and remove demo data belong to F15.
 
-| State | Landing | Sign-up and login | Security | Data |
-| --- | --- | --- | --- | --- |
-| Loading | Posts section shows skeleton cards | Submit shows a spinner; the form is disabled | Sessions list skeleton | n/a |
-| Empty | No posts: section not rendered | n/a | Only "This device" | n/a |
-| Error | Posts unreachable: not rendered | Field and form messages (section 8) | "Sessions could not be loaded." with Retry | Action-specific messages (section 8) |
-| Offline | Shown from cache; Log in and Sign up lead to forms that say "You are offline. Connect to log in." | Form disabled with that line | "Connect to manage security." | Reset and Delete disabled: "Connect to change your data." |
-| Pending | n/a | n/a | n/a | Reset disabled while items wait (BR-F01-21) |
-| Locked (Premium) | n/a | n/a | n/a | n/a |
-| Read-only | n/a | n/a | n/a | n/a |
+| State            | Landing                                                                                           | Sign-up and login                            | Security                                   | Data                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------ | --------------------------------------------------------- |
+| Loading          | Posts section shows skeleton cards                                                                | Submit shows a spinner; the form is disabled | Sessions list skeleton                     | n/a                                                       |
+| Empty            | No posts: section not rendered                                                                    | n/a                                          | Only "This device"                         | n/a                                                       |
+| Error            | Posts unreachable: not rendered                                                                   | Field and form messages (section 8)          | "Sessions could not be loaded." with Retry | Action-specific messages (section 8)                      |
+| Offline          | Shown from cache; Log in and Sign up lead to forms that say "You are offline. Connect to log in." | Form disabled with that line                 | "Connect to manage security."              | Reset and Delete disabled: "Connect to change your data." |
+| Pending          | n/a                                                                                               | n/a                                          | n/a                                        | Reset disabled while items wait (BR-F01-21)               |
+| Locked (Premium) | n/a                                                                                               | n/a                                          | n/a                                        | n/a                                                       |
+| Read-only        | n/a                                                                                               | n/a                                          | n/a                                        | n/a                                                       |
 
 ## 7. Flows
 
@@ -260,28 +261,28 @@ None.
 
 ## 8. Validation and messages
 
-| Field or action | Rule | Message shown |
-| --- | --- | --- |
-| Email | Required | Enter your email. |
-| Email | Valid address | Enter a valid email address, like name@example.com. |
-| Password | Required | Enter a password. |
-| Password | At least 12 characters | Use at least 12 characters. |
-| Password | At most 128 characters | Use 128 characters or fewer. |
-| Password | `PASSWORD_BREACHED` | This password has appeared in a data breach. Choose a different one. |
-| Display name | `INVALID_NAME` | Enter a name of up to 50 characters. |
-| Sign-up | Email exists | An account with this email already exists. Log in instead. |
-| Login | Wrong email or password | Email or password is incorrect. |
-| Login | Rate limited | Too many attempts. Wait a few seconds and try again. |
-| New password | Same as current | Choose a password you have not used for this account. |
-| Current password | Wrong | Your current password is incorrect. |
-| Reset | Text is not `RESET` | Type RESET to confirm. |
-| Delete | Text is not `DELETE` | Type DELETE to confirm. |
-| Delete | Wrong password | Your password is incorrect. |
-| Delete | `PASSWORD_REQUIRED` | Enter your password to delete your account. |
-| Delete | `BILLING_UNAVAILABLE` | We could not reach the billing service, so nothing was deleted. Try again. |
-| Any auth screen | Offline | You are offline. Connect to log in. |
-| Login, Sign-up | The logout marker exists and sign-out still fails | We couldn't finish logging out the last session. Try again in a moment. |
-| Session expired | 401 banner | Your session has expired. Log in to keep saving changes. |
+| Field or action  | Rule                                              | Message shown                                                              |
+| ---------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
+| Email            | Required                                          | Enter your email.                                                          |
+| Email            | Valid address                                     | Enter a valid email address, like name@example.com.                        |
+| Password         | Required                                          | Enter a password.                                                          |
+| Password         | At least 12 characters                            | Use at least 12 characters.                                                |
+| Password         | At most 128 characters                            | Use 128 characters or fewer.                                               |
+| Password         | `PASSWORD_BREACHED`                               | This password has appeared in a data breach. Choose a different one.       |
+| Display name     | `INVALID_NAME`                                    | Enter a name of up to 50 characters.                                       |
+| Sign-up          | Email exists                                      | An account with this email already exists. Log in instead.                 |
+| Login            | Wrong email or password                           | Email or password is incorrect.                                            |
+| Login            | Rate limited                                      | Too many attempts. Wait a few seconds and try again.                       |
+| New password     | Same as current                                   | Choose a password you have not used for this account.                      |
+| Current password | Wrong                                             | Your current password is incorrect.                                        |
+| Reset            | Text is not `RESET`                               | Type RESET to confirm.                                                     |
+| Delete           | Text is not `DELETE`                              | Type DELETE to confirm.                                                    |
+| Delete           | Wrong password                                    | Your password is incorrect.                                                |
+| Delete           | `PASSWORD_REQUIRED`                               | Enter your password to delete your account.                                |
+| Delete           | `BILLING_UNAVAILABLE`                             | We could not reach the billing service, so nothing was deleted. Try again. |
+| Any auth screen  | Offline                                           | You are offline. Connect to log in.                                        |
+| Login, Sign-up   | The logout marker exists and sign-out still fails | We couldn't finish logging out the last session. Try again in a moment.    |
+| Session expired  | 401 banner                                        | Your session has expired. Log in to keep saving changes.                   |
 
 ## 9. Plan gating
 
@@ -297,24 +298,24 @@ None for the core of this feature. Export checks `account.export` (Stretch). Del
 
 Better Auth's endpoints under `/api/auth/*`, limited to the allow-list in P2 (BR-P2-40):
 
-| Endpoint | Used for | Notes |
-| --- | --- | --- |
-| `POST /api/auth/sign-up/email` | Sign-up | Hooks: BR-F01-01, BR-F01-03 |
-| `POST /api/auth/sign-in/email` | Login | Hook: BR-F01-01; rate limited |
-| `POST /api/auth/sign-out` | Logout | |
-| `GET /api/auth/get-session` | Session check | |
-| `GET /api/auth/list-sessions` | Sessions list | |
-| `POST /api/auth/revoke-session`, `/revoke-other-sessions` | Revoke | |
-| `POST /api/auth/change-password` | Change password | Hook: BR-F01-03 |
-| `POST /api/auth/update-user` | Display name (F02) | `name` only (BR-F01-02) |
-| `POST /api/auth/delete-user` | Delete account | Password required by the `before` hook (BR-F01-23); before-delete hook (BR-F01-24) |
+| Endpoint                                                  | Used for           | Notes                                                                              |
+| --------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------------- |
+| `POST /api/auth/sign-up/email`                            | Sign-up            | Hooks: BR-F01-01, BR-F01-03                                                        |
+| `POST /api/auth/sign-in/email`                            | Login              | Hook: BR-F01-01; rate limited                                                      |
+| `POST /api/auth/sign-out`                                 | Logout             |                                                                                    |
+| `GET /api/auth/get-session`                               | Session check      |                                                                                    |
+| `GET /api/auth/list-sessions`                             | Sessions list      |                                                                                    |
+| `POST /api/auth/revoke-session`, `/revoke-other-sessions` | Revoke             |                                                                                    |
+| `POST /api/auth/change-password`                          | Change password    | Hook: BR-F01-03                                                                    |
+| `POST /api/auth/update-user`                              | Display name (F02) | `name` only (BR-F01-02)                                                            |
+| `POST /api/auth/delete-user`                              | Delete account     | Password required by the `before` hook (BR-F01-23); before-delete hook (BR-F01-24) |
 
 Daybook's own endpoints:
 
-| Endpoint | Method | Input | Output | Errors | Idempotency and versioning |
-| --- | --- | --- | --- | --- | --- |
-| `/api/account/reset` | POST | `{ confirmation: "RESET" }` | 200 `{ deleted: { transactions, budgets, subscriptions, goals } }` | 401, 422 `validation_failed` | Exempt from `Idempotency-Key` (P2, BR-P2-16); profile not required |
-| `/api/account/export` (Stretch) | GET | none | CSV file | 401, 403 `feature_off` | n/a |
+| Endpoint                        | Method | Input                       | Output                                                             | Errors                       | Idempotency and versioning                                         |
+| ------------------------------- | ------ | --------------------------- | ------------------------------------------------------------------ | ---------------------------- | ------------------------------------------------------------------ |
+| `/api/account/reset`            | POST   | `{ confirmation: "RESET" }` | 200 `{ deleted: { transactions, budgets, subscriptions, goals } }` | 401, 422 `validation_failed` | Exempt from `Idempotency-Key` (P2, BR-P2-16); profile not required |
+| `/api/account/export` (Stretch) | GET    | none                        | CSV file                                                           | 401, 403 `feature_off`       | n/a                                                                |
 
 ## 12. Cross-feature effects
 
@@ -338,7 +339,7 @@ Daybook's own endpoints:
 ## 14. Acceptance criteria
 
 - **AC-F01-01** (E2E) Given a new email, when the visitor signs up, then they land on `/onboarding` with a session.
-- **AC-F01-02** (integration) Given an account for `asha@example.com`, when someone signs up with ` Asha@Example.COM `, then sign-up is refused with BR-F01-05's message.
+- **AC-F01-02** (integration) Given an account for `asha@example.com`, when someone signs up with `Asha@Example.COM`, then sign-up is refused with BR-F01-05's message.
 - **AC-F01-03** (integration) A password on the breach list (the range API mocked to return its suffix) is refused at sign-up and at change-password. With the range API timing out, sign-up succeeds and a warning is recorded.
 - **AC-F01-04** (integration) A wrong password and an unknown email produce identical responses and messages.
 - **AC-F01-05** (integration) With the rate limiter enabled in the test config and a fixed `x-forwarded-for` client address, the fourth sign-in attempt within 10 seconds returns 429.
@@ -363,14 +364,24 @@ Illustrative, the Better Auth settings this spec implies:
 
 ```ts
 betterAuth({
-  baseURL: env.APP_ORIGIN,
-  trustedOrigins: [env.APP_ORIGIN],
-  database: drizzleAdapter(authDb, { provider: 'pg', schema: authSchema }),
-  emailAndPassword: { enabled: true, minPasswordLength: 12, maxPasswordLength: 128, autoSignIn: true },
-  session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24 },
-  user: { deleteUser: { enabled: true, beforeDelete: cancelBillingAndClearEntitlements } },
-  advanced: { cookiePrefix: 'daybook' },
-  hooks: { before: allowListNormalizeAndBreachCheck },
+	baseURL: env.APP_ORIGIN,
+	trustedOrigins: [env.APP_ORIGIN],
+	database: drizzleAdapter(authDb, { provider: "pg", schema: authSchema }),
+	emailAndPassword: {
+		enabled: true,
+		minPasswordLength: 12,
+		maxPasswordLength: 128,
+		autoSignIn: true,
+	},
+	session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24 },
+	user: {
+		deleteUser: {
+			enabled: true,
+			beforeDelete: cancelBillingAndClearEntitlements,
+		},
+	},
+	advanced: { cookiePrefix: "daybook" },
+	hooks: { before: allowListNormalizeAndBreachCheck },
 });
 ```
 

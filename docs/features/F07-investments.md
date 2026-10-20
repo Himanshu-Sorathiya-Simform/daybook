@@ -5,6 +5,7 @@
 Every user gets a sample investment portfolio when onboarding completes. It holds 7 mock assets across stocks, ETFs, crypto and mutual funds, bought and sold over the two years before onboarding. Its prices are simulated: a deterministic random walk per asset, extended every day to today. Nothing is live market data.
 
 The Investments page shows:
+
 - **Value:** what the portfolio is worth;
 - **Change:** how much it changed over a period, without counting money put in;
 - **Gains:** the unrealized gain or loss;
@@ -14,12 +15,12 @@ The Investments page shows:
 
 The portfolio is read-only; it exists so the dashboard and charts have real time series and cash flows to work with.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M3. Offline reading arrives with P1 (M5) |
-| Plan | Free and Premium; no capability codes |
+| Item       | Value                                                                                                                                                                                                                                                                                    |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M3. Offline reading arrives with P1 (M5)                                                                                                                                                                                                                                                 |
+| Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (onboarding seeds the portfolio; currency), [P2](../platform/P2-data-access-and-security.md) (system module, daily pass, request clock), [F15](F15-demo-and-seed-data.md) (scenario accounts, the golden loader); F08 and F09 show its figures |
-| Decisions | D-05, D-34, D-58, D-104 to D-107, D-272 to D-278, D-291, D-292, D-295 |
+| Decisions  | D-05, D-34, D-58, D-104 to D-107, D-272 to D-278, D-291, D-292, D-295                                                                                                                                                                                                                    |
 
 ## 1. User stories
 
@@ -32,25 +33,26 @@ The portfolio is read-only; it exists so the dashboard and charts have real time
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
-| The mock asset catalog; deterministic daily prices and their catch-up; the per-user seeded portfolio of dated buys and sells; the golden fixture asset; value, period change, unrealized gain, time-weighted return, allocation and per-holding figures; the value-over-time series; the Investments page with trailing and custom ranges; offline reading | None | User-added holdings or trades (D-105, round 1 I1); live market data (D-05); realized gains and tax lots; dividends; XIRR (D-58); per-asset price pages; real tickers or company names; exchange rates (D-107) |
+| In                                                                                                                                                                                                                                                                                                                                                         | Stretch (M8) | Out                                                                                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The mock asset catalog; deterministic daily prices and their catch-up; the per-user seeded portfolio of dated buys and sells; the golden fixture asset; value, period change, unrealized gain, time-weighted return, allocation and per-holding figures; the value-over-time series; the Investments page with trailing and custom ranges; offline reading | None         | User-added holdings or trades (D-105, round 1 I1); live market data (D-05); realized gains and tax lots; dividends; XIRR (D-58); per-asset price pages; real tickers or company names; exchange rates (D-107) |
 
 ## 3. Concepts and fields
 
 **Asset** (reference data. Migrations write the catalog; only the golden loader writes the fixture asset. The runtime role reads both)
 
-| Field | Meaning | Example |
-| --- | --- | --- |
-| `key` | Stable identifier (NAM-2): the lowercase symbol for catalog assets | `mix` |
-| `symbol`, `name` | Fictional; never a real company or coin | `MIX`, Mock Index ETF |
-| `type` | `stock`, `etf`, `crypto`, `mutual_fund` | `etf` |
-| `quantityScale` | Decimal places allowed in quantities | 0 for stocks and ETFs, 3 for mutual funds, 8 for crypto |
-| `originPrice` | The base price on the origin date, 2020-01-01. For the fixture asset, its first price | `10000000000` (100.00 USD) |
-| `position` | Order within its type, 1 to 6: the order of the catalog table below. The generator's picks use it | `1` |
-| `fixture` | True only for the golden test asset (BR-F07-17). Price catch-up and the generator skip it | `false` |
+| Field            | Meaning                                                                                           | Example                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `key`            | Stable identifier (NAM-2): the lowercase symbol for catalog assets                                | `mix`                                                   |
+| `symbol`, `name` | Fictional; never a real company or coin                                                           | `MIX`, Mock Index ETF                                   |
+| `type`           | `stock`, `etf`, `crypto`, `mutual_fund`                                                           | `etf`                                                   |
+| `quantityScale`  | Decimal places allowed in quantities                                                              | 0 for stocks and ETFs, 3 for mutual funds, 8 for crypto |
+| `originPrice`    | The base price on the origin date, 2020-01-01. For the fixture asset, its first price             | `10000000000` (100.00 USD)                              |
+| `position`       | Order within its type, 1 to 6: the order of the catalog table below. The generator's picks use it | `1`                                                     |
+| `fixture`        | True only for the golden test asset (BR-F07-17). Price catch-up and the generator skip it         | `false`                                                 |
 
 **Price** (reference data, written only by the system module): `(assetKey, date, basePrice)`.
+
 - **`date`:** a UTC calendar date.
 - **`basePrice`:** an integer number of 10⁻⁸ USD, stored as `bigint`. The fine unit keeps a cheap coin's price exact.
 
@@ -59,42 +61,44 @@ The portfolio is read-only; it exists so the dashboard and charts have real time
 `round(units × basePrice × num × 10^e ÷ (den × 10^8))` minor units,
 
 where num/den is the currency's factor below and `e` is its exponent.
+
 - **One step:** it is computed on the whole quantity and rounded once, half away from zero (MON-7).
 - **Arithmetic:** BigInt in the pure functions of `shared/portfolio/figures`, never SQL `numeric` or floating point. SQL only loads trades and prices (BR-F07-16), so every figure is computed one way.
 - **Where it applies:** every value, trade flow and cost.
 - **Per-unit figures:** a unit price or an average cost per unit is the same formula for one unit, for display only. One that rounds to 0 shows as less than one minor unit, for example "< £0.01".
 
 | Currency | Factor (num/den) |
-| --- | --- |
-| USD | 1/1 |
-| INR | 83/1 |
-| EUR | 9/10 |
-| GBP | 4/5 |
-| JPY | 150/1 |
-| KWD | 3/10 |
+| -------- | ---------------- |
+| USD      | 1/1              |
+| INR      | 83/1             |
+| EUR      | 9/10             |
+| GBP      | 4/5              |
+| JPY      | 150/1            |
+| KWD      | 3/10             |
 
 **Trade** (private; the portfolio is its trades)
 
-| Field | Meaning | Rules |
-| --- | --- | --- |
-| `id`, `user_id` | P2 | |
-| `assetKey` | The asset | References the catalog |
-| `tradeDate` | When it happened | Before the onboarding date (BR-F07-05) |
-| `side` | `buy` or `sell` | |
-| `quantity` | Units | Positive decimal, at most the asset's `quantityScale` places; a string in JSON (MON-9) |
+| Field           | Meaning          | Rules                                                                                  |
+| --------------- | ---------------- | -------------------------------------------------------------------------------------- |
+| `id`, `user_id` | P2               |                                                                                        |
+| `assetKey`      | The asset        | References the catalog                                                                 |
+| `tradeDate`     | When it happened | Before the onboarding date (BR-F07-05)                                                 |
+| `side`          | `buy` or `sell`  |                                                                                        |
+| `quantity`      | Units            | Positive decimal, at most the asset's `quantityScale` places; a string in JSON (MON-9) |
 
 Trades hold **no money**. Money always comes from a trade's units and a price in the user's current currency. A currency change therefore re-prices the whole portfolio automatically (D-275). A trade happens at the close of its date (golden): its flow is its quantity valued at that date's price.
 
 **The catalog** (D-106, D-272): 24 fictional assets, 6 per type. Origin prices are in USD.
 
-| Type | Assets (symbol, origin price) | Daily drift and volatility |
-| --- | --- | --- |
-| stock | Northwind Tech (NWT, 182.00), Contoso Retail (CTR, 64.50), Fabrikam Energy (FBE, 41.20), Tailspin Air (TSA, 23.80), Litware Health (LWH, 118.00), Adventure Works (ADW, 77.40) | Drift +250 ppm, volatility 15,000 ppm |
-| etf | Mock Index ETF (MIX, 100.00), Global Bond ETF (GBE, 52.00), Green Energy ETF (GEE, 34.60), Tech Leaders ETF (TLE, 145.00), Dividend ETF (DVE, 61.30), Emerging Markets ETF (EME, 28.90) | Drift +200 ppm, volatility 9,000 ppm |
-| crypto | Aurum Coin (AUC, 42,000.00), Nimbus Token (NBT, 2,600.00), Lumen Coin (LMC, 140.00), Quartz (QTZ, 22.00), Pebble (PBL, 1.20), Zephyr (ZPH, 0.08) | Drift +1,000 ppm, volatility 30,000 ppm |
-| mutual_fund | Steady Growth Fund (SGF, 24.00), Balanced Advantage Fund (BAF, 18.50), Liquid Fund (LQF, 10.00), Small Cap Fund (SCF, 31.20), Index Fund 500 (IF5, 56.00), Tax Saver Fund (TSF, 12.70) | Drift +220 ppm, volatility 7,000 ppm (LQF: drift +150, volatility 300) |
+| Type        | Assets (symbol, origin price)                                                                                                                                                           | Daily drift and volatility                                             |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| stock       | Northwind Tech (NWT, 182.00), Contoso Retail (CTR, 64.50), Fabrikam Energy (FBE, 41.20), Tailspin Air (TSA, 23.80), Litware Health (LWH, 118.00), Adventure Works (ADW, 77.40)          | Drift +250 ppm, volatility 15,000 ppm                                  |
+| etf         | Mock Index ETF (MIX, 100.00), Global Bond ETF (GBE, 52.00), Green Energy ETF (GEE, 34.60), Tech Leaders ETF (TLE, 145.00), Dividend ETF (DVE, 61.30), Emerging Markets ETF (EME, 28.90) | Drift +200 ppm, volatility 9,000 ppm                                   |
+| crypto      | Aurum Coin (AUC, 42,000.00), Nimbus Token (NBT, 2,600.00), Lumen Coin (LMC, 140.00), Quartz (QTZ, 22.00), Pebble (PBL, 1.20), Zephyr (ZPH, 0.08)                                        | Drift +1,000 ppm, volatility 30,000 ppm                                |
+| mutual_fund | Steady Growth Fund (SGF, 24.00), Balanced Advantage Fund (BAF, 18.50), Liquid Fund (LQF, 10.00), Small Cap Fund (SCF, 31.20), Index Fund 500 (IF5, 56.00), Tax Saver Fund (TSF, 12.70)  | Drift +220 ppm, volatility 7,000 ppm (LQF: drift +150, volatility 300) |
 
 On its median path a price grows by about drift − volatility² ÷ 2 a day. In ppm that is:
+
 - stocks +138, about 5% a year;
 - ETFs +160, about 6%;
 - crypto +550, about 22%;
@@ -115,6 +119,7 @@ So no type drifts towards zero.
         - **Never stuck:** at the floor, any r of 5,000 ppm or more still moves the price.
 
     The step and the pure price function live in `shared/portfolio/prices`. Price catch-up, the portfolio generator and tests all use it.
+
 - **BR-F07-02** Price catch-up is part of the system module's global daily pass (P2, BR-P2-27), which the route wrapper starts on a server process's first request of each UTC day.
     - **What it writes:** prices from each catalog asset's last stored date to today's UTC date, from `ctx.now`. Fixture assets are skipped.
     - **Idempotent:** it inserts with `ON CONFLICT (asset_key, date) DO NOTHING`, so a repeated or concurrent run changes nothing.
@@ -143,21 +148,21 @@ So no type drifts towards zero.
 
     The draws run in this order, so the seed fixes the result:
 
-    | Step | Holding | Draws and trades | Amount per buy (USD, before quantity rounding) |
-    | --- | --- | --- | --- |
-    | 1 | All | Pick 2 stocks, 2 ETFs, 1 crypto and 2 mutual funds, in that type order. Within a type, the first pick is `draw(6)` into its 6 assets in `position` order, and the second is `draw(5)` into the 5 left, in the same order | |
-    | 2 | Each stock, then each ETF, in pick order | A count `3 + draw(3)`, then for each buy a date between S and L and an amount | `300 + draw(1201)` |
-    | 3 | The crypto | 4 buys, each a date between S and L and an amount | `100 + draw(301)` |
-    | 4 | The crypto | 1 sell of 3/10 of the units held. Its date falls between the later of (the day after its last buy) and (O − 6 months), and L | |
-    | 5 | The first stock | 1 sell of 1/2 of the units held. Its date falls between the later of (the day after its last buy) and (O − 9 months), and L | |
-    | 6 | Each mutual fund | No draws: a buy on the 5th of every month from S's month, for each 5th on or before L (a monthly SIP), so 24 or 25 buys | 150 |
-
+    | Step | Holding                                  | Draws and trades                                                                                                                                                                                                         | Amount per buy (USD, before quantity rounding) |
+    | ---- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+    | 1    | All                                      | Pick 2 stocks, 2 ETFs, 1 crypto and 2 mutual funds, in that type order. Within a type, the first pick is `draw(6)` into its 6 assets in `position` order, and the second is `draw(5)` into the 5 left, in the same order |                                                |
+    | 2    | Each stock, then each ETF, in pick order | A count `3 + draw(3)`, then for each buy a date between S and L and an amount                                                                                                                                            | `300 + draw(1201)`                             |
+    | 3    | The crypto                               | 4 buys, each a date between S and L and an amount                                                                                                                                                                        | `100 + draw(301)`                              |
+    | 4    | The crypto                               | 1 sell of 3/10 of the units held. Its date falls between the later of (the day after its last buy) and (O − 6 months), and L                                                                                             |                                                |
+    | 5    | The first stock                          | 1 sell of 1/2 of the units held. Its date falls between the later of (the day after its last buy) and (O − 9 months), and L                                                                                              |                                                |
+    | 6    | Each mutual fund                         | No draws: a buy on the 5th of every month from S's month, for each 5th on or before L (a monthly SIP), so 24 or 25 buys                                                                                                  | 150                                            |
     - **Quantity per buy:** `floor(amount × 10^8 × 10^scale ÷ basePrice(date))` smallest units (10^−scale each), at least 1. `basePrice(date)` is that date's price.
     - **Quantity per sell:** `floor(units held × share)` in smallest units, with integers.
     - **Skipped sells:** a sell whose date range is empty (its asset's last buy falls on L) draws nothing and is skipped, and the next step's draws follow. A sell whose quantity is 0 is also skipped, after its date draw.
     - **Order:** each sell is dated after every buy of its asset, so it never sells more than is held.
     - **Count:** 64 to 76 trades.
     - **Currency independence:** amounts are in USD before rounding, and quantities depend only on base prices, so the portfolio is the same in every currency.
+
 - **BR-F07-06** The portfolio is read-only. No endpoint creates, edits or deletes a trade. Reset my data keeps it (F01, D-191), and a currency change keeps it unchanged (D-275).
 
 **Figures (D-58, D-277)**
@@ -180,6 +185,7 @@ For a period from date A to date B (inclusive, local dates):
     3. **Return:** the product of the factors, minus 1.
 
     The product is computed exactly with BigInt fractions and rounded once to tenths of a percent, half away from zero. It is "—" when no sub-period has a start value (MON-8).
+
 - **BR-F07-12** **Allocation** at D is each type's share of value, in tenths of a percent. Types with zero value are left out. The four types use fixed colors.
 - **BR-F07-13** **Per holding** at D: units, average cost per unit, cost basis, value, unrealized gain and its percentage, and the share of the portfolio. Sold-out holdings are not listed.
 - **BR-F07-14** **The value series** for a range gives one point per local date from A to B: the value at that date's close. Line series above 1,000 points are drawn with LTTB sampling (F09, BR-F09-18), but the series sent holds every day.
@@ -188,15 +194,15 @@ For a period from date A to date B (inclusive, local dates):
 
 - **BR-F07-15** `/investments` takes either a trailing `range` or a custom `from` and `to`, as dates in the profile time zone (D-278). The page passes them to the endpoints as they are, and the server resolves a range with `shared/portfolio/ranges`. Trailing ranges end at B = today. Month and year steps use date-fns, which clamps month ends.
 
-    | Range | First day A | Example, today 2027-03-31 |
-    | --- | --- | --- |
-    | `1m` | The day after `subMonths(today, 1)` | 2027-03-01 |
-    | `3m` | The day after `subMonths(today, 3)` | 2027-01-01 |
-    | `6m` | The day after `subMonths(today, 6)` | 2026-10-01 |
-    | `ytd` | 1 January of today's year | 2027-01-01 |
-    | `1y` (default) | The day after `subYears(today, 1)` | 2026-04-01 |
-    | `all` | The first trade date | |
-    | Custom | `from`; B is `to`, or today when `to` is later | `from=2026-10-01&to=2026-10-31` |
+    | Range          | First day A                                    | Example, today 2027-03-31       |
+    | -------------- | ---------------------------------------------- | ------------------------------- |
+    | `1m`           | The day after `subMonths(today, 1)`            | 2027-03-01                      |
+    | `3m`           | The day after `subMonths(today, 3)`            | 2027-01-01                      |
+    | `6m`           | The day after `subMonths(today, 6)`            | 2026-10-01                      |
+    | `ytd`          | 1 January of today's year                      | 2027-01-01                      |
+    | `1y` (default) | The day after `subYears(today, 1)`             | 2026-04-01                      |
+    | `all`          | The first trade date                           |                                 |
+    | Custom         | `from`; B is `to`, or today when `to` is later | `from=2026-10-01&to=2026-10-31` |
 
     The start value of a trailing range is therefore the close one period before today.
     - **Invalid input:** it is dropped with the FIL-5 notice, and the default applies. Invalid means an unknown `range`, a malformed date, only one of `from` and `to`, `from` after B, `from` before the origin (2020-01-01), or `range` together with dates.
@@ -208,6 +214,7 @@ For a period from date A to date B (inclusive, local dates):
     3. **Value over time:** a line chart for the range, with buy and sell markers, data zoom, and View as table (F09's chart rules).
     4. **Allocation by type at B:** a donut with the four types and their values.
     5. **Holdings at B:** a TanStack Table (D-171), sortable, with the BR-F07-13 columns. The total row equals the summary. For a custom range that ends before today, the heading says "Holdings on 31 Oct 2026".
+
 - **BR-F07-16** Every figure is computed on the server in one read transaction (D-34). The client never computes a figure.
     - **Loading:** `loadPortfolio` reads the trades and the prices they need, in two statements.
     - **Computing:** pure functions in `shared/portfolio/figures` compute every figure from those rows with BigInt.
@@ -217,6 +224,7 @@ For a period from date A to date B (inclusive, local dates):
     - golden's two trades, in place of a generated portfolio.
 
     Price catch-up and the generator skip fixture assets. The fixture therefore keeps exactly those prices and never appears in another portfolio.
+
 - **BR-F07-18** **Freshness.** An investment query on the client goes stale when both of these hold:
     - the UTC date is later than its `asOfPriceDate`;
     - its range ends after `asOfPriceDate`.
@@ -227,41 +235,45 @@ For a period from date A to date B (inclusive, local dates):
 
 **Golden** ([03-golden-dataset.md, Investments](../03-golden-dataset.md#investments)). Golden holds only the fixture (BR-F07-17). With the real INR factor of 83/1, its base prices give exactly 100.00, 110.00 and 99.00 per unit:
 
-| Date | `basePrice` (10⁻⁸ USD) | One unit in INR | Trade |
-| --- | --- | --- | --- |
-| 2026-09-30 | 120,481,928 | `round(120,481,928 × 83 × 100 ÷ 10^8)` = 10,000 paise, 100.00 | Buy 10 units |
-| 2026-10-15 | 132,530,120 | 11,000 paise, 110.00 | Buy 10 units |
-| 2026-10-31 | 119,277,108 | 9,900 paise, 99.00 | none |
+| Date       | `basePrice` (10⁻⁸ USD) | One unit in INR                                               | Trade        |
+| ---------- | ---------------------- | ------------------------------------------------------------- | ------------ |
+| 2026-09-30 | 120,481,928            | `round(120,481,928 × 83 × 100 ÷ 10^8)` = 10,000 paise, 100.00 | Buy 10 units |
+| 2026-10-15 | 132,530,120            | 11,000 paise, 110.00                                          | Buy 10 units |
+| 2026-10-31 | 119,277,108            | 9,900 paise, 99.00                                            | none         |
 
 Whole holdings round to the same figures. Ten units on 30 Sep are `round(100,000.00024)` = 100,000 paise, and twenty on 31 Oct are `round(197,999.99928)` = 198,000 paise. Between price dates the latest earlier price applies (BR-F07-03). The daily value is therefore:
+
 - 1,000.00 from 30 Sep to 14 Oct;
 - 2,200.00 from 15 to 30 Oct;
 - 1,980.00 from 31 Oct on.
 
-| Figure, October (A = 1 Oct, B = 31 Oct) | Value | Rule |
-| --- | --- | --- |
-| Value at start (close of 30 Sep, after its buy) | 1,000.00 | BR-F07-07 |
-| Net flows (only 15 Oct falls in the period) | +1,100.00 | BR-F07-08 |
-| Value at end (close of 31 Oct, 20 units at 99.00) | 1,980.00 | BR-F07-07 |
-| Change over the period | 1,980.00 − 1,000.00 − 1,100.00 = −120.00 (−12.0% of the start value) | BR-F07-09 |
-| Cost basis | 1,000.00 + 1,100.00 = 2,100.00 | BR-F07-10 |
-| Unrealized gain | −120.00, −5.7% | BR-F07-10 |
-| Time-weighted return | 1,100.00 ÷ 1,000.00 = 1.10; 1,980.00 ÷ 2,200.00 = 0.90; 1.10 × 0.90 − 1 = −1.0% | BR-F07-11 |
-| Allocation | ETF 100.0% | BR-F07-12 |
+| Figure, October (A = 1 Oct, B = 31 Oct)           | Value                                                                           | Rule      |
+| ------------------------------------------------- | ------------------------------------------------------------------------------- | --------- |
+| Value at start (close of 30 Sep, after its buy)   | 1,000.00                                                                        | BR-F07-07 |
+| Net flows (only 15 Oct falls in the period)       | +1,100.00                                                                       | BR-F07-08 |
+| Value at end (close of 31 Oct, 20 units at 99.00) | 1,980.00                                                                        | BR-F07-07 |
+| Change over the period                            | 1,980.00 − 1,000.00 − 1,100.00 = −120.00 (−12.0% of the start value)            | BR-F07-09 |
+| Cost basis                                        | 1,000.00 + 1,100.00 = 2,100.00                                                  | BR-F07-10 |
+| Unrealized gain                                   | −120.00, −5.7%                                                                  | BR-F07-10 |
+| Time-weighted return                              | 1,100.00 ÷ 1,000.00 = 1.10; 1,980.00 ÷ 2,200.00 = 0.90; 1.10 × 0.90 − 1 = −1.0% | BR-F07-11 |
+| Allocation                                        | ETF 100.0%                                                                      | BR-F07-12 |
 
 The gain on cost (−5.7%) and the time-weighted return (−1.0%) differ on purpose: the second buy landed before a fall.
 
 **One price step.**
+
 - A stock at basePrice 18,200,000,000 (182.00 USD), with draws giving r = +12,000 ppm, moves to `round(18,200,000,000 × 1,012,000 ÷ 1,000,000)` = 18,418,400,000.
 - One unit for an INR user is `round(18,418,400,000 × 83 × 100 ÷ 10^8)` = `round(1,528,727.2)` = 1,528,727 paise, or ₹15,287.27.
 
 **Currency independence.** 7.5 units of a mutual fund priced at 24.00 USD (basePrice 2,400,000,000) are worth:
+
 - `round(7.5 × 2,400,000,000 × 83 × 100 ÷ 10^8)` = 1,494,000 paise, or ₹14,940.00, to an INR user;
 - `round(7.5 × 2,400,000,000 × 9 × 100 ÷ (10 × 10^8))` = 16,200 cents, or €162.00, to an EUR user.
 
 Same units, different currency, no rebuild.
 
 **A cheap coin.** 5,000 Zephyr at basePrice 3,000,000 (0.03 USD), for a GBP user:
+
 - **The holding:** `round(5,000 × 3,000,000 × 4 × 100 ÷ (5 × 10^8))` = 12,000 pence, or £120.00.
 - **The unit price:** shows as £0.02, from 2.4p rounded.
 - **Never multiplied:** the holding is never valued as 5,000 × £0.02 = £100.00.
@@ -270,29 +282,32 @@ Same units, different currency, no rebuild.
 
 **`/investments`.** BR-F07-15.
 
-| State | What the user sees |
-| --- | --- |
-| Loading | Skeleton summary, chart area of fixed height, donut and table rows |
-| Empty | Never empty after onboarding. A profile created before M3 in development gets its portfolio from `db:seed --reset`, or from F15's portfolio step |
-| Error | "Investments could not be loaded." with Retry |
-| Offline (M5) | The last viewed range from cache with "as of"; other ranges: "You're offline. This range isn't saved on this device." |
-| Pending | n/a (read-only) |
-| Locked (Premium) | n/a |
-| Read-only | Always; there are no write actions |
+| State            | What the user sees                                                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Loading          | Skeleton summary, chart area of fixed height, donut and table rows                                                                               |
+| Empty            | Never empty after onboarding. A profile created before M3 in development gets its portfolio from `db:seed --reset`, or from F15's portfolio step |
+| Error            | "Investments could not be loaded." with Retry                                                                                                    |
+| Offline (M5)     | The last viewed range from cache with "as of"; other ranges: "You're offline. This range isn't saved on this device."                            |
+| Pending          | n/a (read-only)                                                                                                                                  |
+| Locked (Premium) | n/a                                                                                                                                              |
+| Read-only        | Always; there are no write actions                                                                                                               |
 
 ## 7. Flows
 
 **7.1 Onboarding seeds the portfolio.**
+
 1. `POST /api/profile` succeeds (F02, BR-F02-08).
 2. In the same transaction, BR-F07-05 writes 64 to 76 trades: 24 or 25 monthly buys per fund, plus the stock, ETF and crypto trades.
 3. The first `/investments` visit shows two years of history.
 
 **7.2 Daily prices.**
+
 1. A server process's first request on a new UTC day runs the daily pass (P2, BR-P2-27), which appends one price per catalog asset.
 2. The value series gains one point.
 3. Open pages refetch once the UTC date passes their `asOfPriceDate` (BR-F07-18).
 
 **7.3 Change the range.**
+
 1. Selecting `3m` updates the URL, and the summary and chart refetch for 3 months.
 2. Allocation and holdings are at today for every trailing range, so they stay as they are.
 3. The previous range stays cached for offline use (from M5).
@@ -303,15 +318,15 @@ Same units, different currency, no rebuild.
 
 ## 8. Validation and messages
 
-| Situation | Message shown |
-| --- | --- |
-| Banner | Sample portfolio. Prices are simulated, not real market data. |
-| Invalid `range`, `from` or `to` | Some filters in this link weren't valid and were removed. |
-| Custom range label | 1 Oct – 31 Oct 2026 |
-| Custom range holdings heading | Holdings on 31 Oct 2026 |
-| No change percentage or time-weighted return (no starting value) | — (with the tooltip "Not enough history in this range.") |
-| Per-unit figure below one minor unit | < £0.01 (in the user's currency) |
-| Load failure | Investments could not be loaded. |
+| Situation                                                        | Message shown                                                 |
+| ---------------------------------------------------------------- | ------------------------------------------------------------- |
+| Banner                                                           | Sample portfolio. Prices are simulated, not real market data. |
+| Invalid `range`, `from` or `to`                                  | Some filters in this link weren't valid and were removed.     |
+| Custom range label                                               | 1 Oct – 31 Oct 2026                                           |
+| Custom range holdings heading                                    | Holdings on 31 Oct 2026                                       |
+| No change percentage or time-weighted return (no starting value) | — (with the tooltip "Not enough history in this range.")      |
+| Per-unit figure below one minor unit                             | < £0.01 (in the user's currency)                              |
+| Load failure                                                     | Investments could not be loaded.                              |
 
 ## 9. Plan gating
 
@@ -323,11 +338,11 @@ Read-only, from M5 (P1). The last viewed range's summary and series, and the hol
 
 ## 11. Server surface
 
-| Endpoint | Method | Input | Output | Errors |
-| --- | --- | --- | --- | --- |
-| `/api/investments/summary` | GET | `range`, or `from` and `to` | `{ from, to, valueMinor, changeMinor, changeTenths, netFlowsMinor, startValueMinor, costMinor, gainMinor, gainTenths, twrTenths, allocation: [{ type, valueMinor, shareTenths }], currency, asOfPriceDate }` | 400, 401, 403 `profile_required` |
-| `/api/investments/series` | GET | As for the summary | `{ from, to, points: [{ date, valueMinor }], trades: [{ date, assetKey, side, quantity }], currency, asOfPriceDate }` | 400, 401, 403 |
-| `/api/investments/holdings` | GET | `on` (date, default today; a later date counts as today) | `{ items: [{ assetKey, symbol, name, type, quantity, avgCostMinor, costMinor, valueMinor, gainMinor, gainTenths, shareTenths }], currency, asOfPriceDate }` | 400, 401, 403 |
+| Endpoint                    | Method | Input                                                    | Output                                                                                                                                                                                                       | Errors                           |
+| --------------------------- | ------ | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------- |
+| `/api/investments/summary`  | GET    | `range`, or `from` and `to`                              | `{ from, to, valueMinor, changeMinor, changeTenths, netFlowsMinor, startValueMinor, costMinor, gainMinor, gainTenths, twrTenths, allocation: [{ type, valueMinor, shareTenths }], currency, asOfPriceDate }` | 400, 401, 403 `profile_required` |
+| `/api/investments/series`   | GET    | As for the summary                                       | `{ from, to, points: [{ date, valueMinor }], trades: [{ date, assetKey, side, quantity }], currency, asOfPriceDate }`                                                                                        | 400, 401, 403                    |
+| `/api/investments/holdings` | GET    | `on` (date, default today; a later date counts as today) | `{ items: [{ assetKey, symbol, name, type, quantity, avgCostMinor, costMinor, valueMinor, gainMinor, gainTenths, shareTenths }], currency, asOfPriceDate }`                                                  | 400, 401, 403                    |
 
 - **Transactions:** each endpoint is a read in one repeatable-read transaction (P2).
 - **Input:** `range` resolves on the server as in BR-F07-15, so `all` starts on the first trade date. With dates:
@@ -336,16 +351,19 @@ Read-only, from M5 (P1). The last viewed range's summary and series, and the hol
     - a `from` after the resulting `to` gets 400 `bad_request`.
 
     A request with neither form, or with both, gets 400 `bad_request`.
+
 - **Output:** the resolved `from` and `to`.
 - **Nullable fields:** `changeTenths`, `gainTenths` and `twrTenths` are `null` where section 4 shows "—".
 - **`asOfPriceDate`:** the latest price date used.
 
 **Shared functions.** F08's widget (for the dashboard month), F09's charts and these endpoints use them.
+
 - `loadPortfolio(tx, ctx, { from, to })` reads the trades and the prices they need, in two statements. `to` is clipped to today.
 - `portfolioFigures(data, { from, to })` is pure and returns the summary.
 - `portfolioSeries(data, { from, to })` is pure and returns the daily values and the trades.
 
 **Modules**
+
 - `shared/portfolio/prices`: the price step and the pure price function (BR-F07-01).
 - `shared/portfolio/generate`: the pure generator (BR-F07-05).
 - `shared/portfolio/figures`: the pure figure functions (BR-F07-07 to BR-F07-14).
@@ -417,18 +435,18 @@ Illustrative, `GET /api/investments/summary?from=2026-10-01&to=2026-10-31` with 
 
 ```json
 {
-  "valueMinor": 198000,
-  "startValueMinor": 100000,
-  "netFlowsMinor": 110000,
-  "changeMinor": -12000,
-  "changeTenths": -120,
-  "costMinor": 210000,
-  "gainMinor": -12000,
-  "gainTenths": -57,
-  "twrTenths": -10,
-  "allocation": [{ "type": "etf", "valueMinor": 198000, "shareTenths": 1000 }],
-  "currency": "INR",
-  "asOfPriceDate": "2026-10-31"
+	"valueMinor": 198000,
+	"startValueMinor": 100000,
+	"netFlowsMinor": 110000,
+	"changeMinor": -12000,
+	"changeTenths": -120,
+	"costMinor": 210000,
+	"gainMinor": -12000,
+	"gainTenths": -57,
+	"twrTenths": -10,
+	"allocation": [{ "type": "etf", "valueMinor": 198000, "shareTenths": 1000 }],
+	"currency": "INR",
+	"asOfPriceDate": "2026-10-31"
 }
 ```
 

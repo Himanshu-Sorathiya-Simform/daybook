@@ -3,6 +3,7 @@
 17 Oct 2026 · @Himanshu
 
 The dashboard is the first screen after login. It shows one calendar month at a glance:
+
 - spending against last month;
 - net savings with the split between Goals and unallocated;
 - Budgets, Subscriptions, investments and Goals;
@@ -11,12 +12,12 @@ The dashboard is the first screen after login. It shows one calendar month at a 
 
 Every figure comes from the same server functions as the Transactions list, the Budgets page and the reports, so they always agree. Each widget can be shown or hidden and reordered, and the layout follows the account across devices. A brand-new account sees one onboarding panel in place of the finance widgets.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M3 (dashboard, layout and its sync, settings page). Pending annotations, the persisted cache and offline reading arrive with P1 (M5). The insights widget arrives with F10 (M6) and Latest from Learn with F14 (M7); until then both are absent from the registry |
-| Plan | Free and Premium; no widget is Premium. Drag-and-drop and resizing are Stretch (`dashboard.dragAndDrop`) |
+| Item       | Value                                                                                                                                                                                                                                                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Milestone  | M3 (dashboard, layout and its sync, settings page). Pending annotations, the persisted cache and offline reading arrive with P1 (M5). The insights widget arrives with F10 (M6) and Latest from Learn with F14 (M7); until then both are absent from the registry                                                                          |
+| Plan       | Free and Premium; no widget is Premium. Drag-and-drop and resizing are Stretch (`dashboard.dragAndDrop`)                                                                                                                                                                                                                                   |
 | Depends on | [F03](F03-transactions.md), [F04](F04-budgets.md), [F05](F05-subscriptions.md), [F06](F06-goals.md), [F07](F07-investments.md) for figures; [F02](F02-onboarding-profile-settings.md) (month, locale); [P4](../platform/P4-capabilities.md) (`<Gate>`); F09 (chart rules), F10 (insights), F14 (posts), F15 (Load demo data), P1 (offline) |
-| Decisions | D-25, D-40, D-54, D-55, D-63, D-108 to D-111, D-113, D-114, D-116, D-117, D-120, D-183, D-185, D-279 to D-283, D-293 to D-295, D-385 |
+| Decisions  | D-25, D-40, D-54, D-55, D-63, D-108 to D-111, D-113, D-114, D-116, D-117, D-120, D-183, D-185, D-279 to D-283, D-293 to D-295, D-385                                                                                                                                                                                                       |
 
 ## 1. User stories
 
@@ -29,47 +30,48 @@ Every figure comes from the same server functions as the Transactions list, the 
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
+| In                                                                                                                                                                                                                                                                                          | Stretch (M8)                                                                           | Out                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | The month picker; the widget registry (9 widgets at M3, 11 once F10 and F14 arrive); the dashboard data endpoint; server prefetch and hydration; pending annotations; drill-down; the onboarding panel; layout storage, validation and sync; the Settings → Dashboard page; offline reading | Drag-and-drop reordering and resizing on the dashboard (D-54, `dashboard.dragAndDrop`) | Date ranges or category filters on the dashboard (D-110); custom widgets; per-breakpoint layouts (D-54); saved layout presets; a widget marketplace (root 16); Premium-only widgets (Premium charts live on Analytics, F09) |
 
 ## 3. Concepts and fields
 
 **Widget registry** (`shared/dashboard/widgets.ts`, D-109). One entry per widget.
+
 - **Fields:** id, title, description (for settings), default size, default order, the queries it reads, an optional capability, whether it is a finance widget (hidden by the onboarding panel), and a lazy loader.
 - **Shared with:** layout, lazy loading and gating all read this one definition.
 
-| Order | Id | Title | Size | Finance | Reads | From |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | `spending` | Spending | s | Yes | Dashboard data | M3 |
-| 2 | `savings` | Net savings | s | Yes | Dashboard data | M3 |
-| 3 | `budgets` | Budgets | m | Yes | Dashboard data (F04) | M3 |
-| 4 | `insights` | Insights | m | Yes | F10 insights, top 5 | M6 |
-| 5 | `categories` | Spending by category | m | Yes | Dashboard data | M3 |
-| 6 | `incomeExpenses` | Income vs expenses | m | Yes | Dashboard data | M3 |
-| 7 | `goals` | Goals | s | Yes | Dashboard data (F06) | M3 |
-| 8 | `subscriptions` | Subscriptions | s | Yes | Dashboard data (F05) | M3 |
-| 9 | `investments` | Investments | m | No | Dashboard data (F07) | M3 |
-| 10 | `recent` | Recent Transactions | m | Yes | Dashboard data (F03) | M3 |
-| 11 | `learn` | Latest from Learn | l | No | F14 latest posts, prefetched by the page | M7 |
+| Order | Id               | Title                | Size | Finance | Reads                                    | From |
+| ----- | ---------------- | -------------------- | ---- | ------- | ---------------------------------------- | ---- |
+| 1     | `spending`       | Spending             | s    | Yes     | Dashboard data                           | M3   |
+| 2     | `savings`        | Net savings          | s    | Yes     | Dashboard data                           | M3   |
+| 3     | `budgets`        | Budgets              | m    | Yes     | Dashboard data (F04)                     | M3   |
+| 4     | `insights`       | Insights             | m    | Yes     | F10 insights, top 5                      | M6   |
+| 5     | `categories`     | Spending by category | m    | Yes     | Dashboard data                           | M3   |
+| 6     | `incomeExpenses` | Income vs expenses   | m    | Yes     | Dashboard data                           | M3   |
+| 7     | `goals`          | Goals                | s    | Yes     | Dashboard data (F06)                     | M3   |
+| 8     | `subscriptions`  | Subscriptions        | s    | Yes     | Dashboard data (F05)                     | M3   |
+| 9     | `investments`    | Investments          | m    | No      | Dashboard data (F07)                     | M3   |
+| 10    | `recent`         | Recent Transactions  | m    | Yes     | Dashboard data (F03)                     | M3   |
+| 11    | `learn`          | Latest from Learn    | l    | No      | F14 latest posts, prefetched by the page | M7   |
 
 **Sizes and the grid**
 
 | Size | Desktop (4 columns, from 1024 px) | Tablet (2 columns, 640 to 1023 px) | Phone (1 column) | Reserved height |
-| --- | --- | --- | --- | --- |
-| `s` | 1 column | 1 column | Full width | 176 px |
-| `m` | 2 columns | 2 columns | Full width | 336 px |
-| `l` | 4 columns | 2 columns | Full width | 288 px |
+| ---- | --------------------------------- | ---------------------------------- | ---------------- | --------------- |
+| `s`  | 1 column                          | 1 column                           | Full width       | 176 px          |
+| `m`  | 2 columns                         | 2 columns                          | Full width       | 336 px          |
+| `l`  | 4 columns                         | 2 columns                          | Full width       | 288 px          |
 
 Widgets flow in layout order and wrap. Every widget reserves its height before its data or chunk loads, so nothing shifts (CLS, root 11.1).
 
 **Layout** (private, one per user; D-54)
 
-| Field | Meaning | Rules |
-| --- | --- | --- |
-| `formatVersion` | Format of the stored document. It is separate from the row's `version` column (P2), which layout writes never check (OFF-8) | `1` |
-| `widgets` | Ordered `{ id, size, hidden }` | BR-F08-20 |
-| `changedAt` | When the user made this layout; a column beside the document | Client instant; decides which layout wins (BR-F08-22) |
+| Field           | Meaning                                                                                                                     | Rules                                                 |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `formatVersion` | Format of the stored document. It is separate from the row's `version` column (P2), which layout writes never check (OFF-8) | `1`                                                   |
+| `widgets`       | Ordered `{ id, size, hidden }`                                                                                              | BR-F08-20                                             |
+| `changedAt`     | When the user made this layout; a column beside the document                                                                | Client instant; decides which layout wins (BR-F08-22) |
 
 ## 4. Business rules
 
@@ -93,6 +95,7 @@ Widgets flow in layout order and wrap. Every widget reserves its height before i
     - F15's `accountEmpty`.
 
     The dashboard, the Transactions list and the reports therefore cannot disagree (root success criterion 1, TST-2).
+
 - **BR-F08-04** **Statement budget** (D-293). After the wrapper's setup, the handler runs at most 8 SQL statements:
     1. `rollup`: every Transaction figure and the earliest `occurredOn`, in one statement;
     2. `listTransactions`: the 8 recent rows;
@@ -100,9 +103,10 @@ Widgets flow in layout order and wrap. Every widget reserves its height before i
     4. `subscriptionSummary`: costs and the next renewal;
     5. `goalProgress`: Goals, progress and locks;
     6. and 7. `loadPortfolio`: the trades, then the prices they need;
-    8. `accountEmpty`: one statement of `EXISTS` checks.
+    7. `accountEmpty`: one statement of `EXISTS` checks.
 
     Each of these functions is specified as one statement (two for `loadPortfolio`) by its owning spec. A test counts them (AC-F08-11). Shared functions take the open transaction and never open their own.
+
 - **BR-F08-05** The page renders on the server, prefetches the dashboard data and layout through `readAsUser`, and hydrates TanStack Query (D-113). From M6 it also prefetches insights, and from M7 the 3 newest Learn posts, in their own Suspense boundary so the rest of the page never waits on Sanity (F14, BR-F14-11). The dashboard has no `<SanityLive />`, so the widget's posts update on the next load (D-385).
     - **The persisted cache (from M5):** a persisted copy that is newer than the server's wins until it refetches.
     - **Lazy loading:** widget code and charts load lazily on the client.
@@ -120,6 +124,7 @@ Widgets flow in layout order and wrap. Every widget reserves its height before i
     - the savings rate, "—" without income.
 
     Selecting income opens Transactions with `type=income`; selecting To Goals opens it with `type=goal_contribution,goal_withdrawal`.
+
 - **BR-F08-09** **Budgets** shows the overall figure and the 5 budgeted categories with the highest utilization in M, in F04's states and labels. "View all" opens `/budgets?month=M`. Without Budgets in M it reads "No Budgets for October 2026." with Add a Budget.
 - **BR-F08-10** **Insights** (from M6) shows F10's top 5 insights for M (D-120), with "See all" to `/insights?month=M`.
 - **BR-F08-11** **Spending by category** is a donut of M's category spending:
@@ -129,6 +134,7 @@ Widgets flow in layout order and wrap. Every widget reserves its height before i
     - categories with zero spending left out.
 
     Selecting a slice opens Transactions for M with `cat=<c>`. Other opens it with every category it groups. View as table lists every category (D-117).
+
 - **BR-F08-12** **Income vs expenses** is a grouped bar chart of income and spending for the 12 months ending at M, with negative spending drawn below zero. Selecting a bar opens that month's Transactions with the bar's types.
 - **BR-F08-13** **Goals** shows up to 4 active Goals, oldest first, each with:
     - a progress bar and percent;
@@ -136,12 +142,14 @@ Widgets flow in layout order and wrap. Every widget reserves its height before i
     - a lock badge, when locked.
 
     "View all" opens `/goals`. Goal progress is all-time, not limited to M.
+
 - **BR-F08-14** **Subscriptions** shows:
     - the monthly and yearly cost;
     - the charges in M (Out for `src=subscription` in M);
     - the next renewal from today, from F05's `subscriptionSummary`: the earliest next due date across Subscriptions (F05, BR-F05-19), whatever their cadence. For example "Netflix · 5 Nov · 649.00", or "No upcoming renewals."
 
     "View all" opens `/subscriptions`.
+
 - **BR-F08-15** **Investments** shows, for M:
     - the value at the end of M (today, for the current month);
     - the change in M without flows, and the time-weighted return (F07). A `null` return shows "—" with F07's tooltip "Not enough history in this range.";
@@ -149,6 +157,7 @@ Widgets flow in layout order and wrap. Every widget reserves its height before i
     - the label "Simulated".
 
     The sparkline is an image with a text label: "Portfolio value from ₹1,000.00 on 1 Oct to ₹1,980.00 on 31 Oct; lowest ₹1,000.00, highest ₹2,200.00." The full series, with View as table, is on Investments. Selecting the widget opens `/investments?from=<first day of M>&to=<last day of M, or today>`, which shows the same figures (F07, BR-F07-15).
+
 - **BR-F08-16** **Recent Transactions** lists M's 8 newest Transactions in list order (F03, BR-F03-29), with F03's row content.
     - **Pending creates (from M5):** pending creates in M come first, with their badge.
     - **Selecting:** a row opens `/transactions?txn=<id>`, and "View all" opens Transactions for M.
@@ -181,6 +190,7 @@ Widgets flow in layout order and wrap. Every widget reserves its height before i
     - a layout with an unknown `formatVersion` is replaced by the default.
 
     The server normalizes on every read and write, and the client again on load, since a deploy can add or remove widgets.
+
 - **BR-F08-21** The default layout is the registry order, all visible. "Reset to default" restores it after the confirmation "Reset your dashboard to the default layout?".
 - **BR-F08-22** The layout is stored per account (D-55), with a local copy, and it is not a write-queue item (OFF-8). It works the same way from M3 on.
     - **The local copy:** local storage `daybook.layout` holds `{ userId, layout, changedAt, synced }`. Each change applies on screen at once and is written there with `synced: false`. A copy whose `userId` is not the signed-in user's is deleted unread.
@@ -207,6 +217,7 @@ Widgets flow in layout order and wrap. Every widget reserves its height before i
     - `changedAt`: an ISO 8601 instant.
 
     Everything else is normalized (BR-F08-20), never refused: unknown ids, duplicates, missing widgets, sizes, an unknown `formatVersion`, and every widget hidden.
+
 - **BR-F08-24** At least one widget must stay visible. Hiding the last visible one is refused, with "Keep at least one widget on your dashboard."
 
 **Settings → Dashboard**
@@ -227,20 +238,21 @@ Widgets flow in layout order and wrap. Every widget reserves its height before i
 
 Every figure uses the owning feature's formula. Golden October, at the frozen clock ([03-golden-dataset.md](../03-golden-dataset.md)):
 
-| Widget | Figures |
-| --- | --- |
-| Spending | 31,168.00; September 28,049.00; +3,119.00 (+11.1%) |
-| Net savings | Income 85,000.00, spending 31,168.00, net 53,832.00; To Goals 7,000.00, unallocated 46,832.00; savings rate 63.3% |
-| Budgets | Overall 13,168.00 of 11,000.00, 119.7%, Over budget. Top 5: entertainment 214.8%, food 124.4%, shopping 100.0%, transportation 90.0% (4 budgeted) |
-| Spending by category | housing 18,000.00, food 6,220.00, shopping 3,000.00, entertainment 2,148.00, transportation 1,800.00; total 31,168.00 (5 categories, so no Other) |
-| Income vs expenses | 12 months ending October: September 97,000.00 and 28,049.00; October 85,000.00 and 31,168.00; every other month 0.00 and 0.00 |
-| Goals | Emergency fund 10,000.00 of 100,000.00 (10.0%); Vacation 5,000.00 of 30,000.00 (16.7%), 6,250.00 a month |
-| Subscriptions | 20,273.92 a month, 243,287.00 a year; charges in October 20,148.00; next renewal Netflix, 5 Nov, 649.00 |
-| Investments | With the golden fixture: value 1,980.00, change −120.00, return −1.0%. Sparkline: 1,000.00 from 1 to 14 Oct, 2,200.00 from 15 to 30 Oct, 1,980.00 on 31 Oct |
-| Recent Transactions | #25, #24, #23, #22, #21, #20, #19, #18 |
-| Picker | `earliestMonth` 2026-09; `accountEmpty` false |
+| Widget               | Figures                                                                                                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Spending             | 31,168.00; September 28,049.00; +3,119.00 (+11.1%)                                                                                                          |
+| Net savings          | Income 85,000.00, spending 31,168.00, net 53,832.00; To Goals 7,000.00, unallocated 46,832.00; savings rate 63.3%                                           |
+| Budgets              | Overall 13,168.00 of 11,000.00, 119.7%, Over budget. Top 5: entertainment 214.8%, food 124.4%, shopping 100.0%, transportation 90.0% (4 budgeted)           |
+| Spending by category | housing 18,000.00, food 6,220.00, shopping 3,000.00, entertainment 2,148.00, transportation 1,800.00; total 31,168.00 (5 categories, so no Other)           |
+| Income vs expenses   | 12 months ending October: September 97,000.00 and 28,049.00; October 85,000.00 and 31,168.00; every other month 0.00 and 0.00                               |
+| Goals                | Emergency fund 10,000.00 of 100,000.00 (10.0%); Vacation 5,000.00 of 30,000.00 (16.7%), 6,250.00 a month                                                    |
+| Subscriptions        | 20,273.92 a month, 243,287.00 a year; charges in October 20,148.00; next renewal Netflix, 5 Nov, 649.00                                                     |
+| Investments          | With the golden fixture: value 1,980.00, change −120.00, return −1.0%. Sparkline: 1,000.00 from 1 to 14 Oct, 2,200.00 from 15 to 30 Oct, 1,980.00 on 31 Oct |
+| Recent Transactions  | #25, #24, #23, #22, #21, #20, #19, #18                                                                                                                      |
+| Picker               | `earliestMonth` 2026-09; `accountEmpty` false                                                                                                               |
 
 **November (to date):**
+
 - **Spending:** 18,420.00 with "+300.00 pending" (P1, from M5), against October's 31,168.00: −12,748.00 (−40.9%).
 - **Net savings:** −18,420.00; the savings rate is "—".
 - **Investments:** value 1,980.00, change 0.00; the fixture has no November prices.
@@ -251,15 +263,15 @@ Every figure uses the owning feature's formula. Golden October, at the frozen cl
 
 **`/dashboard?month=YYYY-MM`.** The month picker, then the widgets in layout order. **`/settings/dashboard`.** BR-F08-25.
 
-| State | What the user sees |
-| --- | --- |
-| Loading | The server-rendered page arrives with its figures. Each widget's reserved skeleton (section 3) shows while a client-side month change loads |
-| Empty | The onboarding panel (BR-F08-19). Single empty widgets show one line each, for example "No Budgets for October 2026." |
-| Error | Failing widgets show "This could not be loaded." with Retry; the others render |
-| Offline (M5) | The current and last viewed months from cache with "as of" (root 7.3); other months: "You're offline. This month isn't saved on this device." |
-| Pending (M5) | Annotations (BR-F08-18); pending creates at the top of Recent Transactions |
-| Locked (Premium) | No core widget is gated. A future gated widget renders through `<Gate>` with the locked card (P4) |
-| Read-only | n/a |
+| State            | What the user sees                                                                                                                            |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Loading          | The server-rendered page arrives with its figures. Each widget's reserved skeleton (section 3) shows while a client-side month change loads   |
+| Empty            | The onboarding panel (BR-F08-19). Single empty widgets show one line each, for example "No Budgets for October 2026."                         |
+| Error            | Failing widgets show "This could not be loaded." with Retry; the others render                                                                |
+| Offline (M5)     | The current and last viewed months from cache with "as of" (root 7.3); other months: "You're offline. This month isn't saved on this device." |
+| Pending (M5)     | Annotations (BR-F08-18); pending creates at the top of Recent Transactions                                                                    |
+| Locked (Premium) | No core widget is gated. A future gated widget renders through `<Gate>` with the locked card (P4)                                             |
+| Read-only        | n/a                                                                                                                                           |
 
 ## 7. Flows
 
@@ -296,19 +308,19 @@ Every figure uses the owning feature's formula. Golden October, at the frozen cl
 
 ## 8. Validation and messages
 
-| Situation | Message shown |
-| --- | --- |
-| Invalid `month` | Some filters in this link weren't valid and were removed. |
-| Hiding the last widget | Keep at least one widget on your dashboard. |
-| Reset | Reset your dashboard to the default layout? |
-| Layout save refused (422) | Your dashboard layout couldn't be saved. |
-| Widget failure | This could not be loaded. |
-| Offline month not cached | You're offline. This month isn't saved on this device. |
-| Onboarding panel | Welcome to Daybook. Add your first Transaction to see your month take shape. |
-| No renewals | No upcoming renewals. |
-| Month announcement | October 2026 |
-| Move announcement | Budgets moved to position 2 of 9. (the count is the registry's) |
-| Sparkline label | Portfolio value from ₹1,000.00 on 1 Oct to ₹1,980.00 on 31 Oct; lowest ₹1,000.00, highest ₹2,200.00. |
+| Situation                 | Message shown                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Invalid `month`           | Some filters in this link weren't valid and were removed.                                            |
+| Hiding the last widget    | Keep at least one widget on your dashboard.                                                          |
+| Reset                     | Reset your dashboard to the default layout?                                                          |
+| Layout save refused (422) | Your dashboard layout couldn't be saved.                                                             |
+| Widget failure            | This could not be loaded.                                                                            |
+| Offline month not cached  | You're offline. This month isn't saved on this device.                                               |
+| Onboarding panel          | Welcome to Daybook. Add your first Transaction to see your month take shape.                         |
+| No renewals               | No upcoming renewals.                                                                                |
+| Month announcement        | October 2026                                                                                         |
+| Move announcement         | Budgets moved to position 2 of 9. (the count is the registry's)                                      |
+| Sparkline label           | Portfolio value from ₹1,000.00 on 1 Oct to ₹1,980.00 on 31 Oct; lowest ₹1,000.00, highest ₹2,200.00. |
 
 ## 9. Plan gating
 
@@ -322,11 +334,11 @@ None in the core. The registry's optional `capability` renders a widget through 
 
 ## 11. Server surface
 
-| Endpoint | Method | Input | Output | Errors | Idempotency and versioning |
-| --- | --- | --- | --- | --- | --- |
-| `/api/dashboard` | GET | `month` | Section 15 | 400, 401, 403 `profile_required` | Read |
-| `/api/layout` | GET | none | `{ layout, changedAt }`, the default with `changedAt: null` when none is stored | 401, 403 | Read |
-| `/api/layout` | PUT | `{ layout, changedAt }` | 200 `{ layout, changedAt, applied }` | 401, 403, 422 `validation_failed` | `Idempotency-Key` required; no `If-Match` (OFF-8). A `changedAt` after `ctx.now` is stored as `ctx.now` |
+| Endpoint         | Method | Input                   | Output                                                                          | Errors                            | Idempotency and versioning                                                                              |
+| ---------------- | ------ | ----------------------- | ------------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `/api/dashboard` | GET    | `month`                 | Section 15                                                                      | 400, 401, 403 `profile_required`  | Read                                                                                                    |
+| `/api/layout`    | GET    | none                    | `{ layout, changedAt }`, the default with `changedAt: null` when none is stored | 401, 403                          | Read                                                                                                    |
+| `/api/layout`    | PUT    | `{ layout, changedAt }` | 200 `{ layout, changedAt, applied }`                                            | 401, 403, 422 `validation_failed` | `Idempotency-Key` required; no `If-Match` (OFF-8). A `changedAt` after `ctx.now` is stored as `ctx.now` |
 
 ## 12. Cross-feature effects
 
@@ -385,20 +397,71 @@ Illustrative, `GET /api/dashboard?month=2026-10` on golden (shortened):
 
 ```json
 {
-  "month": "2026-10",
-  "partial": false,
-  "earliestMonth": "2026-09",
-  "accountEmpty": false,
-  "currency": "INR",
-  "spending": { "outMinor": 3116800, "previousOutMinor": 2804900, "deltaMinor": 311900, "deltaTenths": 111 },
-  "savings": { "incomeMinor": 8500000, "outMinor": 3116800, "netMinor": 5383200, "toGoalsMinor": 700000, "unallocatedMinor": 4683200, "rateTenths": 633 },
-  "budgets": { "overall": { "limitMinor": 1100000, "spentMinor": 1316800, "utilizationTenths": 1197, "state": "over" }, "top": [] },
-  "categories": [{ "category": "housing", "outMinor": 1800000 }, { "category": "food", "outMinor": 622000 }],
-  "incomeExpenses": [{ "month": "2026-10", "incomeMinor": 8500000, "outMinor": 3116800 }],
-  "goals": [{ "id": "0192…", "name": "Vacation", "progressMinor": 500000, "targetMinor": 3000000, "percentTenths": 167, "requiredMonthlyMinor": 625000, "requiredStatus": "monthly", "locked": false }],
-  "subscriptions": { "monthlyMinor": 2027392, "yearlyMinor": 24328700, "chargesInMonthMinor": 2014800, "nextRenewal": { "name": "Netflix", "dueOn": "2026-11-05", "amountMinor": 64900 } },
-  "investments": { "valueMinor": 198000, "changeMinor": -12000, "twrTenths": -10, "asOfPriceDate": "2026-10-31", "series": [{ "date": "2026-10-01", "valueMinor": 100000 }] },
-  "recent": []
+	"month": "2026-10",
+	"partial": false,
+	"earliestMonth": "2026-09",
+	"accountEmpty": false,
+	"currency": "INR",
+	"spending": {
+		"outMinor": 3116800,
+		"previousOutMinor": 2804900,
+		"deltaMinor": 311900,
+		"deltaTenths": 111
+	},
+	"savings": {
+		"incomeMinor": 8500000,
+		"outMinor": 3116800,
+		"netMinor": 5383200,
+		"toGoalsMinor": 700000,
+		"unallocatedMinor": 4683200,
+		"rateTenths": 633
+	},
+	"budgets": {
+		"overall": {
+			"limitMinor": 1100000,
+			"spentMinor": 1316800,
+			"utilizationTenths": 1197,
+			"state": "over"
+		},
+		"top": []
+	},
+	"categories": [
+		{ "category": "housing", "outMinor": 1800000 },
+		{ "category": "food", "outMinor": 622000 }
+	],
+	"incomeExpenses": [
+		{ "month": "2026-10", "incomeMinor": 8500000, "outMinor": 3116800 }
+	],
+	"goals": [
+		{
+			"id": "0192…",
+			"name": "Vacation",
+			"progressMinor": 500000,
+			"targetMinor": 3000000,
+			"percentTenths": 167,
+			"requiredMonthlyMinor": 625000,
+			"requiredStatus": "monthly",
+			"locked": false
+		}
+	],
+	"subscriptions": {
+		"monthlyMinor": 2027392,
+		"yearlyMinor": 24328700,
+		"chargesInMonthMinor": 2014800,
+		"nextRenewal": {
+			"name": "Netflix",
+			"dueOn": "2026-11-05",
+			"amountMinor": 64900
+		}
+	},
+	"investments": {
+		"valueMinor": 198000,
+		"changeMinor": -12000,
+		"twrTenths": -10,
+		"asOfPriceDate": "2026-10-31",
+		"series": [{ "date": "2026-10-01", "valueMinor": 100000 }]
+	},
+	"recent": []
 }
 ```
 

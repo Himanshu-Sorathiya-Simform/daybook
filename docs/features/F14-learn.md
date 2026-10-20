@@ -3,17 +3,18 @@
 18 Oct 2026 · @Himanshu
 
 Learn is Daybook's library of short articles, news and guides about money. Content lives in Sanity, Daybook's hosted CMS, and appears on public pages anyone can read, logged in or not. The newest posts also show on the landing page and the dashboard, and post titles are searchable from the palette.
+
 - **Reading:** pages read Sanity on the server.
 - **Live updates:** pages update live when content changes, through Sanity's Live Content API, with no webhooks to configure on localhost.
 - **Rich text:** rendered from Portable Text, never from raw HTML.
 - **Content:** a seed script loads 12 sample posts, so the section is never empty.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M7. Access tiers (members and Premium posts) are Stretch (M8) |
-| Plan | Free and Premium; all core posts are public. Stretch: `learn.tiers` flag, `learn.premium.read` Premium code |
+| Item       | Value                                                                                                                                                                                                                                                                                 |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M7. Access tiers (members and Premium posts) are Stretch (M8)                                                                                                                                                                                                                         |
+| Plan       | Free and Premium; all core posts are public. Stretch: `learn.tiers` flag, `learn.premium.read` Premium code                                                                                                                                                                           |
 | Depends on | [P2](../platform/P2-data-access-and-security.md) (CSP for Sanity, dynamic pages, the request clock), [P1](../platform/P1-offline-and-pwa.md) (page and image caching), [F01](F01-auth-and-account.md) (landing page), [F08](F08-dashboard.md) (widget), [F13](F13-search.md) (search) |
-| Decisions | D-57, D-157 to D-160, D-165, D-173, D-348 to D-353, D-378, D-382, D-385 |
+| Decisions  | D-57, D-157 to D-160, D-165, D-173, D-348 to D-353, D-378, D-382, D-385                                                                                                                                                                                                               |
 
 ## 1. User stories
 
@@ -25,29 +26,30 @@ Learn is Daybook's library of short articles, news and guides about money. Conte
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
+| In                                                                                                                                                                                                                                                                             | Stretch (M8)                                                                                                                                         | Out                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | The post schema and the Sanity Studio; `/learn` with kind and topic filters, title search and paging; `/learn/[slug]`; the landing-page and dashboard lists; live updates; Portable Text rendering; Sanity images; the seed script; offline reading through the service worker | Members-only and Premium posts with dotted ids, read on the server with a token through a second client (D-157, `learn.tiers`, `learn.premium.read`) | Comments, likes or sharing; authoring inside Daybook; drafts and previews in the app (Sanity's Presentation tool); newsletters; full-text search of post bodies; localization; RSS |
 
 ## 3. Concepts and fields
 
 **Post** (one Sanity document type, `post`; D-158, D-348)
 
-| Field | Meaning | Rules | Example |
-| --- | --- | --- | --- |
-| `title` | Headline | Required, 1 to 100 characters | "How to set your first Budget" |
-| `slug` | URL part | Required, unique, lowercase letters, digits and hyphens, from the title | `how-to-set-your-first-budget` |
-| `kind` | `article`, `news` or `guide` | Required | `guide` |
-| `topics` | One to three of `budgeting`, `saving`, `investing`, `debt`, `taxes`, `basics` | Required | `["budgeting", "basics"]` |
-| `excerpt` | One-line summary for lists and metadata | Required, 1 to 200 characters | "Pick one category, set a limit, check it weekly." |
-| `cover` | Image with `alt` text | Required; `alt` required, 1 to 150 characters | |
-| `body` | Portable Text | Required. Styles: normal, h2, h3, blockquote. Lists: bullet and number. Marks: strong, em, code, link. Blocks: image with `alt` | |
-| `author` | Display name | Required, 1 to 60 characters | "Daybook team" |
-| `publishedAt` | When it goes live | Required; a post with a future `publishedAt` is not shown | `2026-10-12T09:00:00Z` |
+| Field         | Meaning                                                                       | Rules                                                                                                                           | Example                                            |
+| ------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `title`       | Headline                                                                      | Required, 1 to 100 characters                                                                                                   | "How to set your first Budget"                     |
+| `slug`        | URL part                                                                      | Required, unique, lowercase letters, digits and hyphens, from the title                                                         | `how-to-set-your-first-budget`                     |
+| `kind`        | `article`, `news` or `guide`                                                  | Required                                                                                                                        | `guide`                                            |
+| `topics`      | One to three of `budgeting`, `saving`, `investing`, `debt`, `taxes`, `basics` | Required                                                                                                                        | `["budgeting", "basics"]`                          |
+| `excerpt`     | One-line summary for lists and metadata                                       | Required, 1 to 200 characters                                                                                                   | "Pick one category, set a limit, check it weekly." |
+| `cover`       | Image with `alt` text                                                         | Required; `alt` required, 1 to 150 characters                                                                                   |                                                    |
+| `body`        | Portable Text                                                                 | Required. Styles: normal, h2, h3, blockquote. Lists: bullet and number. Marks: strong, em, code, link. Blocks: image with `alt` |                                                    |
+| `author`      | Display name                                                                  | Required, 1 to 60 characters                                                                                                    | "Daybook team"                                     |
+| `publishedAt` | When it goes live                                                             | Required; a post with a future `publishedAt` is not shown                                                                       | `2026-10-12T09:00:00Z`                             |
 
 The Sanity Studio lives in `studio/` in the repository, with this schema and its validation, and is deployed to Sanity's hosted Studio (`npx sanity deploy`). Daybook never writes posts at runtime.
 
 **Derived values**
+
 - **Reading time:** the body's words ÷ 200, rounded up, at least 1: "4 min read".
 - **The kind's label:** Article, News or Guide.
 - **The topic's label:** Budgeting, Saving, Investing, Debt, Taxes or Basics.
@@ -96,6 +98,7 @@ The Sanity Studio lives in `studio/` in the repository, with this schema and its
     **Invalid filters:** an unknown `kind` or `topic`, a `page` outside 1 to 50, or a `q` that fails BR-F14-07 is dropped with the FIL-5 notice.
 
     **Dates:** formatted on the server. For a signed-in user they use F02's day format. For a visitor they use the first locale of `Accept-Language` that `Intl` supports, else `en-US`, so server and client render the same text.
+
 - **BR-F14-07** **Title search** (`q`). The query is trimmed and normalized, and must be 3 to 100 characters with no control characters.
     - **Terms:** each whitespace-separated word, with every character other than letters and digits removed. Empty words are dropped, and the first 10 are kept.
     - **Matching:** a post matches when every term begins a word of its title, through GROQ `title match $terms`, with each term followed by `*`. "budg first" finds "How to set your first Budget".
@@ -108,6 +111,7 @@ The Sanity Studio lives in `studio/` in the repository, with this schema and its
     - "More in Budgeting": up to 3 other posts sharing the first topic, newest first, read in its own Suspense boundary, so the page waits only for the post itself.
 
     An unknown, future or draft slug gives Next.js's 404 page. Metadata: `<title>` is the post's title with "· Daybook Learn", the description is the excerpt, and the Open Graph image is the cover at 1200 pixels.
+
 - **BR-F14-09** **The sample-content note.** Every post page ends with "Daybook Learn posts are sample content written for this demo, not financial advice."
 - **BR-F14-10** **Shells** (D-382). Learn pages render in the app shell for a signed-in user, and in the public shell (the landing page's header with Log in and Sign up) otherwise.
     - **Where:** `app/learn/layout.tsx` sits outside the `(app)` and `(public)` groups. It validates the session and renders the same shell component that `app/(app)/layout.tsx` or `app/(public)/layout.tsx` renders.
@@ -162,15 +166,15 @@ No other figures. Learn shows no money.
 
 **`/learn`** (BR-F14-06) and **`/learn/[slug]`** (BR-F14-08).
 
-| State | What the user sees |
-| --- | --- |
-| Loading | Skeleton cards with fixed image ratios (16:9), so nothing shifts |
-| Empty | "No posts yet." with no filter; "No posts match these filters." with Clear filters |
-| Error | "Learn could not be loaded." with Retry |
-| Offline | Posts opened before, from the worker's cache (BR-F14-12); otherwise `/offline` (P1) |
-| Pending | n/a |
-| Locked (Premium) | n/a in the core |
-| Read-only | Always: Learn has no writes |
+| State            | What the user sees                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| Loading          | Skeleton cards with fixed image ratios (16:9), so nothing shifts                    |
+| Empty            | "No posts yet." with no filter; "No posts match these filters." with Clear filters  |
+| Error            | "Learn could not be loaded." with Retry                                             |
+| Offline          | Posts opened before, from the worker's cache (BR-F14-12); otherwise `/offline` (P1) |
+| Pending          | n/a                                                                                 |
+| Locked (Premium) | n/a in the core                                                                     |
+| Read-only        | Always: Learn has no writes                                                         |
 
 ## 7. Flows
 
@@ -184,15 +188,15 @@ No other figures. Learn shows no money.
 
 ## 8. Validation and messages
 
-| Situation | Message shown |
-| --- | --- |
-| Invalid filter in the URL | Some filters in this link weren't valid and were removed. |
-| No posts | No posts yet. |
-| No matches | No posts match these filters. |
-| Search too short | Type at least 3 characters to search. |
-| Load failure | Learn could not be loaded. |
-| Sample note | Daybook Learn posts are sample content written for this demo, not financial advice. |
-| Reading time | 4 min read |
+| Situation                 | Message shown                                                                       |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| Invalid filter in the URL | Some filters in this link weren't valid and were removed.                           |
+| No posts                  | No posts yet.                                                                       |
+| No matches                | No posts match these filters.                                                       |
+| Search too short          | Type at least 3 characters to search.                                               |
+| Load failure              | Learn could not be loaded.                                                          |
+| Sample note               | Daybook Learn posts are sample content written for this demo, not financial advice. |
+| Reading time              | 4 min read                                                                          |
 
 ## 9. Plan gating
 
@@ -205,12 +209,14 @@ BR-F14-12. Learn has no writes.
 ## 11. Server surface
 
 No API routes. Learn is server components, and the server functions in `server/learn`, each through `sanityFetch`:
+
 - `latestPosts(limit)`;
 - `searchLearn(q, limit)`;
 - `postsPage(filter, page)`;
 - `postBySlug(slug)`.
 
 **Environment.**
+
 - `SANITY_PROJECT_ID` and `SANITY_DATASET` (root 13).
 - `SANITY_WRITE_TOKEN`, read only by `sanity:seed`.
 - `SANITY_READ_TOKEN`, unused until the Stretch tiers.

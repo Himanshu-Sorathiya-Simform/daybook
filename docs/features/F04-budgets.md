@@ -4,12 +4,12 @@
 
 A Budget is a monthly spending limit for one expense category. Its limit applies from a chosen month onward and carries forward until it is changed, so past months keep the limits they had. For any month, the Budgets page shows each budgeted category's spending, how much of the limit it uses, and a state: On track, Nearing limit at 80%, or Over budget at 100%. An overall figure covers the budgeted categories, with unbudgeted spending shown beside it. Every number comes from confirmed Transactions; pending changes appear only as annotations and never raise an alert.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M2. Before M5, writes are online only, with F03's stand-ins: Save disabled offline, and a failed save keeps the dialog open (D-241) |
-| Plan | Free and Premium. A one-month override is Stretch (`budgets.monthOverride`) |
+| Item       | Value                                                                                                                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Milestone  | M2. Before M5, writes are online only, with F03's stand-ins: Save disabled offline, and a failed save keeps the dialog open (D-241)                                                                                            |
+| Plan       | Free and Premium. A one-month override is Stretch (`budgets.monthOverride`)                                                                                                                                                    |
 | Depends on | [F03](F03-transactions.md) (category spending), [F02](F02-onboarding-profile-settings.md) (month, locale), [P2](../platform/P2-data-access-and-security.md); P1 (write queue, from M5); F08, F09, F10, F11 read Budget figures |
-| Decisions | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269 |
+| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269                                                                                                                                       |
 
 ## 1. User stories
 
@@ -22,42 +22,42 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
+| In                                                                                                                                                                                                                                                                              | Stretch (M8)                                         | Out                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | One Budget per expense category with a schedule of limit changes; set, change, stop and delete; the month view with per-category and overall utilization, states and unbudgeted spending; card and table views; drill-down to Transactions; pending annotations; offline writes | A one-month override (D-33, `budgets.monthOverride`) | Budgets for income or Goals; rollover of unused amounts and envelope budgeting (root 16); custom thresholds (D-33 fixed them); weekly or yearly Budgets; a total monthly Budget separate from categories (F4 lean); spending-pace projections; toasts when a Transaction crosses a threshold (F7 lean) |
 
 ## 3. Concepts and fields
 
 **Budget** (private; one per expense category per user)
 
-| Field | Meaning | Required | Rules | Example |
-| --- | --- | --- | --- | --- |
-| `id` | UUIDv7 | Yes | Client-generated (ID-1) | |
-| `category` | An expense category (CAT-2) | Yes | Unique per user; never changes | `food` |
-| `schedule` | Ordered limit changes, each `{ from, limitMinor }` | Yes, at least one | `from` is a month `YYYY-MM`, strictly increasing. `limitMinor` is 1 to the MON-5 maximum, or `null` for "stopped from this month" (BR-F04-04) | `[{ "from": "2026-09", "limitMinor": 600000 }, { "from": "2026-10", "limitMinor": 500000 }]` |
-| `demo` | Loaded as demo data | System | F15 | `false` |
-| `version`, `createdAt`, `updatedAt` | P2 | System | Every schedule change bumps `version` | |
+| Field                               | Meaning                                            | Required          | Rules                                                                                                                                         | Example                                                                                      |
+| ----------------------------------- | -------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `id`                                | UUIDv7                                             | Yes               | Client-generated (ID-1)                                                                                                                       |                                                                                              |
+| `category`                          | An expense category (CAT-2)                        | Yes               | Unique per user; never changes                                                                                                                | `food`                                                                                       |
+| `schedule`                          | Ordered limit changes, each `{ from, limitMinor }` | Yes, at least one | `from` is a month `YYYY-MM`, strictly increasing. `limitMinor` is 1 to the MON-5 maximum, or `null` for "stopped from this month" (BR-F04-04) | `[{ "from": "2026-09", "limitMinor": 600000 }, { "from": "2026-10", "limitMinor": 500000 }]` |
+| `demo`                              | Loaded as demo data                                | System            | F15                                                                                                                                           | `false`                                                                                      |
+| `version`, `createdAt`, `updatedAt` | P2                                                 | System            | Every schedule change bumps `version`                                                                                                         |                                                                                              |
 
 **Month view** (computed, never stored), for month M:
 
-| Value | Meaning |
-| --- | --- |
-| Limit (c, M) | The `limitMinor` of the last schedule entry with `from` ≤ M, if that entry is not `null`; otherwise category c has no Budget in M |
-| Budgeted in M | The categories with a limit in M |
-| Spent (c, M) | Category spending (TXN-5): Σ expense − Σ refund of category c with `occurred_on` in M, confirmed only. Subscription charges count, refunds reduce (D-33) |
-| Remaining (c, M) | Limit − spent; negative means over |
-| Utilization (c, M) | Spent ÷ limit, as integer tenths of a percent (BR-F04-08) |
-| State (c, M) | `ok`, `warning` or `over` (BR-F04-09) |
-| Overall (M) | Σ spent over budgeted categories ÷ Σ their limits, with the same states |
-| Unbudgeted (M) | Total spending in M minus spending in budgeted categories, with the per-category list |
+| Value              | Meaning                                                                                                                                                  |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Limit (c, M)       | The `limitMinor` of the last schedule entry with `from` ≤ M, if that entry is not `null`; otherwise category c has no Budget in M                        |
+| Budgeted in M      | The categories with a limit in M                                                                                                                         |
+| Spent (c, M)       | Category spending (TXN-5): Σ expense − Σ refund of category c with `occurred_on` in M, confirmed only. Subscription charges count, refunds reduce (D-33) |
+| Remaining (c, M)   | Limit − spent; negative means over                                                                                                                       |
+| Utilization (c, M) | Spent ÷ limit, as integer tenths of a percent (BR-F04-08)                                                                                                |
+| State (c, M)       | `ok`, `warning` or `over` (BR-F04-09)                                                                                                                    |
+| Overall (M)        | Σ spent over budgeted categories ÷ Σ their limits, with the same states                                                                                  |
+| Unbudgeted (M)     | Total spending in M minus spending in budgeted categories, with the per-category list                                                                    |
 
 **States and their labels**
 
-| State | When | Label |
-| --- | --- | --- |
-| `ok` | Utilization below 80.0% | On track |
+| State     | When                       | Label         |
+| --------- | -------------------------- | ------------- |
+| `ok`      | Utilization below 80.0%    | On track      |
 | `warning` | From 80.0% to below 100.0% | Nearing limit |
-| `over` | 100.0% or more | Over budget |
+| `over`    | 100.0% or more             | Over budget   |
 
 ## 4. Business rules
 
@@ -71,6 +71,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
         3. **Otherwise:** 409 `id_conflict` (P2, BR-P2-20).
 
     Two devices creating Food at once therefore always get one success and one `budget_exists`.
+
 - **BR-F04-02** A limit for month M is the latest schedule entry from M or earlier (D-33). It carries forward to every later month until the next entry. Golden: food is 6,000.00 from 2026-09 and 5,000.00 from 2026-10, so September uses 6,000.00 and November inherits 5,000.00.
 - **BR-F04-03** Setting a limit "from month M" replaces the schedule from M onward with one entry: every entry from M or later is removed, and `{ from: M, limitMinor }` is added (D-246). Months before M keep their limits.
 - **BR-F04-04** Stopping a Budget "from month M" works the same way with `limitMinor: null`. M and every later month have no Budget for that category; earlier months keep theirs. Stopping from the first entry's month or earlier would leave no month at all, so it is refused (422) and the interface offers Delete instead (BR-F04-06).
@@ -79,6 +80,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
     - a `null` entry that follows another `null`, or that comes first, is removed.
 
     The schedule therefore always starts with a limit and never holds two equal neighbours.
+
 - **BR-F04-06** Delete removes the Budget and its whole schedule, so every month loses it. The confirmation says so: "Delete the Food Budget? Every month, including past ones, loses its Food limit."
 - **BR-F04-07** A new change's `from` may be any month from 36 months before the current month to 12 months after it (D-247). The control defaults to the current month. The range limits new changes only: older entries already in a schedule (for example, from demo or seed data) stay valid.
     - **Retroactive changes:** a change whose `from` is before the current month changes past months. The dialog warns before saving, naming the affected months: "This also changes September and October 2026." It never blocks.
@@ -126,6 +128,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
     - **Apply from:** a month (BR-F04-07).
 
     For a category with no Budget record it sends `POST /api/budgets`. For a category with a record (one that starts later or is stopped), it changes that record's schedule with `PATCH`.
+
 - **BR-F04-20** Change limit asks for the new limit and Apply from (default: the current month), with the BR-F04-07 warnings.
 - **BR-F04-21** Stop budgeting asks for "Stop from" (default: the current month) and says "Earlier months keep their limits." A month at or before the first entry turns the action into Delete (BR-F04-04, BR-F04-06).
 
@@ -142,33 +145,36 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 
 Formulas: section 3 and BR-F04-08 to BR-F04-11. Every figure below is from [03-golden-dataset.md](../03-golden-dataset.md#budgets).
 
-| Month | Category | Limit | Spent | Utilization | State |
-| --- | --- | --- | --- | --- | --- |
-| September | food | 6,000.00 | 5,050.00 | 84.2% | Nearing limit |
-| September | shopping | 3,000.00 | 2,400.00 | 80.0% | Nearing limit (exact boundary) |
-| September | entertainment | 1,000.00 | 649.00 | 64.9% | On track |
-| October | food | 5,000.00 | 6,220.00 | 124.4% | Over budget |
-| October | shopping | 3,000.00 | 3,000.00 | 100.0% | Over budget (exact boundary) |
-| October | entertainment | 1,000.00 | 2,148.00 | 214.8% | Over budget |
-| October | transportation | 2,000.00 | 1,800.00 | 90.0% | Nearing limit |
-| November | food | 5,000.00 | 420.00, "+300.00 pending" | 8.4% | On track |
+| Month     | Category       | Limit    | Spent                     | Utilization | State                          |
+| --------- | -------------- | -------- | ------------------------- | ----------- | ------------------------------ |
+| September | food           | 6,000.00 | 5,050.00                  | 84.2%       | Nearing limit                  |
+| September | shopping       | 3,000.00 | 2,400.00                  | 80.0%       | Nearing limit (exact boundary) |
+| September | entertainment  | 1,000.00 | 649.00                    | 64.9%       | On track                       |
+| October   | food           | 5,000.00 | 6,220.00                  | 124.4%      | Over budget                    |
+| October   | shopping       | 3,000.00 | 3,000.00                  | 100.0%      | Over budget (exact boundary)   |
+| October   | entertainment  | 1,000.00 | 2,148.00                  | 214.8%      | Over budget                    |
+| October   | transportation | 2,000.00 | 1,800.00                  | 90.0%       | Nearing limit                  |
+| November  | food           | 5,000.00 | 420.00, "+300.00 pending" | 8.4%        | On track                       |
 
-| Month | Overall | Unbudgeted | Total spending |
-| --- | --- | --- | --- |
-| September | 8,099.00 of 10,000.00, 81.0% | 19,950.00 (housing, health, transportation) | 28,049.00 |
-| October | 13,168.00 of 11,000.00, 119.7% | 18,000.00 (housing) | 31,168.00 |
-| November | 420.00 of 11,000.00, 3.8% | 18,000.00 (housing) | 18,420.00 |
+| Month     | Overall                        | Unbudgeted                                  | Total spending |
+| --------- | ------------------------------ | ------------------------------------------- | -------------- |
+| September | 8,099.00 of 10,000.00, 81.0%   | 19,950.00 (housing, health, transportation) | 28,049.00      |
+| October   | 13,168.00 of 11,000.00, 119.7% | 18,000.00 (housing)                         | 31,168.00      |
+| November  | 420.00 of 11,000.00, 3.8%      | 18,000.00 (housing)                         | 18,420.00      |
 
 **Rounding at the boundary.**
+
 - A limit of 3,000.00 with 2,398.50 spent gives `round(239850 × 1000 ÷ 300000)` = `round(799.5)` = 800, so it reads 80.0% and is Nearing limit.
 - With 2,398.49 spent: 799.497 rounds to 799, so it reads 79.9% and is On track.
 
 **A retroactive change.** On golden, set food to 7,000.00 from 2026-09:
+
 - The schedule becomes `[{ 2026-09, 7,000.00 }]`, since the October entry is replaced.
 - September reads 72.1% (On track); October reads 88.9% (Nearing limit).
 - The dialog warned: "This also changes September and October 2026. This replaces the change to 5,000.00 from October 2026."
 
 **Stopping.** Stop entertainment from 2026-11:
+
 - November has no entertainment Budget.
 - September and October keep 1,000.00.
 - November overall reads 420.00 of 10,000.00, 4.2%.
@@ -177,15 +183,15 @@ Formulas: section 3 and BR-F04-08 to BR-F04-11. Every figure below is from [03-g
 
 **`/budgets?month=YYYY-MM`.** BR-F04-14 to BR-F04-18. Dialogs: BR-F04-19 to BR-F04-21.
 
-| State | What the user sees |
-| --- | --- |
-| Loading | Skeleton overall card and three skeleton Budget cards |
-| Empty | No Budgets in M: "No Budgets for September 2026. Budgets apply from the month you choose." with Add a Budget. The Not budgeted list still shows. With no spending either: only the message and the button |
-| Error | "Budgets could not be loaded." with Retry |
-| Offline | The cached current month with "as of"; other months: "You're offline. This month isn't saved on this device." From M5, writes queue (D-46); before M5, Save is disabled |
-| Pending | Annotations and "Pending sync" badges (BR-F04-12) |
-| Locked (Premium) | n/a; the Stretch override is a flag, not Premium |
-| Read-only | Demo Budgets are editable like any other; none are read-only |
+| State            | What the user sees                                                                                                                                                                                        |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Loading          | Skeleton overall card and three skeleton Budget cards                                                                                                                                                     |
+| Empty            | No Budgets in M: "No Budgets for September 2026. Budgets apply from the month you choose." with Add a Budget. The Not budgeted list still shows. With no spending either: only the message and the button |
+| Error            | "Budgets could not be loaded." with Retry                                                                                                                                                                 |
+| Offline          | The cached current month with "as of"; other months: "You're offline. This month isn't saved on this device." From M5, writes queue (D-46); before M5, Save is disabled                                   |
+| Pending          | Annotations and "Pending sync" badges (BR-F04-12)                                                                                                                                                         |
+| Locked (Premium) | n/a; the Stretch override is a flag, not Premium                                                                                                                                                          |
+| Read-only        | Demo Budgets are editable like any other; none are read-only                                                                                                                                              |
 
 ## 7. Flows
 
@@ -222,19 +228,19 @@ Formulas: section 3 and BR-F04-08 to BR-F04-11. Every figure below is from [03-g
 
 ## 8. Validation and messages
 
-| Field or action | Rule | Message shown |
-| --- | --- | --- |
-| Category | Required | Choose a category. |
-| Category | `budget_exists` | A Shopping Budget already exists. We opened it so you can change it. |
-| Limit | Amount rules (F03, BR-F03-04) | F03's amount messages |
-| Apply from | Within 36 months back and 12 ahead | Choose a month from Nov 2023 to Nov 2027. |
-| Stop from | At or before the first entry | This would remove every month. Delete the Budget instead. |
-| Retroactive change | Warning, not an error | This also changes September and October 2026. |
-| Replaced entries | Warning, not an error | This replaces the change to 7,000.00 from December 2026. |
-| Delete | Confirmation | Delete the Food Budget? Every month, including past ones, loses its Food limit. |
-| Any write | `version_conflict` | This Budget was changed on another device. (Conflict view) |
-| Any write | `not_found` | This Budget was deleted on another device. |
-| Month link | Invalid `month` | Some filters in this link weren't valid and were removed. |
+| Field or action    | Rule                               | Message shown                                                                   |
+| ------------------ | ---------------------------------- | ------------------------------------------------------------------------------- |
+| Category           | Required                           | Choose a category.                                                              |
+| Category           | `budget_exists`                    | A Shopping Budget already exists. We opened it so you can change it.            |
+| Limit              | Amount rules (F03, BR-F03-04)      | F03's amount messages                                                           |
+| Apply from         | Within 36 months back and 12 ahead | Choose a month from Nov 2023 to Nov 2027.                                       |
+| Stop from          | At or before the first entry       | This would remove every month. Delete the Budget instead.                       |
+| Retroactive change | Warning, not an error              | This also changes September and October 2026.                                   |
+| Replaced entries   | Warning, not an error              | This replaces the change to 7,000.00 from December 2026.                        |
+| Delete             | Confirmation                       | Delete the Food Budget? Every month, including past ones, loses its Food limit. |
+| Any write          | `version_conflict`                 | This Budget was changed on another device. (Conflict view)                      |
+| Any write          | `not_found`                        | This Budget was deleted on another device.                                      |
+| Month link         | Invalid `month`                    | Some filters in this link weren't valid and were removed.                       |
 
 ## 9. Plan gating
 
@@ -248,20 +254,21 @@ None for the core. The Stretch override checks `budgets.monthOverride`; with it 
 
 ## 11. Server surface
 
-| Endpoint | Method | Input | Output | Errors | Idempotency and versioning |
-| --- | --- | --- | --- | --- | --- |
-| `/api/budgets` | GET | `month` (default: the current month) | The month view (section 15) | 400, 401, 403 `profile_required` | Read |
-| `/api/budgets` | POST | `{ id, category, from, limitMinor, currency }` | 201 with the Budget; 200 with the existing row for a repeated id (API-5) | 401, 403, 409 `budget_exists`, 409 `id_conflict`, 422 `validation_failed`, `currency_mismatch` | `Idempotency-Key` required |
-| `/api/budgets/[id]` | PATCH | `{ from, limitMinor, currency }`; `limitMinor` may be `null`, and `currency` is required when it is not | 200 with the Budget | 401, 403, 404, 409 `version_conflict`, 422 | `Idempotency-Key` and `If-Match` required |
-| `/api/budgets/[id]` | DELETE | `{}` | 204 | 401, 403, 404, 409 `version_conflict` | `Idempotency-Key` and `If-Match` required |
+| Endpoint            | Method | Input                                                                                                   | Output                                                                   | Errors                                                                                         | Idempotency and versioning                |
+| ------------------- | ------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `/api/budgets`      | GET    | `month` (default: the current month)                                                                    | The month view (section 15)                                              | 400, 401, 403 `profile_required`                                                               | Read                                      |
+| `/api/budgets`      | POST   | `{ id, category, from, limitMinor, currency }`                                                          | 201 with the Budget; 200 with the existing row for a repeated id (API-5) | 401, 403, 409 `budget_exists`, 409 `id_conflict`, 422 `validation_failed`, `currency_mismatch` | `Idempotency-Key` required                |
+| `/api/budgets/[id]` | PATCH  | `{ from, limitMinor, currency }`; `limitMinor` may be `null`, and `currency` is required when it is not | 200 with the Budget                                                      | 401, 403, 404, 409 `version_conflict`, 422                                                     | `Idempotency-Key` and `If-Match` required |
+| `/api/budgets/[id]` | DELETE | `{}`                                                                                                    | 204                                                                      | 401, 403, 404, 409 `version_conflict`                                                          | `Idempotency-Key` and `If-Match` required |
 
 **Error code added by this spec**
 
-| Status | Code | Default message | Write queue does |
-| --- | --- | --- | --- |
-| 409 | `budget_exists` | A Budget for this category already exists. | Reject, with Edit opening the existing Budget |
+| Status | Code            | Default message                            | Write queue does                              |
+| ------ | --------------- | ------------------------------------------ | --------------------------------------------- |
+| 409    | `budget_exists` | A Budget for this category already exists. | Reject, with Edit opening the existing Budget |
 
 **Shared functions.**
+
 - `budgetMonth(tx, ctx, month)` returns the month view, in one statement.
 - `budgetMonths(tx, ctx, months)` returns several months' views, in one statement, for F09's Budget vs actual.
 
@@ -309,34 +316,50 @@ Illustrative, `GET /api/budgets?month=2026-10` on golden:
 
 ```json
 {
-  "month": "2026-10",
-  "currency": "INR",
-  "overall": { "limitMinor": 1100000, "spentMinor": 1316800, "utilizationTenths": 1197, "state": "over" },
-  "totalSpentMinor": 3116800,
-  "unbudgetedMinor": 1800000,
-  "unbudgeted": [{ "category": "housing", "spentMinor": 1800000 }],
-  "budgets": [
-    {
-      "id": "0192…",
-      "category": "food",
-      "limitMinor": 500000,
-      "spentMinor": 622000,
-      "remainingMinor": -122000,
-      "utilizationTenths": 1244,
-      "state": "over",
-      "schedule": [{ "from": "2026-09", "limitMinor": 600000 }, { "from": "2026-10", "limitMinor": 500000 }],
-      "version": 2,
-      "demo": false
-    }
-  ],
-  "inactive": []
+	"month": "2026-10",
+	"currency": "INR",
+	"overall": {
+		"limitMinor": 1100000,
+		"spentMinor": 1316800,
+		"utilizationTenths": 1197,
+		"state": "over"
+	},
+	"totalSpentMinor": 3116800,
+	"unbudgetedMinor": 1800000,
+	"unbudgeted": [{ "category": "housing", "spentMinor": 1800000 }],
+	"budgets": [
+		{
+			"id": "0192…",
+			"category": "food",
+			"limitMinor": 500000,
+			"spentMinor": 622000,
+			"remainingMinor": -122000,
+			"utilizationTenths": 1244,
+			"state": "over",
+			"schedule": [
+				{ "from": "2026-09", "limitMinor": 600000 },
+				{ "from": "2026-10", "limitMinor": 500000 }
+			],
+			"version": 2,
+			"demo": false
+		}
+	],
+	"inactive": []
 }
 ```
 
 Illustrative, an `inactive` entry, from golden September, where transportation starts in October:
 
 ```json
-{ "id": "0192…", "category": "transportation", "status": "starts", "from": "2026-10", "schedule": [{ "from": "2026-10", "limitMinor": 200000 }], "version": 1, "demo": false }
+{
+	"id": "0192…",
+	"category": "transportation",
+	"status": "starts",
+	"from": "2026-10",
+	"schedule": [{ "from": "2026-10", "limitMinor": 200000 }],
+	"version": 1,
+	"demo": false
+}
 ```
 
 Illustrative, a Budget card:

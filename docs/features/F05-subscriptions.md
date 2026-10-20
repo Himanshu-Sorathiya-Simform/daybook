@@ -6,12 +6,12 @@ A Subscription is any recurring bill the user tracks: streaming, rent, insurance
 
 The Subscriptions page shows monthly and yearly cost, renewals over the next 30 days, and every Subscription's next due date. A Subscription can be changed, cancelled, resumed or deleted. Every change takes effect after the day it was made (a resume from that day itself), even when it syncs days later or after another device has already added charges. Stripe is not involved: anything Stripe bills is Premium (NAM-1, D-27).
 
-| Item | Value |
-| --- | --- |
-| Milestone | M2. Before M5, writes are online only: Save is disabled offline with "You are offline. Connect to save.", a failed save keeps the dialog open, and the app calls the boot endpoint once at start. From M5 the write queue (P1) adds offline writes, and boot step 5 calls the endpoint (D-241) |
-| Plan | Free and Premium; no capability codes |
-| Depends on | [F03](F03-transactions.md) (charges are Transactions), [F02](F02-onboarding-profile-settings.md) (time zone, today), [P2](../platform/P2-data-access-and-security.md) (catch-up check, locks, request clock); P1 (write queue and boot sequence); F08, F10, F11, F13 read Subscriptions |
-| Decisions | D-26, D-27, D-70 to D-72, D-90 to D-96, D-181, D-213, D-219, D-224, D-236, D-239, D-241, D-244, D-250 to D-257, D-265, D-267, D-269, D-270 |
+| Item       | Value                                                                                                                                                                                                                                                                                          |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M2. Before M5, writes are online only: Save is disabled offline with "You are offline. Connect to save.", a failed save keeps the dialog open, and the app calls the boot endpoint once at start. From M5 the write queue (P1) adds offline writes, and boot step 5 calls the endpoint (D-241) |
+| Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                                          |
+| Depends on | [F03](F03-transactions.md) (charges are Transactions), [F02](F02-onboarding-profile-settings.md) (time zone, today), [P2](../platform/P2-data-access-and-security.md) (catch-up check, locks, request clock); P1 (write queue and boot sequence); F08, F10, F11, F13 read Subscriptions        |
+| Decisions  | D-26, D-27, D-70 to D-72, D-90 to D-96, D-181, D-213, D-219, D-224, D-236, D-239, D-241, D-244, D-250 to D-257, D-265, D-267, D-269, D-270                                                                                                                                                     |
 
 ## 1. User stories
 
@@ -25,30 +25,31 @@ The Subscriptions page shows monthly and yearly cost, renewals over the next 30 
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
+| In                                                                                                                                                                                                                                                                                                                               | Stretch (M8)                            | Out                                                                                                                                                                                                                                                                                                                              |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Create, edit, cancel, resume and delete; four cadences with anchored schedules; past-charge backfill on create; catch-up and the boot endpoint; charges as Transactions with tombstones; reconciling charges after a change; costs; upcoming renewals; next due dates; the Subscriptions page; charge drill-down; offline writes | Push reminders for renewals (D-144, P1) | Pause (D-94); free trials (D-94); custom intervals such as every 10 days (G1); recurring income (D-72); scheduled future price changes; price history (costs use current amounts); restoring a skipped charge after its Undo window (add a manual expense instead); Stripe for Subscriptions (D-27); email or calendar reminders |
 
 ## 3. Concepts and fields
 
 **Subscription** (private)
 
-| Field | Meaning | Required | Rules | Example |
-| --- | --- | --- | --- | --- |
-| `id` | UUIDv7 | Yes | Client-generated (ID-1) | |
-| `name` | What it is | Yes | 1 to 60 characters (root 6.7); the default payee of its charges (TXN-4); duplicates allowed | `Netflix` |
-| `amountMinor` | The price of one charge | Yes | MON-5 | `64900` |
-| `cadence` | How often | Yes | `weekly`, `monthly`, `quarterly`, `yearly` (D-90) | `monthly` |
-| `startDate` | The date of the first charge; the schedule repeats from it | Yes | From 10 years before to 1 year after the recording date (create) or the change date (edit) (D-257) | `2026-09-05` |
-| `category` | An expense category (CAT-2) | Yes | Copied to each new charge | `entertainment` |
-| `note` | Optional text | No | Up to 500; not copied to charges | |
-| `endDate` | The last date a charge may fall on | No | `null` while it runs; from `startDate` to 10 years after the change date | |
-| `chargesFrom` | The first date catch-up may charge | System | BR-F05-03, BR-F05-11, BR-F05-13 | `2026-09-05` |
-| `lastChangeOn` | The change date of the last applied change | System | The recording date on create; C after each change except a note-only one (D-267) | `2026-09-05` |
-| `demo` | Loaded as demo data | System | F15; its charges inherit it (D-234) | `false` |
-| `version`, `createdAt`, `updatedAt` | P2 | System | `createdAt` is client-set on create, from 90 days before to 5 minutes after `ctx.now` (D-267) | |
+| Field                               | Meaning                                                    | Required | Rules                                                                                              | Example         |
+| ----------------------------------- | ---------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------- | --------------- |
+| `id`                                | UUIDv7                                                     | Yes      | Client-generated (ID-1)                                                                            |                 |
+| `name`                              | What it is                                                 | Yes      | 1 to 60 characters (root 6.7); the default payee of its charges (TXN-4); duplicates allowed        | `Netflix`       |
+| `amountMinor`                       | The price of one charge                                    | Yes      | MON-5                                                                                              | `64900`         |
+| `cadence`                           | How often                                                  | Yes      | `weekly`, `monthly`, `quarterly`, `yearly` (D-90)                                                  | `monthly`       |
+| `startDate`                         | The date of the first charge; the schedule repeats from it | Yes      | From 10 years before to 1 year after the recording date (create) or the change date (edit) (D-257) | `2026-09-05`    |
+| `category`                          | An expense category (CAT-2)                                | Yes      | Copied to each new charge                                                                          | `entertainment` |
+| `note`                              | Optional text                                              | No       | Up to 500; not copied to charges                                                                   |                 |
+| `endDate`                           | The last date a charge may fall on                         | No       | `null` while it runs; from `startDate` to 10 years after the change date                           |                 |
+| `chargesFrom`                       | The first date catch-up may charge                         | System   | BR-F05-03, BR-F05-11, BR-F05-13                                                                    | `2026-09-05`    |
+| `lastChangeOn`                      | The change date of the last applied change                 | System   | The recording date on create; C after each change except a note-only one (D-267)                   | `2026-09-05`    |
+| `demo`                              | Loaded as demo data                                        | System   | F15; its charges inherit it (D-234)                                                                | `false`         |
+| `version`, `createdAt`, `updatedAt` | P2                                                         | System   | `createdAt` is client-set on create, from 90 days before to 5 minutes after `ctx.now` (D-267)      |                 |
 
 **`changedAt` and the change date C.** Every write after the create carries `changedAt`: the client instant when the user made the change. It must lie from 90 days before to 5 minutes after `ctx.now` (D-267). The change date C is computed in the profile time zone:
+
 1. Take the later of `changedAt`'s date and `lastChangeOn`.
 2. Never let it pass today.
 
@@ -57,19 +58,20 @@ A queued change therefore never reaches back past a change applied before it, an
 **Tombstone** (private, a child of a Subscription): `(subscriptionId, dueOn)`. It is written when a charge is deleted, and catch-up never charges a tombstoned date (D-93). Tombstones are deleted only together with their Subscription.
 
 **Charge.** An expense Transaction with source `subscription`, `subscriptionId` and `dueOn` (F03). Its `edited` flag turns true the first time the user edits it (F03, BR-F03-16) and never turns back.
+
 - **Repricing:** the server updates a charge only to reprice an unedited one (BR-F05-10, BR-F05-11). That bumps `version` like any update, so an edit queued before it meets 409 and the conflict view.
 - **Removal:** the server deletes a charge only by BR-F05-11, BR-F05-12 and BR-F05-14, and never an edited one.
 
 **Derived values** (never stored)
 
-| Value | Meaning |
-| --- | --- |
-| Due dates | `startDate` plus k periods, k = 0, 1, 2, … (BR-F05-01) |
-| Chargeable dates | Due dates from `chargesFrom` to `endDate` (or without an end) |
-| Next due | The earliest chargeable date on or after today with no charge and no tombstone |
-| Status | First match of: `ended` (`endDate` before today), `upcoming` (`startDate` after today), `ending` (`endDate` set), `active` |
-| Yearly cost | `amountMinor` × 52, 12, 4 or 1 by cadence |
-| Monthly equivalent | Yearly cost ÷ 12, rounded half away from zero, for display |
+| Value              | Meaning                                                                                                                    |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Due dates          | `startDate` plus k periods, k = 0, 1, 2, … (BR-F05-01)                                                                     |
+| Chargeable dates   | Due dates from `chargesFrom` to `endDate` (or without an end)                                                              |
+| Next due           | The earliest chargeable date on or after today with no charge and no tombstone                                             |
+| Status             | First match of: `ended` (`endDate` before today), `upcoming` (`startDate` after today), `ending` (`endDate` set), `active` |
+| Yearly cost        | `amountMinor` × 52, 12, 4 or 1 by cadence                                                                                  |
+| Monthly equivalent | Yearly cost ÷ 12, rounded half away from zero, for display                                                                 |
 
 ## 4. Business rules
 
@@ -83,12 +85,12 @@ A queued change therefore never reaches back past a change applied before it, an
 
     Month arithmetic keeps the start's day of month and clamps it to each month's length, through date-fns `addMonths` from the start.
 
-    | Start | Cadence | First due dates |
-    | --- | --- | --- |
-    | 2026-01-31 | monthly | 2026-01-31, 2026-02-28, 2026-03-31, 2026-04-30 |
-    | 2028-02-29 | yearly | 2028-02-29, 2029-02-28, 2030-02-28, 2031-02-28, 2032-02-29 |
-    | 2026-11-30 | quarterly | 2026-11-30, 2027-02-28, 2027-05-30, 2027-08-30 |
-    | 2026-10-12 | yearly | 2026-10-12, 2027-10-12 |
+    | Start      | Cadence   | First due dates                                            |
+    | ---------- | --------- | ---------------------------------------------------------- |
+    | 2026-01-31 | monthly   | 2026-01-31, 2026-02-28, 2026-03-31, 2026-04-30             |
+    | 2028-02-29 | yearly    | 2028-02-29, 2029-02-28, 2030-02-28, 2031-02-28, 2032-02-29 |
+    | 2026-11-30 | quarterly | 2026-11-30, 2027-02-28, 2027-05-30, 2027-08-30             |
+    | 2026-10-12 | yearly    | 2026-10-12, 2027-10-12                                     |
 
 **Charges and catch-up (JOB-1, JOB-2)**
 
@@ -98,11 +100,13 @@ A queued change therefore never reaches back past a change applied before it, an
     - **System fields:** source `subscription`, `edited` false, the Subscription's `demo` flag, `createdAt` and `updatedAt` both `ctx.now`, and a server-generated UUIDv7 id.
 
     The dates are computed with `shared/schedule` and inserted in one statement with `ON CONFLICT (subscription_id, due_on) DO NOTHING`, so catch-up is idempotent.
+
 - **BR-F05-03** On create, `chargesFrom` depends on "Also add past charges" (D-91, D-250):
     - **chosen:** `startDate`;
     - **not chosen (the default):** the later of `startDate` and the recording date. The recording date is `createdAt`'s date in the profile time zone, never later than today.
 
     `lastChangeOn` is the recording date. Golden: each Subscription was created on its start date without backfill, so `chargesFrom` equals `startDate` and the first charge falls on the start date.
+
 - **BR-F05-04** "Also add past charges" appears only when `startDate` is before the recording date, and only on create. It is off by default. It shows what it adds, computed in the browser from the schedule: "Adds 14 charges, 9,086.00 in total."
 - **BR-F05-05** Catch-up runs at three moments (JOB-1). Each run locks the profile, then each Subscription it covers with `FOR UPDATE` in id order (SRV-7, JOB-2).
     - **Lazy:** once a day before reads and writes (P2, BR-P2-14), for every Subscription, through today. It is skipped while the device's queue holds pending or in-flight Subscription items (D-244).
@@ -116,6 +120,7 @@ A queued change therefore never reaches back past a change applied before it, an
         3. Catch each one up through today.
 
         The global daily pass is not part of it: the route wrapper runs it before any request when it is due (P2, BR-P2-27). `pricesUpdated` is true when this request's pass wrote prices.
+
     - **Contract:** it needs a profile, is exempt from `Idempotency-Key` (API-3) and declares `catchUp: false`.
     - **Response:** `{ skipped, chargesCreated, pricesUpdated }`. The client invalidates affected queries when `chargesCreated` is above zero or `pricesUpdated` is true (root 5.2). When an earlier lazy check already did the work (for example, the first page was rendered on the server), the endpoint returns zeros.
 - **BR-F05-07** Deleting a single charge writes its tombstone in the same transaction, under the Subscription lock (F03, BR-F03-17; D-93, D-236), so the charge is never recreated. Golden: the Cult Gym charge for 2026-10-10 is a tombstone, and October's charges total 20,148.00.
@@ -129,6 +134,7 @@ A queued change therefore never reaches back past a change applied before it, an
     4. **Open the new period:** catch it up through today with its new values. A delete skips this step.
 
     Charges through C follow the old values, and charges after C follow the new ones, whatever other devices did in between. The response carries `changeDate`, the counts `chargesCreated`, `chargesUpdated` and `chargesDeleted`, and `months`: every month whose charges changed, so the client can invalidate exactly those months.
+
 - **BR-F05-09** A change to `note` alone changes no charge and does not move `lastChangeOn`.
 
 **Value and schedule changes (D-92, D-250)**
@@ -179,6 +185,7 @@ A queued change therefore never reaches back past a change applied before it, an
     - **Monthly cost:** Σ yearly costs ÷ 12, rounded once (MON-7).
 
     Costs use current amounts; there is no price history. Golden: 243,287.00 a year and 20,273.92 a month.
+
 - **BR-F05-18** "Charges this month" is the Out figure of the Transactions summary for `src=subscription` and the current month (FIL-2). It therefore includes charges of deleted Subscriptions and matches the list exactly. Golden October: 20,148.00 (check E).
 
 **Upcoming renewals (D-95, D-254)**
@@ -197,6 +204,7 @@ A queued change therefore never reaches back past a change applied before it, an
     Pending items carry "Pending sync" (OFF-6).
 
     **Deep link:** `/subscriptions?open=<id>` opens that Subscription's dialog over the page, for F13's search results (D-347). An ended Subscription's dialog opens with the Ended group expanded behind it, so the user can Resume it. An unknown id opens nothing, and the parameter is removed.
+
 - **BR-F05-22** A row shows:
     - the name and the category chip;
     - the amount with its cadence: "649.00 a month", "120.00 a week", "6,200.00 every 3 months" or "1,499.00 a year";
@@ -215,19 +223,20 @@ A queued change therefore never reaches back past a change applied before it, an
     - on create, the backfill choice (BR-F05-04).
 
     Editing shows the BR-F05-10 and BR-F05-11 texts as soon as a field they cover changes.
+
 - **BR-F05-25** Every Subscription write takes the profile lock (D-213). Requests that send an amount carry `currency`. Writes are offline-writable from M5 (D-46). Queued Subscription items replay one by one: they are never merged, except that a create and a later delete of the same queued Subscription cancel out (D-265). Each later item uses the version the previous one returned (D-269). No charge is ever generated on the device.
 
 ## 5. Calculations
 
 **Golden, as of 2 November** ([03-golden-dataset.md](../03-golden-dataset.md#subscriptions-as-of-2-november))
 
-| Name | Cadence | Next due | Yearly cost | Monthly equivalent |
-| --- | --- | --- | --- | --- |
-| Netflix | monthly | 2026-11-05 | 7,788.00 | 649.00 |
-| Cult Gym | monthly | 2026-11-10 | 18,000.00 | 1,500.00 |
-| Sunrise Apartments | monthly | 2026-12-01 | 216,000.00 | 18,000.00 |
-| Amazon Prime | yearly | 2027-10-12 | 1,499.00 | 124.92 |
-| **Total** | | | **243,287.00** | **20,273.92** (243,287.00 ÷ 12 = 20,273.9166…, rounded once) |
+| Name               | Cadence | Next due   | Yearly cost    | Monthly equivalent                                           |
+| ------------------ | ------- | ---------- | -------------- | ------------------------------------------------------------ |
+| Netflix            | monthly | 2026-11-05 | 7,788.00       | 649.00                                                       |
+| Cult Gym           | monthly | 2026-11-10 | 18,000.00      | 1,500.00                                                     |
+| Sunrise Apartments | monthly | 2026-12-01 | 216,000.00     | 18,000.00                                                    |
+| Amazon Prime       | yearly  | 2027-10-12 | 1,499.00       | 124.92                                                       |
+| **Total**          |         |            | **243,287.00** | **20,273.92** (243,287.00 ÷ 12 = 20,273.9166…, rounded once) |
 
 - **Upcoming, next 30 days:** 20,149.00.
 - **Within 7 days:** Netflix only; Cult Gym on 10 November is just outside.
@@ -235,6 +244,7 @@ A queued change therefore never reaches back past a change applied before it, an
 - **Catch-up on 2 November:** whichever catch-up runs first that day, boot or lazy, creates row 27 (Sunrise Apartments, due 1 November) and nothing else.
 
 **A price change that syncs late.** Netflix (monthly on the 5th, 649.00) is changed to 799.00 offline, with `changedAt` on 4 November. It syncs in a request at 6 November that carries `Daybook-Queue: pending`, so the lazy check is skipped (D-244).
+
 - **One device:** C = 4 November.
     1. Step 2 catches up through 4 November at 649.00, which creates nothing.
     2. Step 3 updates nothing.
@@ -243,6 +253,7 @@ A queued change therefore never reaches back past a change applied before it, an
 - **The same change made on 5 November:** C = 5 November, so step 2 keeps (or creates) the 5 November charge at 649.00. Only later charges use 799.00.
 
 **A schedule change that syncs late.** Offline, with `changedAt` on 2 November, the user moves golden Netflix's start from 2026-09-05 to 2026-09-08. The laptop creates the 5 November charge on 6 November, and the change syncs in a request at 9 November.
+
 1. C = 2 November, and `chargesFrom` = 3 November, since the new start is before C.
 2. The 5 November charge is not a due date of the new schedule, so step 3 deletes it.
 3. Step 4 creates 8 November.
@@ -250,6 +261,7 @@ A queued change therefore never reaches back past a change applied before it, an
 November has exactly one charge.
 
 **Several queued changes.** Offline, both with `changedAt` on 4 November, the user changes Netflix to 799.00 and then its category to Shopping. Both sync in requests at 9 November.
+
 - **The first item:** C = 4 November; `lastChangeOn` becomes 4 November.
 - **The second item:** uses the version the first returned (D-269), and its C is also 4 November.
 
@@ -263,15 +275,15 @@ The 5 November charge ends up with both changes.
 
 **`/subscriptions`.** BR-F05-21 to BR-F05-23. Dialogs: BR-F05-24, Cancel (BR-F05-12), Resume (BR-F05-13) and Delete (BR-F05-14).
 
-| State | What the user sees |
-| --- | --- |
-| Loading | Skeleton summary, upcoming list and rows |
-| Empty | "No Subscriptions yet. Add rent, streaming, insurance or any bill that repeats." with Add a Subscription |
-| Error | "Subscriptions could not be loaded." with Retry |
-| Offline | Cached data with "as of". The upcoming list is recomputed on the device from cached schedules, including pending ones. Writes queue from M5 |
-| Pending | "Pending sync" on rows. A pending Subscription's upcoming entries are marked "Pending" and left out of the totals |
-| Locked (Premium) | n/a |
-| Read-only | Ended Subscriptions offer Resume, View charges and Delete; their fields can still be edited |
+| State            | What the user sees                                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Loading          | Skeleton summary, upcoming list and rows                                                                                                    |
+| Empty            | "No Subscriptions yet. Add rent, streaming, insurance or any bill that repeats." with Add a Subscription                                    |
+| Error            | "Subscriptions could not be loaded." with Retry                                                                                             |
+| Offline          | Cached data with "as of". The upcoming list is recomputed on the device from cached schedules, including pending ones. Writes queue from M5 |
+| Pending          | "Pending sync" on rows. A pending Subscription's upcoming entries are marked "Pending" and left out of the totals                           |
+| Locked (Premium) | n/a                                                                                                                                         |
+| Read-only        | Ended Subscriptions offer Resume, View charges and Delete; their fields can still be edited                                                 |
 
 ## 7. Flows
 
@@ -286,6 +298,7 @@ The 5 November charge ends up with both changes.
 4. The row appears with "Next: 5 Nov". **422:** field messages.
 
 **7.2 Boot catch-up.** On start, after replaying the queue, the app calls `POST /api/sync/catch-up` (root 5.2, D-181).
+
 - On 2 November, as the process's first request of the day, golden gets `{ skipped: false, chargesCreated: 1, pricesUpdated: true }` and refetches Transactions, the dashboard, Budgets and Subscriptions. If the first page was rendered on the server, its lazy check already created row 27, and the endpoint returns zeros.
 - With Subscription items still waiting, it gets `{ skipped: true }` and calls again after the next successful replay.
 
@@ -308,24 +321,24 @@ The 5 November charge ends up with both changes.
 
 ## 8. Validation and messages
 
-| Field or action | Rule | Message shown |
-| --- | --- | --- |
-| Name | Required, 1 to 60 | Enter a name, like Netflix or Rent. / Use 60 characters or fewer. |
-| Amount | F03's amount rules | F03's amount messages |
-| Cadence | Required | Choose how often it repeats. |
-| Category | Required, an expense category | Choose a category. |
-| Started on | Within 10 years before to 1 year after today | Choose a date from 2 Nov 2016 to 2 Nov 2027. |
-| End date | On or after Started on, within 10 years of today | The end date can't be before the start date. |
-| `createdAt` or `changedAt` | 90 days before to 5 minutes after `ctx.now` | This change is too old to apply. Discard it and make it again. |
-| Backfill | Information, not an error | Adds 14 charges, 9,086.00 in total. |
-| End date | Confirmation, when charges are deleted | This also deletes 1 charge dated after 30 Sep 2026. |
-| Price, name or category change | Information | Charges up to today keep their amount. Later ones use the new amount. |
-| Schedule change | Information | Past charges stay as they are. The new schedule applies from tomorrow. |
-| Resume | Information | Charges restart from today. Months while it was cancelled aren't added. |
-| Delete | Confirmation | Delete Netflix? Its 14 charges stay in Transactions as ordinary expenses. |
-| A late sync | Toast (BR-F05-15) | Netflix: 1 charge added on another device was updated to the new price. / … was removed. |
-| Any write | `version_conflict` | This Subscription was changed on another device. (Conflict view) |
-| Any write | `not_found` | This Subscription was deleted on another device. |
+| Field or action                | Rule                                             | Message shown                                                                            |
+| ------------------------------ | ------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Name                           | Required, 1 to 60                                | Enter a name, like Netflix or Rent. / Use 60 characters or fewer.                        |
+| Amount                         | F03's amount rules                               | F03's amount messages                                                                    |
+| Cadence                        | Required                                         | Choose how often it repeats.                                                             |
+| Category                       | Required, an expense category                    | Choose a category.                                                                       |
+| Started on                     | Within 10 years before to 1 year after today     | Choose a date from 2 Nov 2016 to 2 Nov 2027.                                             |
+| End date                       | On or after Started on, within 10 years of today | The end date can't be before the start date.                                             |
+| `createdAt` or `changedAt`     | 90 days before to 5 minutes after `ctx.now`      | This change is too old to apply. Discard it and make it again.                           |
+| Backfill                       | Information, not an error                        | Adds 14 charges, 9,086.00 in total.                                                      |
+| End date                       | Confirmation, when charges are deleted           | This also deletes 1 charge dated after 30 Sep 2026.                                      |
+| Price, name or category change | Information                                      | Charges up to today keep their amount. Later ones use the new amount.                    |
+| Schedule change                | Information                                      | Past charges stay as they are. The new schedule applies from tomorrow.                   |
+| Resume                         | Information                                      | Charges restart from today. Months while it was cancelled aren't added.                  |
+| Delete                         | Confirmation                                     | Delete Netflix? Its 14 charges stay in Transactions as ordinary expenses.                |
+| A late sync                    | Toast (BR-F05-15)                                | Netflix: 1 charge added on another device was updated to the new price. / … was removed. |
+| Any write                      | `version_conflict`                               | This Subscription was changed on another device. (Conflict view)                         |
+| Any write                      | `not_found`                                      | This Subscription was deleted on another device.                                         |
 
 "Today" in these messages is the recording date for a create and the change date for an edit.
 
@@ -346,15 +359,16 @@ None.
 
 ## 11. Server surface
 
-| Endpoint | Method | Input | Output | Errors | Idempotency and versioning |
-| --- | --- | --- | --- | --- | --- |
-| `/api/subscriptions` | GET | none | `{ items, totals: { monthlyMinor, yearlyMinor }, upcoming, upcomingTotalMinor, chargesThisMonthMinor, currency }` | 401, 403 `profile_required` | Read |
-| `/api/subscriptions` | POST | `{ id, name, amountMinor, currency, cadence, startDate, category, note, backfill, createdAt }` | 201 with the Subscription and `chargesCreated`; 200 for a repeated id | 401, 403, 409 `id_conflict`, 422 `validation_failed`, `currency_mismatch` | `Idempotency-Key` required |
-| `/api/subscriptions/[id]` | PATCH | `changedAt` plus changed fields from `name`, `amountMinor` (with `currency`), `cadence`, `startDate`, `category`, `note`, `endDate` (a date or `null`) | 200 with the Subscription and `{ changeDate, chargesCreated, chargesUpdated, chargesDeleted, months }` | 401, 403, 404, 409 `version_conflict`, 422 | `Idempotency-Key` and `If-Match` required |
-| `/api/subscriptions/[id]` | DELETE | `{ changedAt }` | 200 `{ changeDate, chargesCreated, chargesKept, chargesDeleted, months }` | 401, 403, 404, 409 `version_conflict`, 422 | `Idempotency-Key` and `If-Match` required |
-| `/api/sync/catch-up` | POST | `{}` | `{ skipped, chargesCreated, pricesUpdated }` | 401, 403 `profile_required` | Exempt from `Idempotency-Key` (API-3); `catchUp: false` |
+| Endpoint                  | Method | Input                                                                                                                                                  | Output                                                                                                            | Errors                                                                    | Idempotency and versioning                              |
+| ------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `/api/subscriptions`      | GET    | none                                                                                                                                                   | `{ items, totals: { monthlyMinor, yearlyMinor }, upcoming, upcomingTotalMinor, chargesThisMonthMinor, currency }` | 401, 403 `profile_required`                                               | Read                                                    |
+| `/api/subscriptions`      | POST   | `{ id, name, amountMinor, currency, cadence, startDate, category, note, backfill, createdAt }`                                                         | 201 with the Subscription and `chargesCreated`; 200 for a repeated id                                             | 401, 403, 409 `id_conflict`, 422 `validation_failed`, `currency_mismatch` | `Idempotency-Key` required                              |
+| `/api/subscriptions/[id]` | PATCH  | `changedAt` plus changed fields from `name`, `amountMinor` (with `currency`), `cadence`, `startDate`, `category`, `note`, `endDate` (a date or `null`) | 200 with the Subscription and `{ changeDate, chargesCreated, chargesUpdated, chargesDeleted, months }`            | 401, 403, 404, 409 `version_conflict`, 422                                | `Idempotency-Key` and `If-Match` required               |
+| `/api/subscriptions/[id]` | DELETE | `{ changedAt }`                                                                                                                                        | 200 `{ changeDate, chargesCreated, chargesKept, chargesDeleted, months }`                                         | 401, 403, 404, 409 `version_conflict`, 422                                | `Idempotency-Key` and `If-Match` required               |
+| `/api/sync/catch-up`      | POST   | `{}`                                                                                                                                                   | `{ skipped, chargesCreated, pricesUpdated }`                                                                      | 401, 403 `profile_required`                                               | Exempt from `Idempotency-Key` (API-3); `catchUp: false` |
 
 Each item in `items` carries:
+
 - `nextDueOn`, `status`, `chargesFrom`, `lastChangeOn`;
 - `yearlyMinor`, `monthlyMinor`;
 - `chargeCount`, for the delete dialog;
@@ -362,12 +376,12 @@ Each item in `items` carries:
 
 **Shared functions**
 
-| Function | Used by |
-| --- | --- |
-| `dueDates(subscription, from, to)` in `shared/schedule` | Catch-up, the upcoming list, the backfill preview |
-| `upcomingDue(tx, ctx, days)`, one statement | This page (30 days), F10 (7 days) |
-| `subscriptionCosts(tx, ctx)`, one statement | F08's widget, F11's report, which labels it "Current monthly cost" |
-| `subscriptionSummary(tx, ctx)`: in one statement, the monthly and yearly cost (as `subscriptionCosts`) and the next renewal, the earliest next due date across Subscriptions (BR-F05-19) with its name and amount, or none | F08's widget |
+| Function                                                                                                                                                                                                                   | Used by                                                            |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `dueDates(subscription, from, to)` in `shared/schedule`                                                                                                                                                                    | Catch-up, the upcoming list, the backfill preview                  |
+| `upcomingDue(tx, ctx, days)`, one statement                                                                                                                                                                                | This page (30 days), F10 (7 days)                                  |
+| `subscriptionCosts(tx, ctx)`, one statement                                                                                                                                                                                | F08's widget, F11's report, which labels it "Current monthly cost" |
+| `subscriptionSummary(tx, ctx)`: in one statement, the monthly and yearly cost (as `subscriptionCosts`) and the next renewal, the earliest next due date across Subscriptions (BR-F05-19) with its name and amount, or none | F08's widget                                                       |
 
 ## 12. Cross-feature effects
 
@@ -409,6 +423,7 @@ The request clock is frozen per test. Steps that need a later day move it explic
     - an edited 5 November charge keeps its amount.
 
     The same change with `changedAt` on 5 November leaves that charge at 649.00.
+
 - **AC-F05-06** (integration) Schedule changes:
     - the late schedule change in section 5 leaves exactly one November charge, on the 8th;
     - an upcoming start moved earlier charges from the new start;
@@ -427,6 +442,7 @@ The request clock is frozen per test. Steps that need a later day move it explic
     - a `changedAt` 91 days old.
 
     Two changes queued at 4 November and synced on 9 November both get C = 4 November.
+
 - **AC-F05-12** (client integration, M5) Offline, a pending Subscription's upcoming entries show "Pending" and are left out of the totals, and no charge appears in Transactions until sync.
 - **AC-F05-13** (integration) `/api/transactions?sub=<golden Netflix id>` returns #5 and #16, with Out 1,298.00.
 - **AC-F05-14** (integration) A charge deleted from a stale device after a reprice returns 409. Keep mine deletes it and writes the tombstone, and catch-up never recreates it.
@@ -438,22 +454,22 @@ Illustrative, a list item:
 
 ```json
 {
-  "id": "0192…",
-  "name": "Amazon Prime",
-  "amountMinor": 149900,
-  "cadence": "yearly",
-  "startDate": "2026-10-12",
-  "category": "entertainment",
-  "endDate": null,
-  "chargesFrom": "2026-10-12",
-  "lastChangeOn": "2026-10-12",
-  "status": "active",
-  "nextDueOn": "2027-10-12",
-  "yearlyMinor": 149900,
-  "monthlyMinor": 12492,
-  "chargeCount": 1,
-  "version": 1,
-  "demo": false
+	"id": "0192…",
+	"name": "Amazon Prime",
+	"amountMinor": 149900,
+	"cadence": "yearly",
+	"startDate": "2026-10-12",
+	"category": "entertainment",
+	"endDate": null,
+	"chargesFrom": "2026-10-12",
+	"lastChangeOn": "2026-10-12",
+	"status": "active",
+	"nextDueOn": "2027-10-12",
+	"yearlyMinor": 149900,
+	"monthlyMinor": 12492,
+	"chargeCount": 1,
+	"version": 1,
+	"demo": false
 }
 ```
 

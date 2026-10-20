@@ -6,12 +6,12 @@ A report summarizes one month, quarter or year of a user's money in one document
 
 The PDF is rendered on the server by Chromium from a print page built from the screen's own components, so the download cannot disagree with what the user saw or with the dashboard. Monthly reports are free; quarterly and annual reports are Daybook Premium.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M6 |
-| Plan | Monthly: Free. Quarterly: `reports.quarterly.generate`. Annual: `reports.annual.generate` (Premium) |
+| Item       | Value                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M6                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Plan       | Monthly: Free. Quarterly: `reports.quarterly.generate`. Annual: `reports.annual.generate` (Premium)                                                                                                                                                                                                                                                                                                         |
 | Depends on | [F03](F03-transactions.md) (`rollup`, `listTransactions`), [F04](F04-budgets.md) (`budgetMonths`), [F05](F05-subscriptions.md) (`subscriptionCosts`), [F06](F06-goals.md) (`goalProgress`), [F09](F09-analytics.md) (chart components, SVG on print), [P2](../platform/P2-data-access-and-security.md) (print token), [P4](../platform/P4-capabilities.md) (gates), [F12](F12-premium-billing.md) (Upgrade) |
-| Decisions | D-51 to D-53, D-121 to D-124, D-338 to D-343, D-368 to D-370, D-373, D-382 |
+| Decisions  | D-51 to D-53, D-121 to D-124, D-338 to D-343, D-368 to D-370, D-373, D-382                                                                                                                                                                                                                                                                                                                                  |
 
 ## 1. User stories
 
@@ -23,34 +23,34 @@ The PDF is rendered on the server by Chromium from a print page built from the s
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
-| `/reports` with type and period; the on-screen report; the PDF through server Chromium and the print route; the Transactions CSV and the summary CSV; Premium gates for quarterly and annual | None | Stored report files and history (D-51); scheduled or emailed reports; category or account filters (D-123); investments in reports (D-121); asynchronous report jobs (root 16); custom branding; other formats (XLSX, OFX) |
+| In                                                                                                                                                                                           | Stretch (M8) | Out                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/reports` with type and period; the on-screen report; the PDF through server Chromium and the print route; the Transactions CSV and the summary CSV; Premium gates for quarterly and annual | None         | Stored report files and history (D-51); scheduled or emailed reports; category or account filters (D-123); investments in reports (D-121); asynchronous report jobs (root 16); custom branding; other formats (XLSX, OFX) |
 
 ## 3. Concepts and fields
 
 **Types and periods** (PER-1, D-123)
 
-| Type | Period form | Example | Plan |
-| --- | --- | --- | --- |
-| `monthly` | `YYYY-MM` | `2026-10` | Free |
-| `quarterly` | `YYYY-Qn` | `2026-Q4` (October to December) | Premium |
-| `annual` | `YYYY` | `2026` | Premium |
+| Type        | Period form | Example                         | Plan    |
+| ----------- | ----------- | ------------------------------- | ------- |
+| `monthly`   | `YYYY-MM`   | `2026-10`                       | Free    |
+| `quarterly` | `YYYY-Qn`   | `2026-Q4` (October to December) | Premium |
+| `annual`    | `YYYY`      | `2026`                          | Premium |
 
 A period runs over whole calendar months of `occurred_on` (TIME-3). One that contains today is partial and labelled "to date" (PER-3); its figures run to today. Its covered months are its months up to and including the current one (D-373), so a quarter to date never counts a future month's Budget limits.
 
 **The report** (`reportData(tx, ctx, type, period)`, D-339), in this order (D-121):
 
-| Section | Content | Source |
-| --- | --- | --- |
-| Header | "Daybook monthly report · October 2026" ("quarterly report · Q4 2026", "annual report · 2026"; with "· to date" when partial), "Prepared for <display name>", the currency, and "Generated 2 Nov 2026, 12:00 pm" in F02's date-and-time format | The request clock in the profile zone; on the print route, the token's `generatedAt` |
-| Summary | Income, spending, net savings, To Goals and savings rate (TXN-5), as on the dashboard | F03 `rollup` |
-| Spending by category | Every category with non-zero Out, largest first, with its share of total spending; the donut | F03 `rollup`, F09's donut |
-| Budget against actual | Monthly: F04's month view for the period, with overall and unbudgeted spending. Quarterly and annual: F09's rule of summing each category's limits over the months it was budgeted (D-286), over the covered months, with the chart | F04 `budgetMonths`, F09's chart |
-| Goals | Every Goal created on or before the period's last day and not archived before its first day: progress at the period's end, target, percent, and "Completed on 12 Oct" when it was completed by then. Instants are compared as dates in the profile time zone. Goals carry their current state: a Goal reopened since loses its earlier completion (F06) | F06 `goalProgress` |
-| Subscription costs | Charges in the period per Subscription that had any, largest first, then one "Deleted Subscriptions" row for charges whose Subscription was deleted (F05); and the total, which equals Out for `src=subscription`. The "Current monthly cost" today (F05) | F03 `rollup` by Subscription, F05 `subscriptionCosts` |
-| Largest expenses | Up to 10 expenses by gross amount, largest first; ties newest first, as the list's Largest first sort (F03, BR-F03-29) | F03 `listTransactions` |
-| Month by month | Quarterly and annual only: income, spending, net savings, savings rate and To Goals for every covered month, zeros included | F03 `rollup` |
+| Section               | Content                                                                                                                                                                                                                                                                                                                                                 | Source                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Header                | "Daybook monthly report · October 2026" ("quarterly report · Q4 2026", "annual report · 2026"; with "· to date" when partial), "Prepared for <display name>", the currency, and "Generated 2 Nov 2026, 12:00 pm" in F02's date-and-time format                                                                                                          | The request clock in the profile zone; on the print route, the token's `generatedAt` |
+| Summary               | Income, spending, net savings, To Goals and savings rate (TXN-5), as on the dashboard                                                                                                                                                                                                                                                                   | F03 `rollup`                                                                         |
+| Spending by category  | Every category with non-zero Out, largest first, with its share of total spending; the donut                                                                                                                                                                                                                                                            | F03 `rollup`, F09's donut                                                            |
+| Budget against actual | Monthly: F04's month view for the period, with overall and unbudgeted spending. Quarterly and annual: F09's rule of summing each category's limits over the months it was budgeted (D-286), over the covered months, with the chart                                                                                                                     | F04 `budgetMonths`, F09's chart                                                      |
+| Goals                 | Every Goal created on or before the period's last day and not archived before its first day: progress at the period's end, target, percent, and "Completed on 12 Oct" when it was completed by then. Instants are compared as dates in the profile time zone. Goals carry their current state: a Goal reopened since loses its earlier completion (F06) | F06 `goalProgress`                                                                   |
+| Subscription costs    | Charges in the period per Subscription that had any, largest first, then one "Deleted Subscriptions" row for charges whose Subscription was deleted (F05); and the total, which equals Out for `src=subscription`. The "Current monthly cost" today (F05)                                                                                               | F03 `rollup` by Subscription, F05 `subscriptionCosts`                                |
+| Largest expenses      | Up to 10 expenses by gross amount, largest first; ties newest first, as the list's Largest first sort (F03, BR-F03-29)                                                                                                                                                                                                                                  | F03 `listTransactions`                                                               |
+| Month by month        | Quarterly and annual only: income, spending, net savings, savings rate and To Goals for every covered month, zeros included                                                                                                                                                                                                                             | F03 `rollup`                                                                         |
 
 Investments are left out (D-121).
 
@@ -109,44 +109,46 @@ Investments are left out (D-121).
     - **Numbers:** amounts and percentages, written as plain numbers with `.` as the decimal mark. Amounts are in major units with the currency's fixed decimals (`-18000.00`, `-1500` in JPY, `-12.500` in KWD). Percentages have one decimal. Numbers are never neutralized.
     - **Dates:** ISO (`2026-10-01`).
     - **Everything else is text:** a text cell that begins with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading `'` (formula neutralization).
+
 - **BR-F11-12** **Transactions** (`GET /api/reports/[type]/[period]/csv?part=transactions`). One row per confirmed Transaction in the period, ordered by `occurred_on`, then `occurred_at`, then `id`, oldest first.
 
-    | Column | Type | Content |
-    | --- | --- | --- |
-    | `date` | Date | `occurred_on` |
-    | `time` | Text | Local time `HH:MM` (24-hour), empty for Subscription charges, which show "Auto" on screen |
-    | `type` | Text | `expense`, `income`, `refund`, `goal_contribution` or `goal_withdrawal` |
-    | `category` | Text | The category's label (CAT-1), empty for Goal rows |
-    | `goal` | Text | The Goal's name, for Goal rows |
-    | `payee`, `description`, `note` | Text | As stored |
-    | `amount` | Number | Signed (D-231): plus for income, refunds and withdrawals; minus for expenses and contributions |
-    | `currency` | Text | The profile currency |
-    | `source` | Text | `manual` or `subscription` |
-    | `subscription` | Text | The Subscription's name, for charges whose Subscription still exists |
-    | `id` | Text | The Transaction id |
-
+    | Column                         | Type   | Content                                                                                        |
+    | ------------------------------ | ------ | ---------------------------------------------------------------------------------------------- |
+    | `date`                         | Date   | `occurred_on`                                                                                  |
+    | `time`                         | Text   | Local time `HH:MM` (24-hour), empty for Subscription charges, which show "Auto" on screen      |
+    | `type`                         | Text   | `expense`, `income`, `refund`, `goal_contribution` or `goal_withdrawal`                        |
+    | `category`                     | Text   | The category's label (CAT-1), empty for Goal rows                                              |
+    | `goal`                         | Text   | The Goal's name, for Goal rows                                                                 |
+    | `payee`, `description`, `note` | Text   | As stored                                                                                      |
+    | `amount`                       | Number | Signed (D-231): plus for income, refunds and withdrawals; minus for expenses and contributions |
+    | `currency`                     | Text   | The profile currency                                                                           |
+    | `source`                       | Text   | `manual` or `subscription`                                                                     |
+    | `subscription`                 | Text   | The Subscription's name, for charges whose Subscription still exists                           |
+    | `id`                           | Text   | The Transaction id                                                                             |
     - **Streaming:** the file streams in keyset pages of 1,000 rows, in P2's streaming mode (BR-P2-15). The stream owns one read transaction, and commits and releases it when the file ends. The first page is read before the response starts, so an early error still answers with the error envelope.
     - **Failure:** a database error mid-file aborts the response, so the browser marks the download failed instead of saving a truncated file. A client that disconnects rolls the transaction back.
     - **The name:** `daybook-transactions-2026-10.csv`.
+
 - **BR-F11-13** **Summary** (`/csv?part=summary`, D-342, D-369). A long table with columns `section`, `item`, `metric` and `value`, in the report's order.
     - **`item`:** always text.
     - **`value`:** a number or text, as the metric's type says.
     - **Missing values:** a metric whose value is "—" (a zero denominator) is left out, as is a metric a row does not have.
 
-    | `section` | `item` | `metric` (type) |
-    | --- | --- | --- |
-    | `summary` | empty | `income`, `spending`, `net_savings`, `to_goals`, `savings_rate_percent` (numbers) |
-    | `category` | Category label | `spending`, `share_percent` (numbers) |
-    | `budget` | Category label, or `Overall` | `limit`, `spent`, `utilization_percent` (numbers); `state` (text: F04's `ok`, `warning` or `over`) |
-    | `budget` | `Unbudgeted` | `spent` (number) |
-    | `goal` | Goal name | `progress`, `target`, `percent` (numbers); `completed_on` (date) |
-    | `subscription` | Subscription name | `charges` (number) |
-    | `subscription_deleted` | empty | `charges` (number) |
-    | `subscription_total` | empty | `charges`, `current_monthly_cost` (numbers) |
-    | `largest_expense` | Rank `1` to `10` | `date` (date); `payee`, `category` (text); `amount` (number, gross and positive) |
-    | `month` | `YYYY-MM` (quarterly and annual) | `income`, `spending`, `net_savings`, `to_goals`, `savings_rate_percent` (numbers) |
+    | `section`              | `item`                           | `metric` (type)                                                                                    |
+    | ---------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------- |
+    | `summary`              | empty                            | `income`, `spending`, `net_savings`, `to_goals`, `savings_rate_percent` (numbers)                  |
+    | `category`             | Category label                   | `spending`, `share_percent` (numbers)                                                              |
+    | `budget`               | Category label, or `Overall`     | `limit`, `spent`, `utilization_percent` (numbers); `state` (text: F04's `ok`, `warning` or `over`) |
+    | `budget`               | `Unbudgeted`                     | `spent` (number)                                                                                   |
+    | `goal`                 | Goal name                        | `progress`, `target`, `percent` (numbers); `completed_on` (date)                                   |
+    | `subscription`         | Subscription name                | `charges` (number)                                                                                 |
+    | `subscription_deleted` | empty                            | `charges` (number)                                                                                 |
+    | `subscription_total`   | empty                            | `charges`, `current_monthly_cost` (numbers)                                                        |
+    | `largest_expense`      | Rank `1` to `10`                 | `date` (date); `payee`, `category` (text); `amount` (number, gross and positive)                   |
+    | `month`                | `YYYY-MM` (quarterly and annual) | `income`, `spending`, `net_savings`, `to_goals`, `savings_rate_percent` (numbers)                  |
 
     Its name is `daybook-summary-monthly-2026-10.csv`.
+
 - **BR-F11-14** Both CSV endpoints check the same capability as the PDF, through `assertCan` for the requested type. They answer `text/csv; charset=utf-8` with `Content-Disposition: attachment` and `Cache-Control: no-store`.
 - **BR-F11-15** **Downloading.** The CSV buttons are plain links with `download`, so the browser streams the file and marks it failed itself if the response aborts. Download PDF uses `fetch`, so the page can show "Preparing PDF…", "Reports are busy right now…" or "The download failed.", then saves the returned file.
 
@@ -209,6 +211,7 @@ category,Housing,share_percent,57.8
 ```
 
 **Quarterly, Q4 2026 to date** (on 2 November; covered months October and November, D-373):
+
 - **Summary:** income 85,000.00; spending 49,588.00; net savings 35,412.00; To Goals 7,000.00; savings rate 41.7%.
 - **Spending by category:** housing 36,000.00 (72.6%); food 6,640.00 (13.4%); shopping 3,000.00 (6.0%); entertainment 2,148.00 (4.3%); transportation 1,800.00 (3.6%).
 - **Budget against actual** (limits over October and November):
@@ -228,16 +231,16 @@ category,Housing,share_percent,57.8
 
 **`/reports`.** BR-F11-01 to BR-F11-03.
 
-| State | What the user sees |
-| --- | --- |
-| Loading | The form, and a skeleton report with fixed chart heights |
-| Empty | The report with zeros and "No Transactions in October 2026." |
-| Error | "The report could not be loaded." with Retry; a failed download shows "The download failed. Try again." |
-| Offline | "You're offline. Reports need a connection." in place of the report; the actions are disabled (P1, BR-P1-39) |
-| Pending | n/a: reports show confirmed data only |
-| Locked (Premium) | P4's locked card for quarterly and annual (BR-F11-03) |
-| Read-only | n/a |
-| Downloading | The pressed button shows "Preparing PDF…" until the file arrives |
+| State            | What the user sees                                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| Loading          | The form, and a skeleton report with fixed chart heights                                                     |
+| Empty            | The report with zeros and "No Transactions in October 2026."                                                 |
+| Error            | "The report could not be loaded." with Retry; a failed download shows "The download failed. Try again."      |
+| Offline          | "You're offline. Reports need a connection." in place of the report; the actions are disabled (P1, BR-P1-39) |
+| Pending          | n/a: reports show confirmed data only                                                                        |
+| Locked (Premium) | P4's locked card for quarterly and annual (BR-F11-03)                                                        |
+| Read-only        | n/a                                                                                                          |
+| Downloading      | The pressed button shows "Preparing PDF…" until the file arrives                                             |
 
 ## 7. Flows
 
@@ -251,23 +254,23 @@ category,Housing,share_percent,57.8
 
 ## 8. Validation and messages
 
-| Situation | Message shown |
-| --- | --- |
+| Situation                  | Message shown                                             |
+| -------------------------- | --------------------------------------------------------- |
 | Invalid `type` or `period` | Some filters in this link weren't valid and were removed. |
-| No Transactions | No Transactions in October 2026. |
-| Locked | Get quarterly and annual reports with Daybook Premium. |
-| 503 `report_busy` | Reports are busy right now. Try again in a moment. |
-| Load failure | The report could not be loaded. |
-| Download failure | The download failed. Try again. |
-| Offline | You're offline. Reports need a connection. |
-| Preparing | Preparing PDF… |
+| No Transactions            | No Transactions in October 2026.                          |
+| Locked                     | Get quarterly and annual reports with Daybook Premium.    |
+| 503 `report_busy`          | Reports are busy right now. Try again in a moment.        |
+| Load failure               | The report could not be loaded.                           |
+| Download failure           | The download failed. Try again.                           |
+| Offline                    | You're offline. Reports need a connection.                |
+| Preparing                  | Preparing PDF…                                            |
 
 ## 9. Plan gating
 
-| Code | Gates | Server refusal |
-| --- | --- | --- |
+| Code                         | Gates                                    | Server refusal         |
+| ---------------------------- | ---------------------------------------- | ---------------------- |
 | `reports.quarterly.generate` | Quarterly report, PDF, CSVs, print route | 403 `premium_required` |
-| `reports.annual.generate` | Annual report, PDF, CSVs, print route | 403 `premium_required` |
+| `reports.annual.generate`    | Annual report, PDF, CSVs, print route    | 403 `premium_required` |
 
 The monthly report is free. A Premium lapse locks quarterly and annual again (F12, BR-F12-25).
 
@@ -277,20 +280,21 @@ Online only (root 7.3). Nothing is saved for offline use, and the page shows its
 
 ## 11. Server surface
 
-| Endpoint | Method | Input | Output | Errors | Idempotency |
-| --- | --- | --- | --- | --- | --- |
-| `/api/reports/[type]/[period]` | GET | none | The report as JSON (section 3), with `currency`, `partial`, `generatedAt` | 400, 401, 403 `profile_required` or `premium_required` | Read |
-| `/api/reports/[type]/[period]/pdf` | GET | none | The PDF | 400, 401, 403, 500, 503 `report_busy` | Read |
-| `/api/reports/[type]/[period]/csv` | GET | `part=transactions` or `part=summary` | The CSV | 400, 401, 403 | Read |
-| `/print/reports/[type]/[period]` | GET (page) | Header `X-Print-Token` | The print page | 401 for a bad or expired token, 403, 404 for a route outside the allow-list | Read |
+| Endpoint                           | Method     | Input                                 | Output                                                                    | Errors                                                                      | Idempotency |
+| ---------------------------------- | ---------- | ------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------- |
+| `/api/reports/[type]/[period]`     | GET        | none                                  | The report as JSON (section 3), with `currency`, `partial`, `generatedAt` | 400, 401, 403 `profile_required` or `premium_required`                      | Read        |
+| `/api/reports/[type]/[period]/pdf` | GET        | none                                  | The PDF                                                                   | 400, 401, 403, 500, 503 `report_busy`                                       | Read        |
+| `/api/reports/[type]/[period]/csv` | GET        | `part=transactions` or `part=summary` | The CSV                                                                   | 400, 401, 403                                                               | Read        |
+| `/print/reports/[type]/[period]`   | GET (page) | Header `X-Print-Token`                | The print page                                                            | 401 for a bad or expired token, 403, 404 for a route outside the allow-list | Read        |
 
 **Error code added by this spec**
 
-| Status | Code | Default message | Write queue does |
-| --- | --- | --- | --- |
-| 503 | `report_busy` | Reports are busy right now. Try again in a moment. | Never queued (reads only) |
+| Status | Code          | Default message                                    | Write queue does          |
+| ------ | ------------- | -------------------------------------------------- | ------------------------- |
+| 503    | `report_busy` | Reports are busy right now. Try again in a moment. | Never queued (reads only) |
 
 **Modules.**
+
 - `server/reports/data.ts`: `reportData`.
 - `server/reports/pdf.ts`: the warm browser, slots and rendering.
 - `server/reports/csv.ts`: escaping, neutralization and streaming.

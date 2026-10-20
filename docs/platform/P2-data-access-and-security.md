@@ -4,12 +4,12 @@
 
 Every private read and write reaches Postgres through one path. A route-handler wrapper checks the request and opens one database transaction. Inside it, the data access layer sets the user's identity, and row-level security makes the database refuse anything that belongs to someone else. The same path makes every change safe to retry and detects edits made on another device. This spec defines that path, the database roles behind it, the security headers in front of it, and the tests that prove it.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M0 |
-| Plan | Free and Premium |
-| Depends on | [01-root-spec.md](../01-root-spec.md) sections 7 to 9 |
-| Decisions | D-06, D-07, D-12 to D-19, D-39, D-137, D-153, D-165, D-172, D-173, D-180, D-192 to D-197, D-199, D-201 to D-207, D-242 to D-244, D-292, D-300, D-325, D-343, D-362, D-367, D-368, D-370, D-382, D-383, D-386 |
+| Item       | Value                                                                                                                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Milestone  | M0                                                                                                                                                                                                           |
+| Plan       | Free and Premium                                                                                                                                                                                             |
+| Depends on | [01-root-spec.md](../01-root-spec.md) sections 7 to 9                                                                                                                                                        |
+| Decisions  | D-06, D-07, D-12 to D-19, D-39, D-137, D-153, D-165, D-172, D-173, D-180, D-192 to D-197, D-199, D-201 to D-207, D-242 to D-244, D-292, D-300, D-325, D-343, D-362, D-367, D-368, D-370, D-382, D-383, D-386 |
 
 ## 1. User stories
 
@@ -20,71 +20,72 @@ Every private read and write reaches Postgres through one path. A route-handler 
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
-| Database roles, bootstrap and grants; schemas; RLS policy pattern; foreign-key rules; transaction-local user context; isolation levels; the route-handler wrapper and its step matrix; idempotency records; version checks; error mapping; value parsing; lazy catch-up; the system module; `proxy.ts`; CSP and headers; session-cookie expiry; environment validation; migrations and `db:verify`; Better Auth's endpoint allow-list; the print token | None | Audit log of row changes; field-level encryption; rate limits on the finance API; multiple database regions |
+| In                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Stretch (M8) | Out                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ | ----------------------------------------------------------------------------------------------------------- |
+| Database roles, bootstrap and grants; schemas; RLS policy pattern; foreign-key rules; transaction-local user context; isolation levels; the route-handler wrapper and its step matrix; idempotency records; version checks; error mapping; value parsing; lazy catch-up; the system module; `proxy.ts`; CSP and headers; session-cookie expiry; environment validation; migrations and `db:verify`; Better Auth's endpoint allow-list; the print token | None         | Audit log of row changes; field-level encryption; rate limits on the finance API; multiple database regions |
 
 ## 3. Concepts and fields
 
 **Database roles** (SEC-1)
 
-| Role | Created by | Login | `BYPASSRLS` | Can touch |
-| --- | --- | --- | --- | --- |
-| Owner: the Neon project's default role | Neon, with the project | Migrations and bootstrap only, direct endpoint | Neon's default for that role; not relied on | Everything; owns every table and schema |
-| `daybook_auth` | `db:bootstrap` | Pooled endpoint | No | `USAGE` on schema `auth`; `SELECT, INSERT, UPDATE, DELETE` on its tables. Nothing in `app` |
-| `daybook_runtime` | `db:bootstrap` | Pooled endpoint | No | `USAGE` on schema `app`; `SELECT, INSERT, UPDATE, DELETE` on private tables; `SELECT` only on private system-written tables and reference tables. Its own rows only, through `owner_isolation`. Nothing in `auth` |
-| `daybook_system` | `db:bootstrap` | Pooled endpoint | No | `USAGE` on schema `app`; `SELECT, INSERT, UPDATE, DELETE` on every `app` table; `USAGE` on sequence `app.billing_sync_seq` (F12). Every user's private rows, through its own `system_access` policy (D-206). Nothing in `auth` |
+| Role                                   | Created by             | Login                                          | `BYPASSRLS`                                 | Can touch                                                                                                                                                                                                                      |
+| -------------------------------------- | ---------------------- | ---------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Owner: the Neon project's default role | Neon, with the project | Migrations and bootstrap only, direct endpoint | Neon's default for that role; not relied on | Everything; owns every table and schema                                                                                                                                                                                        |
+| `daybook_auth`                         | `db:bootstrap`         | Pooled endpoint                                | No                                          | `USAGE` on schema `auth`; `SELECT, INSERT, UPDATE, DELETE` on its tables. Nothing in `app`                                                                                                                                     |
+| `daybook_runtime`                      | `db:bootstrap`         | Pooled endpoint                                | No                                          | `USAGE` on schema `app`; `SELECT, INSERT, UPDATE, DELETE` on private tables; `SELECT` only on private system-written tables and reference tables. Its own rows only, through `owner_isolation`. Nothing in `auth`              |
+| `daybook_system`                       | `db:bootstrap`         | Pooled endpoint                                | No                                          | `USAGE` on schema `app`; `SELECT, INSERT, UPDATE, DELETE` on every `app` table; `USAGE` on sequence `app.billing_sync_seq` (F12). Every user's private rows, through its own `system_access` policy (D-206). Nothing in `auth` |
 
 **Schemas (D-192)**
+
 - `auth` holds Better Auth's tables: user, session, account, verification. Session and account reference the user with `ON DELETE CASCADE`.
 - `app` holds every other table.
 
 **Table classes.** Every table in `app` belongs to exactly one class.
 
-| Class | Examples | `user_id` | RLS and policy | Runtime may |
-| --- | --- | --- | --- | --- |
-| Private | Transactions, Budgets, Subscriptions, tombstones, Goals, trades, profile, layout, dismissed insights, idempotency records | Yes | Enabled, forced, `owner_isolation` and `system_access` | Read and write own rows |
-| Private, system-written | Entitlements, plan status, capability overrides | Yes | Enabled, forced, `owner_isolation` and `system_access` | Read own rows only (no write grant) |
-| Reference | Currencies, categories, mock assets, mock prices | No | None | Read |
-| System | Processed Stripe event ids, daily maintenance markers | No | None | Nothing |
+| Class                   | Examples                                                                                                                  | `user_id` | RLS and policy                                         | Runtime may                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------ | ----------------------------------- |
+| Private                 | Transactions, Budgets, Subscriptions, tombstones, Goals, trades, profile, layout, dismissed insights, idempotency records | Yes       | Enabled, forced, `owner_isolation` and `system_access` | Read and write own rows             |
+| Private, system-written | Entitlements, plan status, capability overrides                                                                           | Yes       | Enabled, forced, `owner_isolation` and `system_access` | Read own rows only (no write grant) |
+| Reference               | Currencies, categories, mock assets, mock prices                                                                          | No        | None                                                   | Read                                |
+| System                  | Processed Stripe event ids, daily maintenance markers                                                                     | No        | None                                                   | Nothing                             |
 
 **Columns every private table must have.** These constrain the schema design; they are not the schema.
 
-| Column | Rule |
-| --- | --- |
-| `id` | UUIDv7 primary key (ID-1) |
-| `user_id` | Not null; references `auth.user(id)` with `ON DELETE CASCADE` |
-| `version` | Integer from 1, plus 1 on every update. Required on updatable rows |
-| `created_at`, `updated_at` | `timestamptz`, UTC |
+| Column                     | Rule                                                               |
+| -------------------------- | ------------------------------------------------------------------ |
+| `id`                       | UUIDv7 primary key (ID-1)                                          |
+| `user_id`                  | Not null; references `auth.user(id)` with `ON DELETE CASCADE`      |
+| `version`                  | Integer from 1, plus 1 on every update. Required on updatable rows |
+| `created_at`, `updated_at` | `timestamptz`, UTC                                                 |
 
 A private table that other private rows reference also has `UNIQUE (user_id, id)` (BR-P2-06). The profile carries `last_catch_up_on`, a date in the profile timezone (BR-P2-14).
 
 **Idempotency record (private)**
 
-| Field | Meaning |
-| --- | --- |
-| `user_id`, `key` | Unique together; the key is the request's `Idempotency-Key`, a UUIDv7 (ID-2) |
-| `request_hash` | SHA-256 of method, path and the canonical JSON body |
-| `status_code`, `response_body` | The stored response |
-| `created_at` | Deleted after 90 days (BR-P2-27); deleted with the account by the cascade |
+| Field                          | Meaning                                                                      |
+| ------------------------------ | ---------------------------------------------------------------------------- |
+| `user_id`, `key`               | Unique together; the key is the request's `Idempotency-Key`, a UUIDv7 (ID-2) |
+| `request_hash`                 | SHA-256 of method, path and the canonical JSON body                          |
+| `status_code`, `response_body` | The stored response                                                          |
+| `created_at`                   | Deleted after 90 days (BR-P2-27); deleted with the account by the cascade    |
 
 **Request context**
 
-| Field | Meaning |
-| --- | --- |
-| `requestId` | UUIDv7 from `proxy.ts` |
-| `user` | `{ id, email, name }` from the session |
-| `profile` | Country, currency, timezone, week start, `last_catch_up_on`; `null` before onboarding |
-| `capabilities` | Resolved per [P4](P4-capabilities.md) |
-| `now` | The server's UTC instant for this request |
-| `today` | `now` as a date in the profile timezone (TIME-5) |
+| Field          | Meaning                                                                               |
+| -------------- | ------------------------------------------------------------------------------------- |
+| `requestId`    | UUIDv7 from `proxy.ts`                                                                |
+| `user`         | `{ id, email, name }` from the session                                                |
+| `profile`      | Country, currency, timezone, week start, `last_catch_up_on`; `null` before onboarding |
+| `capabilities` | Resolved per [P4](P4-capabilities.md)                                                 |
+| `now`          | The server's UTC instant for this request                                             |
+| `today`        | `now` as a date in the profile timezone (TIME-5)                                      |
 
 **Route modes**
 
-| Mode | Used by |
-| --- | --- |
-| `user` | Every finance and account endpoint |
-| `webhook` | `/api/webhooks/stripe` |
+| Mode      | Used by                            |
+| --------- | ---------------------------------- |
+| `user`    | Every finance and account endpoint |
+| `webhook` | `/api/webhooks/stripe`             |
 
 Pages readable without a session (the landing page, Learn) are server components, not routes, so the wrapper has no public mode.
 
@@ -114,6 +115,7 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
     - **Runtime role:** a missing or empty setting yields `NULL` and matches no row. On system-written tables the missing write grant stops it writing.
     - **System role:** reaches every row through `system_access` (D-206), so no role needs `BYPASSRLS`.
     - **Auth role:** no policy names it, and it has no grants in `app`.
+
 - **BR-P2-05** Views over private tables use `security_invoker = true` (D-194). Materialized views over private tables are forbidden, since they ignore the querying role.
 - **BR-P2-06** A private row that references another private row uses a composite foreign key `(user_id, parent_id)` → `parent(user_id, id)` (D-193). Postgres skips RLS during foreign-key checks, so a single-column key would let a user link to another user's row. Two actions are allowed between private tables:
     - **The child must survive its parent:** `ON DELETE SET NULL (parent_id)`, with the column list (Postgres 15 or later), so `user_id` is never nulled. Example: a Subscription's charges (D-96).
@@ -139,6 +141,7 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
     - every server module starts with `import 'server-only'`.
 
     Scripts run with `tsx --conditions=react-server`, and Vitest aliases `server-only` to an empty module, so both can import server modules.
+
 - **BR-P2-12** No session, or a session whose user no longer exists, gives 401 `unauthenticated`. API responses never touch cookies; pages clear them through BR-P2-39.
 - **BR-P2-13** A `user` route called before onboarding gives 403 `profile_required`. These routes work without a profile: `/api/me`, `/api/profile`, `/api/account/*`.
 - **BR-P2-14** Lazy catch-up (JOB-1, D-207). It runs before every route with `catchUp: true` (the default whenever a profile is required), and in `readAsUser` before its read transaction opens, at most once per rendered request.
@@ -155,6 +158,7 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
         ```
 
         `$2` is `ctx.now` (BR-P2-43). Today comes from it and the profile's own timezone inside the statement, so nothing is read first.
+
     - **No profile:** matches no row.
     - **A row returned:** catch-up was due. The same transaction runs Subscription catch-up (JOB-2). The check commits before the request's own transaction or snapshot opens, so the response includes the new charges.
     - **`version` and `updated_at`:** never changed by this update. `last_catch_up_on` is bookkeeping and cannot cause a version conflict.
@@ -182,29 +186,30 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
         - **Timing** (D-386): `Server-Timing` `app;dur` ends at the commit, and the continuation is reported as `after;dur`. NFR-1's server-time budget applies to `app;dur`, so a remote call is never counted as database-bound server time.
 
     The handler is called as `handler(ctx, tx, input)`.
+
 - **BR-P2-16** A mutation is any POST, PUT, PATCH or DELETE. Every `user` mutation requires an `Idempotency-Key`, with three exceptions (D-201). They are online only and never queued:
     - `POST /api/sync/catch-up`, idempotent by design;
     - `POST /api/billing/*`, where Stripe calls carry their own idempotency keys;
     - `POST /api/account/reset`, guarded by its confirmation text and an empty queue.
 - **BR-P2-17** Steps by mode, in order; the first failure stops the request:
 
-    | # | Step | `user` read | `user` mutation | `webhook` | Failure |
-    | --- | --- | --- | --- | --- | --- |
-    | 1 | Request id | Yes | Yes | Yes | none |
-    | 2 | Media type is `application/json` (parameters such as `charset` ignored) | | Yes | | 415 `unsupported_media_type` |
-    | 3 | Body at most 64 KB | | Yes | Yes | 413 `payload_too_large` |
-    | 4 | `Origin` equals `APP_ORIGIN`; a missing `Origin` fails | | Yes | | 403 `cross_origin` |
-    | 5 | `Idempotency-Key` present, a UUIDv7; and a `Daybook-Build` header, when sent (the write queue sends it, P1), equals `BUILD_ID` | | Unless exempt | | 400 `bad_request`; 409 `build_mismatch` with `details.buildId`, before any lookup or write (D-383) |
-    | 6 | `If-Match` present when versioned | | Yes | | 400 `bad_request` |
-    | 7 | Provider signature over the raw body | | | Yes | 400 `bad_request` |
-    | 8 | Session | Yes | Yes | | 401 `unauthenticated` |
-    | 9 | Daily pass when due (BR-P2-27), then the catch-up check when `catchUp` (BR-P2-14) | Yes | Yes | | Logged only |
-    | 10 | Open `withUser` (read or write) | Yes | Yes | | |
-    | 11 | Profile, unless the route opts out | Yes | Yes | | 403 `profile_required` |
-    | 12 | Capability, if declared | Yes | Yes | | 403 `premium_required` or `feature_off` |
-    | 13 | Body against its Zod schema | | Yes | Yes | 422 `validation_failed` |
-    | 14 | Idempotency (BR-P2-18): the record is inserted here; a stored answer was already returned right after step 10 | | Unless exempt | | Stored response, or 422 `idempotency_key_reused` |
-    | 15 | Handler | Yes | Yes | Yes | Mapped per BR-P2-24 |
+    | #   | Step                                                                                                                           | `user` read | `user` mutation | `webhook` | Failure                                                                                            |
+    | --- | ------------------------------------------------------------------------------------------------------------------------------ | ----------- | --------------- | --------- | -------------------------------------------------------------------------------------------------- |
+    | 1   | Request id                                                                                                                     | Yes         | Yes             | Yes       | none                                                                                               |
+    | 2   | Media type is `application/json` (parameters such as `charset` ignored)                                                        |             | Yes             |           | 415 `unsupported_media_type`                                                                       |
+    | 3   | Body at most 64 KB                                                                                                             |             | Yes             | Yes       | 413 `payload_too_large`                                                                            |
+    | 4   | `Origin` equals `APP_ORIGIN`; a missing `Origin` fails                                                                         |             | Yes             |           | 403 `cross_origin`                                                                                 |
+    | 5   | `Idempotency-Key` present, a UUIDv7; and a `Daybook-Build` header, when sent (the write queue sends it, P1), equals `BUILD_ID` |             | Unless exempt   |           | 400 `bad_request`; 409 `build_mismatch` with `details.buildId`, before any lookup or write (D-383) |
+    | 6   | `If-Match` present when versioned                                                                                              |             | Yes             |           | 400 `bad_request`                                                                                  |
+    | 7   | Provider signature over the raw body                                                                                           |             |                 | Yes       | 400 `bad_request`                                                                                  |
+    | 8   | Session                                                                                                                        | Yes         | Yes             |           | 401 `unauthenticated`                                                                              |
+    | 9   | Daily pass when due (BR-P2-27), then the catch-up check when `catchUp` (BR-P2-14)                                              | Yes         | Yes             |           | Logged only                                                                                        |
+    | 10  | Open `withUser` (read or write)                                                                                                | Yes         | Yes             |           |                                                                                                    |
+    | 11  | Profile, unless the route opts out                                                                                             | Yes         | Yes             |           | 403 `profile_required`                                                                             |
+    | 12  | Capability, if declared                                                                                                        | Yes         | Yes             |           | 403 `premium_required` or `feature_off`                                                            |
+    | 13  | Body against its Zod schema                                                                                                    |             | Yes             | Yes       | 422 `validation_failed`                                                                            |
+    | 14  | Idempotency (BR-P2-18): the record is inserted here; a stored answer was already returned right after step 10                  |             | Unless exempt   |           | Stored response, or 422 `idempotency_key_reused`                                                   |
+    | 15  | Handler                                                                                                                        | Yes         | Yes             | Yes       | Mapped per BR-P2-24                                                                                |
 
     Profile and capabilities are read inside the step 10 transaction. `webhook` handlers run through the system module and never call `withUser`. A mutation with no payload, such as a DELETE, sends `{}` with the JSON media type; its request hash covers `{}` (API-2).
 
@@ -219,6 +224,7 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
     Then, inside the handler's transaction and before the change, the wrapper runs `INSERT ... (user_id, key, request_hash) ON CONFLICT (user_id, key) DO NOTHING RETURNING id`.
     - **A row is returned:** the handler runs, and the record is updated with the response before commit. Effect and record commit together or not at all.
     - **No row returned:** the wrapper selects the record. Same hash: it returns the stored response without running the handler. Different hash: 422 `idempotency_key_reused`.
+
 - **BR-P2-19** Two concurrent requests with one key serialize on the unique index. The second insert waits for the first transaction. If the first commits, the second takes the no-row branch; if the first rolls back, the second inserts and runs.
 
 **Creates and versions**
@@ -246,16 +252,16 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
 
 - **BR-P2-24** Errors map to the envelope (API-9):
 
-    | Source | Response |
-    | --- | --- |
-    | Zod failure | 422 `validation_failed`, one message per field |
-    | Unique violation on a business constraint | 422 `validation_failed` on the constrained field |
-    | Check-constraint violation | 422 `validation_failed` |
-    | Foreign-key violation on insert or update (missing parent) | 422 `parent_missing` |
-    | Foreign-key violation on delete (children remain) | 409 `has_dependents` |
-    | RLS `WITH CHECK` violation | 404 `not_found`, sent to Sentry as a security event |
-    | Statement timeout | 503 `timeout` (the queue retries) |
-    | Any other error | 500 `internal`; reported to Sentry with the request id, a database error by SQLSTATE, table, and constraint (or column, for NOT NULL) only (P3, BR-P3-05) |
+    | Source                                                     | Response                                                                                                                                                  |
+    | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | Zod failure                                                | 422 `validation_failed`, one message per field                                                                                                            |
+    | Unique violation on a business constraint                  | 422 `validation_failed` on the constrained field                                                                                                          |
+    | Check-constraint violation                                 | 422 `validation_failed`                                                                                                                                   |
+    | Foreign-key violation on insert or update (missing parent) | 422 `parent_missing`                                                                                                                                      |
+    | Foreign-key violation on delete (children remain)          | 409 `has_dependents`                                                                                                                                      |
+    | RLS `WITH CHECK` violation                                 | 404 `not_found`, sent to Sentry as a security event                                                                                                       |
+    | Statement timeout                                          | 503 `timeout` (the queue retries)                                                                                                                         |
+    | Any other error                                            | 500 `internal`; reported to Sentry with the request id, a database error by SQLSTATE, table, and constraint (or column, for NOT NULL) only (P3, BR-P3-05) |
 
     SQL text, stack traces and other users' data never appear in a response.
 
@@ -294,25 +300,25 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
 
 - **BR-P2-33** The CSP, assembled per request:
 
-    | Directive | Value |
-    | --- | --- |
-    | `default-src` | `'self'` |
-    | `script-src` | `'self' 'nonce-<n>' 'strict-dynamic' https://js.stripe.com https://*.js.stripe.com` |
-    | `style-src` | `'self' 'unsafe-inline'` |
-    | `img-src` | `'self' data: blob: https://cdn.sanity.io https://*.stripe.com https://*.link.com` |
-    | `font-src` | `'self'` |
-    | `connect-src` | `'self' https://api.stripe.com https://link.com https://*.link.com https://*.api.sanity.io https://*.apicdn.sanity.io` |
-    | `frame-src` | `https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://link.com https://*.link.com` |
-    | `worker-src`, `manifest-src` | `'self'` |
-    | `form-action`, `base-uri` | `'self'` |
-    | `object-src` | `'none'` |
-    | `frame-ancestors` | `'none'` |
-    | `upgrade-insecure-requests` | Only when `APP_ORIGIN` is `https` |
-
+    | Directive                    | Value                                                                                                                  |
+    | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+    | `default-src`                | `'self'`                                                                                                               |
+    | `script-src`                 | `'self' 'nonce-<n>' 'strict-dynamic' https://js.stripe.com https://*.js.stripe.com`                                    |
+    | `style-src`                  | `'self' 'unsafe-inline'`                                                                                               |
+    | `img-src`                    | `'self' data: blob: https://cdn.sanity.io https://*.stripe.com https://*.link.com`                                     |
+    | `font-src`                   | `'self'`                                                                                                               |
+    | `connect-src`                | `'self' https://api.stripe.com https://link.com https://*.link.com https://*.api.sanity.io https://*.apicdn.sanity.io` |
+    | `frame-src`                  | `https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://link.com https://*.link.com`           |
+    | `worker-src`, `manifest-src` | `'self'`                                                                                                               |
+    | `form-action`, `base-uri`    | `'self'`                                                                                                               |
+    | `object-src`                 | `'none'`                                                                                                               |
+    | `frame-ancestors`            | `'none'`                                                                                                               |
+    | `upgrade-insecure-requests`  | Only when `APP_ORIGIN` is `https`                                                                                      |
     - **Styles:** they allow inline styles (D-195), because React, React Aria and toast libraries inject `style` attributes and `<style>` elements at runtime. Scripts stay strict.
     - **Stripe:** the entries follow Stripe's published lists for Stripe.js and Link.
     - **Sentry:** events go through a same-origin tunnel route, so no Sentry host is listed (D-196).
     - **Development:** adds `'unsafe-eval'` to `script-src`, as Next.js requires.
+
 - **BR-P2-34** Other headers:
     - `X-Content-Type-Options: nosniff`
     - `Referrer-Policy: strict-origin-when-cross-origin`
@@ -422,28 +428,28 @@ None. Error codes reach the user through each feature's states. The messages in 
 
 ## 8. Validation and messages
 
-| Code | Default message |
-| --- | --- |
-| `bad_request` | The request could not be read. |
-| `unauthenticated` | Your session has expired. Log in again. |
-| `cross_origin` | This request came from another site and was blocked. |
-| `profile_required` | Finish setting up your profile first. |
-| `premium_required` | This is part of Daybook Premium. |
-| `feature_off` | This feature is switched off right now. |
-| `not_found` | We could not find that. It may have been deleted. |
-| `version_conflict` | This was changed on another device. |
-| `build_mismatch` | Daybook was updated. Reload to keep saving changes. (The queue pauses rather than showing it, P1.) |
-| `id_conflict` | This could not be created. Try again. |
-| `has_dependents` | This still has linked items. Remove them first. |
-| `payload_too_large` | That is too much data for one request. |
-| `unsupported_media_type` | This request format is not supported. |
-| `validation_failed` | Some fields need attention. (Each field gets its own message from its spec.) |
-| `parent_missing` | The item this belongs to no longer exists. |
-| `idempotency_key_reused` | This change conflicts with an earlier one. Discard it and try again. |
-| `currency_mismatch` | Not saved: your currency changed after this was made. |
-| `rate_limited` | Too many attempts. Wait a few seconds and try again. |
-| `timeout` | This took too long. We will try again. |
-| `internal` | Something went wrong on our side. Your change was not saved. (Reads: "This could not be loaded.") |
+| Code                     | Default message                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------------------- |
+| `bad_request`            | The request could not be read.                                                                     |
+| `unauthenticated`        | Your session has expired. Log in again.                                                            |
+| `cross_origin`           | This request came from another site and was blocked.                                               |
+| `profile_required`       | Finish setting up your profile first.                                                              |
+| `premium_required`       | This is part of Daybook Premium.                                                                   |
+| `feature_off`            | This feature is switched off right now.                                                            |
+| `not_found`              | We could not find that. It may have been deleted.                                                  |
+| `version_conflict`       | This was changed on another device.                                                                |
+| `build_mismatch`         | Daybook was updated. Reload to keep saving changes. (The queue pauses rather than showing it, P1.) |
+| `id_conflict`            | This could not be created. Try again.                                                              |
+| `has_dependents`         | This still has linked items. Remove them first.                                                    |
+| `payload_too_large`      | That is too much data for one request.                                                             |
+| `unsupported_media_type` | This request format is not supported.                                                              |
+| `validation_failed`      | Some fields need attention. (Each field gets its own message from its spec.)                       |
+| `parent_missing`         | The item this belongs to no longer exists.                                                         |
+| `idempotency_key_reused` | This change conflicts with an earlier one. Discard it and try again.                               |
+| `currency_mismatch`      | Not saved: your currency changed after this was made.                                              |
+| `rate_limited`           | Too many attempts. Wait a few seconds and try again.                                               |
+| `timeout`                | This took too long. We will try again.                                                             |
+| `internal`               | Something went wrong on our side. Your change was not saved. (Reads: "This could not be loaded.")  |
 
 ## 9. Plan gating
 
@@ -452,6 +458,7 @@ Wrapper step 12 calls P4's `assertCan` for a declared capability. Limit checks r
 ## 10. Offline behavior
 
 This spec supplies the server half of offline safety:
+
 - idempotency records kept 90 days, so a replay never duplicates;
 - version checks, so a stale edit becomes a visible conflict;
 - client ids, so offline creates can reference each other;
@@ -461,26 +468,26 @@ Requests from the service worker carry `Origin` and pass the same checks.
 
 ## 11. Server surface
 
-| Endpoint | Method | Purpose |
-| --- | --- | --- |
-| `/api/session/expired` | GET | Clears the session cookies, then redirects to `/login?next=...&expired=1` (BR-P2-39). With `reason=deleted` it redirects to `/?deleted=1` instead (F01). With `reason=logout` it first revokes the session and clears `daybook_logout` (P1). `next` is validated as in F01, BR-F01-09 |
+| Endpoint               | Method | Purpose                                                                                                                                                                                                                                                                               |
+| ---------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/session/expired` | GET    | Clears the session cookies, then redirects to `/login?next=...&expired=1` (BR-P2-39). With `reason=deleted` it redirects to `/?deleted=1` instead (F01). With `reason=logout` it first revokes the session and clears `daybook_logout` (P1). `next` is validated as in F01, BR-F01-09 |
 
 **Internal modules**
 
-| Module | Exports | May be imported by |
-| --- | --- | --- |
-| `server/env` | Validated server and public env | Any server module |
-| `server/db/pools` | `authPool`, `runtimePool`, `systemPool`; the safe-integer mapper | `server/auth`, `server/dal`, `server/api/route`, `server/system` |
-| `server/auth` | The Better Auth instance | Route handlers, `server/dal`, scripts |
-| `server/dal/context` | `getRequestContext()` | `server/dal/read`, `server/api/route` |
-| `server/dal/read` | `readAsUser(fn)`: context plus one read transaction | Server components |
-| `server/dal/with-user` | `withUser(ctx, mode, fn)` | `server/dal/*`, `server/api/route` |
-| `server/dal/<feature>` | Query and command functions that take a transaction | Route handlers, server components |
-| `server/api/route` | `route(options, handler)` | Route handlers |
-| `server/api/errors` | Error classes, envelope builder, Postgres error mapping | Route handlers, `server/dal` |
-| `server/system/*` | The functions in BR-P2-26 and BR-P2-27 | Webhook and billing handlers, the `/api/me` handler (lazy billing check), Better Auth hooks, the wrapper (daily pass), scripts |
-| `server/security/csp` | `buildCsp(nonce)`, the header set | `proxy.ts` |
-| `server/security/print-token` | `signPrintToken`, `verifyPrintToken` | F11 |
+| Module                        | Exports                                                          | May be imported by                                                                                                             |
+| ----------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `server/env`                  | Validated server and public env                                  | Any server module                                                                                                              |
+| `server/db/pools`             | `authPool`, `runtimePool`, `systemPool`; the safe-integer mapper | `server/auth`, `server/dal`, `server/api/route`, `server/system`                                                               |
+| `server/auth`                 | The Better Auth instance                                         | Route handlers, `server/dal`, scripts                                                                                          |
+| `server/dal/context`          | `getRequestContext()`                                            | `server/dal/read`, `server/api/route`                                                                                          |
+| `server/dal/read`             | `readAsUser(fn)`: context plus one read transaction              | Server components                                                                                                              |
+| `server/dal/with-user`        | `withUser(ctx, mode, fn)`                                        | `server/dal/*`, `server/api/route`                                                                                             |
+| `server/dal/<feature>`        | Query and command functions that take a transaction              | Route handlers, server components                                                                                              |
+| `server/api/route`            | `route(options, handler)`                                        | Route handlers                                                                                                                 |
+| `server/api/errors`           | Error classes, envelope builder, Postgres error mapping          | Route handlers, `server/dal`                                                                                                   |
+| `server/system/*`             | The functions in BR-P2-26 and BR-P2-27                           | Webhook and billing handlers, the `/api/me` handler (lazy billing check), Better Auth hooks, the wrapper (daily pass), scripts |
+| `server/security/csp`         | `buildCsp(nonce)`, the header set                                | `proxy.ts`                                                                                                                     |
+| `server/security/print-token` | `signPrintToken`, `verifyPrintToken`                             | F11                                                                                                                            |
 
 **Pools.** Runtime: up to 10 connections; auth: 5; system: 3. Connect timeout 10 s, idle timeout 30 s. All use the pooled endpoint over TLS.
 
@@ -549,8 +556,9 @@ Illustrative, a route declaration. The wrapper opens the transaction; the handle
 
 ```ts
 export const PATCH = route(
-  { mode: 'user', body: budgetPatchSchema, versioned: true },
-  (ctx, tx, { body, ifMatch, params }) => budgets.update(tx, params.id, ifMatch, body),
+	{ mode: "user", body: budgetPatchSchema, versioned: true },
+	(ctx, tx, { body, ifMatch, params }) =>
+		budgets.update(tx, params.id, ifMatch, body),
 );
 ```
 
@@ -558,11 +566,13 @@ Illustrative, a conflict response:
 
 ```json
 {
-  "error": {
-    "code": "version_conflict",
-    "message": "This was changed on another device.",
-    "details": { "current": { "id": "0192f0c4-...", "version": 4, "limitMinor": 500000 } },
-    "requestId": "0192f0c5-..."
-  }
+	"error": {
+		"code": "version_conflict",
+		"message": "This was changed on another device.",
+		"details": {
+			"current": { "id": "0192f0c4-...", "version": 4, "limitMinor": 500000 }
+		},
+		"requestId": "0192f0c5-..."
+	}
 }
 ```

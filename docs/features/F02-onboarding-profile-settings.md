@@ -6,12 +6,12 @@ After sign-up, a short setup asks for four things: country, currency, time zone 
 
 Later, the user changes their name, time zone and week start in Settings. They can also change the currency while their account holds no finance data. Theme (light, dark or system) is picked per device and applied before the first paint. This spec also owns the settings shell and the user and profile parts of `/api/me`.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M1 |
-| Plan | Free and Premium; no capability codes |
+| Item       | Value                                                                                                                                                                                                                                                                  |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M1                                                                                                                                                                                                                                                                     |
+| Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                  |
 | Depends on | [F01](F01-auth-and-account.md) (sign-up, display name through `/update-user`), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md) (`/api/me`); F07 (portfolio seeding, from M3), F08 (dashboard settings page), F12 (billing page) |
-| Decisions | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241 |
+| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241                                                                                                                                                                                      |
 
 ## 1. User stories
 
@@ -25,11 +25,12 @@ Later, the user changes their name, time zone and week start in Settings. They c
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
-| `/onboarding` and profile creation; pre-fill rules; the geo data module; Settings → Profile (name, currency, time zone, week start); the currency lock and currency change; locale derivation; the user and profile blocks of `/api/me`; `/api/profile`; the device-time-zone notice; Settings → Appearance (theme); the settings shell and its navigation | None | Changing the country; changing the email (D-189); choosing a language or a stored locale (D-68); fiscal years (D-75); theme per account (D-55); profile photos |
+| In                                                                                                                                                                                                                                                                                                                                                         | Stretch (M8) | Out                                                                                                                                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/onboarding` and profile creation; pre-fill rules; the geo data module; Settings → Profile (name, currency, time zone, week start); the currency lock and currency change; locale derivation; the user and profile blocks of `/api/me`; `/api/profile`; the device-time-zone notice; Settings → Appearance (theme); the settings shell and its navigation | None         | Changing the country; changing the email (D-189); choosing a language or a stored locale (D-68); fiscal years (D-75); theme per account (D-55); profile photos |
 
 **Milestones (D-241).** F02 is built in M1. Two parts arrive later:
+
 - **Until M3 builds the dashboard (F08):** onboarding opens `/transactions`, and `/dashboard` redirects there.
 - **Portfolio seeding** (BR-F02-08) arrives with F07 in M3.
 
@@ -37,37 +38,37 @@ Later, the user changes their name, time zone and week start in Settings. They c
 
 **Profile** (private table, one row per user; P2 columns `id`, `user_id`, `version`, `created_at`, `updated_at` as well)
 
-| Field | Meaning | Required | Rules | Example |
-| --- | --- | --- | --- | --- |
-| `country` | ISO 3166-1 alpha-2 code | Yes | One of the geo module's countries; fixed after onboarding (BR-F02-17) | `IN` |
-| `currency` | ISO 4217 code | Yes | One of MON-2; locked per BR-F02-14 | `INR` |
-| `timezone` | IANA time zone name | Yes | At onboarding, one of the country's zones; later, any valid zone (BR-F02-12) | `Asia/Kolkata` |
-| `weekStart` | First day of the week | Yes | `monday`, `sunday` or `saturday` (D-76) | `monday` |
-| `lastCatchUpOn` | Date of the last lazy catch-up | System | Starts at yesterday (BR-F02-08); P2, BR-P2-14 | `2026-11-01` |
-| `goalsChosenAt` | When the user last chose which Goals stay editable | System | Set by F06 (BR-F06-13); never bumps `version` | |
+| Field           | Meaning                                            | Required | Rules                                                                        | Example        |
+| --------------- | -------------------------------------------------- | -------- | ---------------------------------------------------------------------------- | -------------- |
+| `country`       | ISO 3166-1 alpha-2 code                            | Yes      | One of the geo module's countries; fixed after onboarding (BR-F02-17)        | `IN`           |
+| `currency`      | ISO 4217 code                                      | Yes      | One of MON-2; locked per BR-F02-14                                           | `INR`          |
+| `timezone`      | IANA time zone name                                | Yes      | At onboarding, one of the country's zones; later, any valid zone (BR-F02-12) | `Asia/Kolkata` |
+| `weekStart`     | First day of the week                              | Yes      | `monday`, `sunday` or `saturday` (D-76)                                      | `monday`       |
+| `lastCatchUpOn` | Date of the last lazy catch-up                     | System   | Starts at yesterday (BR-F02-08); P2, BR-P2-14                                | `2026-11-01`   |
+| `goalsChosenAt` | When the user last chose which Goals stay editable | System   | Set by F06 (BR-F06-13); never bumps `version`                                |                |
 
 **Derived, never stored**
 
-| Value | Rule |
-| --- | --- |
-| `numberLocale` | The country's own number format through `Intl`, with Latin digits, for example `hi-IN-u-nu-latn` or `de-DE-u-nu-latn` (BR-F02-18) |
-| `dateLocale` | `en-<country>`, for example `en-DE` (BR-F02-18) |
-| Today | The current date in `timezone` (TIME-5) |
-| `currencyEditable` | True when the user has no Transactions, Budgets, Subscriptions or Goals (BR-F02-14) |
+| Value              | Rule                                                                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `numberLocale`     | The country's own number format through `Intl`, with Latin digits, for example `hi-IN-u-nu-latn` or `de-DE-u-nu-latn` (BR-F02-18) |
+| `dateLocale`       | `en-<country>`, for example `en-DE` (BR-F02-18)                                                                                   |
+| Today              | The current date in `timezone` (TIME-5)                                                                                           |
+| `currencyEditable` | True when the user has no Transactions, Budgets, Subscriptions or Goals (BR-F02-14)                                               |
 
 The display name is Better Auth's user `name` (F01). The email is shown read-only.
 
 **Geo data module (D-209).** `shared/geo` is used by the browser (onboarding, settings) and by the server (validation). It is generated by `npm run geo:generate` from pinned sources and committed. The app never downloads it at runtime.
 
-| Data | Source | Holds |
-| --- | --- | --- |
-| Countries | IANA `zone.tab` | Every country code that has at least one zone. Names come from `Intl.DisplayNames(['en'], { type: 'region' })` in the browser |
-| Zones per country | IANA `zone.tab` | Each country's zones in file order, with the file's comment (for example "Eastern (most areas)") |
-| Default zone | A hand-written table in the generator | For every country with more than one zone: the zone of its capital, or its most populous zone where those differ (BR-F02-05). A single-zone country's default is its only zone |
-| Aliases | IANA `backward` | Legacy name to current name, used only for names missing from `zone.tab` (BR-F02-03): `Asia/Calcutta` → `Asia/Kolkata`, `US/Eastern` → `America/New_York` |
-| Week start | CLDR `weekData` `firstDay`, from a pinned `cldr-core` version | `mon`, `sun` and `sat` map to `monday`, `sunday` and `saturday`; any other value maps to `monday` |
-| Default currency | The table in BR-F02-04 | |
-| Number locale | `Intl` at generation time (BR-F02-18) | One `numberLocale` per country |
+| Data              | Source                                                        | Holds                                                                                                                                                                          |
+| ----------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Countries         | IANA `zone.tab`                                               | Every country code that has at least one zone. Names come from `Intl.DisplayNames(['en'], { type: 'region' })` in the browser                                                  |
+| Zones per country | IANA `zone.tab`                                               | Each country's zones in file order, with the file's comment (for example "Eastern (most areas)")                                                                               |
+| Default zone      | A hand-written table in the generator                         | For every country with more than one zone: the zone of its capital, or its most populous zone where those differ (BR-F02-05). A single-zone country's default is its only zone |
+| Aliases           | IANA `backward`                                               | Legacy name to current name, used only for names missing from `zone.tab` (BR-F02-03): `Asia/Calcutta` → `Asia/Kolkata`, `US/Eastern` → `America/New_York`                      |
+| Week start        | CLDR `weekData` `firstDay`, from a pinned `cldr-core` version | `mon`, `sun` and `sat` map to `monday`, `sunday` and `saturday`; any other value maps to `monday`                                                                              |
+| Default currency  | The table in BR-F02-04                                        |                                                                                                                                                                                |
+| Number locale     | `Intl` at generation time (BR-F02-18)                         | One `numberLocale` per country                                                                                                                                                 |
 
 **Valid time zones:** every zone name in `zone.tab`, plus `UTC`.
 
@@ -84,6 +85,7 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
     - a 403 `profile_required` from any API makes the client navigate there.
 
     A user with a profile who opens `/onboarding` is sent to `/dashboard`. A logged-out visitor goes to `/login?next=/onboarding` (P2, BR-P2-29).
+
 - **BR-F02-02** The page asks for four things: country, currency, time zone and week start. The display name was given at sign-up (F01).
 - **BR-F02-03** Pre-fill runs in the browser when the page opens (D-208):
     1. **Device zone:** `Intl.DateTimeFormat().resolvedOptions().timeZone`.
@@ -94,28 +96,28 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
     3. **The other three fields:** derived from the country per BR-F02-04 to BR-F02-06.
 - **BR-F02-04** The default currency comes from the country (D-210). Any country not listed gets USD.
 
-    | Currency | Countries |
-    | --- | --- |
-    | INR | IN |
-    | EUR | The 21 euro-area members: AT, BE, BG, CY, DE, EE, ES, FI, FR, GR, HR, IE, IT, LT, LU, LV, MT, NL, PT, SI, SK. Also AD, AX, BL, GF, GP, MC, ME, MF, MQ, PM, RE, SM, VA, YT |
-    | GBP | GB, GG, IM, JE |
-    | JPY | JP |
-    | KWD | KW |
+    | Currency | Countries                                                                                                                                                                 |
+    | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | INR      | IN                                                                                                                                                                        |
+    | EUR      | The 21 euro-area members: AT, BE, BG, CY, DE, EE, ES, FI, FR, GR, HR, IE, IT, LT, LU, LV, MT, NL, PT, SI, SK. Also AD, AX, BL, GF, GP, MC, ME, MF, MQ, PM, RE, SM, VA, YT |
+    | GBP      | GB, GG, IM, JE                                                                                                                                                            |
+    | JPY      | JP                                                                                                                                                                        |
+    | KWD      | KW                                                                                                                                                                        |
 
 - **BR-F02-05** The default time zone is the device zone if it belongs to the country, otherwise the country's default zone. The generator's table names a default for every country with more than one zone. `npm run geo:generate` fails if a default is missing, or if it names a zone outside that country. The first `zone.tab` row is not used, because it is often a poor guess. Required entries include:
 
-    | Country | Default | First `zone.tab` row |
-    | --- | --- | --- |
-    | US | `America/New_York` | `America/New_York` |
-    | CA | `America/Toronto` | `America/St_Johns` |
-    | AU | `Australia/Sydney` | `Australia/Lord_Howe` |
-    | BR | `America/Sao_Paulo` | `America/Noronha` |
-    | RU | `Europe/Moscow` | `Europe/Kaliningrad` |
-    | MX | `America/Mexico_City` | `America/Mexico_City` |
-    | ID | `Asia/Jakarta` | `Asia/Jakarta` |
-    | CN | `Asia/Shanghai` | `Asia/Shanghai` |
-    | KZ | `Asia/Almaty` | `Asia/Almaty` |
-    | AR | `America/Argentina/Buenos_Aires` | `America/Argentina/Buenos_Aires` |
+    | Country | Default                          | First `zone.tab` row             |
+    | ------- | -------------------------------- | -------------------------------- |
+    | US      | `America/New_York`               | `America/New_York`               |
+    | CA      | `America/Toronto`                | `America/St_Johns`               |
+    | AU      | `Australia/Sydney`               | `Australia/Lord_Howe`            |
+    | BR      | `America/Sao_Paulo`              | `America/Noronha`                |
+    | RU      | `Europe/Moscow`                  | `Europe/Kaliningrad`             |
+    | MX      | `America/Mexico_City`            | `America/Mexico_City`            |
+    | ID      | `Asia/Jakarta`                   | `Asia/Jakarta`                   |
+    | CN      | `Asia/Shanghai`                  | `Asia/Shanghai`                  |
+    | KZ      | `Asia/Almaty`                    | `Asia/Almaty`                    |
+    | AR      | `America/Argentina/Buenos_Aires` | `America/Argentina/Buenos_Aires` |
 
 - **BR-F02-06** The default week start comes from the country's week-start entry in the geo module.
 - **BR-F02-07** Changing the country re-derives currency, time zone and week start, except fields the user has already changed by hand. A hand-picked time zone that does not belong to the new country is replaced with the new default.
@@ -130,6 +132,7 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
     - **No row came back:** a profile already exists (BR-F02-09).
 
     The first request after onboarding therefore runs Subscription catch-up (P2, BR-P2-14). The global daily pass runs separately, before each server process's first request of a UTC day (P2, BR-P2-27). The client then refetches `/api/me` and opens `/dashboard` (before M3, `/transactions`; section 2).
+
 - **BR-F02-09** If a profile already exists, `POST /api/profile` returns 200 with the existing profile and seeds and changes nothing (D-216). Two tabs submitting at the same moment resolve the same way, through the unique key on `user_id`: one gets 201, the other 200.
 - **BR-F02-10** Onboarding needs a connection.
 
@@ -140,12 +143,14 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
     - **Region and time:** country (read-only), currency (editable only per BR-F02-14), time zone and week start, saved with `PATCH /api/profile` and `If-Match`.
 
     The email appears above both forms, read-only, with "Your email can't be changed."
+
 - **BR-F02-12** The time-zone field in Settings accepts any valid zone (D-211). The list shows:
     - the country's zones first, under a heading such as "In India";
     - every other zone below it, grouped by the first part of its name (Africa, America, Asia, Europe and so on);
     - `UTC` last.
 
     Onboarding offers only the country's zones (BR-F02-08).
+
 - **BR-F02-13** A time-zone change applies from the next request:
     - **Changes:** today, how instants are shown, catch-up dates and the 10-day entry window.
     - **Never changes:** any stored `occurred_on` (TIME-2). Charges already created keep their `occurred_at`; later charges get midnight in the new zone (F05).
@@ -164,6 +169,7 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
     The portfolio needs no rebuild: its trades hold units and dates only, and are valued in the current currency (F07, D-275).
 
     The lock serializes the change with every write to a Transaction, Budget, Subscription or Goal, each of which first reads the profile with `FOR KEY SHARE` (D-213, F03, BR-F03-05). Either the create finishes first, and the re-check sees its row, or the change finishes first, and the create meets `currency_mismatch`. After success, every query is invalidated.
+
 - **BR-F02-16** A `PATCH` with a stale version gets 409 `version_conflict`. The form reloads the current profile and says "Your profile was changed on another device. We loaded the latest version; make your change again." Profile edits are online only and never queued, so there is no side-by-side conflict view.
 - **BR-F02-17** The country cannot be changed. The Profile page shows it as text with "Your country can't be changed. It sets your number format and the currency of Daybook Premium." It is fixed because a Stripe customer keeps one currency once it has subscriptions (F12).
 
@@ -178,22 +184,24 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
         3. Otherwise use `en-<country>-u-nu-latn`.
 
         Run over all 265 regions (Node 26, ICU 78), step 3 applies to 30, mostly Arabic, Persian, Hebrew and Urdu locales, whose output holds Arabic currency signs or text-direction marks, plus Bulgarian and Cape Verde. After the checks, every country's decimal sign agrees across numbers, percentages and money. Only Austria groups money (`1.240,50`) differently from plain numbers (`1 240,50`). A newer ICU can change a result, so the generated table is committed and reviewed.
+
     - **`dateLocale`:** `en-<country>`, for example `en-DE`. Month and weekday names stay English (D-68), while day order and the 12- or 24-hour clock follow the country. Where ICU has no English data for a region, it falls back to plain `en`.
 
     Plain `en-<country>` is not used for numbers: ICU's English regional data mixes conventions, so `en-DE` writes money as `€1,240.50` but a percentage as `63,3 %`.
 
     Before a profile exists, the browser's locale is used for both. `/api/me` returns both locales, so every device and the PDF renderer format the same way.
+
 - **BR-F02-19** Dates and times use `dateLocale`, the profile time zone (TIME-4) and fixed `Intl` option sets:
 
-    | Use | Options | `en-IN` example |
-    | --- | --- | --- |
-    | List day header | `{ weekday: 'short', day: 'numeric', month: 'short' }`, adding `year: 'numeric'` outside the current year | Sat, 31 Oct |
-    | Full date | `{ day: 'numeric', month: 'short', year: 'numeric' }` | 31 Oct 2026 |
-    | Time | `{ hour: 'numeric', minute: '2-digit' }`, in the locale's hour cycle | 11:40 am |
-    | Month | `{ month: 'long', year: 'numeric' }` | October 2026 |
-    | Short date | `{ day: 'numeric', month: 'short' }`, adding `year: 'numeric'` outside the current year | 5 Nov |
-    | Date and time | The full date and the time, joined by `, ` | 2 Nov 2026, 12:00 pm |
-    | Quarter | `Q` and the quarter's number, a space, then the year from `Intl` (not localized further) | Q4 2026 |
+    | Use             | Options                                                                                                   | `en-IN` example      |
+    | --------------- | --------------------------------------------------------------------------------------------------------- | -------------------- |
+    | List day header | `{ weekday: 'short', day: 'numeric', month: 'short' }`, adding `year: 'numeric'` outside the current year | Sat, 31 Oct          |
+    | Full date       | `{ day: 'numeric', month: 'short', year: 'numeric' }`                                                     | 31 Oct 2026          |
+    | Time            | `{ hour: 'numeric', minute: '2-digit' }`, in the locale's hour cycle                                      | 11:40 am             |
+    | Month           | `{ month: 'long', year: 'numeric' }`                                                                      | October 2026         |
+    | Short date      | `{ day: 'numeric', month: 'short' }`, adding `year: 'numeric'` outside the current year                   | 5 Nov                |
+    | Date and time   | The full date and the time, joined by `, `                                                                | 2 Nov 2026, 12:00 pm |
+    | Quarter         | `Q` and the quarter's number, a space, then the year from `Intl` (not localized further)                  | Q4 2026              |
 
 **Device-time-zone notice**
 
@@ -226,10 +234,10 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
 
 **Today** (TIME-5), at the golden frozen clock 2026-11-02T06:30:00Z:
 
-| Profile zone | Local time | Today |
-| --- | --- | --- |
-| `Asia/Kolkata` | 12:00 | 2026-11-02 |
-| `Asia/Dubai` | 10:30 | 2026-11-02 |
+| Profile zone          | Local time                                                    | Today      |
+| --------------------- | ------------------------------------------------------------- | ---------- |
+| `Asia/Kolkata`        | 12:00                                                         | 2026-11-02 |
+| `Asia/Dubai`          | 10:30                                                         | 2026-11-02 |
 | `America/Los_Angeles` | 22:30 on 1 November (PST; daylight saving ended that morning) | 2026-11-01 |
 
 **Offset label:** the `timeZoneName` part of `Intl.DateTimeFormat('en', { timeZone, timeZoneName: 'longOffset' }).formatToParts(now)`. It gives `GMT+05:30`, `GMT-05:00` (with an ASCII hyphen) and, for UTC, `GMT+00:00` (Node 26, ICU 78).
@@ -245,12 +253,12 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
 
 **`/onboarding`.** Title "Set up Daybook"; line "Four quick choices. We filled in our best guesses."
 
-| Field | Control | Helper text |
-| --- | --- | --- |
-| Country | Searchable combobox, sorted by English name | Sets your number format and the currency of Daybook Premium. It can't be changed later. |
-| Currency | Select of the six currencies, labelled "Indian rupee (INR)" through `Intl.DisplayNames` | All your amounts use this currency. It's fixed once you add finance data. |
-| Time zone | Select of the country's zones; plain text when the country has one zone | Decides what "today" is and how times are shown. You can change it later. |
-| Week starts on | Segmented control: Monday, Sunday, Saturday | Used in weekly charts and calendars. |
+| Field          | Control                                                                                 | Helper text                                                                             |
+| -------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Country        | Searchable combobox, sorted by English name                                             | Sets your number format and the currency of Daybook Premium. It can't be changed later. |
+| Currency       | Select of the six currencies, labelled "Indian rupee (INR)" through `Intl.DisplayNames` | All your amounts use this currency. It's fixed once you add finance data.               |
+| Time zone      | Select of the country's zones; plain text when the country has one zone                 | Decides what "today" is and how times are shown. You can change it later.               |
+| Week starts on | Segmented control: Monday, Sunday, Saturday                                             | Used in weekly charts and calendars.                                                    |
 
 Button: "Start using Daybook".
 
@@ -260,15 +268,15 @@ Button: "Start using Daybook".
 
 **Header notice.** The device-time-zone notice (BR-F02-20).
 
-| State | Onboarding | Profile | Appearance |
-| --- | --- | --- | --- |
-| Loading | Fields disabled while the geo module loads; submit shows a spinner | Form skeleton | n/a |
-| Empty | Country empty when it cannot be guessed; Start is disabled until it is chosen | n/a | n/a |
-| Error | Field messages (section 8); "We couldn't save your setup. Try again." | Field messages; "Your changes weren't saved. Try again." | n/a |
-| Offline | Form disabled: "You are offline. Connect to finish setup." | Values from `/api/me`, read-only: "Connect to change your profile." | Works |
-| Pending | n/a | Currency change disabled while queued items wait (BR-F02-15) | n/a |
-| Locked (Premium) | n/a | n/a | n/a |
-| Read-only | n/a | Country always; currency per BR-F02-14 | n/a |
+| State            | Onboarding                                                                    | Profile                                                             | Appearance |
+| ---------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------- |
+| Loading          | Fields disabled while the geo module loads; submit shows a spinner            | Form skeleton                                                       | n/a        |
+| Empty            | Country empty when it cannot be guessed; Start is disabled until it is chosen | n/a                                                                 | n/a        |
+| Error            | Field messages (section 8); "We couldn't save your setup. Try again."         | Field messages; "Your changes weren't saved. Try again."            | n/a        |
+| Offline          | Form disabled: "You are offline. Connect to finish setup."                    | Values from `/api/me`, read-only: "Connect to change your profile." | Works      |
+| Pending          | n/a                                                                           | Currency change disabled while queued items wait (BR-F02-15)        | n/a        |
+| Locked (Premium) | n/a                                                                           | n/a                                                                 | n/a        |
+| Read-only        | n/a                                                                           | Country always; currency per BR-F02-14                              | n/a        |
 
 ## 7. Flows
 
@@ -302,18 +310,18 @@ Button: "Start using Daybook".
 
 ## 8. Validation and messages
 
-| Field or action | Rule | Message shown |
-| --- | --- | --- |
-| Country | Required | Choose your country. |
-| Country | In the list | Choose a country from the list. |
-| Currency | One of the six | Choose one of the listed currencies. |
-| Time zone | Onboarding: one of the country's zones | Choose a time zone in your country. |
-| Time zone | Settings: a valid zone | Choose a time zone from the list. |
-| Week start | One of three | Choose the first day of your week. |
-| Currency change | `currency_locked` | Finance data was added on another device, so your currency is now fixed. |
-| Currency change | Items waiting | Sync or discard 3 waiting changes first. |
-| Profile save | `version_conflict` | Your profile was changed on another device. We loaded the latest version; make your change again. |
-| Any form | Offline | You are offline. Connect to change your profile. (Onboarding: Connect to finish setup.) |
+| Field or action | Rule                                   | Message shown                                                                                     |
+| --------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Country         | Required                               | Choose your country.                                                                              |
+| Country         | In the list                            | Choose a country from the list.                                                                   |
+| Currency        | One of the six                         | Choose one of the listed currencies.                                                              |
+| Time zone       | Onboarding: one of the country's zones | Choose a time zone in your country.                                                               |
+| Time zone       | Settings: a valid zone                 | Choose a time zone from the list.                                                                 |
+| Week start      | One of three                           | Choose the first day of your week.                                                                |
+| Currency change | `currency_locked`                      | Finance data was added on another device, so your currency is now fixed.                          |
+| Currency change | Items waiting                          | Sync or discard 3 waiting changes first.                                                          |
+| Profile save    | `version_conflict`                     | Your profile was changed on another device. We loaded the latest version; make your change again. |
+| Any form        | Offline                                | You are offline. Connect to change your profile. (Onboarding: Connect to finish setup.)           |
 
 ## 9. Plan gating
 
@@ -328,18 +336,18 @@ None. The country decides the Premium price currency (F12), which gates nothing.
 
 ## 11. Server surface
 
-| Endpoint | Method | Input | Output | Errors | Idempotency and versioning |
-| --- | --- | --- | --- | --- | --- |
-| `/api/me` | GET | none | `user`, `profile` (this spec); `plan` (F12); `goals` (F06; `null` before onboarding); `capabilities`, `resolvedAt`, `buildId` (P4) | 401 | n/a |
-| `/api/profile` | GET | none | `{ profile, version, currencyEditable }` | 401, 404 `not_found` | n/a |
-| `/api/profile` | POST | `{ country, currency, timezone, weekStart }` | 201 with the profile; 200 with the existing profile (BR-F02-09) | 401, 422 `validation_failed` | `Idempotency-Key` required; profile not required; catch-up off |
-| `/api/profile` | PATCH | Any of `{ currency, timezone, weekStart }`, at least one | 200 with the profile | 401, 404 `not_found` (no profile yet), 409 `version_conflict`, 409 `currency_locked`, 422 `validation_failed` | `Idempotency-Key` and `If-Match` required; online only |
+| Endpoint       | Method | Input                                                    | Output                                                                                                                             | Errors                                                                                                        | Idempotency and versioning                                     |
+| -------------- | ------ | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `/api/me`      | GET    | none                                                     | `user`, `profile` (this spec); `plan` (F12); `goals` (F06; `null` before onboarding); `capabilities`, `resolvedAt`, `buildId` (P4) | 401                                                                                                           | n/a                                                            |
+| `/api/profile` | GET    | none                                                     | `{ profile, version, currencyEditable }`                                                                                           | 401, 404 `not_found`                                                                                          | n/a                                                            |
+| `/api/profile` | POST   | `{ country, currency, timezone, weekStart }`             | 201 with the profile; 200 with the existing profile (BR-F02-09)                                                                    | 401, 422 `validation_failed`                                                                                  | `Idempotency-Key` required; profile not required; catch-up off |
+| `/api/profile` | PATCH  | Any of `{ currency, timezone, weekStart }`, at least one | 200 with the profile                                                                                                               | 401, 404 `not_found` (no profile yet), 409 `version_conflict`, 409 `currency_locked`, 422 `validation_failed` | `Idempotency-Key` and `If-Match` required; online only         |
 
 **Error code added by this spec**
 
-| Status | Code | Default message | Write queue does |
-| --- | --- | --- | --- |
-| 409 | `currency_locked` | Your currency is fixed because you have finance data. | Never queued |
+| Status | Code              | Default message                                       | Write queue does |
+| ------ | ----------------- | ----------------------------------------------------- | ---------------- |
+| 409    | `currency_locked` | Your currency is fixed because you have finance data. | Never queued     |
 
 ## 12. Cross-feature effects
 
@@ -422,16 +430,28 @@ None. The country decides the Premium price currency (F12), which gates nothing.
 Illustrative, `POST /api/profile`:
 
 ```json
-{ "country": "IN", "currency": "INR", "timezone": "Asia/Kolkata", "weekStart": "sunday" }
+{
+	"country": "IN",
+	"currency": "INR",
+	"timezone": "Asia/Kolkata",
+	"weekStart": "sunday"
+}
 ```
 
 Illustrative, `GET /api/profile` for the golden user:
 
 ```json
 {
-  "profile": { "country": "IN", "currency": "INR", "timezone": "Asia/Kolkata", "weekStart": "monday", "numberLocale": "hi-IN-u-nu-latn", "dateLocale": "en-IN" },
-  "version": 3,
-  "currencyEditable": false
+	"profile": {
+		"country": "IN",
+		"currency": "INR",
+		"timezone": "Asia/Kolkata",
+		"weekStart": "monday",
+		"numberLocale": "hi-IN-u-nu-latn",
+		"dateLocale": "en-IN"
+	},
+	"version": 3,
+	"currencyEditable": false
 }
 ```
 
@@ -453,9 +473,16 @@ Illustrative, the generated geo module:
 
 ```ts
 export const zonesByCountry = {
-  IN: [{ zone: 'Asia/Kolkata' }],
-  US: [{ zone: 'America/New_York', comment: 'Eastern (most areas)' }, /* ... */],
+	IN: [{ zone: "Asia/Kolkata" }],
+	US: [{ zone: "America/New_York", comment: "Eastern (most areas)" } /* ... */],
 } as const;
-export const aliases = { 'Asia/Calcutta': 'Asia/Kolkata', 'US/Eastern': 'America/New_York' /* ... */ };
-export const weekStartByCountry = { IN: 'sunday', DE: 'monday', KW: 'saturday' /* ... */ };
+export const aliases = {
+	"Asia/Calcutta": "Asia/Kolkata",
+	"US/Eastern": "America/New_York" /* ... */,
+};
+export const weekStartByCountry = {
+	IN: "sunday",
+	DE: "monday",
+	KW: "saturday" /* ... */,
+};
 ```

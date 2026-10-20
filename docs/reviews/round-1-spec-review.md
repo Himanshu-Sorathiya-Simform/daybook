@@ -55,22 +55,22 @@ Read left to right: inputs only ever write Transactions, and every view on the r
 
 The spec never lists screens or navigation, so the route map below is my proposal, built from the FRs. Anything marked with a question ID is not settled.
 
-| Area | Route (proposal) | What the user does there | Access |
-| --- | --- | --- | --- |
-| Sign up, log in | `/signup`, `/login` | Email and password | Logged out |
-| Onboarding | `/onboarding` | Region, currency, timezone; then Load demo data or Start empty | Logged in, no profile yet |
-| Dashboard | `/dashboard` | Widgets for the selected month, insights panel | Everyone |
-| Transactions | `/transactions` | Infinite list, filters in the URL, add and edit | Everyone |
-| Budgets | `/budgets` | Limits per category, utilization for a month | Everyone |
-| Subscriptions | `/subscriptions` | List, monthly and annual cost, upcoming renewals | Everyone |
-| Goals | `/goals`, `/goals/[id]` | Progress, contributions | Free: 3 active (H3) |
-| Investments | `/investments` | Holdings, allocation, value over time | Demo-data users only today (I1) |
-| Analytics | `/analytics` (J5) | All charts; heat map and comparative charts are Premium | Mixed |
-| Reports | `/reports` | Pick a period, download PDF or CSV | Quarterly and annual are Premium |
-| Learn | `/learn`, `/learn/[slug]` | Articles, news, guides from the CMS | Public or logged in (S2) |
-| Settings | `/settings/...` | Profile, appearance, dashboard layout, security, data, billing | Everyone |
-| Everywhere | Command palette, sync status, offline banner | Search, quick add, pending count | Everyone |
-| System | `/offline`, a print route for PDFs | Service-worker fallback; headless render target | Internal |
+| Area            | Route (proposal)                             | What the user does there                                       | Access                           |
+| --------------- | -------------------------------------------- | -------------------------------------------------------------- | -------------------------------- |
+| Sign up, log in | `/signup`, `/login`                          | Email and password                                             | Logged out                       |
+| Onboarding      | `/onboarding`                                | Region, currency, timezone; then Load demo data or Start empty | Logged in, no profile yet        |
+| Dashboard       | `/dashboard`                                 | Widgets for the selected month, insights panel                 | Everyone                         |
+| Transactions    | `/transactions`                              | Infinite list, filters in the URL, add and edit                | Everyone                         |
+| Budgets         | `/budgets`                                   | Limits per category, utilization for a month                   | Everyone                         |
+| Subscriptions   | `/subscriptions`                             | List, monthly and annual cost, upcoming renewals               | Everyone                         |
+| Goals           | `/goals`, `/goals/[id]`                      | Progress, contributions                                        | Free: 3 active (H3)              |
+| Investments     | `/investments`                               | Holdings, allocation, value over time                          | Demo-data users only today (I1)  |
+| Analytics       | `/analytics` (J5)                            | All charts; heat map and comparative charts are Premium        | Mixed                            |
+| Reports         | `/reports`                                   | Pick a period, download PDF or CSV                             | Quarterly and annual are Premium |
+| Learn           | `/learn`, `/learn/[slug]`                    | Articles, news, guides from the CMS                            | Public or logged in (S2)         |
+| Settings        | `/settings/...`                              | Profile, appearance, dashboard layout, security, data, billing | Everyone                         |
+| Everywhere      | Command palette, sync status, offline banner | Search, quick add, pending count                               | Everyone                         |
+| System          | `/offline`, a print route for PDFs           | Service-worker fallback; headless render target                | Internal                         |
 
 **The main journeys**
 
@@ -91,15 +91,15 @@ Brief, root spec, per-feature specs is the right shape. I would add three things
 
 **The doc set (B1)**
 
-| File | Holds | Who reads it |
-| --- | --- | --- |
-| `00-brief.md` | What and why, scope, feature list with milestone tags, success criteria | Anyone, in 5 minutes |
-| `01-root-spec.md` | Everything cross-cutting: terms, route map, global flows (boot, auth, offline, premium gating), conventions (money, dates, IDs, the filter object, the period model), architecture and state ownership, API conventions (errors, idempotency, pagination), security model, non-functional targets, testing strategy, milestones | Whoever writes any feature |
-| `02-decisions.md` | Every D-ID: status, reason, rejected options, what would reopen it | You, when a choice is questioned |
-| `03-golden-dataset.md` | A tiny fixed dataset and the expected value of every widget, list total and report line | Tests, and every feature spec's examples |
-| `features/F01-...md` | One per feature, fixed template | Whoever builds that feature |
-| `platform/P1-...md` | Offline and PWA, data access and security, quality | Whoever builds the plumbing |
-| `verification.md` | Sources and as-of dates | Re-checks before relying on a fact |
+| File                   | Holds                                                                                                                                                                                                                                                                                                                           | Who reads it                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `00-brief.md`          | What and why, scope, feature list with milestone tags, success criteria                                                                                                                                                                                                                                                         | Anyone, in 5 minutes                     |
+| `01-root-spec.md`      | Everything cross-cutting: terms, route map, global flows (boot, auth, offline, premium gating), conventions (money, dates, IDs, the filter object, the period model), architecture and state ownership, API conventions (errors, idempotency, pagination), security model, non-functional targets, testing strategy, milestones | Whoever writes any feature               |
+| `02-decisions.md`      | Every D-ID: status, reason, rejected options, what would reopen it                                                                                                                                                                                                                                                              | You, when a choice is questioned         |
+| `03-golden-dataset.md` | A tiny fixed dataset and the expected value of every widget, list total and report line                                                                                                                                                                                                                                         | Tests, and every feature spec's examples |
+| `features/F01-...md`   | One per feature, fixed template                                                                                                                                                                                                                                                                                                 | Whoever builds that feature              |
+| `platform/P1-...md`    | Offline and PWA, data access and security, quality                                                                                                                                                                                                                                                                              | Whoever builds the plumbing              |
+| `verification.md`      | Sources and as-of dates                                                                                                                                                                                                                                                                                                         | Re-checks before relying on a fact       |
 
 The golden dataset is the idea I would push hardest. Your top success criterion is that the dashboard, list totals and reports agree. Twenty hand-made Transactions over two months (with a refund, a Subscription charge, a Goal contribution and a mid-month Budget change) and their expected numbers turn that criterion into a test, and give every feature spec the same worked examples.
 
@@ -107,26 +107,26 @@ The golden dataset is the idea I would push hardest. Your top success criterion 
 
 The FRs mix product features with cross-cutting concerns (FR-15 to FR-17, FR-19), so they do not map one-to-one to specs.
 
-| Spec | Covers | Depends on |
-| --- | --- | --- |
-| F01 Auth and account | FR-18 | P2 |
-| F02 Onboarding, profile, settings, theme | FR-18, FR-13 (theme) | F01 |
-| F03 Transactions | FR-2, FR-12 (list filter) | F02 |
-| F04 Budgets | FR-3 | F03 |
-| F05 Subscriptions | FR-4 | F03 |
-| F06 Goals | FR-5 | F03, F12 (cap) |
-| F07 Investments | FR-6 | F15 |
-| F08 Dashboard and layout | FR-1, FR-13 (layout) | F03 to F07 |
-| F09 Analytics and charts | FR-7 | F08 |
-| F10 Insights | FR-9 | F03 to F06 |
-| F11 Reports | FR-10 | F08, F09 |
-| F12 Premium and billing | FR-11 | F01 |
-| F13 Global search and command palette | FR-12 | F03, F05, F06 |
-| F14 Learn (CMS) | FR-8 | none |
-| F15 Demo and seed data | FR-20 | F03 to F07 |
-| P1 Offline and PWA | FR-14 | F03 |
-| P2 Data access and security | FR-19 | none |
-| P3 Quality: monitoring, CI, performance, testing | FR-15 to FR-17 | all |
+| Spec                                             | Covers                    | Depends on     |
+| ------------------------------------------------ | ------------------------- | -------------- |
+| F01 Auth and account                             | FR-18                     | P2             |
+| F02 Onboarding, profile, settings, theme         | FR-18, FR-13 (theme)      | F01            |
+| F03 Transactions                                 | FR-2, FR-12 (list filter) | F02            |
+| F04 Budgets                                      | FR-3                      | F03            |
+| F05 Subscriptions                                | FR-4                      | F03            |
+| F06 Goals                                        | FR-5                      | F03, F12 (cap) |
+| F07 Investments                                  | FR-6                      | F15            |
+| F08 Dashboard and layout                         | FR-1, FR-13 (layout)      | F03 to F07     |
+| F09 Analytics and charts                         | FR-7                      | F08            |
+| F10 Insights                                     | FR-9                      | F03 to F06     |
+| F11 Reports                                      | FR-10                     | F08, F09       |
+| F12 Premium and billing                          | FR-11                     | F01            |
+| F13 Global search and command palette            | FR-12                     | F03, F05, F06  |
+| F14 Learn (CMS)                                  | FR-8                      | none           |
+| F15 Demo and seed data                           | FR-20                     | F03 to F07     |
+| P1 Offline and PWA                               | FR-14                     | F03            |
+| P2 Data access and security                      | FR-19                     | none           |
+| P3 Quality: monitoring, CI, performance, testing | FR-15 to FR-17            | all            |
 
 Suggested writing order: root spec, P2, F03, F01 and F02, F04 to F06, F08, F09, F12, P1, F10, F11, F13, F07, F15, F14, P3. Transactions go first because every other number is derived from them.
 
@@ -145,6 +145,7 @@ Suggested writing order: root spec, P2, F03, F01 and F02, F04 to F06, F08, F09, 
 
 ```markdown
 # F03 Transactions
+
 Milestone · Free/Premium · Depends on · Decisions referenced
 
 1. Summary: one paragraph
@@ -195,81 +196,81 @@ I found 8 contradictions inside the current docs and 22 topics they never cover.
 
 **Contradictions**
 
-| Where | It says | But | Fix in |
-| --- | --- | --- | --- |
-| Terms vs header | "Subscriptions" is the fixed name | The header and brief use a short form | C1 (decided: Subscriptions everywhere) |
-| Decision log vs Open items | 3 Open decisions | Open items lists 14, and most have no D-ID (accessibility, search UI, holdings, Neon region) | B1 |
-| D-58 | Time-weighted return is Assumed | Open items lists the same topic as open | I3 |
-| Pending badge | Assumed in Architecture | Decided in FR-2 | B1 |
-| Logout | Every cache and persisted store is wiped | The write queue "is not disposable" | P5 |
-| FR-1 date range | Presets include "last 30 days" | Budgets and monthly spending are per calendar month | J1 |
-| Subscription catch-up | Runs at "session start" | Session start is never defined, and sessions last days | G2 |
-| Assumed count | 29 Assumed decisions | Dozens more Assumed statements sit only in FR text (Subscription fields, Goal fields, the 3-character search minimum) | B1 |
+| Where                      | It says                                  | But                                                                                                                   | Fix in                                 |
+| -------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| Terms vs header            | "Subscriptions" is the fixed name        | The header and brief use a short form                                                                                 | C1 (decided: Subscriptions everywhere) |
+| Decision log vs Open items | 3 Open decisions                         | Open items lists 14, and most have no D-ID (accessibility, search UI, holdings, Neon region)                          | B1                                     |
+| D-58                       | Time-weighted return is Assumed          | Open items lists the same topic as open                                                                               | I3                                     |
+| Pending badge              | Assumed in Architecture                  | Decided in FR-2                                                                                                       | B1                                     |
+| Logout                     | Every cache and persisted store is wiped | The write queue "is not disposable"                                                                                   | P5                                     |
+| FR-1 date range            | Presets include "last 30 days"           | Budgets and monthly spending are per calendar month                                                                   | J1                                     |
+| Subscription catch-up      | Runs at "session start"                  | Session start is never defined, and sessions last days                                                                | G2                                     |
+| Assumed count              | 29 Assumed decisions                     | Dozens more Assumed statements sit only in FR text (Subscription fields, Goal fields, the 3-character search minimum) | B1                                     |
 
 **Not covered at all**
 
-| Gap | Where it bites | Question |
-| --- | --- | --- |
-| Route map and navigation, including mobile | Every screen spec | A5, J5 |
-| UI stack: styling, component primitives, forms, validation, dates, toasts, palette | Root spec, every form | U1 to U4, D7 |
-| Who builds this, by when, and who approves deviations from the original brief | Scope of every spec | A1, A2 |
-| API conventions: error shape, status codes, pagination envelope, idempotency storage and expiry | Every endpoint | Root spec |
-| `pg` returns bigint and numeric as strings | Every sum reaching the client | Root spec |
-| Offline edit conflicts between two devices | Offline correctness | P2 |
-| Queue coalescing, sync panel, multi-tab runner, app update flow | Offline UX | P3, P4, P6, P10 |
-| What the Transactions header total means when types mix | Agreement criterion | E3 |
-| Which filter dimensions exist, and which apply to the dashboard | Agreement criterion | E11, J3 |
-| Contents of each widget | Dashboard spec | J2 |
-| Contents of each report, CSV shape, quarters and fiscal year | Reports spec | M1 to M4, D3 |
-| Budget carry-forward, overall utilization, retro edits, removal | Budgets spec | F1 to F4 |
-| Subscription end date, pause, backfill on create, deleting one generated charge | Subscriptions spec | G3 to G9 |
-| Goal achieved and archived states, withdrawals, deleting a funded Goal, which Goals stay editable after a lapse | Goals spec | H1 to H5 |
-| Checkout return before the webhook arrives, or with the Stripe CLI not running | Premium spec | N4 |
-| How locked Premium features look | Every gated screen | K5 |
-| Removing demo data, and demo data in the user's currency | Demo spec, currency lock | R2, D1 |
-| Change password, active sessions, account deletion, data export | Account spec | Q3 to Q5 |
-| Loading, empty, error, stale and locked state conventions | Every screen | Root spec |
-| Input limits: text lengths, amount range, date range | Every form | D5, D6 |
-| Browser matrix, given you develop on Linux without Safari | Testing | T6 |
-| Security headers and a content security policy | Security | T7 |
+| Gap                                                                                                             | Where it bites                | Question        |
+| --------------------------------------------------------------------------------------------------------------- | ----------------------------- | --------------- |
+| Route map and navigation, including mobile                                                                      | Every screen spec             | A5, J5          |
+| UI stack: styling, component primitives, forms, validation, dates, toasts, palette                              | Root spec, every form         | U1 to U4, D7    |
+| Who builds this, by when, and who approves deviations from the original brief                                   | Scope of every spec           | A1, A2          |
+| API conventions: error shape, status codes, pagination envelope, idempotency storage and expiry                 | Every endpoint                | Root spec       |
+| `pg` returns bigint and numeric as strings                                                                      | Every sum reaching the client | Root spec       |
+| Offline edit conflicts between two devices                                                                      | Offline correctness           | P2              |
+| Queue coalescing, sync panel, multi-tab runner, app update flow                                                 | Offline UX                    | P3, P4, P6, P10 |
+| What the Transactions header total means when types mix                                                         | Agreement criterion           | E3              |
+| Which filter dimensions exist, and which apply to the dashboard                                                 | Agreement criterion           | E11, J3         |
+| Contents of each widget                                                                                         | Dashboard spec                | J2              |
+| Contents of each report, CSV shape, quarters and fiscal year                                                    | Reports spec                  | M1 to M4, D3    |
+| Budget carry-forward, overall utilization, retro edits, removal                                                 | Budgets spec                  | F1 to F4        |
+| Subscription end date, pause, backfill on create, deleting one generated charge                                 | Subscriptions spec            | G3 to G9        |
+| Goal achieved and archived states, withdrawals, deleting a funded Goal, which Goals stay editable after a lapse | Goals spec                    | H1 to H5        |
+| Checkout return before the webhook arrives, or with the Stripe CLI not running                                  | Premium spec                  | N4              |
+| How locked Premium features look                                                                                | Every gated screen            | K5              |
+| Removing demo data, and demo data in the user's currency                                                        | Demo spec, currency lock      | R2, D1          |
+| Change password, active sessions, account deletion, data export                                                 | Account spec                  | Q3 to Q5        |
+| Loading, empty, error, stale and locked state conventions                                                       | Every screen                  | Root spec       |
+| Input limits: text lengths, amount range, date range                                                            | Every form                    | D5, D6          |
+| Browser matrix, given you develop on Linux without Safari                                                       | Testing                       | T6              |
+| Security headers and a content security policy                                                                  | Security                      | T7              |
 
 ## The Assumed decisions
 
 I agree with 20 of the 31 Assumed rows (the 29, plus the assumed halves of D-26 and D-30) as written, would adjust 10, and would rethink one. Write Confirm, Change or Discuss in Your call; an empty cell means my verdict stands.
 
-| ID | Decision | My verdict | Note | Your call |
-| --- | --- | --- | --- | --- |
-| D-06 | Drizzle on the stable 0.x line | Agree | Pin the minor version; treat the 1.0 move as its own task later. |  |
-| D-07 | node-postgres to the pooled endpoint; migrations direct | Agree | Also fix how `pg` parses bigint and numeric, which arrive as strings. |  |
-| D-08 | Next.js 16 latest patch, React Compiler on | Agree | Check patch releases weekly. |  |
-| D-13 | Three roles: owner, runtime, system | Adjust | Add a fourth role for Better Auth's tables (pushback 11). |  |
-| D-14 | Runtime role created with SQL | Agree | The RLS suite asserts it. |  |
-| D-15 | Transaction-local user context; empty means no user | Agree | Correct for the transaction-mode pooler. |  |
-| D-16 | Authorization in the data access layer; `proxy.ts` optimistic only | Agree | Matches post-CVE guidance. |  |
-| D-17 | SameSite cookies plus Origin check | Adjust | Also accept only JSON bodies on mutations (pushback 16). |  |
-| D-18 | Entitlements written only by the system role | Agree | The checkout-return reconcile (N4) goes through the same module. |  |
-| D-19 | Auth tables outside user-scoped RLS | Adjust | Outside RLS, yes; readable by the runtime role, no. |  |
-| D-21 | Goal contribution as a third Transaction type | Agree | Withdrawals still open (H1). |  |
-| D-26 | Subscription catch-up mechanism | Adjust | Trigger on boot plus once a day (G2); a deleted charge becomes a tombstone (G5). |  |
-| D-29 | Lapse keeps data, locks extra Goals | Adjust | Say which Goals stay editable (H4). |  |
-| D-30 | Currency pre-filled, fixed after the first Transaction | Adjust | Add a reset-my-data escape (Q6), or one demo-data mistake fixes the currency forever. |  |
-| D-31 | Integer minor units with an exponent table | Agree | Keep amounts as JS numbers under a validated maximum; BigInt does not serialize to JSON. |  |
-| D-32 | Calendar dates, calendar months, UUID keys | Adjust | UUIDv7 (E5); "today" comes from the profile timezone (Q8). |  |
-| D-33 | Budgets per category per month, effective-dated, 80% and 100% | Adjust | Define carry-forward and "overall" (F1, F4). |  |
-| D-35 | Server-side listing with cursors | Agree | The right call at this data size. |  |
-| D-36 | Infinite list, virtualization, maxPages, Load more | Agree | maxPages drops pages from the top, so scrolling back up needs previous-page cursors. |  |
-| D-38 | Zustand for UI state; committed filters in the URL | Agree | Name the real stores: sync status, palette, sidebar, layout editing. |  |
-| D-39 | Route handlers with an idempotency key | Agree | Define where keys are stored and for how long. |  |
-| D-48 | Global search with pg\_trgm | Agree | Numeric queries skip the 3-character minimum. |  |
-| D-50 | Comparative charts: budget vs actual, period over period | Agree | Fills the brief's undefined term well. |  |
-| D-52 | PDF through server-side Chromium | Agree | With the print-stylesheet option weighed (M5). |  |
-| D-53 | CSV: sanitize text, amounts as numbers | Agree | Amounts unformatted with fixed decimals; dates as ISO. |  |
-| D-55 | Theme per device, layout per account | Agree | Matches how people use phones and desktops. |  |
-| D-56 | Five rule-based detectors | Adjust | Add a savings recommendation (L1); the brief asks for one. |  |
-| D-58 | Time-weighted return as the headline | Rethink | Only differs from simple return when there are cash flows (I3). |  |
-| D-59 | Sentry cloud; replay as stretch | Agree | Scrubbing rules belong in P3. |  |
-| D-60 | SonarQube Cloud Free | Agree | The 50K-line cap applies to private repos (A7). |  |
-| D-61 | Vitest, MSW, Playwright, RLS and invariant suites | Adjust | CI database as a service container (T3). |  |
+| ID   | Decision                                                           | My verdict | Note                                                                                     | Your call |
+| ---- | ------------------------------------------------------------------ | ---------- | ---------------------------------------------------------------------------------------- | --------- |
+| D-06 | Drizzle on the stable 0.x line                                     | Agree      | Pin the minor version; treat the 1.0 move as its own task later.                         |           |
+| D-07 | node-postgres to the pooled endpoint; migrations direct            | Agree      | Also fix how `pg` parses bigint and numeric, which arrive as strings.                    |           |
+| D-08 | Next.js 16 latest patch, React Compiler on                         | Agree      | Check patch releases weekly.                                                             |           |
+| D-13 | Three roles: owner, runtime, system                                | Adjust     | Add a fourth role for Better Auth's tables (pushback 11).                                |           |
+| D-14 | Runtime role created with SQL                                      | Agree      | The RLS suite asserts it.                                                                |           |
+| D-15 | Transaction-local user context; empty means no user                | Agree      | Correct for the transaction-mode pooler.                                                 |           |
+| D-16 | Authorization in the data access layer; `proxy.ts` optimistic only | Agree      | Matches post-CVE guidance.                                                               |           |
+| D-17 | SameSite cookies plus Origin check                                 | Adjust     | Also accept only JSON bodies on mutations (pushback 16).                                 |           |
+| D-18 | Entitlements written only by the system role                       | Agree      | The checkout-return reconcile (N4) goes through the same module.                         |           |
+| D-19 | Auth tables outside user-scoped RLS                                | Adjust     | Outside RLS, yes; readable by the runtime role, no.                                      |           |
+| D-21 | Goal contribution as a third Transaction type                      | Agree      | Withdrawals still open (H1).                                                             |           |
+| D-26 | Subscription catch-up mechanism                                    | Adjust     | Trigger on boot plus once a day (G2); a deleted charge becomes a tombstone (G5).         |           |
+| D-29 | Lapse keeps data, locks extra Goals                                | Adjust     | Say which Goals stay editable (H4).                                                      |           |
+| D-30 | Currency pre-filled, fixed after the first Transaction             | Adjust     | Add a reset-my-data escape (Q6), or one demo-data mistake fixes the currency forever.    |           |
+| D-31 | Integer minor units with an exponent table                         | Agree      | Keep amounts as JS numbers under a validated maximum; BigInt does not serialize to JSON. |           |
+| D-32 | Calendar dates, calendar months, UUID keys                         | Adjust     | UUIDv7 (E5); "today" comes from the profile timezone (Q8).                               |           |
+| D-33 | Budgets per category per month, effective-dated, 80% and 100%      | Adjust     | Define carry-forward and "overall" (F1, F4).                                             |           |
+| D-35 | Server-side listing with cursors                                   | Agree      | The right call at this data size.                                                        |           |
+| D-36 | Infinite list, virtualization, maxPages, Load more                 | Agree      | maxPages drops pages from the top, so scrolling back up needs previous-page cursors.     |           |
+| D-38 | Zustand for UI state; committed filters in the URL                 | Agree      | Name the real stores: sync status, palette, sidebar, layout editing.                     |           |
+| D-39 | Route handlers with an idempotency key                             | Agree      | Define where keys are stored and for how long.                                           |           |
+| D-48 | Global search with pg\_trgm                                        | Agree      | Numeric queries skip the 3-character minimum.                                            |           |
+| D-50 | Comparative charts: budget vs actual, period over period           | Agree      | Fills the brief's undefined term well.                                                   |           |
+| D-52 | PDF through server-side Chromium                                   | Agree      | With the print-stylesheet option weighed (M5).                                           |           |
+| D-53 | CSV: sanitize text, amounts as numbers                             | Agree      | Amounts unformatted with fixed decimals; dates as ISO.                                   |           |
+| D-55 | Theme per device, layout per account                               | Agree      | Matches how people use phones and desktops.                                              |           |
+| D-56 | Five rule-based detectors                                          | Adjust     | Add a savings recommendation (L1); the brief asks for one.                               |           |
+| D-58 | Time-weighted return as the headline                               | Rethink    | Only differs from simple return when there are cash flows (I3).                          |           |
+| D-59 | Sentry cloud; replay as stretch                                    | Agree      | Scrubbing rules belong in P3.                                                            |           |
+| D-60 | SonarQube Cloud Free                                               | Agree      | The 50K-line cap applies to private repos (A7).                                          |           |
+| D-61 | Vitest, MSW, Playwright, RLS and invariant suites                  | Adjust     | CI database as a service container (T3).                                                 |           |
 
 ## Questions
 

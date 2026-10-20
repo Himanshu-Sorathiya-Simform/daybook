@@ -3,16 +3,17 @@
 17 Oct 2026 · @Himanshu
 
 Daybook Premium is the paid plan, billed through Stripe in test mode.
+
 - **Buying:** a Free user picks monthly or yearly on the billing page and pays in Daybook's own payment form, built from Stripe's Payment Element on a Checkout Session. Premium unlocks as soon as Stripe confirms the payment.
 - **Managing:** cancelling, switching plans, updating the card and invoices live in Stripe's hosted Customer Portal.
 - **Keeping in step:** Daybook keeps a copy of the user's plan and entitlements. One sync rereads them from Stripe, and the webhook, the app's reconcile call and a lazy billing check all run it. Purchases, renewals, failed payments and lapses therefore reach Daybook even when the Stripe CLI is not forwarding webhooks.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M4. From M4, the locked card (P4) and the Goals limit message (F06) show Upgrade, and F15 seeds Premium states. Offline reading of the plan arrives with P1 (M5); report codes with F11 (M6) |
-| Plan | Free and Premium. This feature sells Premium; it is gated by nothing |
+| Item       | Value                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M4. From M4, the locked card (P4) and the Goals limit message (F06) show Upgrade, and F15 seeds Premium states. Offline reading of the plan arrives with P1 (M5); report codes with F11 (M6)                                                                                                                                                                          |
+| Plan       | Free and Premium. This feature sells Premium; it is gated by nothing                                                                                                                                                                                                                                                                                                  |
 | Depends on | [P4](../platform/P4-capabilities.md) (entitlements, the resolver, `/api/me`), [P2](../platform/P2-data-access-and-security.md) (system module, webhook mode, CSP), [F02](F02-onboarding-profile-settings.md) (country, locale), [F01](F01-auth-and-account.md) (account deletion), [F06](F06-goals.md) (lapse locks), [F15](F15-demo-and-seed-data.md) (seeded plans) |
-| Decisions | D-18, D-27 to D-29, D-70, D-125 to D-132, D-167, D-184, D-199, D-201, D-297 to D-317 |
+| Decisions  | D-18, D-27 to D-29, D-70, D-125 to D-132, D-167, D-184, D-199, D-201, D-297 to D-317                                                                                                                                                                                                                                                                                  |
 
 ## 1. User stories
 
@@ -25,8 +26,8 @@ Daybook Premium is the paid plan, billed through Stripe in test mode.
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
+| In                                                                                                                                                                                                                                                                                                                                                                                                                          | Stretch (M8)                                           | Out                                                                                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Monthly and yearly prices in INR or USD; the billing page; the in-app payment form; the checkout, reconcile and portal endpoints; the webhook; the plan record and entitlements sync; the lazy billing check; activation; the header badge and past-due banner; Upgrade entry points; the Customer Portal configuration; `stripe:setup`, `stripe:listen` and `stripe:clock`; seeded plans; Stripe Customer deletion for F01 | Promotion codes (D-132, flag `billing.promotionCodes`) | Live mode and real payments; tax; free trials (D-126); Adaptive Pricing; in-app cancel or plan-switch screens (the portal does it); refunds; several plans or quantities; changing the price currency after the first purchase (the country is fixed, F02); Stripe's customer-configured Accounts v2 |
 
 ## 3. Concepts and fields
@@ -35,10 +36,10 @@ Daybook Premium is the paid plan, billed through Stripe in test mode.
 
 **Plans** (`shared/billing/plans.ts`, D-125). The one source for amounts, lookup keys and plan copy. `stripe:setup` writes Stripe from it, and the billing page shows it.
 
-| Interval | Price lookup key | USD | INR | Shown as |
-| --- | --- | --- | --- | --- |
-| `month` | `daybook_premium_month` | 499 (4.99) | 39900 (399.00) | "a month" |
-| `year` | `daybook_premium_year` | 4990 (49.90) | 399000 (3,990.00) | "a year", with "2 months free" |
+| Interval | Price lookup key        | USD          | INR               | Shown as                       |
+| -------- | ----------------------- | ------------ | ----------------- | ------------------------------ |
+| `month`  | `daybook_premium_month` | 499 (4.99)   | 39900 (399.00)    | "a month"                      |
+| `year`   | `daybook_premium_year`  | 4990 (49.90) | 399000 (3,990.00) | "a year", with "2 months free" |
 
 Amounts are in Stripe's minor units, which for USD and INR match MON-1. Each Price is created in USD, with INR in its `currency_options`.
 
@@ -46,23 +47,23 @@ Amounts are in Stripe's minor units, which for USD and INR match MON-1. Each Pri
 
 **Plan record** (private, system-written, one per user; P2 table "plan status"; D-297). Users read their own row through RLS and never write it, so it has no `version`.
 
-| Field | Meaning | Example |
-| --- | --- | --- |
-| `stripeCustomerId` | The user's Stripe Customer; unique; `null` until the first checkout, and after a Customer is cleared | `cus_Q8...` |
-| `customerGeneration` | How many Customers have been cleared for this user; part of the creation key (BR-F12-05) | `0` |
-| `source` | `stripe`, or `seed` for seeded plans (F15) | `stripe` |
-| `status` | `none`, `active`, `past_due` or `ended` (BR-F12-10) | `active` |
-| `stripeSubscriptionId` | The current Stripe subscription, or `null` | `sub_1Q...` |
-| `interval` | `month` or `year`, or `null` | `year` |
-| `priceCurrency`, `priceAmountMinor` | What the current subscription charges, or `null` | `INR`, `399000` |
-| `currentPeriodEnd` | When the current period ends, or `null` | `2027-10-17T09:12:00Z` |
-| `endsAt` | When a scheduled cancellation takes effect, or `null` | `null` |
-| `scheduledInterval`, `scheduledAt` | A plan switch Stripe will apply later, or `null` | `month`, `2027-10-17T09:12:00Z` |
-| `endedAt` | Stripe's `ended_at` of the latest ended subscription, for display | `null` |
-| `lapseSeenAt` | The request clock when Daybook saw the latest end of Premium. F06 compares it with `goalsChosenAt` (D-313) | `null` |
-| `duplicate` | More than one live subscription exists (BR-F12-13) | `false` |
-| `closingAt` | When account deletion began, or `null`. A value less than 5 minutes old blocks billing calls (BR-F12-26) | `null` |
-| `syncSeq`, `lastSyncedAt` | The sequence value and request clock of the sync that wrote the row (BR-F12-11) | `4812`, `2026-10-17T09:12:03Z` |
+| Field                               | Meaning                                                                                                    | Example                         |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `stripeCustomerId`                  | The user's Stripe Customer; unique; `null` until the first checkout, and after a Customer is cleared       | `cus_Q8...`                     |
+| `customerGeneration`                | How many Customers have been cleared for this user; part of the creation key (BR-F12-05)                   | `0`                             |
+| `source`                            | `stripe`, or `seed` for seeded plans (F15)                                                                 | `stripe`                        |
+| `status`                            | `none`, `active`, `past_due` or `ended` (BR-F12-10)                                                        | `active`                        |
+| `stripeSubscriptionId`              | The current Stripe subscription, or `null`                                                                 | `sub_1Q...`                     |
+| `interval`                          | `month` or `year`, or `null`                                                                               | `year`                          |
+| `priceCurrency`, `priceAmountMinor` | What the current subscription charges, or `null`                                                           | `INR`, `399000`                 |
+| `currentPeriodEnd`                  | When the current period ends, or `null`                                                                    | `2027-10-17T09:12:00Z`          |
+| `endsAt`                            | When a scheduled cancellation takes effect, or `null`                                                      | `null`                          |
+| `scheduledInterval`, `scheduledAt`  | A plan switch Stripe will apply later, or `null`                                                           | `month`, `2027-10-17T09:12:00Z` |
+| `endedAt`                           | Stripe's `ended_at` of the latest ended subscription, for display                                          | `null`                          |
+| `lapseSeenAt`                       | The request clock when Daybook saw the latest end of Premium. F06 compares it with `goalsChosenAt` (D-313) | `null`                          |
+| `duplicate`                         | More than one live subscription exists (BR-F12-13)                                                         | `false`                         |
+| `closingAt`                         | When account deletion began, or `null`. A value less than 5 minutes old blocks billing calls (BR-F12-26)   | `null`                          |
+| `syncSeq`, `lastSyncedAt`           | The sequence value and request clock of the sync that wrote the row (BR-F12-11)                            | `4812`, `2026-10-17T09:12:03Z`  |
 
 A user who never checked out and was never seeded has no plan record. Every read treats that as `status: none`.
 
@@ -97,16 +98,17 @@ A user who never checked out and was never seeded has no plan record. Every read
     - **Time budget:** every Stripe call has a timeout of 8 seconds or the time left in its request's budget, whichever is less. A handler's calls share a budget of 20 seconds. A call has one network retry when the budget allows. When the budget runs out, the request fails with 503 `billing_unavailable`.
 - **BR-F12-04** Stripe errors map to responses this way, in handlers and in the webhook alike:
 
-    | Stripe error | Response |
-    | --- | --- |
-    | Connection error, timeout, 429, or Stripe 5xx (`StripeConnectionError`, `StripeRateLimitError`, `StripeAPIError`) | 503 `billing_unavailable` |
-    | `resource_missing` for the stored Customer | The Customer is cleared (BR-F12-12). Then checkout creates a new one; the portal answers 409 `no_billing_account`; reconcile answers with the cleared plan; a sync or the webhook stops |
-    | `resource_missing` for a Checkout Session id | 404 `not_found` |
-    | `resource_missing` when the webhook retrieves a Customer it does not know | The event is recorded and answered 200 |
-    | A card error during confirm | Never reaches the server: Stripe.js returns it to the form (BR-F12-16) |
-    | Anything else | 500 `internal`, sent to Sentry with the request id and Stripe's request id |
+    | Stripe error                                                                                                      | Response                                                                                                                                                                                |
+    | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | Connection error, timeout, 429, or Stripe 5xx (`StripeConnectionError`, `StripeRateLimitError`, `StripeAPIError`) | 503 `billing_unavailable`                                                                                                                                                               |
+    | `resource_missing` for the stored Customer                                                                        | The Customer is cleared (BR-F12-12). Then checkout creates a new one; the portal answers 409 `no_billing_account`; reconcile answers with the cleared plan; a sync or the webhook stops |
+    | `resource_missing` for a Checkout Session id                                                                      | 404 `not_found`                                                                                                                                                                         |
+    | `resource_missing` when the webhook retrieves a Customer it does not know                                         | The event is recorded and answered 200                                                                                                                                                  |
+    | A card error during confirm                                                                                       | Never reaches the server: Stripe.js returns it to the form (BR-F12-16)                                                                                                                  |
+    | Anything else                                                                                                     | 500 `internal`, sent to Sentry with the request id and Stripe's request id                                                                                                              |
 
     No response or log ever contains card data, which Daybook never receives.
+
 - **BR-F12-05** **The Stripe Customer** (D-311). Each user has at most one at a time. It is created on the user's first checkout (BR-F12-15):
     - **Request:** `email` and `metadata.userId` only. Both stay fixed: Daybook has no email change, and the display name is not sent, so a retry never sends different parameters under one key.
     - **Idempotency key:** `daybook-customer-<userId>-<customerGeneration>`. Two attempts within Stripe's 24-hour key window create one Customer, and a new generation after a clear gets a new Customer.
@@ -133,13 +135,12 @@ A user who never checked out and was never seeded has no plan record. Every read
 
 - **BR-F12-10** **Status.** A sync derives the plan record from the Customer's subscriptions.
 
-    | Stripe subscription status | Daybook status |
-    | --- | --- |
-    | `active`, `trialing` | `active` |
-    | `past_due`, `unpaid`, `paused` | `past_due` |
-    | `canceled` | `ended` |
+    | Stripe subscription status         | Daybook status                     |
+    | ---------------------------------- | ---------------------------------- |
+    | `active`, `trialing`               | `active`                           |
+    | `past_due`, `unpaid`, `paused`     | `past_due`                         |
+    | `canceled`                         | `ended`                            |
     | `incomplete`, `incomplete_expired` | Ignored: no payment ever succeeded |
-
     - **Live subscriptions:** `active`, `trialing`, `past_due`, `unpaid` and `paused`. The current one is the live one with no scheduled end, then the one whose period ends last, then the newest by `created`.
     - **No live subscription:** the status is `ended` when a canceled subscription exists, and `none` otherwise. `stripeSubscriptionId`, `interval`, the price, `currentPeriodEnd`, `endsAt` and the scheduled switch are then `null`.
     - **`interval` and the price:** from the current subscription's Price, which the sync retrieves by id with `currency_options` and caches per process for 10 minutes. Stripe expands at most four levels, which is too few to read it through the subscription. The amount is in the subscription's currency, taken from `currency_options` when that is not the Price's default.
@@ -147,6 +148,7 @@ A user who never checked out and was never seeded has no plan record. Every read
     - **`endsAt`:** `cancel_at` when set. Otherwise the item's `current_period_end` when `cancel_at_period_end` is true. Otherwise `null`. Both fields are read because Stripe may express a cancellation either way.
     - **`scheduledInterval` and `scheduledAt`:** set when the subscription has a schedule. The next phase is the first one whose `start_date` is at or after the current phase's `end_date`. When its Price's interval differs from the current one, these hold that interval and the phase's `start_date`.
     - **`endedAt`:** the latest `ended_at` among canceled subscriptions.
+
 - **BR-F12-11** **The sync** (`syncBilling(ctx, userId, customerId, { eventId? })`, in `server/system/billing`):
     1. **Order:** take `nextval('app.billing_sync_seq')` immediately before reading Stripe. This orders syncs by when they started, across processes, whatever their clocks. Any sync that starts after a change in Stripe therefore wins over every sync that started before it.
     2. **Read Stripe,** outside any transaction:
@@ -163,6 +165,7 @@ A user who never checked out and was never seeded has no plan record. Every read
         6. Record `eventId`, when given, in processed events with `ON CONFLICT DO NOTHING`. This happens even when nothing else was written.
 
     Seeded keys are replaced too, so a real purchase wins over the seed (P4, BR-P4-16). The sync reads Stripe's current state, never an event's payload, so events can arrive late, twice or out of order.
+
 - **BR-F12-12** **Clearing a Customer** (`clearCustomer(ctx, userId, customerId, { eventId? })`, D-311). It runs on `customer.deleted`, and when Stripe reports the stored Customer deleted or missing. In one system transaction it locks the record with `WHERE user_id = $1 AND stripe_customer_id = $2`. With no such row, because that Customer was already cleared or replaced, it changes nothing but records `eventId`. Otherwise it:
     - sets `stripeCustomerId` to `null` and adds 1 to `customerGeneration`;
     - clears the subscription fields (`stripeSubscriptionId`, `interval`, the price, `currentPeriodEnd`, `endsAt`, the scheduled switch) and `duplicate`;
@@ -172,6 +175,7 @@ A user who never checked out and was never seeded has no plan record. Every read
     The status becomes `ended` when it was `active` or `past_due`, or when `endedAt` is set; otherwise `none`. When it was `active` or `past_due`, `endedAt` and `lapseSeenAt` become `ctx.now`.
 
     Stripe deletes a test clock's Customers 30 days after the clock is created (BR-F12-28), so this path is routine in development. The next checkout creates a new Customer under the new generation's key.
+
 - **BR-F12-13** **Duplicates** (D-299). If a race leaves more than one live subscription:
     - the current one follows BR-F12-10;
     - `duplicate` is true;
@@ -204,6 +208,7 @@ A user who never checked out and was never seeded has no plan record. Every read
     6. **Response:** `{ clientSecret, sessionId, interval, currency, amountMinor, expiresAt }`.
 
     A client that gets 409 `already_premium` refetches `/api/me`, invalidates every query, and shows the plan section for the user's real status.
+
 - **BR-F12-16** **The payment form** (D-309).
     - **Loading Stripe.js:** only after the user picks a plan and selects Continue, so no other page loads it.
     - **The form:** `CheckoutElementsProvider` from `@stripe/react-stripe-js/checkout`, with the client secret and an `appearance` built from the design tokens. It renders the order summary from the session's `total`, the `PaymentElement`, and a Pay button reading "Pay ₹399.00".
@@ -252,6 +257,7 @@ A user who never checked out and was never seeded has no plan record. Every read
     3. **Compare plans** (`#compare`): root 2's Free and Premium table, generated from the feature lines in `plans.ts`. It lists only features shipped in the current build's milestone.
 
     The page reads the plan from `/api/me`. When `hasBillingAccount` is true, it runs one reconcile on opening, so a missed webhook is repaired.
+
 - **BR-F12-21** **`from`.** The locked card links to `/settings/billing?from=<code>` (P4).
     - **A known code:** a client-visible `premium` or `limit` code whose feature line is shipped names its feature in the headline. For example, `from=analytics.heatmap.view` gives "Unlock the calendar heat map with Daybook Premium."
     - **Any other value:** ignored.
@@ -261,6 +267,7 @@ A user who never checked out and was never seeded has no plan record. Every read
     - before `/api/me` has answered: neither.
 
     Seeded Premium shows the badge.
+
 - **BR-F12-23** **The past-due banner** (root 4, D-130, D-305). While `/api/me` reports `status: past_due`, every logged-in page shows "Your Daybook Premium payment failed. Update your card to keep Premium." with Update card.
     - **Update card:** calls the portal endpoint.
     - **Dismissing:** hides it until the next app start (Zustand `ui` store).
@@ -301,15 +308,17 @@ A user who never checked out and was never seeded has no plan record. Every read
     - **If that delete fails:** `closingAt` stops blocking after 5 minutes, so billing works again, and a retried deletion runs this function again.
 
     Stripe's later events find no user and are ignored (BR-F12-24 step 3). `db:seed --reset` calls the same function for every scenario account that has a Customer before it deletes the account (F15).
+
 - **BR-F12-27** **Seeded plans** (F15, BR-F15-25; D-306) have `source: seed` and no Customer, price or period end.
 
-    | Account | `status` | `interval` | `endedAt` and `lapseSeenAt` | Entitlements |
-    | --- | --- | --- | --- | --- |
-    | `family`, `stress`, `golden` | `active` | `year` | `null` | Every `premium` and `limit` code, source `seed` |
-    | `yen` | `active` | `month` | `null` | As above |
-    | `lapsed` | `ended` | `month` | 00:00 in Europe/Berlin, 20 days before the seed day | None |
+    | Account                      | `status` | `interval` | `endedAt` and `lapseSeenAt`                         | Entitlements                                    |
+    | ---------------------------- | -------- | ---------- | --------------------------------------------------- | ----------------------------------------------- |
+    | `family`, `stress`, `golden` | `active` | `year`     | `null`                                              | Every `premium` and `limit` code, source `seed` |
+    | `yen`                        | `active` | `month`    | `null`                                              | As above                                        |
+    | `lapsed`                     | `ended`  | `month`    | 00:00 in Europe/Berlin, 20 days before the seed day | None                                            |
 
     The billing page shows "Premium was granted by the seed script, so there is nothing to manage in Stripe." for an active seeded plan. `lapsed` can buy Premium normally; its first checkout turns the record into a Stripe one (BR-F12-05).
+
 - **BR-F12-28** **Test clocks** (`npm run stripe:clock`, D-307) are for development only. Every form refuses a live key.
     - **`--user <email>`:** puts that user's Customer on a new Stripe test clock, creating the Customer first (BR-F12-05) when there is none. The clock is frozen 60 seconds after the current time, since Stripe refuses a past time for an existing Customer.
         - **Refusals:** a seeded `active` plan, whose seed entitlements a sync would otherwise replace; a user with a live subscription; and a Customer already on a clock, which cannot leave it.
@@ -325,27 +334,28 @@ A user who never checked out and was never seeded has no plan record. Every read
 
 **Prices.**
 
-| Interval | INR | USD | Twelve months at the monthly price | Saving shown as |
-| --- | --- | --- | --- | --- |
-| Monthly | 399.00 | 4.99 | n/a | n/a |
-| Yearly | 3,990.00 (10 × 399.00) | 49.90 (10 × 4.99) | 4,788.00 or 59.88 | 2 months free |
+| Interval | INR                    | USD               | Twelve months at the monthly price | Saving shown as |
+| -------- | ---------------------- | ----------------- | ---------------------------------- | --------------- |
+| Monthly  | 399.00                 | 4.99              | n/a                                | n/a             |
+| Yearly   | 3,990.00 (10 × 399.00) | 49.90 (10 × 4.99) | 4,788.00 or 59.88                  | 2 months free   |
 
 Prorations on a monthly-to-yearly switch are Stripe's arithmetic. Daybook shows none of them; the portal and its invoices do.
 
 **Status from subscriptions** (BR-F12-10).
 
-| Customer's subscriptions | `status` | `endsAt` | `endedAt` |
-| --- | --- | --- | --- |
-| One `active`, `cancel_at_period_end: false`, no `cancel_at` | `active` | `null` | `null` |
-| One `active` with `cancel_at_period_end: true`, item period ending 2027-10-17T09:12:00Z | `active` | 2027-10-17T09:12:00Z | `null` |
-| One `active` with `cancel_at` 2027-01-01T00:00:00Z | `active` | 2027-01-01T00:00:00Z | `null` |
-| One `past_due` | `past_due` | `null` | `null` |
-| One `canceled`, `ended_at` 2026-10-12T05:00:00Z | `ended` | `null` | 2026-10-12T05:00:00Z |
-| One `canceled` (ended 2026-03-01T00:00:00Z) and one `active` | `active` | `null` | 2026-03-01T00:00:00Z |
-| Two `active`: an older one with no end, and a newer one with `cancel_at_period_end: true` | `active`, from the older one, with `duplicate` true | `null` | `null` |
-| One `incomplete_expired` only | `none` | `null` | `null` |
+| Customer's subscriptions                                                                  | `status`                                            | `endsAt`             | `endedAt`            |
+| ----------------------------------------------------------------------------------------- | --------------------------------------------------- | -------------------- | -------------------- |
+| One `active`, `cancel_at_period_end: false`, no `cancel_at`                               | `active`                                            | `null`               | `null`               |
+| One `active` with `cancel_at_period_end: true`, item period ending 2027-10-17T09:12:00Z   | `active`                                            | 2027-10-17T09:12:00Z | `null`               |
+| One `active` with `cancel_at` 2027-01-01T00:00:00Z                                        | `active`                                            | 2027-01-01T00:00:00Z | `null`               |
+| One `past_due`                                                                            | `past_due`                                          | `null`               | `null`               |
+| One `canceled`, `ended_at` 2026-10-12T05:00:00Z                                           | `ended`                                             | `null`               | 2026-10-12T05:00:00Z |
+| One `canceled` (ended 2026-03-01T00:00:00Z) and one `active`                              | `active`                                            | `null`               | 2026-03-01T00:00:00Z |
+| Two `active`: an older one with no end, and a newer one with `cancel_at_period_end: true` | `active`, from the older one, with `duplicate` true | `null`               | `null`               |
+| One `incomplete_expired` only                                                             | `none`                                              | `null`               | `null`               |
 
 **Sync ordering** (BR-F12-11).
+
 1. A webhook sync takes sequence value 4811 and reads Stripe before the user's cancellation.
 2. A reconcile sync takes 4812 after the cancellation, reads Stripe, and stores first.
 3. The webhook sync then finds a stored `syncSeq` of 4812, greater than its own, and writes nothing. It still records its event id.
@@ -354,40 +364,41 @@ The plan keeps the cancellation.
 
 **Failed renewal timeline with a test clock** (BR-F12-07, BR-F12-28). The clock starts at T, when the user buys monthly.
 
-| Clock time | What Stripe does | Daybook after the sync |
-| --- | --- | --- |
-| T + 1 month | Creates the renewal invoice as a draft | `active` |
-| T + 1 month + 2 hours | Has finalized it, about an hour after the draft, and the charge to card 0341 has failed | `past_due`, banner shown, Premium kept |
-| + 1, + 3 and + 6 days after the first failure | Retries 3 times, each failing | `past_due` |
-| After the last retry | Cancels the subscription | `ended`; `lapseSeenAt` is Daybook's time of that sync |
+| Clock time                                    | What Stripe does                                                                        | Daybook after the sync                                |
+| --------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| T + 1 month                                   | Creates the renewal invoice as a draft                                                  | `active`                                              |
+| T + 1 month + 2 hours                         | Has finalized it, about an hour after the draft, and the charge to card 0341 has failed | `past_due`, banner shown, Premium kept                |
+| + 1, + 3 and + 6 days after the first failure | Retries 3 times, each failing                                                           | `past_due`                                            |
+| After the last retry                          | Cancels the subscription                                                                | `ended`; `lapseSeenAt` is Daybook's time of that sync |
 
 ## 6. Screens and states
 
 **`/settings/billing`.** BR-F12-20. The plan section by status:
 
-| Status | Plan section |
-| --- | --- |
-| `none` | "Daybook Free" with the plan picker: Monthly ₹399.00 a month, Yearly ₹3,990.00 a year with "2 months free", and Continue |
-| `active` | "Daybook Premium · Yearly · ₹3,990.00 a year" and "Renews on 17 Oct 2027." with Manage billing |
-| `active` with `endsAt` | "Premium ends on 17 Oct 2027. You keep every feature until then." with Manage billing, where the user can renew |
-| `active` with a scheduled switch | Adds "Switches to monthly billing on 17 Oct 2027." |
-| `past_due` | "Your last payment failed. Stripe will retry it; update your card to keep Premium." with Update card |
-| `ended` | "Your Premium ended on 12 Oct 2026." with the plan picker |
-| Seeded `active` | "Daybook Premium" and the seed sentence (BR-F12-27); no actions |
-| `duplicate` | The BR-F12-13 sentence, above the rest |
+| Status                           | Plan section                                                                                                             |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `none`                           | "Daybook Free" with the plan picker: Monthly ₹399.00 a month, Yearly ₹3,990.00 a year with "2 months free", and Continue |
+| `active`                         | "Daybook Premium · Yearly · ₹3,990.00 a year" and "Renews on 17 Oct 2027." with Manage billing                           |
+| `active` with `endsAt`           | "Premium ends on 17 Oct 2027. You keep every feature until then." with Manage billing, where the user can renew          |
+| `active` with a scheduled switch | Adds "Switches to monthly billing on 17 Oct 2027."                                                                       |
+| `past_due`                       | "Your last payment failed. Stripe will retry it; update your card to keep Premium." with Update card                     |
+| `ended`                          | "Your Premium ended on 12 Oct 2026." with the plan picker                                                                |
+| Seeded `active`                  | "Daybook Premium" and the seed sentence (BR-F12-27); no actions                                                          |
+| `duplicate`                      | The BR-F12-13 sentence, above the rest                                                                                   |
 
-| State | What the user sees |
-| --- | --- |
-| Loading | A skeleton of the plan section and the compare table |
-| Empty | n/a: `none` is a state with its own content |
-| Error | "Billing is unavailable right now. Try again in a minute." for 503 `billing_unavailable`; the plan from `/api/me` stays visible |
-| Offline | Before M5: "Billing needs a connection." From M5: the plan from the persisted `/api/me` with "as of", and that sentence in place of every action |
-| Pending | n/a: billing is never queued |
-| Locked (Premium) | n/a |
-| Read-only | Offline only |
-| Activating | "Activating Premium…", announced through a live region (BR-F12-18) |
+| State            | What the user sees                                                                                                                               |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Loading          | A skeleton of the plan section and the compare table                                                                                             |
+| Empty            | n/a: `none` is a state with its own content                                                                                                      |
+| Error            | "Billing is unavailable right now. Try again in a minute." for 503 `billing_unavailable`; the plan from `/api/me` stays visible                  |
+| Offline          | Before M5: "Billing needs a connection." From M5: the plan from the persisted `/api/me` with "as of", and that sentence in place of every action |
+| Pending          | n/a: billing is never queued                                                                                                                     |
+| Locked (Premium) | n/a                                                                                                                                              |
+| Read-only        | Offline only                                                                                                                                     |
+| Activating       | "Activating Premium…", announced through a live region (BR-F12-18)                                                                               |
 
 **The payment form** replaces the plan picker after Continue. It shows:
+
 - the order summary;
 - the Payment Element;
 - the Pay button;
@@ -399,6 +410,7 @@ The plan keeps the cancellation.
 ## 7. Flows
 
 **7.1 Buy monthly (`student@daybook.test`, IN)**
+
 1. On Analytics, the heat map's locked card offers Upgrade, which opens `/settings/billing?from=analytics.heatmap.view`.
 2. The headline reads "Unlock the calendar heat map with Daybook Premium."
 3. The user picks Monthly (₹399.00) and selects Continue. The server creates the Customer and the session in INR.
@@ -413,6 +425,7 @@ The plan keeps the cancellation.
 **7.4 The Stripe CLI is not running.** No webhook arrives, and reconcile alone activates Premium. If Stripe lists the entitlements later than the payment, the repeated reconcile picks them up when they appear. After 30 seconds the timeout message shows, and the lazy billing check finishes the job on a later `/api/me`.
 
 **7.5 Cancel**
+
 1. Manage billing opens the portal, and the user cancels.
 2. Stripe schedules the end of the period. Back on `?portal=1`, the billing page's reconcile stores `endsAt`.
 3. The page says "Premium ends on 17 Nov 2026. You keep every feature until then."
@@ -421,6 +434,7 @@ The plan keeps the cancellation.
 **7.6 Switch yearly to monthly.** In the portal the user picks Monthly. Stripe schedules it for the end of the paid year. Back in Daybook: "Switches to monthly billing on 17 Oct 2027."
 
 **7.7 A failed renewal, with a test clock** (section 5's timeline)
+
 1. `stripe:clock --user` puts the developer's Customer on a clock. They buy monthly.
 2. In the portal they replace the card with 4000 0000 0000 0341, which attaches but fails every charge.
 3. They advance the clock to T + 1 month + 2 hours. The payment has failed, the subscription is `past_due`, the banner shows, and Premium stays.
@@ -432,34 +446,35 @@ The plan keeps the cancellation.
 
 ## 8. Validation and messages
 
-| Situation | Message shown |
-| --- | --- |
-| 409 `already_premium` | You already have Daybook Premium. |
-| 409 `no_billing_account` | There is no billing account to manage. |
-| 409 `account_closing` | This account is being deleted. |
-| 503 `billing_unavailable` | Billing is unavailable right now. Try again in a minute. |
-| Card or payment error | Stripe's own message, under the form |
-| Form failed to load | The payment form could not load. |
-| Session expired | This payment form expired. Start again. |
-| Activating | Activating Premium… |
-| Activated | You're on Daybook Premium. Everything is unlocked. |
-| Activation timeout | Payment received. Premium is still activating; refresh this page in a minute. |
-| Renewal | Renews on 17 Oct 2027. |
-| Scheduled end | Premium ends on 17 Oct 2027. You keep every feature until then. |
-| Scheduled switch | Switches to monthly billing on 17 Oct 2027. |
-| Past due (page) | Your last payment failed. Stripe will retry it; update your card to keep Premium. |
-| Past due (banner) | Your Daybook Premium payment failed. Update your card to keep Premium. |
-| Ended | Your Premium ended on 12 Oct 2026. |
-| Seeded | Premium was granted by the seed script, so there is nothing to manage in Stripe. |
-| Duplicate | You're paying for Daybook Premium twice. Cancel one in Manage billing. |
-| Offline | Billing needs a connection. |
-| Test card hint | Test mode: use card 4242 4242 4242 4242 with any future date and CVC. |
-| `from` headline | Unlock the calendar heat map with Daybook Premium. |
-| Header | Premium (badge) / Upgrade (link) |
+| Situation                 | Message shown                                                                     |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| 409 `already_premium`     | You already have Daybook Premium.                                                 |
+| 409 `no_billing_account`  | There is no billing account to manage.                                            |
+| 409 `account_closing`     | This account is being deleted.                                                    |
+| 503 `billing_unavailable` | Billing is unavailable right now. Try again in a minute.                          |
+| Card or payment error     | Stripe's own message, under the form                                              |
+| Form failed to load       | The payment form could not load.                                                  |
+| Session expired           | This payment form expired. Start again.                                           |
+| Activating                | Activating Premium…                                                               |
+| Activated                 | You're on Daybook Premium. Everything is unlocked.                                |
+| Activation timeout        | Payment received. Premium is still activating; refresh this page in a minute.     |
+| Renewal                   | Renews on 17 Oct 2027.                                                            |
+| Scheduled end             | Premium ends on 17 Oct 2027. You keep every feature until then.                   |
+| Scheduled switch          | Switches to monthly billing on 17 Oct 2027.                                       |
+| Past due (page)           | Your last payment failed. Stripe will retry it; update your card to keep Premium. |
+| Past due (banner)         | Your Daybook Premium payment failed. Update your card to keep Premium.            |
+| Ended                     | Your Premium ended on 12 Oct 2026.                                                |
+| Seeded                    | Premium was granted by the seed script, so there is nothing to manage in Stripe.  |
+| Duplicate                 | You're paying for Daybook Premium twice. Cancel one in Manage billing.            |
+| Offline                   | Billing needs a connection.                                                       |
+| Test card hint            | Test mode: use card 4242 4242 4242 4242 with any future date and CVC.             |
+| `from` headline           | Unlock the calendar heat map with Daybook Premium.                                |
+| Header                    | Premium (badge) / Upgrade (link)                                                  |
 
 ## 9. Plan gating
 
 None for billing itself; every user can open it. This feature is what grants the Premium codes P4 resolves:
+
 - `analytics.heatmap.view` and `analytics.comparative.view` (F09);
 - `goals.active.max` (F06);
 - `reports.quarterly.generate` and `reports.annual.generate` (F11, from M6);
@@ -470,6 +485,7 @@ None for billing itself; every user can open it. This feature is what grants the
 ## 10. Offline behavior
 
 Billing is online only and never queued (P2, BR-P2-16).
+
 - **Before M5:** the billing page shows "Billing needs a connection."
 - **From M5 (P1):** it shows the plan from the persisted `/api/me` with "as of", and disables every action with that sentence.
 - **The past-due banner:** its Update card is disabled the same way.
@@ -477,23 +493,24 @@ Billing is online only and never queued (P2, BR-P2-16).
 
 ## 11. Server surface
 
-| Endpoint | Method | Input | Output | Errors | Idempotency |
-| --- | --- | --- | --- | --- | --- |
-| `/api/billing/checkout-session` | POST | `{ interval: "month" \| "year" }` | 201 `{ clientSecret, sessionId, interval, currency, amountMinor, expiresAt }` | 401, 403 `profile_required`, 409 `already_premium` or `account_closing`, 422 `validation_failed`, 503 `billing_unavailable` | Exempt (D-201); online only |
-| `/api/billing/reconcile` | POST | `{ sessionId? }` | 200 `{ plan, checkout }` | 401, 403, 404 `not_found`, 422, 503 `billing_unavailable` | Exempt; online only |
-| `/api/billing/portal` | POST | `{}` | 200 `{ url }` | 401, 403, 409 `no_billing_account` or `account_closing`, 503 `billing_unavailable` | Exempt; online only |
-| `/api/webhooks/stripe` | POST | A Stripe event, signed | 200 `{ received: true }` | 400 `bad_request` (signature), 413, 500, 503 `billing_unavailable` | The event id (BR-F12-24) |
+| Endpoint                        | Method | Input                             | Output                                                                        | Errors                                                                                                                      | Idempotency                 |
+| ------------------------------- | ------ | --------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `/api/billing/checkout-session` | POST   | `{ interval: "month" \| "year" }` | 201 `{ clientSecret, sessionId, interval, currency, amountMinor, expiresAt }` | 401, 403 `profile_required`, 409 `already_premium` or `account_closing`, 422 `validation_failed`, 503 `billing_unavailable` | Exempt (D-201); online only |
+| `/api/billing/reconcile`        | POST   | `{ sessionId? }`                  | 200 `{ plan, checkout }`                                                      | 401, 403, 404 `not_found`, 422, 503 `billing_unavailable`                                                                   | Exempt; online only         |
+| `/api/billing/portal`           | POST   | `{}`                              | 200 `{ url }`                                                                 | 401, 403, 409 `no_billing_account` or `account_closing`, 503 `billing_unavailable`                                          | Exempt; online only         |
+| `/api/webhooks/stripe`          | POST   | A Stripe event, signed            | 200 `{ received: true }`                                                      | 400 `bad_request` (signature), 413, 500, 503 `billing_unavailable`                                                          | The event id (BR-F12-24)    |
 
 **Error codes added by this spec**
 
-| Status | Code | Default message | Write queue does |
-| --- | --- | --- | --- |
-| 409 | `already_premium` | You already have Daybook Premium. | Never queued |
-| 409 | `no_billing_account` | There is no billing account to manage. | Never queued |
-| 409 | `account_closing` | This account is being deleted. | Never queued |
-| 503 | `billing_unavailable` | Billing is unavailable right now. Try again in a minute. | Never queued |
+| Status | Code                  | Default message                                          | Write queue does |
+| ------ | --------------------- | -------------------------------------------------------- | ---------------- |
+| 409    | `already_premium`     | You already have Daybook Premium.                        | Never queued     |
+| 409    | `no_billing_account`  | There is no billing account to manage.                   | Never queued     |
+| 409    | `account_closing`     | This account is being deleted.                           | Never queued     |
+| 503    | `billing_unavailable` | Billing is unavailable right now. Try again in a minute. | Never queued     |
 
 **The plan block of `/api/me`** (P4, BR-P4-11):
+
 - **`premium`:** true when the user's entitlement keys include any registry `premium` or `limit` code, so it always agrees with gating.
 - **`hasBillingAccount`:** true when a Customer is stored.
 - **The other fields:** the plan record's, without the Stripe ids, `customerGeneration`, `closingAt`, `syncSeq` and `lastSyncedAt`.
@@ -502,12 +519,14 @@ Billing is online only and never queued (P2, BR-P2-16).
 - **No plan record:** `{ premium: false, status: "none", source: null, hasBillingAccount: false }`, with every other field `null` and `duplicate` false.
 
 **Sentry events.** Each carries the request id and the user id, never card data:
+
 - `billing.signature_failed` (warning);
 - `billing.sync_failed`;
 - `billing.stripe_error`, with Stripe's request id;
 - `billing.duplicate_subscription`.
 
 **Modules**
+
 - `shared/billing/plans.ts`: plans, amounts and feature lines.
 - `server/billing/stripe.ts`: the only Stripe SDK import (BR-F12-03).
 - `server/billing/*`: the three handlers and the webhook route.
@@ -601,41 +620,68 @@ Illustrative, `POST /api/billing/checkout-session` for an IN user:
 
 ```json
 {
-  "clientSecret": "cs_test_..._secret_...",
-  "sessionId": "cs_test_a1B2c3",
-  "interval": "month",
-  "currency": "INR",
-  "amountMinor": 39900,
-  "expiresAt": "2026-10-17T10:12:00Z"
+	"clientSecret": "cs_test_..._secret_...",
+	"sessionId": "cs_test_a1B2c3",
+	"interval": "month",
+	"currency": "INR",
+	"amountMinor": 39900,
+	"expiresAt": "2026-10-17T10:12:00Z"
 }
 ```
 
 Illustrative, `/api/me` plan blocks:
 
 ```json
-{ "premium": true, "status": "active", "source": "stripe", "hasBillingAccount": true, "interval": "year",
-  "price": { "currency": "INR", "amountMinor": 399000 },
-  "currentPeriodEnd": "2027-10-17T09:12:00Z", "endsAt": null,
-  "scheduledInterval": null, "scheduledAt": null, "endedAt": null, "lapseSeenAt": null, "duplicate": false }
+{
+	"premium": true,
+	"status": "active",
+	"source": "stripe",
+	"hasBillingAccount": true,
+	"interval": "year",
+	"price": { "currency": "INR", "amountMinor": 399000 },
+	"currentPeriodEnd": "2027-10-17T09:12:00Z",
+	"endsAt": null,
+	"scheduledInterval": null,
+	"scheduledAt": null,
+	"endedAt": null,
+	"lapseSeenAt": null,
+	"duplicate": false
+}
 ```
 
 ```json
-{ "premium": true, "status": "active", "source": "seed", "hasBillingAccount": false, "interval": "year",
-  "price": null, "currentPeriodEnd": null, "endsAt": null,
-  "scheduledInterval": null, "scheduledAt": null, "endedAt": null, "lapseSeenAt": null, "duplicate": false }
+{
+	"premium": true,
+	"status": "active",
+	"source": "seed",
+	"hasBillingAccount": false,
+	"interval": "year",
+	"price": null,
+	"currentPeriodEnd": null,
+	"endsAt": null,
+	"scheduledInterval": null,
+	"scheduledAt": null,
+	"endedAt": null,
+	"lapseSeenAt": null,
+	"duplicate": false
+}
 ```
 
 Illustrative, the webhook in outline:
 
 ```ts
 export const POST = webhookRoute(async (ctx, event) => {
-  if (!HANDLED.has(event.type)) return ok();
-  if (await billing.seen(event.id)) return ok();
-  const customerId = event.type === 'customer.deleted' ? event.data.object.id : event.data.object.customer;
-  const userId = await billing.userForCustomer(customerId); // stored, or mapped from the Customer's metadata
-  if (!userId) return billing.recordEvent(event.id);
-  if (event.type === 'customer.deleted') return billing.clearCustomer(ctx, userId, customerId, { eventId: event.id });
-  await billing.syncBilling(ctx, userId, customerId, { eventId: event.id });
-  return ok();
+	if (!HANDLED.has(event.type)) return ok();
+	if (await billing.seen(event.id)) return ok();
+	const customerId =
+		event.type === "customer.deleted" ?
+			event.data.object.id
+		:	event.data.object.customer;
+	const userId = await billing.userForCustomer(customerId); // stored, or mapped from the Customer's metadata
+	if (!userId) return billing.recordEvent(event.id);
+	if (event.type === "customer.deleted")
+		return billing.clearCustomer(ctx, userId, customerId, { eventId: event.id });
+	await billing.syncBilling(ctx, userId, customerId, { eventId: event.id });
+	return ok();
 });
 ```

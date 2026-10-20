@@ -3,6 +3,7 @@
 17 Oct 2026 · @Himanshu
 
 The Analytics page holds every chart, over any date range and set of categories:
+
 - spending over time;
 - spending by category;
 - income against expenses;
@@ -14,12 +15,12 @@ The Analytics page holds every chart, over any date range and set of categories:
 
 Three of them are Daybook Premium: Budget against actual, period over period, and the heat map. Every chart reads the same server rollups as the Transactions list. Each one can be zoomed, exported as an image, read as a table, and clicked through to the Transactions behind it. This spec also owns the chart rules the dashboard (F08) and the PDF reports (F11) reuse.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M3 (charts and page). The Premium gates show the locked card from M0, through P4; the purchase flow arrives in M4 (F12). Before M4 the locked card has no Upgrade button. Offline reading and the pending note arrive with P1 (M5) |
-| Plan | Free: spending over time, by category, income vs expenses, portfolio, allocation, Goal progress. Premium: `analytics.comparative.view` (Budget vs actual, period over period), `analytics.heatmap.view` (calendar heat map). Stretch: `analytics.weekdayHour.view` |
+| Item       | Value                                                                                                                                                                                                                                                                                          |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M3 (charts and page). The Premium gates show the locked card from M0, through P4; the purchase flow arrives in M4 (F12). Before M4 the locked card has no Upgrade button. Offline reading and the pending note arrive with P1 (M5)                                                             |
+| Plan       | Free: spending over time, by category, income vs expenses, portfolio, allocation, Goal progress. Premium: `analytics.comparative.view` (Budget vs actual, period over period), `analytics.heatmap.view` (calendar heat map). Stretch: `analytics.weekdayHour.view`                             |
 | Depends on | [F03](F03-transactions.md) (filter-to-SQL, the filter object), [F04](F04-budgets.md), [F06](F06-goals.md), [F07](F07-investments.md), [P4](../platform/P4-capabilities.md) (gates, locked card), [F02](F02-onboarding-profile-settings.md) (locales, week start); F08 and F11 reuse the charts |
-| Decisions | D-49, D-50, D-108, D-111, D-112, D-115 to D-119, D-124, D-185, D-284 to D-290, D-295, D-296 |
+| Decisions  | D-49, D-50, D-108, D-111, D-112, D-115 to D-119, D-124, D-185, D-284 to D-290, D-295, D-296                                                                                                                                                                                                    |
 
 ## 1. User stories
 
@@ -33,13 +34,14 @@ Three of them are Daybook Premium: Budget against actual, period over period, an
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
+| In                                                                                                                                                                                                                                                       | Stretch (M8)                         | Out                                                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/analytics` with date range and category filters; 9 charts; bucketing; Premium gating with locked cards; drill-down; PNG export; View as table; ECharts setup, theme and accessibility rules shared with F08 and F11; offline reading of the last range | Weekday-by-hour heat map (D-115, K6) | Custom chart building; chart annotations; comparing arbitrary periods (only the previous period); category-by-month matrix (rejected); forecasting; exporting chart data (reports export CSV, F11) |
 
 ## 3. Concepts and fields
 
 **The filter (D-285).** Root 6.9's `from`, `to` and `cat`, normalized with F03's shared module (BR-F03-33). Other filter fields are ignored on Analytics.
+
 - **Always two dates:** Analytics never means "all time". Its presets are PER-2's without All time: this month, last month, last 3 months, year to date, last 12 months and custom.
 - **The default:** Last 12 months. A URL with neither date is replaced with the default's dates, with no notice.
 - **One date only:** it is dropped with the FIL-5 notice, and the default applies.
@@ -48,28 +50,28 @@ Three of them are Daybook Premium: Budget against actual, period over period, an
 
 **Buckets (D-284).** The spending-over-time and income-vs-expenses charts group by:
 
-| Range length | Bucket | Label example (`dateLocale`) |
-| --- | --- | --- |
-| Up to 31 days | Day | 5 Oct |
-| 32 to 183 days | Week, starting on the profile's week start (D-76) | Week of 5 Oct |
-| More than 183 days | Calendar month | Oct 2026 |
+| Range length       | Bucket                                            | Label example (`dateLocale`) |
+| ------------------ | ------------------------------------------------- | ---------------------------- |
+| Up to 31 days      | Day                                               | 5 Oct                        |
+| 32 to 183 days     | Week, starting on the profile's week start (D-76) | Week of 5 Oct                |
+| More than 183 days | Calendar month                                    | Oct 2026                     |
 
 The first and last buckets are clipped to the range. A week starting before `from` covers only days from `from`, and is labelled with its first in-range day.
 
 **The charts**
 
-| Id | Chart | Type | Plan | Reads |
-| --- | --- | --- | --- | --- |
-| `spendingSeries` | Spending over time | Line, with data zoom | Free | Out per bucket |
-| `categories` | Spending by category | Donut, top 6 plus Other (D-116) | Free | Out per category |
-| `incomeExpenses` | Income vs expenses | Grouped bars | Free | Income and Out per bucket |
-| `budgetActual` | Budget vs actual | Paired bars per category | Premium (`analytics.comparative.view`) | F04 month views |
-| `periodCompare` | This period vs previous | Paired bars per category, plus a change table | Premium (`analytics.comparative.view`) | Out per category, for two periods |
-| `heatmap` | Daily spending calendar | ECharts calendar heat map, one year (D-118) | Premium (`analytics.heatmap.view`) | Out per day |
-| `portfolioValue` | Portfolio value | Line, with trade markers | Free | F07 series |
-| `allocation` | Allocation | Donut, four types | Free | F07 summary at `to` |
-| `goalProgress` | Goal progress | Lines, cumulative | Free | F06 progress by day |
-| `weekdayHour` (Stretch) | Spending by weekday and hour | 7 × 24 heat map | Premium (`analytics.weekdayHour.view`) | Out by local weekday and hour |
+| Id                      | Chart                        | Type                                          | Plan                                   | Reads                             |
+| ----------------------- | ---------------------------- | --------------------------------------------- | -------------------------------------- | --------------------------------- |
+| `spendingSeries`        | Spending over time           | Line, with data zoom                          | Free                                   | Out per bucket                    |
+| `categories`            | Spending by category         | Donut, top 6 plus Other (D-116)               | Free                                   | Out per category                  |
+| `incomeExpenses`        | Income vs expenses           | Grouped bars                                  | Free                                   | Income and Out per bucket         |
+| `budgetActual`          | Budget vs actual             | Paired bars per category                      | Premium (`analytics.comparative.view`) | F04 month views                   |
+| `periodCompare`         | This period vs previous      | Paired bars per category, plus a change table | Premium (`analytics.comparative.view`) | Out per category, for two periods |
+| `heatmap`               | Daily spending calendar      | ECharts calendar heat map, one year (D-118)   | Premium (`analytics.heatmap.view`)     | Out per day                       |
+| `portfolioValue`        | Portfolio value              | Line, with trade markers                      | Free                                   | F07 series                        |
+| `allocation`            | Allocation                   | Donut, four types                             | Free                                   | F07 summary at `to`               |
+| `goalProgress`          | Goal progress                | Lines, cumulative                             | Free                                   | F06 progress by day               |
+| `weekdayHour` (Stretch) | Spending by weekday and hour | 7 × 24 heat map                               | Premium (`analytics.weekdayHour.view`) | Out by local weekday and hour     |
 
 ## 4. Business rules
 
@@ -81,6 +83,7 @@ The first and last buckets are clipped to the range. A week starting before `fro
     - **A whole year:** the heat map covers one calendar year (BR-F09-09).
 
     Their figures equal the list for those spans, not for the filter's dates.
+
 - **BR-F09-03** A category filter applies to every Transaction chart (FIL-6), and the Budget charts keep only those categories. It never applies to the portfolio charts. Goal progress ignores it, since Goal rows have no category.
 
 **Each chart**
@@ -92,6 +95,7 @@ The first and last buckets are clipped to the range. A week starting before `fro
     - zero categories left out, and negative ones clamped to zero with the footnote "Refunds exceeded spending" (D-185).
 
     View as table lists every category, negatives included. A slice opens `/transactions` for the range and that category; Other opens it with every category it groups.
+
 - **BR-F09-06** **Income vs expenses** draws income and Out per bucket as grouped bars, with negative Out below zero. A bar opens that bucket's Transactions with `type=income` or `type=expense,refund`.
 - **BR-F09-07** **Budget vs actual** (D-50, D-286, D-373) covers the calendar months the range touches, up to and including the current month; a 15 Sep to 10 Nov range covers September, October and November. A future month's carried-forward limit is never counted, so Analytics and F11's reports agree.
     - **Per category:** the sum of its limits over the months where it is budgeted, against its spending in those months. Spending in months where it has no Budget is left out, and a note says so: "Transportation had no Budget in September; its spending then is not counted."
@@ -119,6 +123,7 @@ The first and last buckets are clipped to the range. A week starting before `fro
         - **Levels 1 to 4:** level 1 is up to t1, level 2 up to t2, level 3 up to t3, and level 4 is above t3.
 
         The thresholds are the quartiles of the spending days, so a few large days, such as rent, take level 4 without washing out the rest. The legend shows each level's range.
+
     - **Interaction:** the tooltip gives the exact amount; selecting a day opens that day's Transactions.
 - **BR-F09-10** **Portfolio value** and **Allocation** draw F07's series from `from` to the earlier of `to` and today, and its allocation at that date, labelled "Simulated". Their drill-down opens `/investments` with the same `from` and `to` (F07, BR-F07-15). A range that starts after today shows "No portfolio values in this range." and sends no request.
 - **BR-F09-11** **Goal progress** draws each selected Goal's cumulative progress (contributions minus withdrawals, all time up to each day) from `from` to the earlier of `to` and today (D-290). It reads F06's `goalProgressSeries`.
@@ -139,6 +144,7 @@ The first and last buckets are clipped to the range. A week starting before `fro
     - **Print:** `SVGRenderer` only on the print route (D-124).
 
     Option objects are memoized (D-08), charts resize with their container, and each instance is disposed on unmount.
+
 - **BR-F09-15** Two themes, `daybook-light` and `daybook-dark`, are built from the design tokens and registered once. A theme change switches every live chart with ECharts 6's runtime theme switch, without recreating the instance (F02, BR-F02-22).
 - **BR-F09-16** Colors are fixed everywhere:
     - each category its CAT-4 color;
@@ -147,6 +153,7 @@ The first and last buckets are clipped to the range. A week starting before `fro
     - Goals their F06 color.
 
     A category is never recolored by position.
+
 - **BR-F09-17** Tooltips and axes format money with `numberLocale` and the currency (MON-4), and dates with `dateLocale` (F02). Percentages use one decimal (MON-8).
 - **BR-F09-18** Time axes have data zoom: inside zoom always, plus a slider when a chart has more than 60 points. Line series above 1,000 points use LTTB sampling. Animation is off above 2,000 points, on the print route, and when the user prefers reduced motion.
 - **BR-F09-19** Every chart offers two actions:
@@ -168,6 +175,7 @@ Golden ([03-golden-dataset.md](../03-golden-dataset.md)), at the frozen clock:
 **Spending over time, October** (31 days, so daily buckets). Each day equals the golden calendar table: 1 Oct 18,000.00, 4 Oct 2,300.00, 5 Oct 649.00, 7 Oct 4,500.00, 9 Oct −1,500.00 (below zero on the line), 11 Oct 1,800.00, 12 Oct 1,499.00, 14 Oct 2,900.00, 19 Oct 640.00, 31 Oct 380.00. Every other day is 0.00. The sum is 31,168.00.
 
 **Daily spending calendar, 2026.** The year has 17 positive days (7 in September, 9 in October, 1 in November).
+
 - **Thresholds:** by nearest rank, t1 = 649.00 (rank 5), t2 = 1,850.00 (rank 9) and t3 = 3,200.00 (rank 13).
 - **October's levels:**
     - level 4: 1 Oct (18,000.00) and 7 Oct (4,500.00);
@@ -178,25 +186,25 @@ Golden ([03-golden-dataset.md](../03-golden-dataset.md)), at the frozen clock:
 
 **This period vs previous, October against September**
 
-| Category | September | October | Change |
-| --- | --- | --- | --- |
-| housing | 18,000.00 | 18,000.00 | 0.00 (0.0%) |
-| food | 5,050.00 | 6,220.00 | +1,170.00 (+23.2%) |
-| shopping | 2,400.00 | 3,000.00 | +600.00 (+25.0%) |
-| entertainment | 649.00 | 2,148.00 | +1,499.00 (+231.0%) |
-| transportation | 450.00 | 1,800.00 | +1,350.00 (+300.0%) |
-| health | 1,500.00 | 0.00 | −1,500.00 (−100.0%) |
-| **Total** | **28,049.00** | **31,168.00** | **+3,119.00 (+11.1%)** |
+| Category       | September     | October       | Change                 |
+| -------------- | ------------- | ------------- | ---------------------- |
+| housing        | 18,000.00     | 18,000.00     | 0.00 (0.0%)            |
+| food           | 5,050.00      | 6,220.00      | +1,170.00 (+23.2%)     |
+| shopping       | 2,400.00      | 3,000.00      | +600.00 (+25.0%)       |
+| entertainment  | 649.00        | 2,148.00      | +1,499.00 (+231.0%)    |
+| transportation | 450.00        | 1,800.00      | +1,350.00 (+300.0%)    |
+| health         | 1,500.00      | 0.00          | −1,500.00 (−100.0%)    |
+| **Total**      | **28,049.00** | **31,168.00** | **+3,119.00 (+11.1%)** |
 
 **Budget vs actual, September and October** (`from=2026-09-01&to=2026-10-31`)
 
-| Category | Limits (months budgeted) | Spent in those months | Utilization |
-| --- | --- | --- | --- |
-| food | 6,000.00 + 5,000.00 = 11,000.00 | 5,050.00 + 6,220.00 = 11,270.00 | 102.5% |
-| shopping | 3,000.00 + 3,000.00 = 6,000.00 | 2,400.00 + 3,000.00 = 5,400.00 | 90.0% |
-| entertainment | 1,000.00 + 1,000.00 = 2,000.00 | 649.00 + 2,148.00 = 2,797.00 | 139.9% |
-| transportation | 2,000.00 (October only) | 1,800.00 (September's 450.00 not counted) | 90.0% |
-| **Overall** | **21,000.00** | **21,267.00** | **101.3%** |
+| Category       | Limits (months budgeted)        | Spent in those months                     | Utilization |
+| -------------- | ------------------------------- | ----------------------------------------- | ----------- |
+| food           | 6,000.00 + 5,000.00 = 11,000.00 | 5,050.00 + 6,220.00 = 11,270.00           | 102.5%      |
+| shopping       | 3,000.00 + 3,000.00 = 6,000.00  | 2,400.00 + 3,000.00 = 5,400.00            | 90.0%       |
+| entertainment  | 1,000.00 + 1,000.00 = 2,000.00  | 649.00 + 2,148.00 = 2,797.00              | 139.9%      |
+| transportation | 2,000.00 (October only)         | 1,800.00 (September's 450.00 not counted) | 90.0%       |
+| **Overall**    | **21,000.00**                   | **21,267.00**                             | **101.3%**  |
 
 **Income vs expenses, September to October** (61 days, so weekly buckets). Weeks start on Monday for golden. The September and October totals equal the monthly table: income 182,000.00 and spending 59,217.00 across the buckets.
 
@@ -204,15 +212,15 @@ Golden ([03-golden-dataset.md](../03-golden-dataset.md)), at the frozen clock:
 
 **`/analytics`.** The filter bar, the pending note (BR-F09-22), and the charts, each with Save as image and View as table.
 
-| State | What the user sees |
-| --- | --- |
-| Loading | Each chart's reserved skeleton (BR-F09-21) |
-| Empty | Per chart: "No spending in this range.", "No Budgets in these months.", "No active Goals." |
-| Error | Per chart: "This chart could not be loaded." with Retry |
-| Offline (M5) | The last viewed range from cache, with "as of" (root 7.3); other ranges: "You're offline. This range isn't saved on this device." |
-| Pending (M5) | The note above the charts (BR-F09-22) |
-| Locked (Premium) | P4's locked card with a sample picture; no data request (BR-F09-13). Before M4, without the Upgrade button |
-| Read-only | Everything; Analytics has no writes |
+| State            | What the user sees                                                                                                                |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Loading          | Each chart's reserved skeleton (BR-F09-21)                                                                                        |
+| Empty            | Per chart: "No spending in this range.", "No Budgets in these months.", "No active Goals."                                        |
+| Error            | Per chart: "This chart could not be loaded." with Retry                                                                           |
+| Offline (M5)     | The last viewed range from cache, with "as of" (root 7.3); other ranges: "You're offline. This range isn't saved on this device." |
+| Pending (M5)     | The note above the charts (BR-F09-22)                                                                                             |
+| Locked (Premium) | P4's locked card with a sample picture; no data request (BR-F09-13). Before M4, without the Upgrade button                        |
+| Read-only        | Everything; Analytics has no writes                                                                                               |
 
 ## 7. Flows
 
@@ -228,24 +236,24 @@ Golden ([03-golden-dataset.md](../03-golden-dataset.md)), at the frozen clock:
 
 ## 8. Validation and messages
 
-| Situation | Message shown |
-| --- | --- |
-| Invalid filter parameter | Some filters in this link weren't valid and were removed. |
-| Refunds exceed spending in a donut or calendar | Refunds exceeded spending |
-| Budget months without a Budget | Transportation had no Budget in September; its spending then is not counted. |
-| Pending note | 3 changes waiting to sync aren't in these charts yet. |
-| Empty charts | No spending in this range. / No Budgets in these months. / No active Goals. / No portfolio values in this range. |
-| Locked chart | Part of Daybook Premium (P4's locked card) |
-| Load failure | This chart could not be loaded. |
-| No previous data | — (change % when the previous value is 0) |
+| Situation                                      | Message shown                                                                                                    |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Invalid filter parameter                       | Some filters in this link weren't valid and were removed.                                                        |
+| Refunds exceed spending in a donut or calendar | Refunds exceeded spending                                                                                        |
+| Budget months without a Budget                 | Transportation had no Budget in September; its spending then is not counted.                                     |
+| Pending note                                   | 3 changes waiting to sync aren't in these charts yet.                                                            |
+| Empty charts                                   | No spending in this range. / No Budgets in these months. / No active Goals. / No portfolio values in this range. |
+| Locked chart                                   | Part of Daybook Premium (P4's locked card)                                                                       |
+| Load failure                                   | This chart could not be loaded.                                                                                  |
+| No previous data                               | — (change % when the previous value is 0)                                                                        |
 
 ## 9. Plan gating
 
-| Code | Charts | Server refusal | Client shows |
-| --- | --- | --- | --- |
-| `analytics.comparative.view` | Budget vs actual, This period vs previous | 403 `premium_required` on `/api/analytics/budget-actual` and `/api/analytics/period-compare` | The locked card |
-| `analytics.heatmap.view` | Daily spending calendar | 403 `premium_required` on `/api/analytics/heatmap` | The locked card |
-| `analytics.weekdayHour.view` (Stretch) | Weekday and hour | 403 `premium_required` on `/api/analytics/weekday-hour` | The locked card |
+| Code                                   | Charts                                    | Server refusal                                                                               | Client shows    |
+| -------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- | --------------- |
+| `analytics.comparative.view`           | Budget vs actual, This period vs previous | 403 `premium_required` on `/api/analytics/budget-actual` and `/api/analytics/period-compare` | The locked card |
+| `analytics.heatmap.view`               | Daily spending calendar                   | 403 `premium_required` on `/api/analytics/heatmap`                                           | The locked card |
+| `analytics.weekdayHour.view` (Stretch) | Weekday and hour                          | 403 `premium_required` on `/api/analytics/weekday-hour`                                      | The locked card |
 
 ## 10. Offline behavior
 
@@ -255,16 +263,16 @@ Analytics reads only. From M5 (P1), the last viewed range's chart data is persis
 
 Every endpoint is a `GET` read with `from`, `to` and `cat` (unless noted), using F03's filter function. Both dates are required. Each response carries `currency`, and refusals use 400, 401, 403 `profile_required` or 403 `premium_required`.
 
-| Endpoint | Extra input | Output |
-| --- | --- | --- |
-| `/api/analytics/spending-series` | none | `{ bucket: "day" \| "week" \| "month", points: [{ start, end, outMinor }] }` |
-| `/api/analytics/categories` | none | `{ items: [{ category, outMinor }], totalMinor }` |
-| `/api/analytics/income-expenses` | none | `{ bucket, points: [{ start, end, incomeMinor, outMinor }] }` |
-| `/api/analytics/budget-actual` (Premium) | none | `{ months: ["2026-09", "2026-10"], items: [{ category, limitMinor, spentMinor, utilizationTenths, state, unbudgetedMonths }], overall }` |
-| `/api/analytics/period-compare` (Premium) | none | `{ current: { from, to }, previous: { from, to }, items: [{ category, previousMinor, currentMinor, changeMinor, changeTenths }], totals }` |
-| `/api/analytics/heatmap` (Premium) | `year` instead of `from` and `to` | `{ year, days: [{ date, outMinor }], thresholdsMinor: [t1, t2, t3] }` |
-| `/api/analytics/goal-progress` | `goals` (comma list, up to 5); no `cat` | `{ goals: [{ id, name, color, targetMinor, points: [{ date, progressMinor }] }] }` |
-| `/api/analytics/weekday-hour` (Stretch, Premium) | none | `{ cells: [{ weekday, hour, outMinor }] }` |
+| Endpoint                                         | Extra input                             | Output                                                                                                                                     |
+| ------------------------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/api/analytics/spending-series`                 | none                                    | `{ bucket: "day" \| "week" \| "month", points: [{ start, end, outMinor }] }`                                                               |
+| `/api/analytics/categories`                      | none                                    | `{ items: [{ category, outMinor }], totalMinor }`                                                                                          |
+| `/api/analytics/income-expenses`                 | none                                    | `{ bucket, points: [{ start, end, incomeMinor, outMinor }] }`                                                                              |
+| `/api/analytics/budget-actual` (Premium)         | none                                    | `{ months: ["2026-09", "2026-10"], items: [{ category, limitMinor, spentMinor, utilizationTenths, state, unbudgetedMonths }], overall }`   |
+| `/api/analytics/period-compare` (Premium)        | none                                    | `{ current: { from, to }, previous: { from, to }, items: [{ category, previousMinor, currentMinor, changeMinor, changeTenths }], totals }` |
+| `/api/analytics/heatmap` (Premium)               | `year` instead of `from` and `to`       | `{ year, days: [{ date, outMinor }], thresholdsMinor: [t1, t2, t3] }`                                                                      |
+| `/api/analytics/goal-progress`                   | `goals` (comma list, up to 5); no `cat` | `{ goals: [{ id, name, color, targetMinor, points: [{ date, progressMinor }] }] }`                                                         |
+| `/api/analytics/weekday-hour` (Stretch, Premium) | none                                    | `{ cells: [{ weekday, hour, outMinor }] }`                                                                                                 |
 
 The portfolio charts use F07's `/api/investments/series` and `/api/investments/summary`. Goal progress reads F06's `goalProgressSeries`.
 
@@ -316,11 +324,24 @@ Illustrative, `GET /api/analytics/period-compare?from=2026-10-01&to=2026-10-31` 
 
 ```json
 {
-  "current": { "from": "2026-10-01", "to": "2026-10-31" },
-  "previous": { "from": "2026-09-01", "to": "2026-09-30" },
-  "items": [{ "category": "food", "previousMinor": 505000, "currentMinor": 622000, "changeMinor": 117000, "changeTenths": 232 }],
-  "totals": { "previousMinor": 2804900, "currentMinor": 3116800, "changeMinor": 311900, "changeTenths": 111 },
-  "currency": "INR"
+	"current": { "from": "2026-10-01", "to": "2026-10-31" },
+	"previous": { "from": "2026-09-01", "to": "2026-09-30" },
+	"items": [
+		{
+			"category": "food",
+			"previousMinor": 505000,
+			"currentMinor": 622000,
+			"changeMinor": 117000,
+			"changeTenths": 232
+		}
+	],
+	"totals": {
+		"previousMinor": 2804900,
+		"currentMinor": 3116800,
+		"changeMinor": 311900,
+		"changeTenths": 111
+	},
+	"currency": "INR"
 }
 ```
 

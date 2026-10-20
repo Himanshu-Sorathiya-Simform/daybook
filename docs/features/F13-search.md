@@ -6,12 +6,12 @@ One palette, opened with Ctrl or Cmd+K or the header's search button, finds anyt
 
 Scope chips and typed prefixes narrow the search. Results come from the server, under the user's own data rules, with the same matching as the Transactions list's text filter, so "See all" opens a list that agrees with the palette.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M6. Learn results arrive with F14 (M7) |
-| Plan | Free and Premium. Field operators (`amount:>500`) are Stretch (`search.operators`) |
+| Item       | Value                                                                                                                                                                                                                                                                   |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M6. Learn results arrive with F14 (M7)                                                                                                                                                                                                                                  |
+| Plan       | Free and Premium. Field operators (`amount:>500`) are Stretch (`search.operators`)                                                                                                                                                                                      |
 | Depends on | [F03](F03-transactions.md) (search expression, list order, the `q` filter), [F05](F05-subscriptions.md), [F06](F06-goals.md), F14 (Learn, M7), [P1](../platform/P1-offline-and-pwa.md) (offline, the queue), [F02](F02-onboarding-profile-settings.md) (theme, formats) |
-| Decisions | D-47, D-48, D-133 to D-136, D-344 to D-347, D-372, D-385, D-386 |
+| Decisions  | D-47, D-48, D-133 to D-136, D-344 to D-347, D-372, D-385, D-386                                                                                                                                                                                                         |
 
 ## 1. User stories
 
@@ -23,24 +23,25 @@ Scope chips and typed prefixes narrow the search. Results come from the server, 
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
+| In                                                                                                                                                                                                   | Stretch (M8)                                                                    | Out                                                                                                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | The palette, its shortcut and button; scope chips and prefixes; quick actions and navigation; server search over Transactions, Subscriptions, Goals and (from M7) Learn; "See all"; offline behavior | Field operators such as `amount:>500 category:food` (D-136, `search.operators`) | Searching pending changes; fuzzy typo matching beyond substrings; search history; searching Budgets, categories or settings; full-text search of Learn bodies; searching investments |
 
 ## 3. Concepts and fields
 
 **Scopes** (D-136)
 
-| Chip | Prefix | Searches | Results in All | Results when scoped |
-| --- | --- | --- | --- | --- |
-| All | none | Everything below | | |
-| Transactions | `t:` | Payee, description, note; exact amount | 5 | 20 |
-| Subscriptions | `s:` | Name; exact amount | 5 | 20 |
-| Goals | `g:` | Name | 5 | 20 |
-| Learn (from M7) | `l:` (from M7) | Post titles (F14), 3 or more characters | 5 | 20 |
-| Actions | `>` | Quick actions and pages, on the device | 5 | All |
+| Chip            | Prefix         | Searches                                | Results in All | Results when scoped |
+| --------------- | -------------- | --------------------------------------- | -------------- | ------------------- |
+| All             | none           | Everything below                        |                |                     |
+| Transactions    | `t:`           | Payee, description, note; exact amount  | 5              | 20                  |
+| Subscriptions   | `s:`           | Name; exact amount                      | 5              | 20                  |
+| Goals           | `g:`           | Name                                    | 5              | 20                  |
+| Learn (from M7) | `l:` (from M7) | Post titles (F14), 3 or more characters | 5              | 20                  |
+| Actions         | `>`            | Quick actions and pages, on the device  | 5              | All                 |
 
 **Query rules** (root 6.7, D-48, BR-F03-35)
+
 - **Text:** trimmed and NFC-normalized, up to 100 code points, no control characters.
 - **Searching the server:** needs at least 3 characters, unless the query is numeric.
 - **A numeric query:** one the amount field would accept. Under 3 characters, it matches amounts only.
@@ -48,13 +49,13 @@ Scope chips and typed prefixes narrow the search. Results come from the server, 
 
 **Quick actions** (D-134)
 
-| Action | Does | Keywords |
-| --- | --- | --- |
-| Add Transaction | Opens F03's entry dialog | expense, income, spend, new |
-| Add Subscription | Opens F05's create dialog | bill, recurring, new |
-| Add Goal | Opens F06's new Goal flow, which shows the limit message at the Free cap | save, target, new |
-| Go to Dashboard, Transactions, Budgets, Subscriptions, Goals, Investments, Analytics, Insights, Reports, Settings, and Learn (from M7) | Navigates there | each page's name |
-| Switch to dark theme / Switch to light theme | Changes the theme (F02) | theme, dark, light, appearance |
+| Action                                                                                                                                 | Does                                                                     | Keywords                       |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------ |
+| Add Transaction                                                                                                                        | Opens F03's entry dialog                                                 | expense, income, spend, new    |
+| Add Subscription                                                                                                                       | Opens F05's create dialog                                                | bill, recurring, new           |
+| Add Goal                                                                                                                               | Opens F06's new Goal flow, which shows the limit message at the Free cap | save, target, new              |
+| Go to Dashboard, Transactions, Budgets, Subscriptions, Goals, Investments, Analytics, Insights, Reports, Settings, and Learn (from M7) | Navigates there                                                          | each page's name               |
+| Switch to dark theme / Switch to light theme                                                                                           | Changes the theme (F02)                                                  | theme, dark, light, appearance |
 
 ## 4. Business rules
 
@@ -81,6 +82,7 @@ Scope chips and typed prefixes narrow the search. Results come from the server, 
 - **BR-F13-07** **Transactions** (D-47). Exactly the Transactions list's `q` filter (F03, BR-F03-35), through the same function, so its search expression, `coalesce` handling, numeric rule and literal `%`, `_` and `\` are F03's.
 
     Results are in list order, newest first (TIME-3), so the palette's first results are the first rows of the list that "See all" opens: `/transactions?q=<query>`.
+
 - **BR-F13-08** **Subscriptions** (D-372): the predicate is `name ILIKE '%q%'`, with `%`, `_` and `\` escaped, through a trigram index on `name` (`gin_trgm_ops`). A numeric query also matches the amount exactly. Order: not ended first, by name, then ended ones with an "Ended" badge. Opening an ended one shows its dialog, with Resume (F05).
 - **BR-F13-09** **Goals:** `name ILIKE '%q%'`, escaped as above, through a trigram index on `name` (`gin_trgm_ops`). Order: active, then completed, then archived, each by name.
 - **BR-F13-10** **Learn (from M7):** public post titles through F14's `searchLearn`, only for queries of 3 or more characters. It runs after the database groups' transaction has committed, through P2's `afterCommit` option (BR-P2-15), so no connection waits on Sanity. A Sanity failure returns the group empty with `error: true`, shown as "Learn search failed." Until M7 the Learn chip, the `l:` prefix and "Go to Learn" are absent, and no Learn group is returned.
@@ -91,15 +93,16 @@ Scope chips and typed prefixes narrow the search. Results come from the server, 
 
 - **BR-F13-13** Each result shows:
 
-    | Kind | Line | Opens |
-    | --- | --- | --- |
-    | Transaction | Payee (or the Goal's name for Goal rows), the category chip, the day in F02's format, and the signed amount (D-231) | `/transactions?txn=<id>` |
-    | Subscription | Name, cadence and amount, and the next due date | `/subscriptions?open=<id>`, which opens its dialog (F05) |
-    | Goal | Name and progress percent | `/goals/<id>` |
-    | Learn | Title and kind | `/learn/<slug>` |
-    | Action | Its label, with the shortcut where one exists | Runs it |
+    | Kind         | Line                                                                                                                | Opens                                                    |
+    | ------------ | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+    | Transaction  | Payee (or the Goal's name for Goal rows), the category chip, the day in F02's format, and the signed amount (D-231) | `/transactions?txn=<id>`                                 |
+    | Subscription | Name, cadence and amount, and the next due date                                                                     | `/subscriptions?open=<id>`, which opens its dialog (F05) |
+    | Goal         | Name and progress percent                                                                                           | `/goals/<id>`                                            |
+    | Learn        | Title and kind                                                                                                      | `/learn/<slug>`                                          |
+    | Action       | Its label, with the shortcut where one exists                                                                       | Runs it                                                  |
 
     The matched part of a name or payee is highlighted. Text is rendered as text, never as HTML.
+
 - **BR-F13-14** Opening a result closes the palette. A navigation keeps the browser's history, so Back returns to the previous page.
 
 **Offline (D-346)**
@@ -110,29 +113,29 @@ Scope chips and typed prefixes narrow the search. Results come from the server, 
 
 None. Matching and order follow F03's rules. Golden examples ([03-golden-dataset.md](../03-golden-dataset.md)):
 
-| Query | Transactions | Subscriptions | Goals |
-| --- | --- | --- | --- |
-| `swiggy` | #26, #25, #24, #4 (check D's rows, newest first) | none | none |
-| `649` | #16, #5 (exact amount) | Netflix (649.00) | none |
-| `net` | #16, #5 (payee "Netflix") | Netflix | none |
-| `vac` | none: Goal rows have no payee | none | Vacation |
-| `groceries` | #21, #8 (description, check G) | none | none |
-| `gr` | not sent: under 3 characters and not numeric | | |
+| Query       | Transactions                                     | Subscriptions    | Goals    |
+| ----------- | ------------------------------------------------ | ---------------- | -------- |
+| `swiggy`    | #26, #25, #24, #4 (check D's rows, newest first) | none             | none     |
+| `649`       | #16, #5 (exact amount)                           | Netflix (649.00) | none     |
+| `net`       | #16, #5 (payee "Netflix")                        | Netflix          | none     |
+| `vac`       | none: Goal rows have no payee                    | none             | Vacation |
+| `groceries` | #21, #8 (description, check G)                   | none             | none     |
+| `gr`        | not sent: under 3 characters and not numeric     |                  |          |
 
 ## 6. Screens and states
 
 **The palette** (BR-F13-02).
 
-| State | What the user sees |
-| --- | --- |
-| Loading | The previous results stay, with a progress bar under the field |
-| Empty | "No results for “zzq”." per searched group; Actions still filter |
-| Error | "Search failed. Try again." in place of the search groups; Actions work |
-| Offline | BR-F13-15 |
-| Pending | The waiting-to-sync note (BR-F13-12) |
-| Locked (Premium) | n/a |
-| Read-only | n/a |
-| Too short | "Type at least 3 characters to search." |
+| State            | What the user sees                                                      |
+| ---------------- | ----------------------------------------------------------------------- |
+| Loading          | The previous results stay, with a progress bar under the field          |
+| Empty            | "No results for “zzq”." per searched group; Actions still filter        |
+| Error            | "Search failed. Try again." in place of the search groups; Actions work |
+| Offline          | BR-F13-15                                                               |
+| Pending          | The waiting-to-sync note (BR-F13-12)                                    |
+| Locked (Premium) | n/a                                                                     |
+| Read-only        | n/a                                                                     |
+| Too short        | "Type at least 3 characters to search."                                 |
 
 ## 7. Flows
 
@@ -146,17 +149,17 @@ None. Matching and order follow F03's rules. Golden examples ([03-golden-dataset
 
 ## 8. Validation and messages
 
-| Situation | Message shown |
-| --- | --- |
-| Placeholder | Search or type > for actions |
-| Too short | Type at least 3 characters to search. |
-| No results | No results for “zzq”. |
-| Search failed | Search failed. Try again. |
-| Learn search failed | Learn search failed. |
-| Offline | You're offline. Search needs a connection. |
-| Waiting to sync | Changes waiting to sync appear here after they're saved. |
-| See all | See all in Transactions |
-| Results announcement | 7 results |
+| Situation            | Message shown                                            |
+| -------------------- | -------------------------------------------------------- |
+| Placeholder          | Search or type > for actions                             |
+| Too short            | Type at least 3 characters to search.                    |
+| No results           | No results for “zzq”.                                    |
+| Search failed        | Search failed. Try again.                                |
+| Learn search failed  | Learn search failed.                                     |
+| Offline              | You're offline. Search needs a connection.               |
+| Waiting to sync      | Changes waiting to sync appear here after they're saved. |
+| See all              | See all in Transactions                                  |
+| Results announcement | 7 results                                                |
 
 ## 9. Plan gating
 
@@ -168,9 +171,9 @@ BR-F13-15: actions and navigation only. The palette saves nothing, and the searc
 
 ## 11. Server surface
 
-| Endpoint | Method | Input | Output | Errors | Idempotency |
-| --- | --- | --- | --- | --- | --- |
-| `/api/search` | GET | `q` (section 3's rules), `scope` (`all`, `transactions`, `subscriptions`, `goals`, `learn`; default `all`) | `{ q, scope, groups: [{ kind, items, more, error }], currency }` | 400 (`q` too short or invalid, unknown scope), 401, 403 `profile_required` | Read |
+| Endpoint      | Method | Input                                                                                                      | Output                                                           | Errors                                                                     | Idempotency |
+| ------------- | ------ | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------- | ----------- |
+| `/api/search` | GET    | `q` (section 3's rules), `scope` (`all`, `transactions`, `subscriptions`, `goals`, `learn`; default `all`) | `{ q, scope, groups: [{ kind, items, more, error }], currency }` | 400 (`q` too short or invalid, unknown scope), 401, 403 `profile_required` | Read        |
 
 - **Statements:** one read transaction, with one statement per searched database group (at most 3), and from M7 one call to F14's search for Learn.
 - **Indexes:** each group uses its trigram index (`pg_trgm`, D-48). A migration creates the extension and the `gin_trgm_ops` indexes on Subscription and Goal `name`, which `ILIKE` uses. F03 owns the Transactions index.
@@ -214,14 +217,38 @@ Illustrative, `GET /api/search?q=net`:
 
 ```json
 {
-  "q": "net",
-  "scope": "all",
-  "groups": [
-    { "kind": "transaction", "items": [{ "id": "0192…", "payee": "Netflix", "category": "entertainment", "occurredOn": "2026-10-05", "signedAmountMinor": -64900 }], "more": false },
-    { "kind": "subscription", "items": [{ "id": "0192…", "name": "Netflix", "cadence": "monthly", "amountMinor": 64900, "nextDueOn": "2026-11-05" }], "more": false },
-    { "kind": "goal", "items": [], "more": false }
-  ],
-  "currency": "INR"
+	"q": "net",
+	"scope": "all",
+	"groups": [
+		{
+			"kind": "transaction",
+			"items": [
+				{
+					"id": "0192…",
+					"payee": "Netflix",
+					"category": "entertainment",
+					"occurredOn": "2026-10-05",
+					"signedAmountMinor": -64900
+				}
+			],
+			"more": false
+		},
+		{
+			"kind": "subscription",
+			"items": [
+				{
+					"id": "0192…",
+					"name": "Netflix",
+					"cadence": "monthly",
+					"amountMinor": 64900,
+					"nextDueOn": "2026-11-05"
+				}
+			],
+			"more": false
+		},
+		{ "kind": "goal", "items": [], "more": false }
+	],
+	"currency": "INR"
 }
 ```
 

@@ -3,6 +3,7 @@
 18 Oct 2026 · @Himanshu
 
 This spec covers how Daybook is watched, measured and checked:
+
 - **Monitoring:** errors, traces and web vitals go to Sentry with no personal or financial data, and a request id links a browser error to the server request behind it.
 - **Logs:** every API request leaves one structured log line.
 - **Performance:** the budgets of root 11.1 are measured the same way every time, with results recorded before and after each optimization.
@@ -10,12 +11,12 @@ This spec covers how Daybook is watched, measured and checked:
 - **CI:** it runs lint, types, tests, the RLS suite and the build on every push, with SonarQube's quality gate.
 - **Release:** a checklist maps each success criterion of root 15 to the run that proves it.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M0 (Sentry, logs, CI, SonarQube) and M7 (the performance runs, the accessibility pass, the release checklist). Session replay is Stretch (M8) |
-| Plan | n/a; flag `monitoring.sessionReplay` (Stretch) |
+| Item       | Value                                                                                                                                                                                                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M0 (Sentry, logs, CI, SonarQube) and M7 (the performance runs, the accessibility pass, the release checklist). Session replay is Stretch (M8)                                                                                                                                                                             |
+| Plan       | n/a; flag `monitoring.sessionReplay` (Stretch)                                                                                                                                                                                                                                                                            |
 | Depends on | [P2](P2-data-access-and-security.md) (request ids, `Server-Timing`, the error envelope, the CSP, environment validation), [P1](P1-offline-and-pwa.md) (production builds with the worker), [F15](../features/F15-demo-and-seed-data.md) (the stress account), every feature spec's accessibility and performance criteria |
-| Decisions | D-02, D-03, D-59 to D-61, D-63, D-161 to D-166, D-196, D-294, D-354 to D-360, D-379 to D-381, D-386 |
+| Decisions  | D-02, D-03, D-59 to D-61, D-63, D-161 to D-166, D-196, D-294, D-354 to D-360, D-379 to D-381, D-386                                                                                                                                                                                                                       |
 
 ## 1. User stories
 
@@ -27,8 +28,8 @@ This spec covers how Daybook is watched, measured and checked:
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
+| In                                                                                                                                                                                                                                                                                                                        | Stretch (M8)                                                              | Out                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Sentry for browser and server, through the tunnel, with data collection set explicitly, scrubbing, sampling, releases and source maps; request-id linking; structured server logs; the performance runs and their records; the accessibility pass; CI and SonarQube; dependency and secret hygiene; the release checklist | Session replay (`monitoring.sessionReplay`, masking every text and input) | A local Postgres or Docker (D-02, D-03); uptime monitoring and alerting beyond Sentry's defaults; log shipping or a log service; other monitoring vendors; load testing beyond the stress account |
 
 ## 3. Concepts and fields
@@ -36,24 +37,25 @@ This spec covers how Daybook is watched, measured and checked:
 **Sentry environments.** `development` (`next dev`), `production` (a local production build) and `ci`. The release is the build id (`BUILD_ID`). Both values are inlined into the browser bundle at build time, through `NEXT_PUBLIC_SENTRY_ENVIRONMENT` and `NEXT_PUBLIC_BUILD_ID` (root SEC-9).
 
 **The performance run** (D-294, D-357, D-379). One manual GitHub Actions workflow, `perf.yml`, runs everything on one runner:
+
 - the app as a production build, with the service worker;
 - a Postgres service container seeded with the stress account;
 - Chromium for the browser measures and the PDF.
 
-| Part | Measures | Held to |
-| --- | --- | --- |
-| The server measures | Server time per endpoint, and PDF render time | The 300 ms p95 and the 5 s PDF p95. The runner and its database share a machine, which is D-294's "same region" |
-| The browser measures | LCP, CLS, INP and first-load JavaScript | Root 11.1's browser budgets. The page and its server share the machine, so no distance to a remote database is measured |
+| Part                 | Measures                                      | Held to                                                                                                                 |
+| -------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| The server measures  | Server time per endpoint, and PDF render time | The 300 ms p95 and the 5 s PDF p95. The runner and its database share a machine, which is D-294's "same region"         |
+| The browser measures | LCP, CLS, INP and first-load JavaScript       | Root 11.1's browser budgets. The page and its server share the machine, so no distance to a remote database is measured |
 
 Nothing runs Docker or Postgres on the developer machine (D-02, D-03); the service container is GitHub's. Learn reads the real Sanity project, whose project id and dataset are public repository variables.
 
 **Environment variables added by this spec**
 
-| Variable | Purpose | Required at startup |
-| --- | --- | --- |
-| `SENTRY_ENVIRONMENT`, `NEXT_PUBLIC_SENTRY_ENVIRONMENT` | `development`, `production` or `ci`, for the server and the browser | No |
-| `SENTRY_ORG`, `SENTRY_PROJECT` | Source-map upload at build, with `SENTRY_AUTH_TOKEN` (root 13) | No |
-| `NEXT_PUBLIC_BUILD_ID` | The release, in the browser | Yes, set from `BUILD_ID` at build |
+| Variable                                               | Purpose                                                             | Required at startup               |
+| ------------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------- |
+| `SENTRY_ENVIRONMENT`, `NEXT_PUBLIC_SENTRY_ENVIRONMENT` | `development`, `production` or `ci`, for the server and the browser | No                                |
+| `SENTRY_ORG`, `SENTRY_PROJECT`                         | Source-map upload at build, with `SENTRY_AUTH_TOKEN` (root 13)      | No                                |
+| `NEXT_PUBLIC_BUILD_ID`                                 | The release, in the browser                                         | Yes, set from `BUILD_ID` at build |
 
 P2's startup validation (BR-P2-38) treats the Sentry variables, `SANITY_WRITE_TOKEN` and `SANITY_READ_TOKEN` as optional. `ci.yml` sets placeholder values for the required ones it does not use, such as the Sanity project id, and its tests mock the Sanity client. `perf.yml` uses the real Sanity project id and dataset.
 
@@ -76,6 +78,7 @@ P2's startup validation (BR-P2-38) treats the Sentry variables, `SANITY_WRITE_TO
     - **Profiling:** off.
 
     The performance runs do not depend on Sentry's numbers (BR-P3-09).
+
 - **BR-P3-03** **Data collection** (D-380). Version 11's `dataCollection` option is set explicitly on browser and server, never left at its defaults:
     - `userInfo: false`, `cookies: false`;
     - `httpHeaders: { request: { allow: ["user-agent", "x-request-id"] }, response: false }`;
@@ -89,6 +92,7 @@ P2's startup validation (BR-P2-38) treats the Sentry variables, `SANITY_WRITE_TO
     **Spans:** `traceLifecycle` is pinned to `'stream'`, version 11's default, and the `beforeSendSpan` scrubber handles that streamed span shape. AC-P3-12 proves it actually runs.
 
     **The user:** the only user field sent is `{ id }`. The browser sets it after `/api/me` answers, and the server per request (BR-P3-01).
+
 - **BR-P3-04** **Scrubbing** (SEC-12, D-356). One scrubber runs in `beforeSend`, `beforeSendSpan` and `beforeBreadcrumb`, on browser and server, as a second line behind data collection:
     - **URLs:** in every URL it finds (events, spans, breadcrumbs), the path is kept. Query parameters are kept only from an allow-list: `month`, `from`, `to`, `type`, `cat`, `goal`, `goals`, `sub`, `src`, `sort`, `dir`, `range`, `period`, `part`, `year`, `scope`, `kind`, `topic`, `page`, `txn`, `open`, `limit`. Every other value becomes `[Filtered]`. That includes `q`, `min`, `max`, `cursor` (it can encode an amount), `token`, `session_id` and `next`.
     - **Keys:** each key is normalized to lower case without `_`, `-` and spaces. A value is replaced with `[Filtered]` when its normalized key is one of `payee`, `payeename`, `description`, `note`, `email`, `password`, `token`, `q`, `displayname`, `name`, `body`, `before`, `label`, `title` or `message`, or when the key starts with `amount` or ends with `minor`. `label` covers the queue item's label, which holds a payee and an amount (P1).
@@ -118,13 +122,13 @@ P2's startup validation (BR-P2-38) treats the Sentry variables, `SANITY_WRITE_TO
 
 - **BR-P3-09** **Measures:**
 
-    | Measure | Budget | Run | How |
-    | --- | --- | --- | --- |
-    | Server time | p95 under 300 ms per endpoint | Server | `npm run perf:api`: per endpoint, 20 warm-up requests, then 200 sequential requests as the stress user. The p95 of `Server-Timing` `app;dur`, which P2 times from the wrapper's first step to the response, or to the commit for an `afterCommit` route (D-386), so the session, profile and capability steps count. The p95 of `db;dur` is recorded beside it (root 15, criterion 8) |
-    | PDF render | p95 under 5 s (D-357) | Server | `perf:api` also requests the previous month's PDF 20 times, with Chromium warm (F11). Each sample is the wall time from sending the request to receiving the last byte, measured on the runner |
-    | LCP, CLS | 2.5 s or less; 0.1 or less | Browser | Lighthouse's Node API (npm `lighthouse`) with its default mobile emulation, median of 3 runs, on `/dashboard`, `/transactions` and one `/learn/[slug]`, with the worker in control (BR-P3-11). Each sample records its TTFB beside LCP |
-    | INP | 200 ms or less | Browser | Playwright on Chromium with 4× CPU throttling and `web-vitals`, over 5 repetitions of two interactions: applying a category filter on Transactions, and saving a Transaction. The worst value counts |
-    | First-load JavaScript | 200 KB compressed or less | Browser | Playwright, with service workers blocked so every script comes from the network and is counted, loads `/dashboard` and waits until the network has been idle for 2 seconds after `load`. It sums the Resource Timing `encodedBodySize` of every script loaded, except the chunks that the build's loadable manifest lists for the chart wrapper's `next/dynamic` import, which root 11.1 exempts. Lazily loaded widget code therefore counts. Next.js 16's build output no longer reports sizes |
+    | Measure               | Budget                        | Run     | How                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+    | --------------------- | ----------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+    | Server time           | p95 under 300 ms per endpoint | Server  | `npm run perf:api`: per endpoint, 20 warm-up requests, then 200 sequential requests as the stress user. The p95 of `Server-Timing` `app;dur`, which P2 times from the wrapper's first step to the response, or to the commit for an `afterCommit` route (D-386), so the session, profile and capability steps count. The p95 of `db;dur` is recorded beside it (root 15, criterion 8)                                                                                                           |
+    | PDF render            | p95 under 5 s (D-357)         | Server  | `perf:api` also requests the previous month's PDF 20 times, with Chromium warm (F11). Each sample is the wall time from sending the request to receiving the last byte, measured on the runner                                                                                                                                                                                                                                                                                                  |
+    | LCP, CLS              | 2.5 s or less; 0.1 or less    | Browser | Lighthouse's Node API (npm `lighthouse`) with its default mobile emulation, median of 3 runs, on `/dashboard`, `/transactions` and one `/learn/[slug]`, with the worker in control (BR-P3-11). Each sample records its TTFB beside LCP                                                                                                                                                                                                                                                          |
+    | INP                   | 200 ms or less                | Browser | Playwright on Chromium with 4× CPU throttling and `web-vitals`, over 5 repetitions of two interactions: applying a category filter on Transactions, and saving a Transaction. The worst value counts                                                                                                                                                                                                                                                                                            |
+    | First-load JavaScript | 200 KB compressed or less     | Browser | Playwright, with service workers blocked so every script comes from the network and is counted, loads `/dashboard` and waits until the network has been idle for 2 seconds after `load`. It sums the Resource Timing `encodedBodySize` of every script loaded, except the chunks that the build's loadable manifest lists for the chart wrapper's `next/dynamic` import, which root 11.1 exempts. Lazily loaded widget code therefore counts. Next.js 16's build output no longer reports sizes |
 
     `perf:api`'s endpoints:
     - `/api/me`;
@@ -136,6 +140,7 @@ P2's startup validation (BR-P2-38) treats the Sentry variables, `SANITY_WRITE_TO
     - `/api/insights`;
     - `/api/search` with `q=swi`, every scope. Its Learn call runs after the commit and is timed apart as `after;dur` (D-386; F13, AC-F13-10);
     - the monthly report JSON.
+
 - **BR-P3-10** **`perf.yml`** (`workflow_dispatch`), one job:
     1. **Database:** a Postgres service container of the Neon project's major version.
     2. **Environment:** the same block as `ci.yml`'s integration job. That covers the owner and three role URLs pointing at the container, the role passwords, `BETTER_AUTH_SECRET`, `PRINT_TOKEN_SECRET`, a placeholder `sk_test_` key, `BUILD_ID` and `NEXT_PUBLIC_BUILD_ID` from the commit, and `APP_ORIGIN=http://localhost:3000`. Learn's project id and dataset come from repository variables.
@@ -146,6 +151,7 @@ P2's startup validation (BR-P2-38) treats the Sentry variables, `SANITY_WRITE_TO
     7. **Measures:** `perf:api`, then `perf:browser`. The results are uploaded as an artifact.
 
     The stress account lives only in this job's container, so the INP run's saved Transactions need no cleanup. The account has no Stripe Customer, so the lazy billing check never calls Stripe.
+
 - **BR-P3-11** **The browser measures** (`npm run perf:browser`):
     - **The browser:** one Chromium launched by Playwright with a remote-debugging port, which Lighthouse's Node API drives.
     - **The session cookie:** set in that browser for `APP_ORIGIN` only, so it never reaches Sanity or any other origin.
@@ -182,12 +188,14 @@ P2's startup validation (BR-P2-38) treats the Sentry variables, `SANITY_WRITE_TO
     5. **sonar:** SonarQube Cloud's CI-based analysis with the merged `lcov` report. Its quality gate must pass (root 15, criterion 11). It is skipped for pull requests from `dependabot[bot]`, which receive no repository secrets.
 
     Branch protection on `main` requires check, integration, coverage, build and sonar to pass before merging.
+
 - **BR-P3-17** **Coverage** (D-162). 80% of lines on the domain modules, measured on the merged coverage:
     - `shared/**`;
     - `server/**`, except `server/reports/pdf.ts` (it needs Chromium, which `ci.yml` does not install) and `server/db/pools.ts`;
     - `client/queue/**` and `client/persist/**`.
 
     SonarQube's `sonar.coverage.exclusions` lists everything outside these globs, so its gate holds new code to 80% on the same modules.
+
 - **BR-P3-18** **End-to-end tests** run locally against the Neon development database (TST-6), with `npm run test:e2e` on a production build.
     - **Manual tags:** `@stripe` tests need Stripe test keys and the CLI (F12); `@sanity` tests need the seeded Sanity project (F14). Both run by hand before a release.
     - **CSP:** every E2E test fails on a CSP violation in the console.
@@ -209,20 +217,20 @@ P2's startup validation (BR-P2-38) treats the Sentry variables, `SANITY_WRITE_TO
 
 **The release checklist** (root 15):
 
-| Root 15 criterion | Proven by |
-| --- | --- |
-| 1 Agreement | TST-2 invariants on golden; AC-F08-02, AC-F09-02, AC-F11-01 |
-| 2 Time | AC-F03-04 (row 26 counts in November) and AC-F03-32 |
-| 3 Isolation | The RLS suite (TST-1) and `db:verify`, green in CI; and by hand at release, both run against a Neon test branch (TST-6), which checks the role attributes Neon's own roles carry (SEC-6) |
-| 4 Offline, read | AC-P1-12, then by hand: the app installed (AC-P1-23) and opened with the network off |
-| 5 Offline, write | AC-F08-03 and AC-F03-02 (the pending badge and annotation); AC-P1-06 and AC-P1-07 (exactly once); the conflict journey (AC-P1-23) and AC-F03-19; AC-P1-25 (a rejected item with its reason); AC-P1-14 (offline logout) |
-| 6 Premium | AC-F12-13 and AC-F12-15 (`@stripe`, test clock); AC-P4-08 |
-| 7 Reports | AC-F11-01 (matches the screen), AC-F11-02, AC-F11-03, AC-F11-06 and AC-F11-09 |
-| 8 Performance | A passing `perf.yml` run, recorded in `perf/RESULTS.md` with the `db;dur` p95 per endpoint (AC-P3-04) |
-| 9 Accessibility | BR-P3-13 green, and BR-P3-15 recorded, including keyboard-only Transaction entry and search |
-| 10 Security hygiene | AC-P2-17 (no secret in the client bundle), AC-P2-10 (cross-origin and non-JSON mutations), AC-P2-15 (nonce CSP), AC-P2-29 and AC-P4-08 (route handlers called with no proxy in front still refuse) |
-| 11 Quality gates | CI green with the SonarQube gate passed, and AC-P3-10 (a scrubbed test error seen in Sentry) |
-| 12 Install | AC-P1-23 on a production build at localhost |
+| Root 15 criterion   | Proven by                                                                                                                                                                                                              |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 Agreement         | TST-2 invariants on golden; AC-F08-02, AC-F09-02, AC-F11-01                                                                                                                                                            |
+| 2 Time              | AC-F03-04 (row 26 counts in November) and AC-F03-32                                                                                                                                                                    |
+| 3 Isolation         | The RLS suite (TST-1) and `db:verify`, green in CI; and by hand at release, both run against a Neon test branch (TST-6), which checks the role attributes Neon's own roles carry (SEC-6)                               |
+| 4 Offline, read     | AC-P1-12, then by hand: the app installed (AC-P1-23) and opened with the network off                                                                                                                                   |
+| 5 Offline, write    | AC-F08-03 and AC-F03-02 (the pending badge and annotation); AC-P1-06 and AC-P1-07 (exactly once); the conflict journey (AC-P1-23) and AC-F03-19; AC-P1-25 (a rejected item with its reason); AC-P1-14 (offline logout) |
+| 6 Premium           | AC-F12-13 and AC-F12-15 (`@stripe`, test clock); AC-P4-08                                                                                                                                                              |
+| 7 Reports           | AC-F11-01 (matches the screen), AC-F11-02, AC-F11-03, AC-F11-06 and AC-F11-09                                                                                                                                          |
+| 8 Performance       | A passing `perf.yml` run, recorded in `perf/RESULTS.md` with the `db;dur` p95 per endpoint (AC-P3-04)                                                                                                                  |
+| 9 Accessibility     | BR-P3-13 green, and BR-P3-15 recorded, including keyboard-only Transaction entry and search                                                                                                                            |
+| 10 Security hygiene | AC-P2-17 (no secret in the client bundle), AC-P2-10 (cross-origin and non-JSON mutations), AC-P2-15 (nonce CSP), AC-P2-29 and AC-P4-08 (route handlers called with no proxy in front still refuse)                     |
+| 11 Quality gates    | CI green with the SonarQube gate passed, and AC-P3-10 (a scrubbed test error seen in Sentry)                                                                                                                           |
+| 12 Install          | AC-P1-23 on a production build at localhost                                                                                                                                                                            |
 
 **p95.** Nearest rank: for n samples sorted ascending, p95 is the value at rank ⌈0.95 × n⌉. For 200 samples that is the 190th, and for the PDF's 20 samples the 19th.
 
@@ -230,8 +238,8 @@ P2's startup validation (BR-P2-38) treats the Sentry variables, `SANITY_WRITE_TO
 
 None for users. Developers see Sentry's issues and traces, `perf/RESULTS.md`, `docs/a11y-checklist.md`, `docs/release-checklist.md` and CI's checks.
 
-| State | What the user sees |
-| --- | --- |
+| State                                                      | What the user sees         |
+| ---------------------------------------------------------- | -------------------------- |
 | Loading, Empty, Error, Offline, Pending, Locked, Read-only | n/a: no user-facing screen |
 
 ## 7. Flows
@@ -239,6 +247,7 @@ None for users. Developers see Sentry's issues and traces, `perf/RESULTS.md`, `d
 **7.1 Follow an error.** A user's save fails with 500. The toast shows the generic message. Sentry has the browser error tagged `request_id=0192…`, and the server event and log line carry the same id, with the route, the SQLSTATE, and the database time.
 
 **7.2 A performance run.**
+
 1. The developer starts `perf.yml` from GitHub's Actions tab.
 2. The runner seeds the stress account, builds, and runs `perf:api` and `perf:browser`.
 3. `/api/analytics/budget-actual` fails at 340 ms, and the developer adds an index.
@@ -260,11 +269,12 @@ Sentry's offline transport stores events raised offline and sends them on reconn
 
 ## 11. Server surface
 
-| Route | Purpose |
-| --- | --- |
+| Route         | Purpose                                                                                                                                                                                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/monitoring` | Sentry's tunnel (`tunnelRoute`): a Next.js rewrite to Sentry's ingest host for the organization and project its query names. It accepts any project, so it is an open relay to Sentry, not a Daybook endpoint. Browser events reach it without cookies (BR-P3-01). The proxy skips it |
 
 **Scripts:**
+
 - `npm run perf:api`: server time and PDF; run by `perf.yml`.
 - `npm run perf:browser`: LCP, CLS, INP and JavaScript size; run by `perf.yml`, and locally for exploration only.
 - The CI workflows `ci.yml` and `perf.yml`.
@@ -293,6 +303,7 @@ Sentry's offline transport stores events raised offline and sends them on reconn
     - no request body.
 
     Its log line has the same `requestId`.
+
 - **AC-P3-02** (unit) The scrubber:
     - replaces `q`, `min`, `max`, `cursor`, `token` and `next` in a URL, and keeps `month` and `cat`;
     - replaces `payee`, `amountMinor`, `signedAmountMinor`, `displayName`, a queue item's `label` and a nested `body.note`;
@@ -319,7 +330,17 @@ Sentry's offline transport stores events raised offline and sends them on reconn
 Illustrative, a log line:
 
 ```json
-{"time":"2026-11-02T06:30:01.234Z","level":"info","requestId":"0192f0c4-…","method":"GET","route":"/api/dashboard","status":200,"durMs":184,"dbMs":121,"userId":"0192f0c4-…"}
+{
+	"time": "2026-11-02T06:30:01.234Z",
+	"level": "info",
+	"requestId": "0192f0c4-…",
+	"method": "GET",
+	"route": "/api/dashboard",
+	"status": 200,
+	"durMs": 184,
+	"dbMs": 121,
+	"userId": "0192f0c4-…"
+}
 ```
 
 Illustrative, `perf/RESULTS.md` rows:

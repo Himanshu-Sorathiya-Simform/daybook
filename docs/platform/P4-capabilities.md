@@ -4,12 +4,12 @@
 
 One system answers "may this user use this?" for every gated feature. The server decides from two sources: Premium entitlements from Stripe, and feature flags set by the developer. The client receives the answers for display only, and keeps them for offline use. Row ownership is not a capability; RLS enforces it on every query (P2). There are no roles.
 
-| Item | Value |
-| --- | --- |
-| Milestone | M0 (registry, flags, checks, `/api/me`), M4 (Stripe entitlements) |
-| Plan | Free and Premium |
+| Item       | Value                                                                                                                               |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M0 (registry, flags, checks, `/api/me`), M4 (Stripe entitlements)                                                                   |
+| Plan       | Free and Premium                                                                                                                    |
 | Depends on | [P2](P2-data-access-and-security.md), [01-root-spec.md](../01-root-spec.md) section 10; F12 writes the entitlements this spec reads |
-| Decisions | D-18, D-28, D-29, D-119, D-131, D-167, D-198, D-200, D-205 |
+| Decisions  | D-18, D-28, D-29, D-119, D-131, D-167, D-198, D-200, D-205                                                                          |
 
 ## 1. User stories
 
@@ -21,82 +21,82 @@ One system answers "may this user use this?" for every gated feature. The server
 
 ## 2. Scope
 
-| In | Stretch (M8) | Out |
-| --- | --- | --- |
+| In                                                                                                                                                                                                                                                                                   | Stretch (M8)                                             | Out                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | The registry; code naming; the three kinds (premium, flag, limit); resolution order; server checks and refusals; race-safe limit checks; the capabilities block of `/api/me`; client `useCan` and `<Gate>`; the locked card; the per-user override script; Stripe lookup-key mapping | Codes for Stretch features, added when M8 starts (D-200) | Roles; an admin page; a hosted flag service; A/B experiments and analytics; flags that change on a schedule |
 
 ## 3. Concepts and fields
 
 **Kinds**
 
-| Kind | Answers | Decided by |
-| --- | --- | --- |
-| `premium` | Has the user paid for this? | Stripe entitlements |
-| `limit` | How many may the user have? | Stripe entitlements: Premium value with the entitlement, Free value without |
-| `flag` | Is this switched on? | Default, rollout, per-user override, kill switch |
+| Kind      | Answers                     | Decided by                                                                  |
+| --------- | --------------------------- | --------------------------------------------------------------------------- |
+| `premium` | Has the user paid for this? | Stripe entitlements                                                         |
+| `limit`   | How many may the user have? | Stripe entitlements: Premium value with the entitlement, Free value without |
+| `flag`    | Is this switched on?        | Default, rollout, per-user override, kill switch                            |
 
 **Registry entry**
 
-| Field | Meaning | Rules |
-| --- | --- | --- |
-| `code` | The identifier | Lowercase dotted segments, camelCase inside a segment (`analytics.heatmap.view`). Never renamed once shipped |
-| `kind` | `premium`, `limit` or `flag` | |
-| `description` | One line, shown in tooling and logs | |
-| `clientVisible` | Whether `/api/me` includes it | Server-only codes never reach the browser |
-| `enforcedBy` | `server` (default) or `client` | `client` only for flags that switch browser behavior and protect nothing (BR-P4-10) |
-| `default` | Flags: `on` or `off`. Limits: `{ free: n, premium: n or null }`, where null means unlimited | |
-| `rollout` | Flags only: 0 to 100, optional | |
-| `spec` | The owning spec, for example `F06` | |
+| Field           | Meaning                                                                                     | Rules                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `code`          | The identifier                                                                              | Lowercase dotted segments, camelCase inside a segment (`analytics.heatmap.view`). Never renamed once shipped |
+| `kind`          | `premium`, `limit` or `flag`                                                                |                                                                                                              |
+| `description`   | One line, shown in tooling and logs                                                         |                                                                                                              |
+| `clientVisible` | Whether `/api/me` includes it                                                               | Server-only codes never reach the browser                                                                    |
+| `enforcedBy`    | `server` (default) or `client`                                                              | `client` only for flags that switch browser behavior and protect nothing (BR-P4-10)                          |
+| `default`       | Flags: `on` or `off`. Limits: `{ free: n, premium: n or null }`, where null means unlimited |                                                                                                              |
+| `rollout`       | Flags only: 0 to 100, optional                                                              |                                                                                                              |
+| `spec`          | The owning spec, for example `F06`                                                          |                                                                                                              |
 
 **Resolved capability.** One per code, per request.
 
-| Field | Meaning |
-| --- | --- |
-| `allowed` | `true` or `false` (always `true` for limits) |
-| `reason` | `ok`, `premium_required` or `feature_off` |
-| `limit` | Limits only: the number, or `null` for unlimited |
+| Field     | Meaning                                          |
+| --------- | ------------------------------------------------ |
+| `allowed` | `true` or `false` (always `true` for limits)     |
+| `reason`  | `ok`, `premium_required` or `feature_off`        |
+| `limit`   | Limits only: the number, or `null` for unlimited |
 
 **Stored data read by the resolver.** Both are private, system-written tables (P2).
 
-| Data | Written by | Holds |
-| --- | --- | --- |
-| Entitlements | F12's sync (webhook, reconcile, checkout, lazy billing check); F15 seeds (source `seed`) | The user's active Stripe feature lookup keys, source, update time |
-| Capability overrides | The flag script (BR-P4-14) | Per user, per flag code: `on` or `off` |
+| Data                 | Written by                                                                               | Holds                                                             |
+| -------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Entitlements         | F12's sync (webhook, reconcile, checkout, lazy billing check); F15 seeds (source `seed`) | The user's active Stripe feature lookup keys, source, update time |
+| Capability overrides | The flag script (BR-P4-14)                                                               | Per user, per flag code: `on` or `off`                            |
 
 **The codes**
 
-| Code | Kind | Default | Client-visible | Spec |
-| --- | --- | --- | --- | --- |
-| `goals.active.max` | limit | Free 3, Premium unlimited | Yes | F06 |
-| `analytics.heatmap.view` | premium | | Yes | F09 |
-| `analytics.comparative.view` | premium | | Yes | F09 |
-| `reports.quarterly.generate` | premium | | Yes | F11 |
-| `reports.annual.generate` | premium | | Yes | F11 |
-| `offline.writes` | flag, enforced by the client | on | Yes | P1 |
-| `sync.background` | flag, enforced by the client | on | Yes | P1 |
-| `insights.detector.categoryTrend` | flag | on | No | F10 |
-| `insights.detector.budgetThreshold` | flag | on | No | F10 |
-| `insights.detector.savingsRate` | flag | on | No | F10 |
-| `insights.detector.outlier` | flag | on | No | F10 |
-| `insights.detector.renewalsSoon` | flag | on | No | F10 |
-| `insights.detector.savingsRecommendation` | flag | on | No | F10 |
+| Code                                      | Kind                         | Default                   | Client-visible | Spec |
+| ----------------------------------------- | ---------------------------- | ------------------------- | -------------- | ---- |
+| `goals.active.max`                        | limit                        | Free 3, Premium unlimited | Yes            | F06  |
+| `analytics.heatmap.view`                  | premium                      |                           | Yes            | F09  |
+| `analytics.comparative.view`              | premium                      |                           | Yes            | F09  |
+| `reports.quarterly.generate`              | premium                      |                           | Yes            | F11  |
+| `reports.annual.generate`                 | premium                      |                           | Yes            | F11  |
+| `offline.writes`                          | flag, enforced by the client | on                        | Yes            | P1   |
+| `sync.background`                         | flag, enforced by the client | on                        | Yes            | P1   |
+| `insights.detector.categoryTrend`         | flag                         | on                        | No             | F10  |
+| `insights.detector.budgetThreshold`       | flag                         | on                        | No             | F10  |
+| `insights.detector.savingsRate`           | flag                         | on                        | No             | F10  |
+| `insights.detector.outlier`               | flag                         | on                        | No             | F10  |
+| `insights.detector.renewalsSoon`          | flag                         | on                        | No             | F10  |
+| `insights.detector.savingsRecommendation` | flag                         | on                        | No             | F10  |
 
 Codes added when M8 starts (D-200). Until then they do not exist, and the features behind them are not built.
 
-| Code | Kind | Default | Client-visible | Spec |
-| --- | --- | --- | --- | --- |
-| `analytics.weekdayHour.view` | premium | | Yes | F09 |
-| `learn.premium.read` | premium | | Yes | F14 |
-| `learn.tiers` | flag | off | Yes | F14 |
-| `push.notifications` | flag | off | Yes | P1 |
-| `app.badge` | flag | off | Yes | P1 |
-| `search.operators` | flag | off | Yes | F13 |
-| `dashboard.dragAndDrop` | flag | off | Yes | F08 |
-| `transactions.bulkDelete` | flag | off | Yes | F03 |
-| `budgets.monthOverride` | flag | off | Yes | F04 |
-| `account.export` | flag | off | Yes | F01 |
-| `billing.promotionCodes` | flag | off | Yes | F12 |
-| `monitoring.sessionReplay` | flag | off | Yes | P3 |
+| Code                         | Kind    | Default | Client-visible | Spec |
+| ---------------------------- | ------- | ------- | -------------- | ---- |
+| `analytics.weekdayHour.view` | premium |         | Yes            | F09  |
+| `learn.premium.read`         | premium |         | Yes            | F14  |
+| `learn.tiers`                | flag    | off     | Yes            | F14  |
+| `push.notifications`         | flag    | off     | Yes            | P1   |
+| `app.badge`                  | flag    | off     | Yes            | P1   |
+| `search.operators`           | flag    | off     | Yes            | F13  |
+| `dashboard.dragAndDrop`      | flag    | off     | Yes            | F08  |
+| `transactions.bulkDelete`    | flag    | off     | Yes            | F03  |
+| `budgets.monthOverride`      | flag    | off     | Yes            | F04  |
+| `account.export`             | flag    | off     | Yes            | F01  |
+| `billing.promotionCodes`     | flag    | off     | Yes            | F12  |
+| `monitoring.sessionReplay`   | flag    | off     | Yes            | P3   |
 
 ## 4. Business rules
 
@@ -117,6 +117,7 @@ Codes added when M8 starts (D-200). Until then they do not exist, and the featur
     4. **Kill switch:** the environment variable `FLAG_<CODE>` set to `on` or `off`, which beats everything. Dots become underscores and camelCase becomes upper snake case: `offline.writes` → `FLAG_OFFLINE_WRITES`, `dashboard.dragAndDrop` → `FLAG_DASHBOARD_DRAG_AND_DROP`.
 
     A flag that ends `off` resolves `feature_off`.
+
 - **BR-P4-07** Startup validation (P2, BR-P2-38) rejects a `FLAG_` variable whose value is not `on` or `off`, whose code is not in the registry, or whose code is not a flag.
 
 **Enforcement**
@@ -143,6 +144,7 @@ Codes added when M8 starts (D-200). Until then they do not exist, and the featur
     - after any response with `premium_required` or `feature_off`.
 
     It is persisted with the query cache (STATE-3), so offline gating uses the last answer, shown with its "as of" time.
+
 - **BR-P4-13** `useCan(code)` returns one of two shapes: `{ status: 'loading' }` before any answer exists (first load, no persisted copy), or `{ status: 'ready', allowed, reason, limit, asOf }`. While loading, gated UI shows a skeleton and never shows gated content as unlocked. A code missing from the answer resolves as `{ status: 'ready', allowed: false, reason: 'feature_off' }`.
 
 **Tooling and Stripe**
@@ -164,15 +166,16 @@ Worked example from the golden dataset: `golden@daybook.test` is Premium, so `go
 
 There is no screen of its own. Every gated element renders through `<Gate code>`:
 
-| State | Shown |
-| --- | --- |
-| Loading (no answer yet) | The element's skeleton |
-| Allowed | The element |
-| `premium_required` | The locked card |
-| `feature_off` | Nothing, or the `fallback` the element passes |
+| State                               | Shown                                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------------- |
+| Loading (no answer yet)             | The element's skeleton                                                                |
+| Allowed                             | The element                                                                           |
+| `premium_required`                  | The locked card                                                                       |
+| `feature_off`                       | Nothing, or the `fallback` the element passes                                         |
 | Offline, using the persisted answer | As above; the locked card's Upgrade button reads "Connect to upgrade" and is disabled |
 
 **The locked card (D-119)** has five parts:
+
 - the title "Part of Daybook Premium";
 - one line naming the feature, for example "See every day of spending on a calendar heat map.";
 - a static sample picture, never the user's data;
@@ -214,28 +217,28 @@ There is no screen of its own. Every gated element renders through `<Gate code>`
 
 ## 8. Validation and messages
 
-| Situation | Message |
-| --- | --- |
-| 403 `premium_required` on an action | This is part of Daybook Premium. |
-| 403 `premium_required` on a limit | Free includes 3 active Goals. Complete or archive one, or upgrade for unlimited Goals. (Each limit's spec words its own.) |
-| 403 `feature_off` | This feature is switched off right now. |
-| A queued item rejected with `feature_off` | Not saved: this feature was switched off. |
-| Script: unknown code | Unknown capability code: <code>. |
-| Script: premium or limit code | Premium capabilities come from Stripe and cannot be overridden. |
-| Script: user not found | No user with email <email>. |
+| Situation                                 | Message                                                                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 403 `premium_required` on an action       | This is part of Daybook Premium.                                                                                          |
+| 403 `premium_required` on a limit         | Free includes 3 active Goals. Complete or archive one, or upgrade for unlimited Goals. (Each limit's spec words its own.) |
+| 403 `feature_off`                         | This feature is switched off right now.                                                                                   |
+| A queued item rejected with `feature_off` | Not saved: this feature was switched off.                                                                                 |
+| Script: unknown code                      | Unknown capability code: <code>.                                                                                          |
+| Script: premium or limit code             | Premium capabilities come from Stripe and cannot be overridden.                                                           |
+| Script: user not found                    | No user with email <email>.                                                                                               |
 
 ## 9. Plan gating
 
 This spec defines the gating every feature uses. The endpoints that check each code:
 
-| Code | Checked by |
-| --- | --- |
-| `goals.active.max` | Creating a Goal, reopening a completed or archived Goal, choosing the editable Goals after a lapse, and the lock computation on every Goal and Goal-Transaction write (F06) |
-| `analytics.heatmap.view` | The heat-map endpoint (F09) |
-| `analytics.comparative.view` | The budget-vs-actual and period-over-period endpoints (F09) |
-| `reports.quarterly.generate`, `reports.annual.generate` | The report endpoints for those types, including the print route (F11) |
-| `insights.detector.*` | `insightsFor`, which skips switched-off detectors on every request (F10) |
-| `offline.writes`, `sync.background` | Nothing on the server; P1's queue reads them (BR-P4-10) |
+| Code                                                    | Checked by                                                                                                                                                                  |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `goals.active.max`                                      | Creating a Goal, reopening a completed or archived Goal, choosing the editable Goals after a lapse, and the lock computation on every Goal and Goal-Transaction write (F06) |
+| `analytics.heatmap.view`                                | The heat-map endpoint (F09)                                                                                                                                                 |
+| `analytics.comparative.view`                            | The budget-vs-actual and period-over-period endpoints (F09)                                                                                                                 |
+| `reports.quarterly.generate`, `reports.annual.generate` | The report endpoints for those types, including the print route (F11)                                                                                                       |
+| `insights.detector.*`                                   | `insightsFor`, which skips switched-off detectors on every request (F10)                                                                                                    |
+| `offline.writes`, `sync.background`                     | Nothing on the server; P1's queue reads them (BR-P4-10)                                                                                                                     |
 
 ## 10. Offline behavior
 
@@ -243,26 +246,51 @@ The persisted `/api/me` answer drives gating offline, with its "as of" time. A q
 
 ## 11. Server surface
 
-| Endpoint | Method | Output | Errors |
-| --- | --- | --- | --- |
-| `/api/me` | GET | Below | 401 |
+| Endpoint  | Method | Output | Errors |
+| --------- | ------ | ------ | ------ |
+| `/api/me` | GET    | Below  | 401    |
 
 Illustrative `/api/me` response:
 
 ```json
 {
-  "user": { "id": "0192f0c4-...", "email": "golden@daybook.test", "name": "Golden" },
-  "profile": { "country": "IN", "currency": "INR", "timezone": "Asia/Kolkata", "weekStart": "monday", "numberLocale": "hi-IN-u-nu-latn", "dateLocale": "en-IN" },
-  "plan": { "premium": true, "status": "active", "source": "seed", "hasBillingAccount": false, "interval": "year", "price": null, "currentPeriodEnd": null, "endsAt": null, "scheduledInterval": null, "scheduledAt": null, "endedAt": null, "lapseSeenAt": null, "duplicate": false },
-  "goals": { "lockedCount": 0, "needsChoice": false },
-  "capabilities": {
-    "goals.active.max": { "allowed": true, "reason": "ok", "limit": null },
-    "analytics.heatmap.view": { "allowed": true, "reason": "ok" },
-    "reports.quarterly.generate": { "allowed": true, "reason": "ok" },
-    "offline.writes": { "allowed": true, "reason": "ok" }
-  },
-  "resolvedAt": "2026-11-02T06:30:00Z",
-  "buildId": "2026-11-01.3"
+	"user": {
+		"id": "0192f0c4-...",
+		"email": "golden@daybook.test",
+		"name": "Golden"
+	},
+	"profile": {
+		"country": "IN",
+		"currency": "INR",
+		"timezone": "Asia/Kolkata",
+		"weekStart": "monday",
+		"numberLocale": "hi-IN-u-nu-latn",
+		"dateLocale": "en-IN"
+	},
+	"plan": {
+		"premium": true,
+		"status": "active",
+		"source": "seed",
+		"hasBillingAccount": false,
+		"interval": "year",
+		"price": null,
+		"currentPeriodEnd": null,
+		"endsAt": null,
+		"scheduledInterval": null,
+		"scheduledAt": null,
+		"endedAt": null,
+		"lapseSeenAt": null,
+		"duplicate": false
+	},
+	"goals": { "lockedCount": 0, "needsChoice": false },
+	"capabilities": {
+		"goals.active.max": { "allowed": true, "reason": "ok", "limit": null },
+		"analytics.heatmap.view": { "allowed": true, "reason": "ok" },
+		"reports.quarterly.generate": { "allowed": true, "reason": "ok" },
+		"offline.writes": { "allowed": true, "reason": "ok" }
+	},
+	"resolvedAt": "2026-11-02T06:30:00Z",
+	"buildId": "2026-11-01.3"
 }
 ```
 
@@ -270,12 +298,12 @@ Illustrative `/api/me` response:
 
 **Internal functions**
 
-| Function | Use |
-| --- | --- |
-| `resolveCapabilities(ctx, tx)` | Builds the map once per request (BR-P4-03) |
-| `can(ctx, code)` | Boolean check |
-| `assertCan(ctx, code)` | Throws the 403 refusal |
-| `getLimit(ctx, code)` | Returns the limit, or `null` |
+| Function                       | Use                                                      |
+| ------------------------------ | -------------------------------------------------------- |
+| `resolveCapabilities(ctx, tx)` | Builds the map once per request (BR-P4-03)               |
+| `can(ctx, code)`               | Boolean check                                            |
+| `assertCan(ctx, code)`         | Throws the 403 refusal                                   |
+| `getLimit(ctx, code)`          | Returns the limit, or `null`                             |
 | `withLimitLock(tx, ctx, code)` | Takes the advisory lock and returns the current headroom |
 
 ## 12. Cross-feature effects
@@ -316,9 +344,27 @@ Illustrative registry entries:
 
 ```ts
 export const registry = {
-  'analytics.heatmap.view': { kind: 'premium', description: 'Calendar heat map of daily spending', clientVisible: true, spec: 'F09' },
-  'goals.active.max': { kind: 'limit', default: { free: 3, premium: null }, description: 'Active Goals', clientVisible: true, spec: 'F06' },
-  'offline.writes': { kind: 'flag', default: 'on', enforcedBy: 'client', description: 'Queue writes made offline', clientVisible: true, spec: 'P1' },
+	"analytics.heatmap.view": {
+		kind: "premium",
+		description: "Calendar heat map of daily spending",
+		clientVisible: true,
+		spec: "F09",
+	},
+	"goals.active.max": {
+		kind: "limit",
+		default: { free: 3, premium: null },
+		description: "Active Goals",
+		clientVisible: true,
+		spec: "F06",
+	},
+	"offline.writes": {
+		kind: "flag",
+		default: "on",
+		enforcedBy: "client",
+		description: "Queue writes made offline",
+		clientVisible: true,
+		spec: "P1",
+	},
 } as const satisfies Registry;
 
 export type CapabilityCode = keyof typeof registry;
@@ -328,6 +374,6 @@ Illustrative client use:
 
 ```tsx
 <Gate code="analytics.heatmap.view">
-  <SpendingHeatmap month={month} />
+	<SpendingHeatmap month={month} />
 </Gate>
 ```
