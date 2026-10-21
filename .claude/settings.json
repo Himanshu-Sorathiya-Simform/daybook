@@ -63,6 +63,54 @@
 			"Edit(/pnpm-lock.yaml)"
 		]
 	},
+	"hooks": {
+		"PreToolUse": [
+			{
+				"matcher": "Bash",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "node",
+						"args": [
+							"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-bash.mjs"
+						],
+						"timeout": 10,
+						"statusMessage": "Checking command"
+					}
+				]
+			},
+			{
+				"matcher": "Edit|Write",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "node",
+						"args": [
+							"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-files.mjs"
+						],
+						"timeout": 10,
+						"statusMessage": "Checking file"
+					}
+				]
+			}
+		],
+		"PostToolUse": [
+			{
+				"matcher": "Edit|Write",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "node",
+						"args": [
+							"${CLAUDE_PROJECT_DIR}/.claude/hooks/format-file.mjs"
+						],
+						"timeout": 30,
+						"statusMessage": "Formatting"
+					}
+				]
+			}
+		]
+	},
 	"worktree": {
 		"baseRef": "head"
 	}

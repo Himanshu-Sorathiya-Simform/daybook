@@ -28,7 +28,7 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 - `pnpm lint`, `pnpm format:check` (`pnpm format` rewrites files), `pnpm typecheck`
 - `pnpm test:run` (one pass), `pnpm test` (watch)
 - CI runs lint, format:check, typecheck, test:run and build. All five must pass.
-- Prettier decides style (tabs, double quotes, width 85). Run it; don't hand-format.
+- Prettier decides style (tabs, double quotes, width 85). A hook runs it on each file you edit; don't hand-format.
 - `curl`, `wget`, `sudo` and `docker` are blocked. Use the web fetch tool for web pages.
 
 ## Layout
@@ -50,6 +50,7 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 - **No Docker and no local Postgres.** The database is Neon; database tests run in CI on a service container (D-02, D-03).
 - **Database roles are created only by the bootstrap script's SQL**, never in the Neon Console or by a migration (D-14).
 - **Cache Components stay off.** No `use cache`, `cacheLife` or `cacheTag`, and no Cache Components or Partial Prefetching skills. Next plans to make it the default in a later major release.
+- **A hook block is final.** Hooks in `.claude/hooks/` stop disguised git commands, secrets in files, edits to committed migrations and watch-mode tests. Don't look for another way around a block; tell me.
 - **Say why a dependency changes.** Whenever you add, remove or update one, state what it is for and why it is needed.
 - **Public repo, no secrets.** Never read, print or edit `.env*`. List variable names in a committed `.env.example`, which doesn't exist yet. Stripe is test mode only.
 
