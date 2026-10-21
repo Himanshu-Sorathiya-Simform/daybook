@@ -29,6 +29,7 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 - `pnpm test:run` (one pass), `pnpm test` (watch)
 - CI runs lint, format:check, typecheck, test:run and build. All five must pass.
 - Prettier decides style (tabs, double quotes, width 85). Run it; don't hand-format.
+- `curl`, `wget`, `sudo` and `docker` are blocked. Use the web fetch tool for web pages.
 
 ## Layout
 
@@ -49,12 +50,14 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 - **No Docker and no local Postgres.** The database is Neon; database tests run in CI on a service container (D-02, D-03).
 - **Database roles are created only by the bootstrap script's SQL**, never in the Neon Console or by a migration (D-14).
 - **Cache Components stay off.** No `use cache`, `cacheLife` or `cacheTag`, and no Cache Components or Partial Prefetching skills. Next plans to make it the default in a later major release.
+- **Say why a dependency changes.** Whenever you add, remove or update one, state what it is for and why it is needed.
 - **Public repo, no secrets.** Never read, print or edit `.env*`. List variable names in a committed `.env.example`, which doesn't exist yet. Stripe is test mode only.
 
 ## Git
 
 - Run only read-only git commands: status, log, diff, show, branch listing, blame.
 - Never stage, commit, push, switch, merge, rebase, reset, stash or tag. I do all of that.
+- One exception: to test things, you may use the worktree tool (`EnterWorktree`) and work in that separate git worktree. Even there, never commit, push or switch branches.
 - Write a commit message or PR text only when I ask. Don't offer one when work finishes.
 - Commit format: `type: short imperative summary`, with type one of feat, fix, chore, docs, ci, test, refactor. No Co-Authored-By or "Generated with Claude" lines. Branches are `type/kebab-case`.
 
