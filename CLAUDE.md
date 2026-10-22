@@ -62,7 +62,7 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 - Never stage, commit, push, switch, merge, rebase, reset, stash or tag. I do all of that.
 - One exception: to test things, you may use the worktree tool (`EnterWorktree`) and work in that separate git worktree. Even there, never commit, push or switch branches.
 - Write a commit message or PR text only when I ask. Don't offer one when work finishes.
-- Commit format: `type: short imperative summary`, with type one of feat, fix, chore, docs, ci, test, refactor. No Co-Authored-By or "Generated with Claude" lines. Branches are `type/kebab-case`.
+- Commit format: `type: short imperative summary`, with type one of feat, fix, refactor, perf, test, docs, chore, ci, build. No Co-Authored-By or "Generated with Claude" lines. Branches are `type/kebab-case`.
 
 ## How we work
 
