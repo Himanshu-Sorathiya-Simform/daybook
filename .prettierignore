@@ -1,1 +1,8 @@
 pnpm-lock.yaml
+
+# Skills copied from other projects. They stay byte for byte as upstream, and each
+# has a SOURCE.md. Add a line here for every new one.
+.claude/skills/composition-patterns
+.claude/skills/react-best-practices
+.claude/skills/stripe-best-practices
+.claude/skills/web-design-guidelines

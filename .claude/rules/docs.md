@@ -35,8 +35,6 @@ paths:
 
 ## Before saying a docs change is finished
 
-1. Every D-number, BR and AC you cite exists (check with grep).
-2. Every relative link resolves to a file.
-3. Section numbers run in order, and no rule ID appears twice.
-4. `pnpm format:check` passes.
-5. Report what you ran and anything that failed.
+1. Run `pnpm docs:check <files you changed>`. It checks that every cited D-number, rule, BR and AC exists, that relative links and their headings resolve, that section numbers run in order, that no ID is defined twice, decision statuses, the date line, and the style markers above.
+2. Run `pnpm format:check`.
+3. Report what you ran and anything that failed. A finding in a file you did not change may already exist: report it, don't fix it.

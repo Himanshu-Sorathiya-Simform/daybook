@@ -7,6 +7,7 @@
 			"Bash(pnpm typecheck *)",
 			"Bash(pnpm test:run *)",
 			"Bash(pnpm build *)",
+			"Bash(pnpm docs:check *)",
 			"Bash(pnpm dev *)",
 			"Bash(pnpm exec prettier --check *)",
 			"Bash(pnpm exec prettier --write *)",

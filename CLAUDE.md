@@ -27,6 +27,7 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 - `pnpm dev`, `pnpm build`, `pnpm start`
 - `pnpm lint`, `pnpm format:check` (`pnpm format` rewrites files), `pnpm typecheck`
 - `pnpm test:run` (one pass), `pnpm test` (watch)
+- `pnpm docs:check [files]` checks the docs: cited IDs, links, numbering, date line, style.
 - CI runs lint, format:check, typecheck, test:run and build. All five must pass.
 - Prettier decides style (tabs, double quotes, width 85). A hook runs it on each file you edit; don't hand-format.
 - `curl`, `wget`, `sudo` and `docker` are blocked. Use the web fetch tool for web pages.
@@ -52,6 +53,7 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 - **Cache Components stay off.** No `use cache`, `cacheLife` or `cacheTag`, and no Cache Components or Partial Prefetching skills. Next plans to make it the default in a later major release.
 - **A hook block is final.** Hooks in `.claude/hooks/` stop disguised git commands, secrets in files, edits to committed migrations and watch-mode tests. Don't look for another way around a block; tell me.
 - **Say why a dependency changes.** Whenever you add, remove or update one, state what it is for and why it is needed.
+- **Copied skills are advice only.** A skill copied into `.claude/skills/` from another project has a `SOURCE.md` (origin, commit, licence, our changes). Where it disagrees with a spec, a decision or a rule here, ours wins. A new one also needs a line in `.prettierignore`.
 - **Public repo, no secrets.** Never read, print or edit `.env*`. List variable names in a committed `.env.example`, which doesn't exist yet. Stripe is test mode only.
 
 ## Git
@@ -64,11 +66,11 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 
 ## How we work
 
-1. Find the spec first: the feature file, then the root rules it cites. Don't load the rest.
+1. Find the spec first: the feature file, then the root rules it cites. Don't load the rest. For a long spec, ask the `spec-reader` agent for an extract.
 2. Plan before editing anything beyond a small fix, and wait for my yes.
 3. Write tests from the spec's acceptance criteria, then the smallest change that passes.
 4. Run the CI checks. Report exactly what ran and what passed or failed, and say so if something could not run. Never say "done" without that.
-5. For any library, check its installed version's docs or source before using an API you are unsure of. Don't rely on memory; Next 16 here differs from what you were trained on.
+5. For any library, check its installed version's docs or source before using an API you are unsure of. Don't rely on memory; Next 16 here differs from what you were trained on. To check a fact against primary sources, use the `fact-checker` agent.
 
 ## Working with me
 
