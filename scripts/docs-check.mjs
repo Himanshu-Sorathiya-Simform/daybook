@@ -26,21 +26,32 @@ function readLines(text) {
 	});
 }
 
+/** Removes HTML tags, repeating until none is left (`<scr<b>ipt>` hides one). */
+function stripTags(text) {
+	let result = text;
+	let previous;
+
+	do {
+		previous = result;
+		result = result.replaceAll(/<[^<>]+>/g, "");
+	} while (result !== previous);
+
+	return result;
+}
+
 /** GitHub-style anchors for every heading in a file. */
 function headingAnchors(lines) {
 	const anchors = new Set();
 	const seen = new Map();
 
 	for (const { content, code } of lines) {
-		const match = !code && content.match(/^#{1,6}\s+(.+?)\s*#*$/);
+		const match = !code && content.match(/^#{1,6}\s(.+)$/);
 		if (!match) continue;
 
-		const base = match[1]
-			.toLowerCase()
-			.replace(/[`*~]/g, "")
-			.replace(/<[^>]+>/g, "")
-			.replace(/[^\p{L}\p{N}\s_-]/gu, "")
-			.replace(/\s/g, "-");
+		const base = stripTags(match[1].toLowerCase().replaceAll(/[`*~]/g, ""))
+			.replaceAll(/[^\p{L}\p{N}\s_-]/gu, "")
+			.trim()
+			.replaceAll(/\s/g, "-");
 		const count = seen.get(base) ?? 0;
 
 		seen.set(base, count + 1);
@@ -92,11 +103,8 @@ function collectDefinitions(files, parsed, add) {
 		decisionRows.set(row[1], number);
 
 		const status = content.split("|")[3]?.trim() ?? "";
-		if (
-			!DECISION_STATUSES.some((s) =>
-				status.replace(/\u2019/g, "'").startsWith(s),
-			)
-		) {
+		const plainStatus = status.replaceAll("\u2019", "'");
+		if (!DECISION_STATUSES.some((s) => plainStatus.startsWith(s))) {
 			add(
 				"docs/02-decisions.md",
 				number,
@@ -119,42 +127,75 @@ function collectDefinitions(files, parsed, add) {
 
 	return {
 		rootIds,
-		rootCitation: new RegExp(`\\b(?:${prefixes.join("|")})-\\d+\\b`, "g"),
+		rootCitation: new RegExp(String.raw`\b(?:${prefixes.join("|")})-\d+\b`, "g"),
 		decisionRows,
 		specIds,
 	};
 }
 
+const DECISION_CITATION = /\bD-\d+\b/g;
+const RULE_CITATION = /\b((?:BR|AC)-([FP]\d+)-\d+)\b/g;
+
+/** What a line may cite, and how to tell whether each cited ID is defined. */
+function citationRules(file, content, defs) {
+	const isDecisionRow =
+		file === "docs/02-decisions.md" && content.startsWith("| D-");
+
+	return [
+		{
+			pattern: DECISION_CITATION,
+			skip: isDecisionRow,
+			check: "decision-id",
+			isDefined: ([id]) => defs.decisionRows.has(id),
+			problem: "is not in the decisions log",
+		},
+		{
+			pattern: defs.rootCitation,
+			check: "rule-id",
+			isDefined: ([id]) => defs.rootIds.has(id),
+			problem: "is not defined in the root spec",
+		},
+		{
+			pattern: RULE_CITATION,
+			check: "rule-id",
+			isDefined: ([id, , specKey]) => defs.specIds.get(specKey)?.has(id),
+			problem: "is not defined in its spec",
+		},
+	];
+}
+
 /** Every cited decision and rule must be defined. */
 function checkCitations(file, lines, defs, add) {
 	for (const { content, number } of lines) {
-		const isDecisionRow =
-			file === "docs/02-decisions.md" && content.startsWith("| D-");
+		for (const rule of citationRules(file, content, defs)) {
+			if (rule.skip) continue;
 
-		for (const m of content.matchAll(/\bD-\d+\b/g)) {
-			if (!isDecisionRow && !defs.decisionRows.has(m[0])) {
-				add(
-					file,
-					number,
-					"decision-id",
-					`${m[0]} is not in the decisions log`,
-				);
+			for (const match of content.matchAll(rule.pattern)) {
+				if (!rule.isDefined(match))
+					add(file, number, rule.check, `${match[0]} ${rule.problem}`);
 			}
 		}
-		for (const m of content.matchAll(defs.rootCitation)) {
-			if (!defs.rootIds.has(m[0]))
-				add(
-					file,
-					number,
-					"rule-id",
-					`${m[0]} is not defined in the root spec`,
-				);
-		}
-		for (const m of content.matchAll(/\b((?:BR|AC)-([FP]\d+)-\d+)\b/g)) {
-			if (!defs.specIds.get(m[2])?.has(m[1]))
-				add(file, number, "rule-id", `${m[1]} is not defined in its spec`);
-		}
 	}
+}
+
+const LINK = /\[[^[\]]*\]\(([^)\s]+)\)/g;
+const isExternalLink = (target) => /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(target);
+
+/** Why a relative link is broken, or null when it reaches a file and heading. */
+function linkProblem(file, target, parsed) {
+	const [pathPart, anchor] = target.split("#");
+	const resolved =
+		pathPart ? posix.normalize(posix.join(dirname(file), pathPart)) : file;
+
+	if (!parsed.has(resolved)) {
+		return pathPart.endsWith(".md") ?
+				`${target} does not resolve to a file`
+			:	null;
+	}
+	if (anchor && !headingAnchors(parsed.get(resolved)).has(anchor))
+		return `${target} has no such heading`;
+
+	return null;
 }
 
 /** Every relative link must reach a file, and its heading must exist. */
@@ -162,23 +203,12 @@ function checkLinks(file, lines, parsed, add) {
 	for (const { content, number, code } of lines) {
 		if (code) continue;
 
-		for (const m of content
-			.replace(/`[^`]*`/g, "")
-			.matchAll(/!?\[[^\]]*\]\(([^)\s]+)\)/g)) {
-			if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(m[1])) continue;
+		const prose = content.replaceAll(/`[^`]*`/g, "");
+		for (const [, target] of prose.matchAll(LINK)) {
+			if (isExternalLink(target)) continue;
 
-			const [pathPart, anchor] = m[1].split("#");
-			const resolved =
-				pathPart ?
-					posix.normalize(posix.join(dirname(file), pathPart))
-				:	file;
-
-			if (!parsed.has(resolved)) {
-				if (/\.md$/.test(pathPart))
-					add(file, number, "link", `${m[1]} does not resolve to a file`);
-			} else if (anchor && !headingAnchors(parsed.get(resolved)).has(anchor)) {
-				add(file, number, "link", `${m[1]} has no such heading`);
-			}
+			const problem = linkProblem(file, target, parsed);
+			if (problem) add(file, number, "link", problem);
 		}
 	}
 }
@@ -192,7 +222,7 @@ function checkStyle(file, lines, add) {
 
 		const cells = content
 			.split("|")
-			.map((cell) => cell.trim().replace(/`[^`]*`/g, ""));
+			.map((cell) => cell.trim().replaceAll(/`[^`]*`/g, ""));
 		if (cells.some((cell) => / — /.test(cell))) {
 			add(
 				file,
@@ -258,16 +288,43 @@ function checkStructure(file, lines, text, templateSections, add) {
 		);
 }
 
+// Only SKILL.md and agent files are loaded by Claude Code; other files in a
+// skill folder are supporting material and carry no frontmatter.
+const LOADED_FILE = /^\.claude\/(skills\/[^/]+\/SKILL\.md|agents\/[^/]+\.md)$/;
+const FRONTMATTER_KEY = /^([A-Za-z][\w-]*):(.*)$/;
+
+/** Checks each value for unquoted YAML traps and returns the keys it found. */
+function checkFrontmatterValues(file, lines, add) {
+	const keys = new Set();
+
+	for (const { content, number } of lines) {
+		const match = content.match(FRONTMATTER_KEY);
+		if (!match) continue;
+
+		const [, key, rest] = match;
+		const value = rest.trimStart();
+		keys.add(key);
+
+		const quoted = /^["'[{|>&*!%@`]/.test(value);
+		if (value && !quoted && /: | #/.test(value)) {
+			add(
+				file,
+				number,
+				"frontmatter",
+				`quote the value of "${key}": an unquoted ": " or " #" breaks YAML`,
+			);
+		}
+	}
+
+	return keys;
+}
+
 /**
  * Frontmatter of skills, agents and rules. An unquoted value that holds a colon
  * and a space, or a space and a hash, breaks YAML parsers, so it must be quoted.
  */
 function checkFrontmatter(file, lines, add) {
-	// Only SKILL.md and agent files are loaded by Claude Code; other files in a
-	// skill folder are supporting material and carry no frontmatter.
-	const isLoaded = /^\.claude\/(skills\/[^/]+\/SKILL\.md|agents\/[^/]+\.md)$/.test(
-		file,
-	);
+	const isLoaded = LOADED_FILE.test(file);
 
 	if (lines[0]?.content !== "---") {
 		if (isLoaded) {
@@ -294,31 +351,12 @@ function checkFrontmatter(file, lines, add) {
 		return;
 	}
 
-	const keys = new Set();
+	const keys = checkFrontmatterValues(file, lines.slice(1, end), add);
+	if (!isLoaded) return;
 
-	for (const { content, number } of lines.slice(1, end)) {
-		const match = content.match(/^([A-Za-z][\w-]*):\s*(.*)$/);
-		if (!match) continue;
-
-		const [, key, value] = match;
-		keys.add(key);
-
-		const quoted = /^["'[{|>&*!%@`]/.test(value);
-		if (value && !quoted && /: | #/.test(value)) {
-			add(
-				file,
-				number,
-				"frontmatter",
-				`quote the value of "${key}": an unquoted ": " or " #" breaks YAML`,
-			);
-		}
-	}
-
-	if (isLoaded) {
-		for (const key of ["name", "description"]) {
-			if (!keys.has(key))
-				add(file, 1, "frontmatter", `the frontmatter has no "${key}"`);
-		}
+	for (const key of ["name", "description"]) {
+		if (!keys.has(key))
+			add(file, 1, "frontmatter", `the frontmatter has no "${key}"`);
 	}
 }
 
@@ -402,21 +440,24 @@ function main() {
 	);
 	const wanted = process.argv
 		.slice(2)
-		.map((arg) => relative(root, join(root, arg)).split("\\").join("/"));
+		.map((arg) => relative(root, join(root, arg)).replaceAll("\\", "/"));
 	const findings = checkDocs(files).filter(
 		({ file }) => wanted.length === 0 || wanted.includes(file),
 	);
 
 	for (const { file, line, check, message } of findings) {
-		console.log(`${file}${line ? `:${line}` : ""}  [${check}]  ${message}`);
+		const place = line ? `${file}:${line}` : file;
+		console.log(`${place}  [${check}]  ${message}`);
 	}
 
-	console.log(
-		findings.length === 0 ?
-			`docs:check passed (${files.size} files read)`
-		:	`docs:check found ${findings.length} problem${findings.length === 1 ? "" : "s"}`,
-	);
-	process.exit(findings.length === 0 ? 0 : 1);
+	if (findings.length === 0) {
+		console.log(`docs:check passed (${files.size} files read)`);
+		process.exit(0);
+	}
+
+	const noun = findings.length === 1 ? "problem" : "problems";
+	console.log(`docs:check found ${findings.length} ${noun}`);
+	process.exit(1);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)

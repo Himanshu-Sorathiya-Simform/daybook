@@ -35,6 +35,12 @@ function goodDocs() {
 
 const with_ = (path, text) => new Map([...goodDocs(), [path, text]]);
 const checks = (docs) => checkDocs(docs).map(({ check }) => check);
+const specWith = (body) => with_(specPath, spec(body));
+const decisionsWith = (rows) =>
+	with_("docs/02-decisions.md", `# D\n\n${byline}\n\n${rows}`);
+
+const expectFlagged = (docs, check) => expect(checks(docs)).toContain(check);
+const expectClean = (docs) => expect(checks(docs)).toEqual([]);
 
 describe("a clean set of docs", () => {
 	test("passes every check", () => {
@@ -43,30 +49,21 @@ describe("a clean set of docs", () => {
 });
 
 describe("citations", () => {
-	test("flags a decision that is not in the log", () => {
-		expect(checks(with_(specPath, spec("\nSee D-99.\n")))).toContain(
-			"decision-id",
-		);
-	});
-
-	test("flags a root rule that is not defined", () => {
-		expect(checks(with_(specPath, spec("\nSee MON-9.\n")))).toContain("rule-id");
+	test.each([
+		["a decision that is not in the log", "\nSee D-99.\n", "decision-id"],
+		["a root rule that is not defined", "\nSee MON-9.\n", "rule-id"],
+		[
+			"a business rule that its spec does not define",
+			"\nSee BR-F01-09.\n",
+			"rule-id",
+		],
+		["a rule in a spec that does not exist", "\nSee BR-P2-01.\n", "rule-id"],
+	])("flags %s", (_name, body, check) => {
+		expectFlagged(specWith(body), check);
 	});
 
 	test("accepts a root rule that is defined", () => {
-		expect(checks(with_(specPath, spec("\nSee MON-1.\n")))).toEqual([]);
-	});
-
-	test("flags a business rule that its spec does not define", () => {
-		expect(checks(with_(specPath, spec("\nSee BR-F01-09.\n")))).toContain(
-			"rule-id",
-		);
-	});
-
-	test("flags a rule in a spec that does not exist", () => {
-		expect(checks(with_(specPath, spec("\nSee BR-P2-01.\n")))).toContain(
-			"rule-id",
-		);
+		expectClean(specWith("\nSee MON-1.\n"));
 	});
 
 	test("checks CLAUDE.md and rules files too", () => {
@@ -79,150 +76,130 @@ describe("citations", () => {
 });
 
 describe("definitions", () => {
-	test("flags a decision defined twice", () => {
-		const docs = with_(
-			"docs/02-decisions.md",
-			`# D\n\n${byline}\n\n| D-01 | A | Decided | y | z |\n| D-01 | B | Decided | y | z |\n`,
-		);
-
-		expect(checks(docs)).toContain("duplicate-id");
-	});
-
-	test("flags a decision with an unknown status", () => {
-		const docs = with_(
-			"docs/02-decisions.md",
-			`# D\n\n${byline}\n\n| D-01 | A | Maybe | y | z |\n`,
-		);
-
-		expect(checks(docs)).toContain("decision-status");
+	test.each([
+		[
+			"a decision defined twice",
+			decisionsWith(
+				"| D-01 | A | Decided | y | z |\n| D-01 | B | Decided | y | z |\n",
+			),
+			"duplicate-id",
+		],
+		[
+			"a decision with an unknown status",
+			decisionsWith("| D-01 | A | Maybe | y | z |\n"),
+			"decision-status",
+		],
+		[
+			"a business rule defined twice in one spec",
+			specWith("\n- **BR-F01-01** Again.\n"),
+			"duplicate-id",
+		],
+		[
+			"a root rule defined twice",
+			with_(
+				"docs/01-root-spec.md",
+				`# Root\n\n${byline}\n\n## 1. First\n\n- **MON-1** One.\n- **MON-1** Two.\n`,
+			),
+			"duplicate-id",
+		],
+	])("flags %s", (_name, docs, check) => {
+		expectFlagged(docs, check);
 	});
 
 	test("accepts a status with a note after it", () => {
-		const docs = with_(
-			"docs/02-decisions.md",
-			`# D\n\n${byline}\n\n| D-01 | A | Decided (headers Claude's call) | y | z |\n`,
+		expectClean(
+			decisionsWith(
+				"| D-01 | A | Decided (headers Claude's call) | y | z |\n",
+			),
 		);
-
-		expect(checks(docs)).toEqual([]);
-	});
-
-	test("flags a business rule defined twice in one spec", () => {
-		expect(
-			checks(with_(specPath, spec("\n- **BR-F01-01** Again.\n"))),
-		).toContain("duplicate-id");
-	});
-
-	test("flags a root rule defined twice", () => {
-		const docs = with_(
-			"docs/01-root-spec.md",
-			`# Root\n\n${byline}\n\n## 1. First\n\n- **MON-1** One.\n- **MON-1** Two.\n`,
-		);
-
-		expect(checks(docs)).toContain("duplicate-id");
 	});
 });
 
 describe("links", () => {
-	test("flags a link to a missing file", () => {
-		expect(checks(with_(specPath, spec("\n[x](missing.md)\n")))).toContain(
-			"link",
-		);
+	test.each([
+		["a link to a missing file", "\n[x](missing.md)\n"],
+		[
+			"a link to a heading that does not exist",
+			"\n[x](../01-root-spec.md#nope)\n",
+		],
+	])("flags %s", (_name, body) => {
+		expectFlagged(specWith(body), "link");
 	});
 
-	test("flags a link to a heading that does not exist", () => {
-		const docs = with_(specPath, spec("\n[x](../01-root-spec.md#nope)\n"));
-
-		expect(checks(docs)).toContain("link");
-	});
-
-	test("accepts a link to an existing heading", () => {
-		const docs = with_(specPath, spec("\n[x](../01-root-spec.md#1-first)\n"));
-
-		expect(checks(docs)).toEqual([]);
-	});
-
-	test("accepts a same-file anchor", () => {
-		expect(checks(with_(specPath, spec("\n[x](#2-scope)\n")))).toEqual([]);
-	});
-
-	test("ignores web links, code fences and inline code", () => {
-		const body =
-			"\n[a](https://example.com)\n```\n[b](missing.md)\n```\n`[c](missing.md)`\n";
-
-		expect(checks(with_(specPath, spec(body)))).toEqual([]);
+	test.each([
+		["a link to an existing heading", "\n[x](../01-root-spec.md#1-first)\n"],
+		["a same-file anchor", "\n[x](#2-scope)\n"],
+		["a heading with HTML tags", "\n## <b>Bold</b> text\n\n[x](#bold-text)\n"],
+		["a heading with nested HTML tags", "\n## <scr<b>ipt>Hi\n\n[x](#hi)\n"],
+		[
+			"web links, code fences and inline code",
+			"\n[a](https://example.com)\n```\n[b](missing.md)\n```\n`[c](missing.md)`\n",
+		],
+	])("accepts %s", (_name, body) => {
+		expectClean(specWith(body));
 	});
 });
 
 describe("structure", () => {
-	test("flags a bad byline", () => {
-		const docs = with_(
-			specPath,
-			spec().replace(byline, "Oct 16, 2026 · @Himanshu"),
-		);
-
-		expect(checks(docs)).toContain("byline");
-	});
-
-	test("flags sections out of order", () => {
-		const docs = with_(specPath, spec().replace("## 2. Scope", "## 3. Scope"));
-
-		expect(checks(docs)).toContain("section-number");
-	});
-
-	test("flags a spec whose sections differ from the template", () => {
-		const docs = with_(
-			specPath,
-			spec().replace("## 2. Scope", "## 2. Something else"),
-		);
-
-		expect(checks(docs)).toContain("template-sections");
-	});
-
-	test("flags a leftover template comment", () => {
-		expect(checks(with_(specPath, spec("\n<!-- how to -->\n")))).toContain(
+	test.each([
+		[
+			"a bad byline",
+			with_(specPath, spec().replace(byline, "Oct 16, 2026 · @Himanshu")),
+			"byline",
+		],
+		[
+			"sections out of order",
+			with_(specPath, spec().replace("## 2. Scope", "## 3. Scope")),
+			"section-number",
+		],
+		[
+			"a spec whose sections differ from the template",
+			with_(specPath, spec().replace("## 2. Scope", "## 2. Something else")),
+			"template-sections",
+		],
+		[
+			"a leftover template comment",
+			specWith("\n<!-- how to -->\n"),
 			"template-comment",
-		);
+		],
+	])("flags %s", (_name, docs, check) => {
+		expectFlagged(docs, check);
 	});
 });
 
 describe("style", () => {
-	test("flags an em dash in prose", () => {
-		expect(checks(with_(specPath, spec("\nA thing — and more.\n")))).toContain(
-			"em-dash",
-		);
-	});
-
-	test("allows the dash as a table value, alone or with a note", () => {
-		const body = "\n| A | B |\n| -- | -- |\n| x | — |\n| y | — (no income) |\n";
-
-		expect(checks(with_(specPath, spec(body)))).toEqual([]);
-	});
-
-	test("ignores an em dash in code", () => {
-		expect(checks(with_(specPath, spec("\nShows `a — b`.\n")))).toEqual([]);
-	});
-
-	test("flags a marker for an open item in a spec", () => {
-		expect(checks(with_(specPath, spec("\nTBD: pick one.\n")))).toContain(
+	test.each([
+		["an em dash in prose", "\nA thing — and more.\n", "em-dash"],
+		[
+			"a marker for an open item in a spec",
+			"\nTBD: pick one.\n",
 			"open-question",
-		);
-	});
-
-	test("flags an open questions heading in a spec", () => {
-		expect(checks(with_(specPath, spec("\n### Open questions\n")))).toContain(
+		],
+		[
+			"an open questions heading in a spec",
+			"\n### Open questions\n",
 			"open-question",
-		);
+		],
+	])("flags %s", (_name, body, check) => {
+		expectFlagged(specWith(body), check);
 	});
 
-	test("lets ordinary prose and the rule itself through", () => {
-		const body =
-			"\nEach chart uses a predicate to decide whether it renders.\nNo open questions live in specs.\n";
-
-		expect(checks(with_(specPath, spec(body)))).toEqual([]);
+	test.each([
+		[
+			"the dash as a table value, alone or with a note",
+			"\n| A | B |\n| -- | -- |\n| x | — |\n| y | — (no income) |\n",
+		],
+		["an em dash in code", "\nShows `a — b`.\n"],
+		[
+			"ordinary prose and the rule itself",
+			"\nEach chart uses a predicate to decide whether it renders.\nNo open questions live in specs.\n",
+		],
+	])("allows %s", (_name, body) => {
+		expectClean(specWith(body));
 	});
 
 	test("does not check the style of other files", () => {
-		expect(checks(with_("CLAUDE.md", "# P\n\nA — B and TBD.\n"))).toEqual([]);
+		expectClean(with_("CLAUDE.md", "# P\n\nA — B and TBD.\n"));
 	});
 });
 
@@ -231,12 +208,21 @@ describe("frontmatter of skills, agents and rules", () => {
 	const withSkill = (frontmatter) =>
 		with_(skill, `---\n${frontmatter}\n---\n\n# Demo\n`);
 
-	test("accepts quoted values and plain values without a colon", () => {
-		const docs = withSkill(
-			'name: demo\ndescription: "Does a thing: well. Use it # always"\nargument-hint: "[x]"',
-		);
+	test.each([
+		[
+			"an unquoted value with a space and a hash",
+			"name: demo\ndescription: Does a thing # well",
+		],
+		["a skill with no description", "name: demo"],
+	])("flags %s", (_name, frontmatter) => {
+		expectFlagged(withSkill(frontmatter), "frontmatter");
+	});
 
-		expect(checks(docs)).toEqual([]);
+	test.each([
+		["a skill with no frontmatter", "# Demo\n"],
+		["a block that is never closed", "---\nname: demo\n# Demo\n"],
+	])("flags %s", (_name, text) => {
+		expectFlagged(with_(skill, text), "frontmatter");
 	});
 
 	test("flags an unquoted value with a colon and a space", () => {
@@ -247,48 +233,34 @@ describe("frontmatter of skills, agents and rules", () => {
 		);
 	});
 
-	test("flags an unquoted value with a space and a hash", () => {
-		const docs = withSkill("name: demo\ndescription: Does a thing # well");
-
-		expect(checks(docs)).toContain("frontmatter");
+	test.each([
+		[
+			"quoted values and plain values without a colon",
+			withSkill(
+				'name: demo\ndescription: "Does a thing: well. Use it # always"\nargument-hint: "[x]"',
+			),
+		],
+		[
+			"a colon without a space after it",
+			withSkill("name: demo\ndescription: See docs/a:b for it"),
+		],
+	])("accepts %s", (_name, docs) => {
+		expectClean(docs);
 	});
 
-	test("accepts a colon without a space after it", () => {
-		const docs = withSkill("name: demo\ndescription: See docs/a:b for it");
-
-		expect(checks(docs)).toEqual([]);
-	});
-
-	test("flags a skill with no description", () => {
-		expect(checks(withSkill("name: demo"))).toContain("frontmatter");
-	});
-
-	test("flags a skill with no frontmatter", () => {
-		expect(checks(with_(skill, "# Demo\n"))).toContain("frontmatter");
-	});
-
-	test("flags a block that is never closed", () => {
-		expect(checks(with_(skill, "---\nname: demo\n# Demo\n"))).toContain(
-			"frontmatter",
-		);
-	});
-
-	test("does not require frontmatter in a supporting file of a skill", () => {
-		const docs = with_(
+	test.each([
+		[
+			"does not require frontmatter in a supporting file of a skill",
 			".claude/skills/demo/checklist.md",
 			"# Checklist\n\n- A\n",
-		);
-
-		expect(checks(docs)).toEqual([]);
-	});
-
-	test("does not require name or description in a rule file", () => {
-		const docs = with_(
+		],
+		[
+			"does not require name or description in a rule file",
 			".claude/rules/demo.md",
 			'---\npaths:\n    - "docs/**"\n---\n\n# Rule\n',
-		);
-
-		expect(checks(docs)).toEqual([]);
+		],
+	])("%s", (_name, path, text) => {
+		expectClean(with_(path, text));
 	});
 });
 
@@ -296,17 +268,16 @@ describe("skills copied from another project", () => {
 	const folder = ".claude/skills/copied";
 	const broken =
 		"---\nname: copied\ndescription: Not quoted: breaks\n---\n\n[x](nope.md) D-99\n";
+	const copiedDocs = () => with_(`${folder}/SKILL.md`, broken);
 
 	test("are checked when the folder has no SOURCE.md", () => {
-		const docs = with_(`${folder}/SKILL.md`, broken);
-
-		expect(checks(docs)).toEqual(
+		expect(checks(copiedDocs())).toEqual(
 			expect.arrayContaining(["frontmatter", "link", "decision-id"]),
 		);
 	});
 
 	test("are skipped when the folder has a SOURCE.md", () => {
-		const docs = with_(`${folder}/SKILL.md`, broken);
+		const docs = copiedDocs();
 		docs.set(`${folder}/rules/a.md`, "[x](nope.md) D-99\n");
 		docs.set(`${folder}/SOURCE.md`, "# Source: copied\n");
 
@@ -314,7 +285,7 @@ describe("skills copied from another project", () => {
 	});
 
 	test("still check the SOURCE.md itself", () => {
-		const docs = with_(`${folder}/SKILL.md`, broken);
+		const docs = copiedDocs();
 		docs.set(`${folder}/SOURCE.md`, "# Source: copied\n\nSee D-99.\n");
 
 		expect(checkDocs(docs)).toContainEqual(
@@ -326,10 +297,10 @@ describe("skills copied from another project", () => {
 	});
 
 	test("do not exempt a skill folder that has no SOURCE.md", () => {
-		const docs = with_(`${folder}/SKILL.md`, broken);
+		const docs = copiedDocs();
 		docs.set(".claude/skills/other/SOURCE.md", "# Source: other\n");
 
-		expect(checks(docs)).toContain("link");
+		expectFlagged(docs, "link");
 	});
 });
 
