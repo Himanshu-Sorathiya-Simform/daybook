@@ -1,0 +1,67 @@
+/* Radius, elevation, easing, layout, motion and focus. Spacing keeps Tailwind's default 4px step
+   (p-1 = 4px); the design's 2px steps are p-0.5, p-1.5, p-2.5 and p-3.5 (D-387). */
+
+@theme {
+	/* Radii step up with size so nested shapes look concentric */
+	--radius-kbd: 5px;
+	--radius-bar: 4px;
+	--radius-chip: 12px; /* badges, pending chips (pill at their height) */
+	--radius-control: 10px; /* buttons, inputs, nav items, month arrows */
+	--radius-section: 14px; /* framed sections */
+	--radius-card: 16px; /* Premium card, dialogs, sheets */
+
+	/* Motion curve: only in response to an action */
+	--ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* Elevation: sections never float. Only overlays get a shadow, always with a 1px --line border.
+   The values are plain variables so the dark values switch under .dark; the inline theme makes
+   shadow-popover and shadow-dialog read them live. */
+:root {
+	--elevation-popover: 0 8px 24px rgba(16, 24, 40, 0.12);
+	--elevation-dialog: 0 24px 48px rgba(16, 24, 40, 0.18);
+}
+
+.dark {
+	--elevation-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
+	--elevation-dialog: 0 24px 48px rgba(0, 0, 0, 0.55);
+}
+
+@theme inline {
+	--shadow-popover: var(--elevation-popover);
+	--shadow-dialog: var(--elevation-dialog);
+}
+
+:root {
+	/* Layout */
+	--sidebar-width: 232px;
+	--rail-width: 64px;
+	--header-height: 64px;
+	--bottom-bar-height: 64px;
+	--gutter: 32px; /* desktop content padding */
+	--gutter-phone: 16px;
+	--content-max: 2000px;
+	--target-min: 44px; /* touch targets on phones */
+
+	/* Motion durations. Read them with duration-(--dur-fast). */
+	--dur-fast: 120ms; /* hover, press */
+	--dur-base: 200ms; /* popovers, sheets */
+	--dur-layout: 260ms; /* dashboard reorder: position and size together */
+
+	/* Focus: 2px ring, 2px offset, accent colour, on every interactive element */
+	--focus-ring: 2px solid var(--focus);
+	--focus-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--dur-fast: 0ms;
+		--dur-base: 0ms;
+		--dur-layout: 0ms;
+	}
+}
+
+@utility focus-ring {
+	outline: var(--focus-ring);
+	outline-offset: var(--focus-offset);
+}

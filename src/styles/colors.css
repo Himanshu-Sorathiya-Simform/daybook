@@ -1,0 +1,97 @@
+/* Daybook colour tokens. Light is :root; dark applies with the .dark class on <html>, which
+   next-themes sets with attribute="class" (BR-F02-21). Every text pair meets 4.5:1; marks, input
+   borders and focus rings meet 3:1 (WCAG 2.2 AA). The @theme inline block at the end turns each
+   token into Tailwind classes (bg-page, text-ink-2, border-line). */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+	/* Surfaces */
+	--page: #ffffff; /* the one page surface; sections sit on it */
+	--section: #ffffff; /* framed section background */
+	--soft: #f3f5f9; /* Premium card, avatars, segmented controls, hover */
+	--track: #eceef2; /* empty part of bars; carries no information */
+	--scrim: rgba(26, 29, 35, 0.45);
+
+	/* Lines */
+	--line: #e1e4e9; /* section frames, header and sidebar edges */
+	--line-strong: #9aa0aa; /* totals rules, outlined small buttons */
+	--edge: #8a909c; /* input and control boundaries, 3.3:1 on white */
+
+	/* Ink */
+	--ink: #1a1d23; /* 16.5:1 */
+	--ink-2: #4f5664; /* labels, secondary text, 7.5:1 */
+	--ink-3: #5f6673; /* captions, axis labels, 5.9:1 */
+
+	/* Action */
+	--accent: #2f4fa8; /* lapis: everything you can do, To Goals, today */
+	--accent-hover: #263f8a;
+	--accent-soft: #e9eefa; /* selected rows, active nav fill alt */
+	--on-accent: #ffffff;
+	--focus: #2f4fa8;
+
+	/* Meaning */
+	--bar: #5c6880; /* neutral data marks (daily strip, budget fill) */
+	--neg: #b42318; /* below zero, over budget, Not saved */
+	--neg-soft: #fbe9e7;
+	--pos: #1e7a4c; /* money becoming free: income, refunds, From Goals */
+	--warn: #8a5a00; /* near limit; text only */
+	--pending: #4f5664; /* pending annotations: dashed outline + ink-2 */
+}
+
+.dark {
+	--page: #15171c;
+	--section: #15171c;
+	--soft: #1e2128;
+	--track: #262a33;
+	--scrim: rgba(0, 0, 0, 0.6);
+
+	--line: #2e323b;
+	--line-strong: #4a505c;
+	--edge: #6b7280;
+
+	--ink: #eceef2;
+	--ink-2: #a9afbb;
+	--ink-3: #8d94a1;
+
+	--accent: #9cb4f7;
+	--accent-hover: #b6c8fa;
+	--accent-soft: #1f2740;
+	--on-accent: #0f1424;
+	--focus: #9cb4f7;
+
+	--bar: #9aa6bf;
+	--neg: #ff8a7a;
+	--neg-soft: #3a1f1d;
+	--pos: #7fd3a8;
+	--warn: #f0b85a;
+	--pending: #a9afbb;
+
+	color-scheme: dark;
+}
+
+/* Inline, so each class reads the live variable and one class works in light and dark. */
+@theme inline {
+	--color-page: var(--page);
+	--color-section: var(--section);
+	--color-soft: var(--soft);
+	--color-track: var(--track);
+	--color-scrim: var(--scrim);
+	--color-line: var(--line);
+	--color-line-strong: var(--line-strong);
+	--color-edge: var(--edge);
+	--color-ink: var(--ink);
+	--color-ink-2: var(--ink-2);
+	--color-ink-3: var(--ink-3);
+	--color-accent: var(--accent);
+	--color-accent-hover: var(--accent-hover);
+	--color-accent-soft: var(--accent-soft);
+	--color-on-accent: var(--on-accent);
+	--color-focus: var(--focus);
+	--color-bar: var(--bar);
+	--color-neg: var(--neg);
+	--color-neg-soft: var(--neg-soft);
+	--color-pos: var(--pos);
+	--color-warn: var(--warn);
+	--color-pending: var(--pending);
+}

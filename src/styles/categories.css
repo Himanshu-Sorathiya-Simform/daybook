@@ -1,0 +1,78 @@
+/* The 20 fixed categories. One colour per category, used the same way in every chart, row and
+   filter. Light values are at least 4.1:1 on white; dark values at least 8.5:1 on #15171c.
+   Colour is never the only signal: every use pairs it with the category icon or label, and
+   charts add ECharts decals.
+   Icons (lucide): food utensils · shopping shopping-bag · transportation car · utilities zap ·
+   entertainment clapperboard · housing house · health heart-pulse · education graduation-cap ·
+   travel plane · insurance shield-check · personal_care scissors · gifts_donations gift ·
+   fees_taxes receipt · loans landmark · other circle-dashed · salary briefcase · freelance
+   laptop · investments sprout · gifts hand-heart · other_income circle-plus */
+
+:root {
+	--cat-food: #b35629;
+	--cat-shopping: #b04e77;
+	--cat-transportation: #008c83;
+	--cat-utilities: #a76200;
+	--cat-entertainment: #8a5cb1;
+	--cat-housing: #4373c3;
+	--cat-health: #b64e53;
+	--cat-education: #0087a2;
+	--cat-travel: #008c5f;
+	--cat-insurance: #007eb8;
+	--cat-personal-care: #a15397;
+	--cat-gifts-donations: #717d00;
+	--cat-fees-taxes: #917000;
+	--cat-loans: #6c67c0;
+	--cat-other: #6c7680;
+	--cat-salary: #278a47;
+	--cat-freelance: #628110;
+	--cat-investments: #008a93;
+	--cat-gifts: #9f549a;
+	--cat-other-income: #7e7265;
+}
+
+.dark {
+	--cat-food: #f59f7a;
+	--cat-shopping: #f298ba;
+	--cat-transportation: #4acfc5;
+	--cat-utilities: #e8a962;
+	--cat-entertainment: #cca3f0;
+	--cat-housing: #8cb8ff;
+	--cat-health: #f89999;
+	--cat-education: #4acbe2;
+	--cat-travel: #69cfa4;
+	--cat-insurance: #67c3f7;
+	--cat-personal-care: #e39cd8;
+	--cat-gifts-donations: #b4c167;
+	--cat-fees-taxes: #d2b55b;
+	--cat-loans: #aeadff;
+	--cat-other: #aeb9c4;
+	--cat-salary: #7fcc90;
+	--cat-freelance: #a7c470;
+	--cat-investments: #45cdd4;
+	--cat-gifts: #e19cda;
+	--cat-other-income: #c2b5a7;
+}
+
+@theme inline {
+	--color-cat-food: var(--cat-food);
+	--color-cat-shopping: var(--cat-shopping);
+	--color-cat-transportation: var(--cat-transportation);
+	--color-cat-utilities: var(--cat-utilities);
+	--color-cat-entertainment: var(--cat-entertainment);
+	--color-cat-housing: var(--cat-housing);
+	--color-cat-health: var(--cat-health);
+	--color-cat-education: var(--cat-education);
+	--color-cat-travel: var(--cat-travel);
+	--color-cat-insurance: var(--cat-insurance);
+	--color-cat-personal-care: var(--cat-personal-care);
+	--color-cat-gifts-donations: var(--cat-gifts-donations);
+	--color-cat-fees-taxes: var(--cat-fees-taxes);
+	--color-cat-loans: var(--cat-loans);
+	--color-cat-other: var(--cat-other);
+	--color-cat-salary: var(--cat-salary);
+	--color-cat-freelance: var(--cat-freelance);
+	--color-cat-investments: var(--cat-investments);
+	--color-cat-gifts: var(--cat-gifts);
+	--color-cat-other-income: var(--cat-other-income);
+}
