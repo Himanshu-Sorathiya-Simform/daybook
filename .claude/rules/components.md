@@ -22,6 +22,15 @@ paths:
 - Keep the focus ring from `base.css`. Meaning is never carried by colour alone: pair it with text, an icon or a dashed outline.
 - Touch targets are at least `--target-min` (44px) on phones.
 
+## Class names
+
+- Every component takes a `className` for its root element, and no `style` prop. Callers add layout through `className` (a grid, `flex-1`, a margin, a height).
+- Merge with `cn` from `@/lib/cn`, the component's own classes first and the caller's last, so the caller wins any conflict: `cn("inline-flex h-9.5", className)`. Never join class strings by hand.
+- A caller who needs something the base styles forbid (a different colour, no left padding) is a missing variant or prop. Add it to the component instead of overriding it from outside.
+- Style states with the variants from `tailwindcss-react-aria-components`: `pressed:`, `selected:`, `hover:`, `focus-visible:`, `disabled:`, `invalid:`. They match React Aria's data attributes on its parts and the usual pseudo-classes on plain elements. Don't write `data-[pressed]:` by hand.
+- A new `--text-*`, `--radius-*` or `--shadow-*` name in `src/styles/` goes into the theme lists in `src/lib/cn.ts`. Its test fails until it does.
+- A part whose `className` may be a function of its state keeps that working. Read the types of `composeRenderProps` before writing one.
+
 ## Types
 
 - Props extend the React Aria props type of the part they wrap, and add only what Daybook needs.
