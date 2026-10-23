@@ -1,0 +1,31 @@
+/* Base styles. They sit in the base layer, after Tailwind's reset, so utility classes always win.
+   The page font comes from --font-sans through Tailwind's reset. */
+
+@layer base {
+	html {
+		background: var(--page);
+		color: var(--ink);
+		-webkit-font-smoothing: antialiased;
+	}
+
+	body {
+		@apply text-body;
+	}
+
+	a {
+		color: var(--accent);
+		text-decoration: none;
+		font-weight: 600;
+	}
+
+	a:hover {
+		color: var(--accent-hover);
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+
+	:focus-visible {
+		outline: var(--focus-ring);
+		outline-offset: var(--focus-offset);
+	}
+}

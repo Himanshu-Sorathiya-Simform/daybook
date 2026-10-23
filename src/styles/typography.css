@@ -1,0 +1,77 @@
+/* Hanken Grotesk (SIL OFL 1.1), a variable font loaded by next/font/google in app/layout.tsx, which
+   declares --font-hanken on <html> (D-388). The type scale lives only here, as Tailwind --text-*
+   values, so text-title, text-body and the rest set size, line height, weight and tracking
+   together. No other file may declare a --text-* variable. Every amount uses tabular figures (the
+   figures class). */
+
+@theme inline {
+	--font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+}
+
+@theme {
+	/* The month's hero figure; the currency sign and minor units use readout-unit in ink-2 */
+	--text-readout: 60px;
+	--text-readout--line-height: 1.05;
+	--text-readout--letter-spacing: -0.03em;
+	--text-readout--font-weight: 600;
+	--text-readout-unit: 30px;
+	--text-readout-unit--line-height: 1.05;
+	--text-readout-unit--font-weight: 500;
+
+	/* Page title */
+	--text-title: 26px;
+	--text-title--line-height: 1.2;
+	--text-title--letter-spacing: -0.02em;
+	--text-title--font-weight: 700;
+
+	/* Section heading. Named heading, not section, because Tailwind reads text-section as
+	   the section colour. */
+	--text-heading: 18px;
+	--text-heading--line-height: 1.3;
+	--text-heading--letter-spacing: -0.01em;
+	--text-heading--font-weight: 700;
+
+	/* Secondary figures */
+	--text-figure: 24px;
+	--text-figure--line-height: 1.2;
+	--text-figure--letter-spacing: -0.02em;
+	--text-figure--font-weight: 600;
+
+	/* Row amounts */
+	--text-amount: 16px;
+	--text-amount--line-height: 1.3;
+	--text-amount--font-weight: 600;
+
+	/* Payee, list primary */
+	--text-body-lg: 15.5px;
+	--text-body-lg--line-height: 1.4;
+	--text-body-lg--font-weight: 500;
+
+	--text-body: 15px;
+	--text-body--line-height: 1.5;
+	--text-body--font-weight: 400;
+
+	/* Field and figure labels, sentence case */
+	--text-label: 14px;
+	--text-label--line-height: 1.4;
+	--text-label--font-weight: 500;
+
+	/* Subtitles, meta */
+	--text-caption: 13.5px;
+	--text-caption--line-height: 1.4;
+	--text-caption--font-weight: 400;
+
+	/* Badges, chips, kbd */
+	--text-small: 12.5px;
+	--text-small--line-height: 1.3;
+	--text-small--font-weight: 600;
+
+	/* Chart ticks only */
+	--text-axis: 11px;
+	--text-axis--line-height: 1.2;
+	--text-axis--font-weight: 500;
+}
+
+@utility figures {
+	font-variant-numeric: tabular-nums;
+}

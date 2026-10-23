@@ -36,7 +36,7 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 
 - `app/` at the repo root: routes only, kept thin. `proxy.ts` sits beside it. Never create `src/app`; Next ignores it when a root `app/` exists.
 - `src/features/<name>`: one folder per spec feature. A feature never imports another feature's internals.
-- `src/components`: shared UI. `src/lib`: pure code safe in browser and server (money, time, Zod schemas). `src/server`: server-only code.
+- `src/components`: shared UI. `src/lib`: pure code safe in browser and server (money, time, Zod schemas). `src/server`: server-only code. `src/styles`: the design system's CSS (tokens, Tailwind theme, base styles); `app/globals.css` only imports it (D-387).
 - Repo root also keeps config plus `docs`, `e2e`, `scripts`, `drizzle` (migrations), `public` and `.claude`.
 - `src/` doesn't exist yet. Create its folders when the first file needs them.
 
@@ -62,7 +62,7 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 - Never stage, commit, push, switch, merge, rebase, reset, stash or tag. I do all of that.
 - One exception: to test things, you may use the worktree tool (`EnterWorktree`) and work in that separate git worktree. Even there, never commit, push or switch branches.
 - Write a commit message or PR text only when I ask. Don't offer one when work finishes.
-- Commit format: `type: short imperative summary`, with type one of feat, fix, refactor, perf, test, docs, chore, ci, build. No Co-Authored-By or "Generated with Claude" lines. Branches are `type/kebab-case`.
+- Commit format: `type: short imperative summary`, with type one of feat, fix, refactor, perf, test, docs, chore, ci, build. One line only, never a body. No Co-Authored-By or "Generated with Claude" lines. Branches are `type/kebab-case`.
 
 ## How we work
 
