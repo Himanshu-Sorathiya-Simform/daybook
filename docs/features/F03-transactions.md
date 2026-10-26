@@ -218,7 +218,7 @@ A plus sign means money becomes free to spend: income, a refund, money back from
 **Deleting**
 
 - **BR-F03-26** Delete removes the row from the screen at once and shows "Transaction deleted." with Undo for 5 seconds (D-84). The `DELETE` request, with `If-Match`, is sent when the 5 seconds end.
-    - **From M5 (D-228, D-364):** the delete enters the write queue at once with a 5-second hold, so closing the tab does not cancel it, and nothing sends it early. Undo removes the item while it is still unsent. The toast does not pause on hover, and it closes when the item is sent (P1, BR-P1-16).
+    - **From M5 (D-228, D-364):** the delete enters the write queue at once with a 5-second hold, so closing the tab does not cancel it, and nothing sends it early. Undo removes the item while it is still unsent. The toast closes when the item is sent, because the app closes it by its id even while the pointer is over it (P1, BR-P1-16; D-407).
     - **Before M5:** a timer in the page holds the delete. Closing the tab within the 5 seconds cancels it.
     - **During the 5 seconds:** from M5 the deletion counts as a pending delete in the header (BR-F03-42). Before M5 the header changes once the delete is confirmed.
     - **409 after the window:** the conflict view opens (BR-F03-24). Keep mine deletes against the current version; Keep theirs keeps the row.

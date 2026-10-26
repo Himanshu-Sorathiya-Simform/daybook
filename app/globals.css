@@ -4,3 +4,5 @@
 @import "../src/styles/typography.css";
 @import "../src/styles/space.css";
 @import "../src/styles/base.css";
+
+@plugin "tailwindcss-react-aria-components";
