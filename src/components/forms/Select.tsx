@@ -24,6 +24,7 @@ export type SelectProps = Omit<
 	| "items"
 	| "selectionMode"
 	| "isInvalid"
+	| "validate"
 	| "value"
 	| "defaultValue"
 	| "onChange"

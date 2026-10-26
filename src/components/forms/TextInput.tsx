@@ -12,7 +12,7 @@ import { cn } from "@/lib/cn";
 
 export type TextInputProps = Omit<
 	AriaTextFieldProps,
-	"children" | "className" | "style" | "isInvalid"
+	"children" | "className" | "style" | "isInvalid" | "validate"
 >
 	& Omit<FieldProps, "children" | "className"> & {
 		placeholder?: string;

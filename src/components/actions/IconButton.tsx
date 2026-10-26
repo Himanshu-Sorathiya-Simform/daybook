@@ -42,9 +42,30 @@ export function IconButton({
 	size = "md",
 	tooltipPlacement,
 	className,
+	isDisabled = false,
 	type = "button",
+	onPress,
+	onPressStart,
+	onPressEnd,
+	onPressChange,
+	onPressUp,
+	onClick,
 	...rest
 }: IconButtonProps) {
+	const ariaProps: AriaButtonProps = {};
+	if (isDisabled) ariaProps["aria-disabled"] = true;
+	// A disabled button hears none of its press handlers.
+	if (!isDisabled) {
+		Object.assign(ariaProps, {
+			onPress,
+			onPressStart,
+			onPressEnd,
+			onPressChange,
+			onPressUp,
+			onClick,
+		});
+	}
+
 	return (
 		<Tooltip
 			text={label}
@@ -52,14 +73,15 @@ export function IconButton({
 		>
 			<AriaButton
 				{...rest}
-				type={type}
+				{...ariaProps}
+				type={isDisabled ? "button" : type}
 				aria-label={label}
 				className={cn(
 					"rounded-control text-ink inline-flex shrink-0 cursor-pointer items-center justify-center border",
-					"hover:bg-soft transition-colors duration-(--dur-fast) ease-out max-md:size-11",
+					"not-aria-disabled:hover:bg-soft transition-colors duration-(--dur-fast) ease-out max-md:size-11",
 					variants[variant],
 					sizes[size].box,
-					"disabled:border-edge disabled:text-ink-3 disabled:cursor-not-allowed disabled:border-[1.5px] disabled:border-dashed disabled:bg-transparent",
+					"aria-disabled:border-edge aria-disabled:text-ink-3 aria-disabled:cursor-not-allowed aria-disabled:border-[1.5px] aria-disabled:border-dashed aria-disabled:bg-transparent",
 					className,
 				)}
 			>

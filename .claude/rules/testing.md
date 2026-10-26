@@ -38,3 +38,4 @@ paths:
 
 - While working, run only the tests for the file you changed: `pnpm test:run <path>`. Before saying work is done, run the full `pnpm test:run`.
 - Never run `pnpm test`; it is watch mode and never exits.
+- `pnpm test:coverage` runs every test once and lists the lines and branches of `src/components` and `src/lib` that no test reaches. Use it to find what is untested; a covered line is not yet a tested behaviour, so test states and props, not only lines.

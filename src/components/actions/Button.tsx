@@ -67,8 +67,11 @@ export function Button({
 	const descriptionId = useId();
 	const ariaProps: AriaButtonProps = {};
 	if (isDisabled) ariaProps["aria-disabled"] = true;
-	if (description) ariaProps["aria-describedby"] = descriptionId;
-	else if (describedBy) ariaProps["aria-describedby"] = describedBy;
+	// The visible description and any description the caller names are both read.
+	const describedByIds = [description ? descriptionId : "", describedBy ?? ""]
+		.filter(Boolean)
+		.join(" ");
+	if (describedByIds) ariaProps["aria-describedby"] = describedByIds;
 	// A disabled button hears none of its press handlers.
 	if (!isDisabled) {
 		Object.assign(ariaProps, {

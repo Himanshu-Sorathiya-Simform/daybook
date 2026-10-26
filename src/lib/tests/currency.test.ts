@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
 	CURRENCY_EXPONENTS,
@@ -6,6 +6,10 @@ import {
 	currencySymbol,
 	type CurrencyCode,
 } from "@/lib/currency";
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
 
 const CODES = Object.keys(CURRENCY_EXPONENTS) as CurrencyCode[];
 
@@ -84,6 +88,14 @@ describe("currencySymbol", () => {
 			expect(symbol.length).toBeGreaterThan(0);
 			expect(symbol).not.toMatch(/\d/);
 		}
+	});
+
+	test("falls back to the currency code when the format has no sign for it", () => {
+		vi.spyOn(Intl.NumberFormat.prototype, "formatToParts").mockReturnValue([
+			{ type: "integer", value: "0" },
+		]);
+
+		expect(currencySymbol("KWD", "en-US-u-nu-latn")).toBe("KWD");
 	});
 
 	test("refuses a locale that does not exist", () => {

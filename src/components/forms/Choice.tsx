@@ -40,6 +40,7 @@ export function Choice({
 	const text = (
 		<>
 			<span className="flex-1">{label}</span>
+			{count !== undefined && " "}
 			{count !== undefined && (
 				<span className="figures text-caption text-ink-2">{count}</span>
 			)}

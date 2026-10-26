@@ -93,6 +93,7 @@ export function ChoiceGroup({
 										<span className="flex-1">
 											{option.label}
 										</span>
+										{option.count !== undefined && " "}
 										{option.count !== undefined && (
 											<span className="figures text-caption text-ink-2">
 												{option.count}

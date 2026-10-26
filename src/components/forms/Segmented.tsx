@@ -1,6 +1,7 @@
 import {
-	ToggleButton as AriaToggleButton,
-	ToggleButtonGroup as AriaToggleButtonGroup,
+	RadioButton as AriaRadioButton,
+	RadioField as AriaRadioField,
+	RadioGroup as AriaRadioGroup,
 } from "react-aria-components";
 
 import { cn } from "@/lib/cn";
@@ -15,6 +16,8 @@ export type SegmentedProps = {
 	label: string;
 	size?: "sm" | "md";
 	isDisabled?: boolean;
+	/** Submits the chosen value with a form under this name. */
+	name?: string;
 	className?: string;
 };
 
@@ -23,8 +26,11 @@ const sizes = {
 	md: "h-8 text-label",
 };
 
-/** A choice of two to five options that stay visible: Daily or Pace, the transaction type. One
- * is always selected, and the arrow keys move the selection. */
+/**
+ * A choice of two to five options that stay visible: Daily or Pace, the transaction type. It is a
+ * radio group, so one option is always chosen, Tab lands on the chosen one, and the arrow keys
+ * move and choose.
+ */
 export function Segmented({
 	options,
 	value,
@@ -32,19 +38,17 @@ export function Segmented({
 	label,
 	size = "md",
 	isDisabled = false,
+	name,
 	className,
 }: SegmentedProps) {
 	return (
-		<AriaToggleButtonGroup
+		<AriaRadioGroup
 			aria-label={label}
-			selectionMode="single"
-			disallowEmptySelection
-			selectedKeys={[value]}
+			orientation="horizontal"
+			value={value}
+			onChange={onChange}
 			isDisabled={isDisabled}
-			onSelectionChange={(keys) => {
-				const [next] = keys;
-				if (typeof next === "string" && next !== value) onChange(next);
-			}}
+			{...(name ? { name } : {})}
 			className={cn(
 				"rounded-control bg-soft inline-flex gap-0.5 p-0.5",
 				className,
@@ -56,21 +60,27 @@ export function Segmented({
 						{ value: option, label: option }
 					:	option;
 				return (
-					<AriaToggleButton
+					<AriaRadioField
 						key={id}
-						id={id}
-						className={cn(
-							"text-ink-2 cursor-pointer rounded-lg border border-transparent px-3 font-semibold whitespace-nowrap",
-							"transition-colors duration-(--dur-fast) ease-out max-md:min-h-11",
-							"selected:border-line selected:bg-page selected:text-ink",
-							"disabled:text-ink-3 disabled:cursor-not-allowed",
-							sizes[size],
-						)}
+						value={id}
+
+						className="flex"
 					>
-						{text}
-					</AriaToggleButton>
+						<AriaRadioButton
+							className={cn(
+								"text-ink-2 inline-flex cursor-pointer items-center rounded-lg border border-transparent px-3 font-semibold whitespace-nowrap",
+								"transition-colors duration-(--dur-fast) ease-out max-md:min-h-11",
+								"selected:border-line selected:bg-page selected:text-ink",
+								"focus-visible:focus-ring",
+								"disabled:text-ink-3 disabled:cursor-not-allowed",
+								sizes[size],
+							)}
+						>
+							{text}
+						</AriaRadioButton>
+					</AriaRadioField>
 				);
 			})}
-		</AriaToggleButtonGroup>
+		</AriaRadioGroup>
 	);
 }

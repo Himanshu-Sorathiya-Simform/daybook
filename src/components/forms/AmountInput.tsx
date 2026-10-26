@@ -11,7 +11,7 @@ import { currencyExponent, currencySymbol, type CurrencyCode } from "@/lib/curre
 
 export type AmountInputProps = Omit<
 	AriaTextFieldProps,
-	"children" | "className" | "style" | "isInvalid" | "inputMode"
+	"children" | "className" | "style" | "isInvalid" | "validate" | "inputMode"
 >
 	& Omit<FieldProps, "children" | "className"> & {
 		currency: CurrencyCode;
