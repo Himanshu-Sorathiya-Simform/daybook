@@ -210,3 +210,37 @@ describe("dismissToast", () => {
 		expect(() => act(() => dismissToast("no-such-toast"))).not.toThrow();
 	});
 });
+
+describe("hovering a toast", () => {
+	test("pauses its own timer, as Sonner always does", async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+		render(<Toaster />);
+		show("Held by hover.", { duration: 2000 });
+		const message = await screen.findByText("Held by hover.");
+
+		await user.hover(message);
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(6000);
+		});
+
+		expect(screen.getByText("Held by hover.")).toBeVisible();
+	});
+
+	test("is still closed at once by dismissToast, so the app decides when it ends (D-407)", async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+		render(<Toaster />);
+		const id = show("Transaction deleted.", { action: "Undo", duration: 5000 });
+		const message = await screen.findByText("Transaction deleted.");
+		await user.hover(message);
+
+		act(() => dismissToast(id));
+
+		await waitFor(() =>
+			expect(
+				screen.queryByText("Transaction deleted."),
+			).not.toBeInTheDocument(),
+		);
+	});
+});
