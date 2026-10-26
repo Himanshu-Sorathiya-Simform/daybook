@@ -558,6 +558,32 @@ describe("focus ring", () => {
 	});
 });
 
+describe("text size on touch devices", () => {
+	// iOS Safari zooms the whole page when an input under 16px gets focus, and does not zoom back.
+	test("a single line uses 16px text on touch devices and the 15px body size with a mouse", () => {
+		render(<TextInput label="Payee" />);
+
+		expect(screen.getByRole("textbox", { name: "Payee" })).toHaveClass(
+			"text-body",
+			"pointer-coarse:text-base",
+		);
+	});
+
+	test("a multi-line box does the same", () => {
+		render(
+			<TextInput
+				label="Note"
+				multiline
+			/>,
+		);
+
+		expect(screen.getByRole("textbox", { name: "Note" })).toHaveClass(
+			"text-body",
+			"pointer-coarse:text-base",
+		);
+	});
+});
+
 describe("className", () => {
 	test("goes on the root element, which holds the label, the box and the message", () => {
 		const { container } = render(

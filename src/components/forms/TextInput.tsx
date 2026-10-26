@@ -61,11 +61,11 @@ export function TextInput({
 						<AriaTextArea
 							rows={rows}
 							{...(placeholder ? { placeholder } : {})}
-							className="text-body text-ink placeholder:text-ink-3 disabled:text-ink-3 min-w-0 flex-1 resize-y bg-transparent outline-none disabled:cursor-not-allowed"
+							className="text-body text-ink placeholder:text-ink-3 disabled:text-ink-3 min-w-0 flex-1 resize-y bg-transparent outline-none disabled:cursor-not-allowed pointer-coarse:text-base"
 						/>
 					:	<AriaInput
 							{...(placeholder ? { placeholder } : {})}
-							className="text-body text-ink placeholder:text-ink-3 disabled:text-ink-3 min-w-0 flex-1 self-stretch bg-transparent outline-none disabled:cursor-not-allowed"
+							className="text-body text-ink placeholder:text-ink-3 disabled:text-ink-3 min-w-0 flex-1 self-stretch bg-transparent outline-none disabled:cursor-not-allowed pointer-coarse:text-base"
 						/>
 					}
 				</AriaGroup>

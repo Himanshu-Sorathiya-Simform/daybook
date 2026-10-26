@@ -22,6 +22,7 @@ paths:
 - Icons are named imports from `lucide-react` (D-170), for example `import { Plus } from "lucide-react"`. Never `import *`, and never a lookup by name string. A component that shows an icon takes it as a prop typed `LucideIcon`: `icon={Plus}` (D-392).
 - Keep the focus ring from `base.css`. Meaning is never carried by colour alone: pair it with text, an icon or a dashed outline.
 - Touch targets are at least `--target-min` (44px) on phones.
+- A text input is at least 16px on touch devices: add `pointer-coarse:text-base` to the `Input` or `TextArea` (D-408). Under 16px, iOS Safari zooms the page on focus. Never turn zoom off to avoid it.
 
 ## Class names
 

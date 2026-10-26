@@ -167,3 +167,4 @@ Node 26.11.1 with ICU 78.3, 16 Oct 2026.
 - Playwright's `setExtraHTTPHeaders` adds headers to every request of a context. F11 adds its token header to the document request only, through `page.route`.
 - Next.js's `notFound()` sets a 404 when it runs before any streaming, so F11's print page decides its status with no Suspense above the check.
 - Browser support for `Intl.NumberFormat` with string decimals (Chrome 106, Safari 15.4, Firefox 116) is from memory, not checked against a source. Check caniuse before the supported browser list is final (D-404).
+- iOS Safari zooms the page when an input with a font size under 16px gets focus, and does not zoom back out. This comes from the `mobile-native` skill and long-standing behaviour, and is not checked on a device. Test a `TextInput` on an iPhone before M1 closes (D-408).
