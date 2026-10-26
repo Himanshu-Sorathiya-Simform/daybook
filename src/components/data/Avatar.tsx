@@ -35,7 +35,7 @@ export function Avatar({
 	pending = false,
 	size = "md",
 	className,
-}: AvatarProps) {
+}: Readonly<AvatarProps>) {
 	const color = categoryColor(goal ? "salary" : category);
 	const letters = goal ? "" : initials(payee);
 	const CategoryIcon = CATEGORY_ICONS[category];

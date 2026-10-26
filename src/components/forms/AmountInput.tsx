@@ -37,7 +37,7 @@ export function AmountInput({
 	numberLocale,
 	className,
 	...rest
-}: AmountInputProps) {
+}: Readonly<AmountInputProps>) {
 	return (
 		<AriaTextField
 			{...rest}

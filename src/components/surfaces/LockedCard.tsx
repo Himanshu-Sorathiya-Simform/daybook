@@ -30,7 +30,7 @@ export function LockedCard({
 	onUpgrade,
 	compareHref,
 	className,
-}: LockedCardProps) {
+}: Readonly<LockedCardProps>) {
 	return (
 		<div
 			className={cn(

@@ -11,7 +11,7 @@ export type SampleHeatmapProps = {
 };
 
 /** The locked card's default sample picture: a static calendar heat map in lapis tints. */
-export function SampleHeatmap({ className }: SampleHeatmapProps) {
+export function SampleHeatmap({ className }: Readonly<SampleHeatmapProps>) {
 	return (
 		<div className={cn("grid grid-cols-7 gap-1", className)}>
 			{TINTS.map((tint, index) => (

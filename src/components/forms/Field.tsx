@@ -34,7 +34,7 @@ export function Field({
 	counter,
 	children,
 	className,
-}: FieldProps) {
+}: Readonly<FieldProps>) {
 	return (
 		<div className={cn("flex flex-col gap-1.25", className)}>
 			<div className="flex items-baseline gap-1.5">

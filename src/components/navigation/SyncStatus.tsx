@@ -83,7 +83,7 @@ export function SyncStatus({
 	pausedReason = "login",
 	onOpen,
 	className,
-}: SyncStatusProps) {
+}: Readonly<SyncStatusProps>) {
 	const { icon: Icon, tone } = looks[state];
 	const { short, full } = wording(state, count, pausedReason);
 	return (

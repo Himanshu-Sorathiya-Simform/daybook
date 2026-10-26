@@ -32,7 +32,7 @@ export function Tooltip({
 	className,
 	delay = 500,
 	...triggerProps
-}: TooltipProps) {
+}: Readonly<TooltipProps>) {
 	return (
 		<AriaTooltipTrigger
 			delay={delay}

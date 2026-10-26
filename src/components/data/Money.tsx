@@ -30,7 +30,7 @@ export function Money({
 	tone = "auto",
 	sign = "negative",
 	className,
-}: MoneyProps) {
+}: Readonly<MoneyProps>) {
 	const parts = moneyParts(minor, currency, numberLocale, { signDisplay: sign });
 	const color =
 		tone === "neutral" ? ""

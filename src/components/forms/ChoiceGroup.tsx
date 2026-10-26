@@ -50,7 +50,7 @@ export function ChoiceGroup({
 	options,
 	className,
 	...rest
-}: ChoiceGroupProps) {
+}: Readonly<ChoiceGroupProps>) {
 	return (
 		<AriaRadioGroup
 			{...rest}

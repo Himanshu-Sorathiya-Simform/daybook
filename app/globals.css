@@ -1,7 +1,8 @@
 @import "tailwindcss";
-@plugin "tailwindcss-react-aria-components";
 @import "../src/styles/colors.css";
 @import "../src/styles/categories.css";
 @import "../src/styles/typography.css";
 @import "../src/styles/space.css";
 @import "../src/styles/base.css";
+
+@plugin "tailwindcss-react-aria-components";

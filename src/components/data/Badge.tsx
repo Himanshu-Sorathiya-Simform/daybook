@@ -29,7 +29,7 @@ export function Badge({
 	icon: Icon,
 	children,
 	className,
-}: BadgeProps) {
+}: Readonly<BadgeProps>) {
 	return (
 		<span
 			className={cn(

@@ -39,7 +39,7 @@ export function TextInput({
 	rows = 3,
 	className,
 	...rest
-}: TextInputProps) {
+}: Readonly<TextInputProps>) {
 	return (
 		<AriaTextField
 			{...rest}

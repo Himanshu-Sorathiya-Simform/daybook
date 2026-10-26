@@ -31,7 +31,7 @@ export function NavItem({
 	collapsed = false,
 	className,
 	...rest
-}: NavItemProps) {
+}: Readonly<NavItemProps>) {
 	const link = (
 		<AriaLink
 			{...rest}

@@ -25,7 +25,7 @@ export function EmptyState({
 	onSecondary,
 	compact = false,
 	className,
-}: EmptyStateProps) {
+}: Readonly<EmptyStateProps>) {
 	return (
 		<div
 			className={cn(

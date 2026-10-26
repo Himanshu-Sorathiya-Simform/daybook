@@ -63,7 +63,7 @@ export function Button({
 	onPressUp,
 	onClick,
 	...rest
-}: ButtonProps) {
+}: Readonly<ButtonProps>) {
 	const descriptionId = useId();
 	const ariaProps: AriaButtonProps = {};
 	if (isDisabled) ariaProps["aria-disabled"] = true;

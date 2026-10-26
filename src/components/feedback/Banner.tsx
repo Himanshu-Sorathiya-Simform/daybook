@@ -31,7 +31,7 @@ export function Banner({
 	action,
 	onAction,
 	className,
-}: BannerProps) {
+}: Readonly<BannerProps>) {
 	const { icon: Icon, tone } = kinds[kind];
 	return (
 		<div

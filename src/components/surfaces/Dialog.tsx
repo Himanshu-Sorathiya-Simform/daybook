@@ -51,7 +51,7 @@ export function Dialog({
 	isDismissable = false,
 	isKeyboardDismissDisabled = false,
 	className,
-}: DialogProps) {
+}: Readonly<DialogProps>) {
 	return (
 		<AriaModalOverlay
 			isOpen={isOpen}

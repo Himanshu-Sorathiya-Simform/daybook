@@ -8,7 +8,7 @@ export type SkeletonProps = {
 
 /** A static placeholder in the track colour. It has no shimmer, because motion only follows an
  * action. It is hidden from screen readers; the section around it says it is loading. */
-export function Skeleton({ className }: SkeletonProps) {
+export function Skeleton({ className }: Readonly<SkeletonProps>) {
 	return (
 		<span
 			aria-hidden="true"

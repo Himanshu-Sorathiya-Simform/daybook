@@ -27,7 +27,7 @@ export function Section({
 	children,
 	as: Tag = "section",
 	className,
-}: SectionProps) {
+}: Readonly<SectionProps>) {
 	const headingId = useId();
 	return (
 		<Tag

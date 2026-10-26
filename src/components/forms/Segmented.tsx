@@ -40,7 +40,7 @@ export function Segmented({
 	isDisabled = false,
 	name,
 	className,
-}: SegmentedProps) {
+}: Readonly<SegmentedProps>) {
 	return (
 		<AriaRadioGroup
 			aria-label={label}

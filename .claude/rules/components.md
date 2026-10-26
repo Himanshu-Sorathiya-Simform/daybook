@@ -36,6 +36,7 @@ paths:
 ## Types
 
 - Props extend the React Aria props type of the part they wrap, and add only what Daybook needs.
+- Props are read-only. The component takes them as `Readonly<NameProps>`: `export function Money({ minor }: Readonly<MoneyProps>)`, or `(props: Readonly<NameProps>)` when it keeps the object. The exported `NameProps` type itself stays plain, so another type can still extend it. `Readonly` is shallow, so a component never changes a prop's array or object in place either.
 - `exactOptionalPropertyTypes` is on: never pass an explicit `undefined` to an optional prop. Leave it out, or type the prop `T | undefined`.
 
 ## Tests

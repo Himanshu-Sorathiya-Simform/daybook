@@ -16,7 +16,7 @@ export function CategoryTag({
 	category,
 	variant = "label",
 	className,
-}: CategoryTagProps) {
+}: Readonly<CategoryTagProps>) {
 	const color = categoryColor(category);
 	const label = categoryLabel(category);
 	const Icon = CATEGORY_ICONS[category];

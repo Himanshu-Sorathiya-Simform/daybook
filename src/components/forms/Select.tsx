@@ -72,7 +72,7 @@ export function Select({
 	size = "md",
 	className,
 	...rest
-}: SelectProps) {
+}: Readonly<SelectProps>) {
 	return (
 		<AriaSelect
 			{...rest}

@@ -32,7 +32,7 @@ export type PendingNoteProps = Shared
  * The one pending signal: a dashed outline with ink-2 text. It sits beside a confirmed figure
  * and never replaces it or is added into it.
  */
-export function PendingNote(props: PendingNoteProps) {
+export function PendingNote(props: Readonly<PendingNoteProps>) {
 	const text =
 		props.label !== undefined ? props.label
 		: props.count !== undefined ? `+${props.count} pending`

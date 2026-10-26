@@ -36,7 +36,7 @@ export function Choice({
 	count,
 	className,
 	...rest
-}: ChoiceProps) {
+}: Readonly<ChoiceProps>) {
 	const text = (
 		<>
 			<span className="flex-1">{label}</span>

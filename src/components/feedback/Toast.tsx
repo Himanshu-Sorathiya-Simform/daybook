@@ -24,7 +24,7 @@ export function Toast({
 	onAction,
 	tone = "neutral",
 	className,
-}: ToastProps) {
+}: Readonly<ToastProps>) {
 	return (
 		<div
 			className={cn(

@@ -51,7 +51,7 @@ export function IconButton({
 	onPressUp,
 	onClick,
 	...rest
-}: IconButtonProps) {
+}: Readonly<IconButtonProps>) {
 	const ariaProps: AriaButtonProps = {};
 	if (isDisabled) ariaProps["aria-disabled"] = true;
 	// A disabled button hears none of its press handlers.
