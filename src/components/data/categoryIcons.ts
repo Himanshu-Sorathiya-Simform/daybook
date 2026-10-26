@@ -1,0 +1,50 @@
+import {
+	Briefcase,
+	Car,
+	CircleDashed,
+	CirclePlus,
+	Clapperboard,
+	Gift,
+	GraduationCap,
+	HandHeart,
+	HeartPulse,
+	House,
+	Landmark,
+	Laptop,
+	Plane,
+	Receipt,
+	Scissors,
+	ShieldCheck,
+	ShoppingBag,
+	Sprout,
+	Utensils,
+	Zap,
+	type LucideIcon,
+} from "lucide-react";
+
+import type { CategoryKey } from "@/lib/categories";
+
+/** The fixed icon of each category (CAT-1). Colour is never the only signal, so a category is
+ * always shown with this icon or its label. */
+export const CATEGORY_ICONS: Record<CategoryKey, LucideIcon> = {
+	food: Utensils,
+	shopping: ShoppingBag,
+	transportation: Car,
+	utilities: Zap,
+	entertainment: Clapperboard,
+	housing: House,
+	health: HeartPulse,
+	education: GraduationCap,
+	travel: Plane,
+	insurance: ShieldCheck,
+	personal_care: Scissors,
+	gifts_donations: Gift,
+	fees_taxes: Receipt,
+	loans: Landmark,
+	other: CircleDashed,
+	salary: Briefcase,
+	freelance: Laptop,
+	investments: Sprout,
+	gifts: HandHeart,
+	other_income: CirclePlus,
+};
