@@ -4,7 +4,8 @@
  * in one transaction, so a failure leaves the database as it was. Drizzle keeps its log in
  * `drizzle.__drizzle_migrations`, a schema the Daybook roles cannot reach.
  *
- * Run `pnpm db:bootstrap` first: migrations grant to the roles it creates.
+ * Run `pnpm db:bootstrap` first: migrations grant to the roles it creates. Afterwards it runs
+ * the same checks as `pnpm db:verify` and fails if any does (BR-P2-37).
  */
 import { pathToFileURL } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -12,6 +13,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Client, type ClientBase } from "pg";
 import { parseOwnerEnv } from "../../src/server/env";
 import { loadEnvFile } from "./env-file";
+import { report, verifyDatabase } from "./verify";
 
 export const MIGRATIONS_FOLDER = "drizzle";
 
@@ -56,6 +58,7 @@ async function main(): Promise<void> {
 				"Nothing to apply: the database is up to date."
 			:	`Applied ${applied} migration${applied === 1 ? "" : "s"}.`,
 		);
+		if (!report(await verifyDatabase(client))) process.exitCode = 1;
 	} finally {
 		await client.end();
 	}

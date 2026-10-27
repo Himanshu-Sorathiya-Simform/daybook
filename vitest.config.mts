@@ -17,7 +17,13 @@ export default defineConfig({
 	test: {
 		environment: "jsdom",
 		setupFiles: ["./vitest.setup.ts"],
-		exclude: [...configDefaults.exclude, ".next/**", "e2e/**"],
+		// Database tests run through vitest.integration.config.mts (`pnpm test:integration`).
+		exclude: [
+			...configDefaults.exclude,
+			".next/**",
+			"e2e/**",
+			"**/*.integration.test.ts",
+		],
 		coverage: {
 			provider: "v8",
 			include: ["src/components/**", "src/lib/**", "src/server/**"],

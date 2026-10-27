@@ -13,11 +13,13 @@
 		"test": "vitest",
 		"test:run": "vitest run",
 		"test:coverage": "vitest run --coverage",
+		"test:integration": "vitest run --config vitest.integration.config.mts",
 		"docs:check": "node scripts/docs-check.mjs",
 		"db:bootstrap": "tsx --conditions=react-server scripts/db/bootstrap.ts",
 		"db:check-connections": "tsx --conditions=react-server scripts/db/check-connections.ts",
 		"db:generate": "NODE_OPTIONS=--conditions=react-server drizzle-kit generate",
-		"db:migrate": "tsx --conditions=react-server scripts/db/migrate.ts"
+		"db:migrate": "tsx --conditions=react-server scripts/db/migrate.ts",
+		"db:verify": "tsx --conditions=react-server scripts/db/verify.ts"
 	},
 	"dependencies": {
 		"better-auth": "^1.7.12",
