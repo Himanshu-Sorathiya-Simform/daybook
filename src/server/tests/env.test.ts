@@ -4,7 +4,7 @@ import { EnvError, parseOwnerEnv, parseServerEnv } from "../env";
 
 // Placeholder values only; none of these is a real credential.
 const roleUrl = (role: string) =>
-	`postgresql://${role}:pw@db-pooler.example.com/neondb`;
+	`postgresql://${role}:pw@db-pooler.example.com/neondb?sslmode=verify-full`;
 
 const validServer = {
 	APP_ORIGIN: "http://localhost:3000",
@@ -15,7 +15,8 @@ const validServer = {
 };
 
 const validOwner = {
-	DATABASE_URL_OWNER: "postgresql://neondb_owner:pw@db.example.com/neondb",
+	DATABASE_URL_OWNER:
+		"postgresql://neondb_owner:pw@db.example.com/neondb?sslmode=verify-full",
 	DB_PASSWORD_AUTH: "a".repeat(16),
 	DB_PASSWORD_RUNTIME: "r".repeat(16),
 	DB_PASSWORD_SYSTEM: "s".repeat(16),
@@ -160,7 +161,8 @@ describe("parseServerEnv", () => {
 		});
 
 		test("accepts the postgres:// spelling as well as postgresql://", () => {
-			const url = "postgres://daybook_runtime:pw@db.example.com/neondb";
+			const url =
+				"postgres://daybook_runtime:pw@db.example.com/neondb?sslmode=verify-full";
 			expect(
 				parseServerEnv({ ...validServer, DATABASE_URL_RUNTIME: url })
 					.DATABASE_URL_RUNTIME,
@@ -178,6 +180,103 @@ describe("parseServerEnv", () => {
 				),
 			).toEqual([
 				"DATABASE_URL_RUNTIME must be a postgres:// URL for the daybook_runtime role",
+			]);
+		});
+	});
+
+	describe("encrypted connections", () => {
+		const runtimeAt = (rest: string) =>
+			`postgresql://daybook_runtime:pw@${rest}`;
+		const message =
+			"DATABASE_URL_RUNTIME must end with ?sslmode=verify-full (only a localhost database may leave it out)";
+
+		test.each([
+			["no sslmode", "db.example.com/neondb"],
+			["sslmode=require", "db.example.com/neondb?sslmode=require"],
+			["sslmode=disable", "db.example.com/neondb?sslmode=disable"],
+			[
+				"sslmode in the path instead of the query",
+				"db.example.com/neondb/sslmode=verify-full",
+			],
+		])("refuses a remote URL with %s", (_label, rest) => {
+			expect(
+				problemsOf(() =>
+					parseServerEnv({
+						...validServer,
+						DATABASE_URL_RUNTIME: runtimeAt(rest),
+					}),
+				),
+			).toEqual([message]);
+		});
+
+		test("accepts sslmode=verify-full beside other parameters", () => {
+			const url = runtimeAt(
+				"db.example.com/neondb?channel_binding=require&sslmode=verify-full",
+			);
+			expect(
+				parseServerEnv({ ...validServer, DATABASE_URL_RUNTIME: url })
+					.DATABASE_URL_RUNTIME,
+			).toBe(url);
+		});
+
+		test.each(["localhost:5432", "127.0.0.1:5432", "[::1]:5432"])(
+			"accepts %s without sslmode, as CI's Postgres container is reached",
+			(host) => {
+				const url = runtimeAt(`${host}/daybook`);
+				expect(
+					parseServerEnv({ ...validServer, DATABASE_URL_RUNTIME: url })
+						.DATABASE_URL_RUNTIME,
+				).toBe(url);
+			},
+		);
+
+		test("reports only the wrong role, not encryption too, for another role's unencrypted URL", () => {
+			expect(
+				problemsOf(() =>
+					parseServerEnv({
+						...validServer,
+						DATABASE_URL_RUNTIME:
+							"postgresql://daybook_auth:pw@db.example.com/neondb",
+					}),
+				),
+			).toEqual([
+				"DATABASE_URL_RUNTIME must be a postgres:// URL for the daybook_runtime role",
+			]);
+		});
+
+		test("checks the owner URL the same way", () => {
+			expect(
+				problemsOf(() =>
+					parseOwnerEnv({
+						...validOwner,
+						DATABASE_URL_OWNER:
+							"postgresql://neondb_owner:pw@db.example.com/neondb",
+					}),
+				),
+			).toEqual([
+				"DATABASE_URL_OWNER must end with ?sslmode=verify-full (only a localhost database may leave it out)",
+			]);
+		});
+
+		test("accepts a localhost owner URL without sslmode", () => {
+			const url = "postgresql://postgres:pw@localhost:5432/daybook";
+			expect(
+				parseOwnerEnv({ ...validOwner, DATABASE_URL_OWNER: url })
+					.DATABASE_URL_OWNER,
+			).toBe(url);
+		});
+
+		test("reports only the owner rule for an unencrypted daybook_ URL in the owner slot", () => {
+			expect(
+				problemsOf(() =>
+					parseOwnerEnv({
+						...validOwner,
+						DATABASE_URL_OWNER:
+							"postgresql://daybook_runtime:pw@db.example.com/neondb",
+					}),
+				),
+			).toEqual([
+				"DATABASE_URL_OWNER must be a postgres:// URL for the database owner, not a daybook_ role",
 			]);
 		});
 	});
@@ -228,7 +327,7 @@ describe("parseOwnerEnv", () => {
 				problemsOf(() =>
 					parseOwnerEnv({
 						...validOwner,
-						DATABASE_URL_OWNER: `postgresql://${role}:pw@db.example.com/neondb`,
+						DATABASE_URL_OWNER: `postgresql://${role}:pw@db.example.com/neondb?sslmode=verify-full`,
 					}),
 				),
 			).toEqual([

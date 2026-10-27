@@ -21,30 +21,64 @@ const required = (name: string) =>
 		.string({ error: `${name} is required` })
 		.min(1, { error: `${name} is required`, abort: true });
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** Every database URL asks for an encrypted connection with a checked certificate (D-413),
+ * except one to a Postgres on this machine, such as CI's service container. Without
+ * `sslmode`, `pg` does not encrypt at all, and Neon refuses the login as insecure. */
+const encrypted = (value: string) => {
+	const url = URL.parse(value);
+	return (
+		url !== null
+		&& (LOCAL_HOSTS.has(url.hostname)
+			|| url.searchParams.get("sslmode") === "verify-full")
+	);
+};
+const encryptedMessage = (name: string) =>
+	`${name} must end with ?sslmode=verify-full (only a localhost database may leave it out)`;
+
 /** A Postgres URL whose user is `role`, so a connection string pasted into the wrong
  * variable (the owner's in the runtime slot, say) stops the app instead of quietly
  * running with the wrong powers. */
 const roleUrl = (name: string, role: string) =>
-	required(name).refine((value) => {
-		const url = URL.parse(value);
-		return (
-			url !== null
-			&& (url.protocol === "postgres:" || url.protocol === "postgresql:")
-			&& decodeURIComponent(url.username) === role
-		);
-	}, `${name} must be a postgres:// URL for the ${role} role`);
+	required(name)
+		.refine(
+			(value) => {
+				const url = URL.parse(value);
+				return (
+					url !== null
+					&& (url.protocol === "postgres:"
+						|| url.protocol === "postgresql:")
+					&& decodeURIComponent(url.username) === role
+				);
+			},
+			{
+				error: `${name} must be a postgres:// URL for the ${role} role`,
+				abort: true,
+			},
+		)
+		.refine(encrypted, encryptedMessage(name));
 
 /** The owner's URL: any user except the three Daybook roles, which own nothing. */
 const ownerUrl = (name: string) =>
-	required(name).refine((value) => {
-		const url = URL.parse(value);
-		return (
-			url !== null
-			&& (url.protocol === "postgres:" || url.protocol === "postgresql:")
-			&& url.username !== ""
-			&& !decodeURIComponent(url.username).startsWith("daybook_")
-		);
-	}, `${name} must be a postgres:// URL for the database owner, not a daybook_ role`);
+	required(name)
+		.refine(
+			(value) => {
+				const url = URL.parse(value);
+				return (
+					url !== null
+					&& (url.protocol === "postgres:"
+						|| url.protocol === "postgresql:")
+					&& url.username !== ""
+					&& !decodeURIComponent(url.username).startsWith("daybook_")
+				);
+			},
+			{
+				error: `${name} must be a postgres:// URL for the database owner, not a daybook_ role`,
+				abort: true,
+			},
+		)
+		.refine(encrypted, encryptedMessage(name));
 
 const password = (name: string) =>
 	required(name).min(16, `${name} must be at least 16 characters`);

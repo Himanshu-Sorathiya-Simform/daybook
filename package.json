@@ -13,7 +13,9 @@
 		"test": "vitest",
 		"test:run": "vitest run",
 		"test:coverage": "vitest run --coverage",
-		"docs:check": "node scripts/docs-check.mjs"
+		"docs:check": "node scripts/docs-check.mjs",
+		"db:bootstrap": "tsx --conditions=react-server scripts/db/bootstrap.ts",
+		"db:check-connections": "tsx --conditions=react-server scripts/db/check-connections.ts"
 	},
 	"dependencies": {
 		"better-auth": "^1.7.12",

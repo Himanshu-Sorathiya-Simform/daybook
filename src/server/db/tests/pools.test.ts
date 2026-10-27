@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 // Placeholder values only. No test here connects: a pg Pool opens a connection on first query.
 const roleUrl = (role: string) =>
-	`postgresql://${role}:pw@db-pooler.example.com/neondb`;
+	`postgresql://${role}:pw@db-pooler.example.com/neondb?sslmode=verify-full`;
 
 const validServer = {
 	APP_ORIGIN: "http://localhost:3000",
