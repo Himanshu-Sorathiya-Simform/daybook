@@ -65,7 +65,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON app.<table> TO daybook_system;
 
 ## 5. Tests
 
-- The isolation suite finds private tables from the database catalog, so the new table is covered by its checks (AC-P2-01 to AC-P2-04, TST-1). Confirm that it is in the suite's run.
+- The isolation suite, `src/server/db/tests/isolation.integration.test.ts`, runs every check (AC-P2-01 to AC-P2-04, AC-P2-06, TST-1) on every private table in `TABLE_CLASSES`. Add a row factory for the new table to `PRIVATE_ROWS` in `src/server/db/tests/private-rows.ts`; the typecheck fails until you do. Confirm the table appears in the suite's run.
 - Add table tests: a composite foreign key refuses another user's parent with `parent_missing` (AC-P2-05); deleting a parent behaves as chosen in step 3 (AC-P2-06); deleting the user removes the rows without a foreign-key error.
 - `db:verify` must pass (AC-P2-07). `pnpm db:migrate --env .env.test` applies the migration to the Neon test branch and runs the same checks.
 - Database tests are `*.integration.test.ts` files, run by `pnpm test:integration`: locally against the Neon test branch from `.env.test`, and in CI. Report what ran where; never claim a run that did not happen.
@@ -80,4 +80,4 @@ Show the final migration SQL and a checklist of steps 2 to 5 with one line each 
 
 ## Keep this skill current
 
-When the first real migration exists, check this skill against it and fix any difference. Update step 5 once the isolation suite's location is known.
+Checked against the first migration (`drizzle/0000_init.sql`) and the isolation suite on 27 Oct 2026. When a migration, `db:verify` or the suite changes how a table is added, update this skill in the same change.

@@ -67,15 +67,16 @@ async function loginAs(connectionString: string): Promise<string> {
 	}
 }
 
-async function main(): Promise<void> {
-	const file = loadEnvFile(process.argv.slice(2));
-	console.log(
-		`Checking database connections${file ? ` (variables from ${file})` : ""}`,
-	);
-	const env = parseServerEnv(process.env);
-	let failed = false;
+export type SlotResult = { slot: Slot; problems: string[] };
+
+/** Runs every check for the three slots, logging in once per role. */
+export async function checkConnections(
+	env: ServerEnv,
+	source: Readonly<Record<string, string | undefined>>,
+): Promise<SlotResult[]> {
+	const results: SlotResult[] = [];
 	for (const slot of SLOTS) {
-		const problems = staticProblems(slot, env, process.env);
+		const problems = staticProblems(slot, env, source);
 		try {
 			const role = await loginAs(env[slot.url]);
 			if (role !== slot.role) problems.push(`it logged in as ${role}`);
@@ -86,14 +87,26 @@ async function main(): Promise<void> {
 				`login failed: ${error instanceof Error ? error.message : "unknown"}`,
 			);
 		}
-		if (problems.length === 0) {
-			console.log(`  ${slot.url}: ok, logged in as ${slot.role}`);
-		} else {
-			failed = true;
-			console.log(`  ${slot.url}: FAILED, ${problems.join("; ")}`);
-		}
+		results.push({ slot, problems });
 	}
-	if (failed) process.exitCode = 1;
+	return results;
+}
+
+async function main(): Promise<void> {
+	const file = loadEnvFile(process.argv.slice(2));
+	console.log(
+		`Checking database connections${file ? ` (variables from ${file})` : ""}`,
+	);
+	const env = parseServerEnv(process.env);
+	const results = await checkConnections(env, process.env);
+	for (const { slot, problems } of results) {
+		console.log(
+			problems.length === 0 ?
+				`  ${slot.url}: ok, logged in as ${slot.role}`
+			:	`  ${slot.url}: FAILED, ${problems.join("; ")}`,
+		);
+	}
+	if (results.some((r) => r.problems.length > 0)) process.exitCode = 1;
 	else console.log("Done. All three roles log in.");
 }
 

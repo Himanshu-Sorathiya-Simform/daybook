@@ -34,3 +34,51 @@ jobs:
             - run: pnpm typecheck
             - run: pnpm test:run
             - run: pnpm build
+
+    # The database tests against a throwaway Postgres 18 on GitHub's runner, never Neon (TST-5,
+    # D-02, D-03). The passwords below exist only inside this container and are deleted with it.
+    database:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        services:
+            postgres:
+                image: postgres:18
+                env:
+                    POSTGRES_USER: postgres
+                    POSTGRES_PASSWORD: ci-placeholder-owner-password
+                    POSTGRES_DB: daybook
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U postgres -d daybook"
+                    --health-interval 5s
+                    --health-timeout 5s
+                    --health-retries 12
+        env:
+            DAYBOOK_TEST_DATABASE: "true"
+            APP_ORIGIN: http://localhost:3000
+            BETTER_AUTH_SECRET: ci-placeholder-auth-secret-not-used-outside-ci
+            DATABASE_URL_OWNER: postgresql://postgres:ci-placeholder-owner-password@localhost:5432/daybook
+            DB_PASSWORD_AUTH: ci-placeholder-auth-password
+            DB_PASSWORD_RUNTIME: ci-placeholder-runtime-password
+            DB_PASSWORD_SYSTEM: ci-placeholder-system-password
+            DATABASE_URL_AUTH: postgresql://daybook_auth:ci-placeholder-auth-password@localhost:5432/daybook
+            DATABASE_URL_RUNTIME: postgresql://daybook_runtime:ci-placeholder-runtime-password@localhost:5432/daybook
+            DATABASE_URL_SYSTEM: postgresql://daybook_system:ci-placeholder-system-password@localhost:5432/daybook
+        steps:
+            - uses: actions/checkout@v7
+
+            - uses: pnpm/action-setup@v6
+
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 24
+                  cache: pnpm
+
+            - run: pnpm install --frozen-lockfile
+
+            # Roles and schemas, then the migrations (which run db:verify at the end).
+            - run: pnpm db:bootstrap
+            - run: pnpm db:migrate
+            - run: pnpm db:check-connections
+            - run: pnpm test:integration
