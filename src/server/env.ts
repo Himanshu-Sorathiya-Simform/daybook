@@ -1,0 +1,106 @@
+import "server-only";
+import { z } from "zod";
+
+/** Thrown when environment variables are missing or malformed. The message lists each
+ * variable and its problem, never a value, so a secret cannot reach a log (BR-P2-38). */
+export class EnvError extends Error {
+	readonly problems: readonly string[];
+
+	constructor(problems: readonly string[]) {
+		super(
+			`Environment variables are missing or invalid:\n${problems.map((problem) => `  - ${problem}`).join("\n")}`,
+		);
+		this.name = "EnvError";
+		this.problems = problems;
+	}
+}
+
+// `abort` stops the variable's later checks, so an empty value reports "required" alone.
+const required = (name: string) =>
+	z
+		.string({ error: `${name} is required` })
+		.min(1, { error: `${name} is required`, abort: true });
+
+/** A Postgres URL whose user is `role`, so a connection string pasted into the wrong
+ * variable (the owner's in the runtime slot, say) stops the app instead of quietly
+ * running with the wrong powers. */
+const roleUrl = (name: string, role: string) =>
+	required(name).refine((value) => {
+		const url = URL.parse(value);
+		return (
+			url !== null
+			&& (url.protocol === "postgres:" || url.protocol === "postgresql:")
+			&& decodeURIComponent(url.username) === role
+		);
+	}, `${name} must be a postgres:// URL for the ${role} role`);
+
+/** The owner's URL: any user except the three Daybook roles, which own nothing. */
+const ownerUrl = (name: string) =>
+	required(name).refine((value) => {
+		const url = URL.parse(value);
+		return (
+			url !== null
+			&& (url.protocol === "postgres:" || url.protocol === "postgresql:")
+			&& url.username !== ""
+			&& !decodeURIComponent(url.username).startsWith("daybook_")
+		);
+	}, `${name} must be a postgres:// URL for the database owner, not a daybook_ role`);
+
+const password = (name: string) =>
+	required(name).min(16, `${name} must be at least 16 characters`);
+
+/** What the running app reads. The owner URL and the role passwords are deliberately absent:
+ * the app never migrates or creates roles (BR-P2-36), so it never holds the owner's key. */
+export const serverEnvSchema = z.object({
+	APP_ORIGIN: required("APP_ORIGIN").refine((value) => {
+		const url = URL.parse(value);
+		return (
+			url !== null
+			&& (url.protocol === "http:" || url.protocol === "https:")
+			&& url.origin === value
+		);
+	}, "APP_ORIGIN must be an origin like http://localhost:3000, with no path or trailing slash"),
+	BETTER_AUTH_SECRET: required("BETTER_AUTH_SECRET").min(
+		32,
+		"BETTER_AUTH_SECRET must be at least 32 characters",
+	),
+	DATABASE_URL_AUTH: roleUrl("DATABASE_URL_AUTH", "daybook_auth"),
+	DATABASE_URL_RUNTIME: roleUrl("DATABASE_URL_RUNTIME", "daybook_runtime"),
+	DATABASE_URL_SYSTEM: roleUrl("DATABASE_URL_SYSTEM", "daybook_system"),
+});
+
+/** What the database scripts (bootstrap, migrate, verify) read, over the direct endpoint. */
+export const ownerEnvSchema = z.object({
+	DATABASE_URL_OWNER: ownerUrl("DATABASE_URL_OWNER"),
+	DB_PASSWORD_AUTH: password("DB_PASSWORD_AUTH"),
+	DB_PASSWORD_RUNTIME: password("DB_PASSWORD_RUNTIME"),
+	DB_PASSWORD_SYSTEM: password("DB_PASSWORD_SYSTEM"),
+});
+
+export type ServerEnv = z.infer<typeof serverEnvSchema>;
+export type OwnerEnv = z.infer<typeof ownerEnvSchema>;
+
+type Source = Readonly<Record<string, string | undefined>>;
+
+function parseWith<T>(schema: z.ZodType<T>, source: Source): T {
+	const result = schema.safeParse(source);
+	if (result.success) return result.data;
+	// One line per variable; Zod's messages here are ours and carry no input value.
+	throw new EnvError(result.error.issues.map((issue) => issue.message));
+}
+
+export function parseServerEnv(source: Source): ServerEnv {
+	return parseWith(serverEnvSchema, source);
+}
+
+export function parseOwnerEnv(source: Source): OwnerEnv {
+	return parseWith(ownerEnvSchema, source);
+}
+
+let cached: ServerEnv | undefined;
+
+/** The validated server environment, read from `process.env` on first use. */
+export function serverEnv(): ServerEnv {
+	cached ??= parseServerEnv(process.env);
+	return cached;
+}
