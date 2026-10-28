@@ -2,6 +2,7 @@ import { parseNumericQuery, parseUrlAmount, writeUrlAmount } from "@/lib/amount"
 import type { CategoryKey } from "@/lib/categories";
 import type { CurrencyCode } from "@/lib/currency";
 import { codePointLength, normalizeText } from "@/lib/text";
+import { isUuid } from "@/lib/ids";
 import { isIsoDate } from "@/lib/time";
 
 import {
@@ -48,7 +49,6 @@ export type ReadFilter = {
 	invalid: FilterParam[];
 };
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const Q_MIN = 3;
 const Q_MAX = 100;
 
@@ -104,7 +104,7 @@ export function readFilterParams(
 
 	const type = list("type", TXN_TYPES);
 	const cat = list("cat", CATEGORY_KEYS);
-	const uuid = (raw: string) => (UUID.test(raw) ? raw.toLowerCase() : null);
+	const uuid = (raw: string) => (isUuid(raw) ? raw.toLowerCase() : null);
 	const goal = value("goal", uuid);
 	const sub = value("sub", uuid);
 	const src = value("src", (raw) => (oneOf(SOURCES, raw) ? raw : null));
@@ -114,7 +114,8 @@ export function readFilterParams(
 		minMinor = drop("min");
 		maxMinor = drop("max");
 	}
-	const q = readQuery(one("q"), currency);
+	const query = checkQuery(one("q"), currency);
+	const q = query.ok ? query.q : null;
 	if (q === null) drop("q");
 
 	const sort =
@@ -148,21 +149,28 @@ export function readFilterParams(
 	};
 }
 
-/** The search text, trimmed and in NFC (root 6.7), `undefined` when absent, or `null` when
- * invalid: control characters, over 100 characters, or under 3 unless numeric (BR-F03-34). */
-function readQuery(
+export type QueryCheck =
+	| { ok: true; q: string | undefined }
+	| { ok: false; reason: "characters" | "too_long" | "too_short" };
+
+/** The search text, trimmed and in NFC (root 6.7), or `undefined` when absent or blank. It is
+ * refused for control characters, over 100 characters, or under 3 unless numeric
+ * (BR-F03-34); `reason` says which, for a saved view's message (BR-F03-64). */
+export function checkQuery(
 	raw: string | undefined,
 	currency: CurrencyCode,
-): string | null | undefined {
-	if (raw === undefined) return undefined;
+): QueryCheck {
+	if (raw === undefined) return { ok: true, q: undefined };
 	const normalized = normalizeText(raw);
-	if (!normalized.ok) return null;
+	if (!normalized.ok) return { ok: false, reason: "characters" };
 	const q = normalized.value;
-	if (q === "") return undefined;
+	if (q === "") return { ok: true, q: undefined };
 	const length = codePointLength(q);
-	if (length > Q_MAX) return null;
-	if (length < Q_MIN && parseNumericQuery(q, currency) === null) return null;
-	return q;
+	if (length > Q_MAX) return { ok: false, reason: "too_long" };
+	if (length < Q_MIN && parseNumericQuery(q, currency) === null) {
+		return { ok: false, reason: "too_short" };
+	}
+	return { ok: true, q };
 }
 
 /**

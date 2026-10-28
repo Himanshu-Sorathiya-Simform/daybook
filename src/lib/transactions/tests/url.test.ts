@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import type { CurrencyCode } from "@/lib/currency";
 import type { FilterParam } from "@/lib/transactions/model";
 import {
+	checkQuery,
 	readFilterParams,
 	writeFilterQuery,
 	type ListParams,
@@ -383,5 +384,32 @@ describe("writeFilterQuery", () => {
 			const query = writeFilterQuery(filter, list, { currency: "INR" });
 			expect(read(query)).toEqual({ filter, list, invalid: [] });
 		}
+	});
+});
+
+describe("checkQuery (BR-F03-34)", () => {
+	test("answers the search trimmed and in NFC", () => {
+		expect(checkQuery(" Cafe\u0301 ", "INR")).toEqual({
+			ok: true,
+			q: "Caf\u00e9",
+		});
+	});
+
+	test("treats a missing or blank search as absent", () => {
+		expect(checkQuery(undefined, "INR")).toEqual({ ok: true, q: undefined });
+		expect(checkQuery("   ", "INR")).toEqual({ ok: true, q: undefined });
+	});
+
+	test.each([
+		["ab\u0007c", "characters"],
+		["a".repeat(101), "too_long"],
+		["ab", "too_short"],
+		["0", "too_short"],
+	])("refuses %j: %s", (raw, reason) => {
+		expect(checkQuery(raw, "INR")).toEqual({ ok: false, reason });
+	});
+
+	test("keeps a short search that is an amount", () => {
+		expect(checkQuery("12", "INR")).toEqual({ ok: true, q: "12" });
 	});
 });

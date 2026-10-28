@@ -161,24 +161,6 @@ describe("checkOrigin", () => {
 	});
 });
 
-describe("isUuidV7", () => {
-	test("accepts a UUIDv7, in either case", () => {
-		expect(isUuidV7(V7)).toBe(true);
-		expect(isUuidV7(V7.toUpperCase())).toBe(true);
-	});
-
-	test.each([
-		["a UUIDv4", "0192f0c4-8a1b-4c2d-9e3f-0123456789ab"],
-		["a bad variant", "0192f0c4-8a1b-7c2d-7e3f-0123456789ab"],
-		["no dashes", "0192f0c48a1b7c2d9e3f0123456789ab"],
-		["extra text", `${V7}x`],
-		["empty", ""],
-		["null", null],
-	])("refuses %s", (_name, value) => {
-		expect(isUuidV7(value)).toBe(false);
-	});
-});
-
 describe("requestIdOf", () => {
 	test("keeps the proxy's UUIDv7, lower-cased", () => {
 		expect(requestIdOf(new Headers({ "x-request-id": V7.toUpperCase() }))).toBe(

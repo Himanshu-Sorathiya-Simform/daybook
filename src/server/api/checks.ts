@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUIDv7 } from "node:crypto";
 import { parseCookies } from "../auth/session-expired";
+import { isUuidV7 } from "@/lib/ids";
 import { ApiError } from "./errors";
 
 /** The largest JSON body a route accepts (BR-P2-17, step 3). */
@@ -61,12 +62,7 @@ export function checkOrigin(request: Request, origin: string): void {
 	if (request.headers.get("origin") !== origin) throw new ApiError("cross_origin");
 }
 
-const UUID_V7 =
-	/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export function isUuidV7(value: string | null | undefined): value is string {
-	return typeof value === "string" && UUID_V7.test(value);
-}
+export { isUuidV7 } from "@/lib/ids";
 
 /** The request id: the `x-request-id` that `proxy.ts` sets when it is a UUIDv7, or a new one,
  * so a handler called without the proxy still has one (step 1, D-436). */
