@@ -5,6 +5,7 @@ import {
 	dailyPassMarkers,
 	idempotencyRecords,
 	profile,
+	transactions,
 } from "./app";
 import { account, session, user, verification } from "./auth";
 
@@ -23,5 +24,6 @@ export const ALL_TABLES = [
 	categories,
 	profile,
 	idempotencyRecords,
+	transactions,
 	dailyPassMarkers,
 ] as const;

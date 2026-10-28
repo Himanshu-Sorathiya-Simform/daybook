@@ -62,8 +62,6 @@ export function checkOrigin(request: Request, origin: string): void {
 	if (request.headers.get("origin") !== origin) throw new ApiError("cross_origin");
 }
 
-export { isUuidV7 } from "@/lib/ids";
-
 /** The request id: the `x-request-id` that `proxy.ts` sets when it is a UUIDv7, or a new one,
  * so a handler called without the proxy still has one (step 1, D-436). */
 export function requestIdOf(headers: Headers): string {

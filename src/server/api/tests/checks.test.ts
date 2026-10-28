@@ -5,13 +5,13 @@ import {
 	checkOrigin,
 	isJsonMediaType,
 	isMutation,
-	isUuidV7,
 	parseIfMatch,
 	queuePending,
 	readBody,
 	requestIdOf,
 } from "../checks";
 import { ApiError } from "../errors";
+import { isUuidV7 } from "@/lib/ids";
 
 const V7 = "0192f0c4-8a1b-7c2d-9e3f-0123456789ab";
 

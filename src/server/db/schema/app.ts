@@ -1,8 +1,11 @@
 import "server-only";
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import {
+	bigint,
+	boolean,
 	check,
 	date,
+	foreignKey,
 	index,
 	integer,
 	jsonb,
@@ -12,6 +15,7 @@ import {
 	timestamp,
 	unique,
 	uuid,
+	type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 
@@ -63,6 +67,8 @@ export const categories = appSchema.table(
 		position: smallint("position").notNull().unique(),
 	},
 	(t) => [
+		// The target of a Transaction's composite key (category, category_kind) (D-466).
+		unique("categories_key_kind_key").on(t.key, t.kind),
 		check("categories_key_format", sql`${t.key} ~ '^[a-z_]+$'`),
 		check("categories_kind_values", sql`${t.kind} IN ('expense', 'income')`),
 		check("categories_position_positive", sql`${t.position} >= 1`),
@@ -126,6 +132,105 @@ export const idempotencyRecords = appSchema.table(
 			"idempotency_records_status_code_range",
 			sql`${t.statusCode} BETWEEN 100 AND 599`,
 		),
+	],
+);
+
+/** A text column's backstop (BR-F03-12, D-467): 1 to `max` code points, in NFC, with no
+ * control character. `multiline` allows the line feed, for a note. Empty text is stored as
+ * null, so a present value is never empty. */
+function textCheck(
+	name: string,
+	column: SQL.Aliased | AnyPgColumn,
+	max: number,
+	multiline = false,
+) {
+	const control =
+		multiline ?
+			"[\\x01-\\x09\\x0b-\\x1f\\x7f-\\x9f]"
+		:	"[\\x01-\\x1f\\x7f-\\x9f]";
+	return check(
+		name,
+		sql`char_length(${column}) BETWEEN 1 AND ${sql.raw(String(max))}
+			AND ${column} !~ ${sql.raw(`'${control}'`)}
+			AND ${column} IS NFC NORMALIZED`,
+	);
+}
+
+/**
+ * One user's ledger (F03 section 3). At M1 it holds income, expenses and refunds; `goal_id`,
+ * the Goal types and the charge link (`subscription_id`, `due_on`, `edited`) arrive with F06's
+ * and F05's migrations in M2 (D-465). The checks are backstops for the shared schemas'
+ * rules (D-467). The trigram search index is written by hand in the migration, after
+ * `CREATE EXTENSION pg_trgm`, so it is not declared here (D-468).
+ */
+export const transactions = appSchema.table(
+	"transactions",
+	{
+		...privateColumns(),
+		type: text("type").notNull(),
+		amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+		occurredAt: instant("occurred_at").notNull(),
+		occurredOn: date("occurred_on", { mode: "string" }).notNull(),
+		category: text("category").notNull(),
+		// Lets a foreign key check that the category suits the type (TXN-3, D-466).
+		categoryKind: text("category_kind").generatedAlwaysAs(
+			sql`CASE "type" WHEN 'income' THEN 'income' ELSE 'expense' END`,
+		),
+		payee: text("payee").notNull(),
+		description: text("description"),
+		note: text("note"),
+		source: text("source").notNull(),
+		demo: boolean("demo").notNull().default(false),
+		version: integer("version").notNull().default(1),
+	},
+	(t) => [
+		foreignKey({
+			name: "transactions_category_kind_fk",
+			columns: [t.category, t.categoryKind],
+			foreignColumns: [categories.key, categories.kind],
+		}),
+		index("transactions_date_order_idx").on(
+			t.userId,
+			t.occurredOn,
+			t.occurredAt,
+			t.id,
+		),
+		index("transactions_amount_order_idx").on(
+			t.userId,
+			t.amountMinor,
+			t.occurredOn,
+			t.occurredAt,
+			t.id,
+		),
+		index("transactions_payee_idx").on(
+			t.userId,
+			sql`lower(${t.payee}) text_pattern_ops`,
+		),
+		check(
+			"transactions_type_values",
+			sql`${t.type} IN ('income', 'expense', 'refund')`,
+		),
+		check(
+			"transactions_amount_range",
+			sql`${t.amountMinor} BETWEEN 1 AND 999999999999`,
+		),
+		check(
+			"transactions_occurred_at_minute",
+			sql`date_trunc('minute', ${t.occurredAt}) = ${t.occurredAt}`,
+		),
+		check(
+			"transactions_occurred_on_fits",
+			sql`${t.occurredOn} BETWEEN ((${t.occurredAt} AT TIME ZONE 'UTC') - interval '12 hours')::date
+				AND ((${t.occurredAt} AT TIME ZONE 'UTC') + interval '14 hours')::date`,
+		),
+		textCheck("transactions_payee_text", t.payee, 80),
+		textCheck("transactions_description_text", t.description, 120),
+		textCheck("transactions_note_text", t.note, 500, true),
+		check(
+			"transactions_source_values",
+			sql`${t.source} IN ('manual', 'subscription')`,
+		),
+		check("transactions_version_positive", sql`${t.version} >= 1`),
 	],
 );
 

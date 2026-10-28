@@ -15,13 +15,13 @@ import {
 	checkOrigin,
 	isJsonMediaType,
 	isMutation,
-	isUuidV7,
 	parseIfMatch,
 	queuePending,
 	readBody,
 	requestIdOf,
 } from "./checks";
 import { ApiError, describeError, fromZodError, toApiError } from "./errors";
+import { isUuidV7 } from "@/lib/ids";
 import {
 	claimKey,
 	findAnswer,
