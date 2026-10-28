@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270                                                                                                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-451                                                                                      |
 
 ## 1. User stories
 
@@ -29,9 +29,9 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 
 ## 2. Scope
 
-| In                                                                                                                                                                                                                                                                                                                                  | Stretch (M8)                                                | Out                                                                                                                                                                                                                                                                            |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The entry dialog (create, edit, duplicate); the infinite, virtualized list; filters in the URL; sort; header totals; payee suggestions; delete with Undo; deep links; pending, rejected and conflict display; how Subscription charges and demo rows behave in the list; the server rules for Goal Transactions; keyboard shortcuts | Bulk delete with one Undo (D-85, `transactions.bulkDelete`) | Import (D-86); attachments and receipts; split Transactions (D-22); tags (D-23); accounts and transfers (D-24); multi-currency; recurring income (D-72); linking a refund to its original expense; changing a charge's date; per-day totals in the list; export (F01, Stretch) |
+| In                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Stretch (M8)                                                | Out                                                                                                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The entry dialog (create, edit, duplicate); the infinite, virtualized list; filters in the URL; sort; header totals; payee suggestions; delete with Undo; deep links; pending, rejected and conflict display; how Subscription charges and demo rows behave in the list; the server rules for Goal Transactions; keyboard shortcuts; grouping by day, category or payee with group totals; the summary breakdowns; filter counts; the amount histogram; payee history and search | Bulk delete with one Undo (D-85, `transactions.bulkDelete`) | Import (D-86); attachments and receipts; split Transactions (D-22); tags (D-23); accounts and transfers (D-24); multi-currency; recurring income (D-72); linking a refund to its original expense; changing a charge's date; export (F01, Stretch) |
 
 **Milestones (D-241).** Each acceptance criterion names its milestone when it is not M1.
 
@@ -87,19 +87,21 @@ A plus sign means money becomes free to spend: income, a refund, money back from
 | `txn=<id>` | Opens that Transaction in the dialog over the list |
 | `new=1`    | Opens an empty entry dialog                        |
 
-**Date presets (D-227).** Each preset writes explicit dates into the URL. Examples are for today, 2026-11-02.
+**List parameters.** `sort` and `dir` (BR-F03-40) and `group` (BR-F03-55) shape the list but select no rows. The summary, the filter counts and the amount histogram ignore them, valid or not.
 
-| Preset             | `from` to `to`                         | Example                  |
-| ------------------ | -------------------------------------- | ------------------------ |
-| All time (default) | No dates                               |                          |
-| This month         | First to last day of the current month | 2026-11-01 to 2026-11-30 |
-| Last month         | The previous calendar month            | 2026-10-01 to 2026-10-31 |
-| Last 3 months      | The current month and the two before   | 2026-09-01 to 2026-11-30 |
-| Year to date       | 1 January to today                     | 2026-01-01 to 2026-11-02 |
-| Last 12 months     | The current month and the 11 before    | 2025-12-01 to 2026-11-30 |
-| Custom             | Any inclusive range                    |                          |
+**Date presets (D-227).** Each preset writes explicit dates into the URL. Examples are for today, 2026-11-02. The key names the preset in filter counts (BR-F03-59).
 
-**Cursor.** Opaque base64url JSON holding the sort, the direction of travel, and the boundary row's sort key and id. A cursor used with a different sort, or one that fails to decode, gets 400 `bad_request`.
+| Preset             | Key              | `from` to `to`                         | Example                  |
+| ------------------ | ---------------- | -------------------------------------- | ------------------------ |
+| All time (default) | `all`            | No dates                               |                          |
+| This month         | `this_month`     | First to last day of the current month | 2026-11-01 to 2026-11-30 |
+| Last month         | `last_month`     | The previous calendar month            | 2026-10-01 to 2026-10-31 |
+| Last 3 months      | `last_3_months`  | The current month and the two before   | 2026-09-01 to 2026-11-30 |
+| Year to date       | `year_to_date`   | 1 January to today                     | 2026-01-01 to 2026-11-02 |
+| Last 12 months     | `last_12_months` | The current month and the 11 before    | 2025-12-01 to 2026-11-30 |
+| Custom             | `custom`         | Any inclusive range                    |                          |
+
+**Cursor.** Opaque base64url JSON holding the sort, the group, the direction of travel, and the boundary row's sort key and id. Under category or payee grouping it also holds the boundary row's group key and the order fingerprint (BR-F03-57). A cursor used with a different sort or group, or one that fails to decode, gets 400 `bad_request`.
 
 ## 4. Business rules
 
@@ -244,14 +246,16 @@ A plus sign means money becomes free to spend: income, a refund, money back from
     - **Date sort:** `occurredOn`, then `occurredAt`, then `id`, all in the chosen direction (newest first by default).
     - **Amount sort:** `amountMinor`, then `occurredOn`, `occurredAt` and `id` in the same direction.
 
-    Day groups therefore never interleave, even after a time-zone change. Cursors stay stable when rows are inserted (API-7).
+    Under category or payee grouping, rows order first by their group (BR-F03-55), then as above.
+
+    Day groups therefore never interleave, even after a time-zone change. Cursors stay stable when rows are inserted (API-7), except under category or payee grouping, where a reorder ends them (BR-F03-57).
 
 - **BR-F03-30** Pages hold 50 rows. The list behaves like this (D-36, D-171):
     - it keeps at most 5 pages in memory (`maxPages`) and reloads pages trimmed from the top through `prevCursor`;
     - it is a virtualized React Aria GridList;
     - scrolling near the end loads the next page, and a visible Load more button does the same (NFR-5);
     - each load announces "Loaded 50 more Transactions" in a polite live region.
-- **BR-F03-31** The date sort shows sticky day headers by `occurredOn`: "Today", "Yesterday", or the F02 day format ("Sat, 31 Oct"; "Sat, 31 Oct 2025" outside the current year). The amount sort shows the date on each row instead.
+- **BR-F03-31** Day grouping (BR-F03-55) shows sticky day headers by `occurredOn`: "Today", "Yesterday", or the F02 day format ("Sat, 31 Oct"; "Sat, 31 Oct 2025" outside the current year). Every other grouping shows the date on each row instead.
 - **BR-F03-32** A row shows six things:
     - **Avatar:** the payee's initials (D-86), taken from the letters and digits of the payee: the first character of each of the first two words, or the first two characters of a single word, uppercase. With none, the category icon. Goal rows show the Goal's icon and color.
     - **Title:** the payee. Goal rows read "To Vacation" or "From Vacation".
@@ -260,12 +264,30 @@ A plus sign means money becomes free to spend: income, a refund, money back from
     - **Time:** or "Auto" for charges.
     - **Amount and badges:** the signed amount (D-231), then any badge: "Pending sync" or "Not saved".
 
+**Grouping**
+
+- **BR-F03-55** `group` sets how the list is grouped: `day`, `category`, `payee` or `none` (D-445).
+    - **Default:** `day` under the date sort, `none` under the amount sort. Choosing the amount sort while grouped by day switches to `none`.
+    - **Day needs the date sort:** `group=day` with `sort=amount` is invalid (BR-F03-34).
+    - **Day order:** day groups follow the rows' own order (BR-F03-29), so another day never splits a day group.
+    - **Category and payee order:** groups run by weight, largest first, then by key. Weight is In + |Out| + |To Goals| of the group over the whole filter (TXN-5). Rows inside a group follow the chosen sort and direction; the direction never reverses the group order.
+    - **Group keys:** the `occurredOn` date; the category key; or the payee lowercased with Postgres `lower()`, labeled with the payee of the group's last row in the date order of BR-F03-29. Under category and payee grouping, Goal rows group by `goal:<goalId>`, labeled with the Goal's name.
+- **BR-F03-56** Group totals come with each page (D-445), so a header never depends on how many rows are loaded.
+    - **The entries:** each page carries `groups`, one entry for every group with a row on that page: `key`, `label`, `count`, `inMinor`, `outMinor` and `toGoalsMinor`, over the whole filter's confirmed rows (TXN-6).
+    - **`label`:** the display name of a payee or Goal group; null for day and category groups, which the client names itself.
+    - **No grouping:** with `group=none`, `groups` is empty.
+    - **The header:** a group header shows its label and its figures that are not zero; category and payee headers also show the count. A group that spans two pages uses the entry of the page fetched last.
+- **BR-F03-57** Under category or payee grouping, a write anywhere can reorder groups between two page loads (D-446).
+    - **The fingerprint:** each page carries `order`: the first 16 hexadecimal characters of the SHA-256 of the filter's group keys, in their current order, joined by U+001F. It is null under day and no grouping, whose order never moves.
+    - **The cursor:** next and previous cursors carry the fingerprint of the page they came from. If the order has changed since, the server answers with no items, no cursors and the new `order`.
+    - **The client:** it keeps the `order` of the first page it loaded, apart from the pages, so trimming by `maxPages` never loses it. When a later page's `order` differs, it reloads the list from the first page and keeps the new `order`.
+
 **Filters**
 
 - **BR-F03-33** The committed filter lives in the URL (FIL-4) and is normalized before use:
-    - parameters in a fixed order: `from`, `to`, `type`, `cat`, `goal`, `sub`, `src`, `min`, `max`, `q`, `sort`, `dir`;
+    - parameters in a fixed order: `from`, `to`, `type`, `cat`, `goal`, `sub`, `src`, `min`, `max`, `q`, `sort`, `dir`, `group`;
     - lists sorted and deduplicated;
-    - defaults omitted (`sort=date`, `dir=desc`, no dates for all time).
+    - defaults omitted (`sort=date`, `dir=desc`, the sort's default `group`, no dates for all time).
 
     The normalized object is the query key, so equivalent URLs share one cache entry.
 
@@ -277,7 +299,8 @@ A plus sign means money becomes free to spend: income, a refund, money back from
     - an amount that does not parse in major units with `.`, has more decimals than the currency allows, or exceeds MON-5;
     - a non-numeric `q` under 3 characters, any `q` over 100, or a `q` with control characters;
     - a `goal` or `sub` that is not a UUID;
-    - an unknown `sort` or `dir`.
+    - an unknown `sort` or `dir`;
+    - an unknown `group`, or `group=day` with `sort=amount`.
 
     A well-formed Goal or Subscription id that is not the user's simply matches no rows.
 
@@ -305,6 +328,29 @@ A plus sign means money becomes free to spend: income, a refund, money back from
     - **The deltas:** a pending create adds its row; a pending edit adds the difference between old and new; a pending delete subtracts its row.
     - **Lifetime:** the annotation stays until the summary refetches after the sync (OFF-6).
 - **BR-F03-43** Matching pending rows to the filter uses one shared module, `matchesFilter(row, filter)`. It mirrors the SQL predicate rule for rule and builds the same search string as BR-F03-35. The golden list checks run against both. It is used only for pending rows, never for confirmed figures.
+- **BR-F03-58** The summary also gives a date span and, on request, breakdowns (D-447).
+    - **The date span:** `firstOn` and `lastOn`, the earliest and latest `occurredOn` of the filter's confirmed rows, or null when there are none. These come from `rollup`'s `bounds`.
+    - **Breakdowns:** `by` takes a comma list of `category` and `payee`, and the answer gains `byCategory`, `byPayee` or both. An empty `by`, an unknown value or a repeated value gets 400 `bad_request`.
+    - **Each breakdown:** at most 6 groups whose Out is above zero, ordered by Out, largest first, then by key. Each has `key`, `label`, `count` (its expense and refund rows) and `outMinor`.
+    - **Keys and labels:** as BR-F03-55 and BR-F03-56. Income and Goal rows never enter a breakdown.
+
+**Filter counts and the amount histogram**
+
+- **BR-F03-59** `GET /api/transactions/facets` counts the filter's confirmed rows per option of four fields, so each filter control shows what picking an option gives (D-448).
+    - **`type`:** every TXN-1 type.
+    - **`category`:** every key in CAT-2 and CAT-3. Goal rows have no category, so no category key counts them.
+    - **`date`:** every preset key of section 3 except `custom`, with dates from today in the profile zone (TIME-5).
+    - **`source`:** `manual` and `subscription`.
+    - **Each field ignores its own filter.** The type counts apply every filter except `type`, and so on. Every option appears, zero counts included.
+    - **No counts** for `goal`, `sub`, `min`, `max` or `q`. The amount control reads the histogram instead.
+    - **One statement**, through the filter-to-SQL module (FIL-2).
+- **BR-F03-60** `GET /api/transactions/amount-histogram` buckets the amounts of the confirmed rows that match every filter except `min` and `max` (D-449). It returns `{ edges, counts, currency }`.
+    - **The series:** 100, 125, 160, 200, 250, 315, 400, 500, 630 and 800, each times a power of ten, keeping only whole numbers of minor units. So the series runs 1, 2, 4, 5, 8, 10, 16, 20 and on.
+    - **The edges:** the first edge is the largest series value at or below the smallest amount. The last is the smallest series value above the largest amount.
+    - **Thinning:** if that gives more than 40 buckets, the series becomes 100, 160, 250, 400 and 630; if still more than 40, it becomes 100, 200 and 500.
+    - **The counts:** bucket `i` counts amounts from `edges[i]`, inclusive, up to `edges[i + 1]`, exclusive. `counts` therefore has one entry fewer than `edges`.
+    - **No rows:** both arrays are empty.
+    - **Integers only:** edges and comparisons never use a float (MON-1).
 
 **Payee suggestions**
 
@@ -313,11 +359,25 @@ A plus sign means money becomes free to spend: income, a refund, money back from
     - ordered by count, then by last use;
     - each with its last type and last category.
 
+    The answer also carries `categories`: every category used by an income, expense or refund row in those 365 days, with its row count, ordered by count, then by key (D-451). The entry dialog orders its category choices by it.
+
     The answer is persisted for offline use (STATE-3).
 
 - **BR-F03-45** The payee field filters that list on the device (D-225). From the first character it suggests up to 8 payees that start with the typed text, or that have a word starting with it, case-insensitively. Choosing one fills the payee only.
     - **The category chip:** when that payee's last category is valid for the current type, a chip "Last time: Food" appears. Tapping it sets the category.
     - **Never automatic:** the category is never filled in on its own (D-89).
+- **BR-F03-61** `GET /api/payees?q=` searches the same 365 days on the server, for payees beyond the 200 on the device (D-451).
+    - **Matching:** as BR-F03-45: the payee starts with `q`, or has a word starting with it, case-insensitively. `%`, `_` and `\` in `q` match literally.
+    - **The answer:** at most 8 payees, in BR-F03-44's order and item shape, without `categories`.
+    - **`q`:** 1 to 80 characters after BR-F03-12's trimming, without control characters; otherwise 400 `bad_request`.
+    - **When:** online only, when the device list gives fewer than 8 suggestions, 300 ms after typing stops (as FIL-4).
+    - **Merging:** device suggestions come first, then server ones whose `lower()` payee is not already listed, up to 8 in all.
+- **BR-F03-62** `GET /api/payees/history?payee=<payee>&months=<n>` describes one payee's recent rows (D-450).
+    - **The rows:** income, expense and refund rows whose `lower()` payee equals `lower(payee)`, as BR-F03-55 groups them, and whose `occurredOn` runs from today minus `n` calendar months to today, both inclusive, with today in the profile zone (TIME-5). A month end clamps as date-fns `subMonths` does: 2026-05-31 minus 3 months is 2026-02-28.
+    - **The answer:** `{ count, inMinor, outMinor, usualDay, currency }`. `inMinor` is Σ income; `outMinor` is Σ expense − Σ refund (TXN-5).
+    - **`usualDay`:** the median day of the month of those rows' `occurredOn`, taking the lower middle value for an even count. Null with fewer than 2 rows.
+    - **`months`:** 1 to 12, default 3.
+    - **`payee`:** 1 to 80 characters after BR-F03-12's trimming, without control characters. Otherwise, or with a bad `months`, 400 `bad_request`. A payee with no rows answers a count of 0, zero sums and a null `usualDay`.
 
 **Pending, rejected and conflicting rows**
 
@@ -414,6 +474,55 @@ Every check in [03-golden-dataset.md, Transactions list checks](../03-golden-dat
 
 - Newest first gives P1 (in the waiting group), then #26, #27, #25, #24.
 - October by amount, largest first, starts with #13 and #12, as listed in the golden file.
+
+**Group order** (BR-F03-55). Check A grouped by category, by weight:
+
+| Group          | Weight    | Why                           |
+| -------------- | --------- | ----------------------------- |
+| salary         | 85,000.00 | In                            |
+| housing        | 18,000.00 | Out                           |
+| food           | 6,220.00  | Out                           |
+| Emergency fund | 5,000.00  | To Goals                      |
+| shopping       | 3,000.00  | Out: 4,500.00 − 1,500.00      |
+| entertainment  | 2,148.00  | Out                           |
+| Vacation       | 2,000.00  | To Goals: 3,000.00 − 1,000.00 |
+| transportation | 1,800.00  | Out                           |
+
+At M1, before Goal Transactions, the same order holds without the two Goal groups.
+
+**Group totals** (BR-F03-56). Check A, oldest first, with `limit=1`: the page holds only #12, and its one group entry is `2026-10-01` with count 2, In 85,000.00 and Out 18,000.00, because #13 shares the day.
+
+**Summary breakdowns** (BR-F03-58). Check A with `by=category,payee`:
+
+- **Span:** `firstOn` 2026-10-01, `lastOn` 2026-10-31.
+- **By category:** housing 18,000.00 (1 row), food 6,220.00 (4), shopping 3,000.00 (2), entertainment 2,148.00 (2), transportation 1,800.00 (1). Salary is income, so it is left out.
+- **By payee:** Sunrise Apartments 18,000.00 (1), Croma 3,000.00 (2), BigBasket 2,900.00 (1), Zomato 2,300.00 (1), Indian Oil 1,800.00 (1), Amazon Prime 1,499.00 (1). Swiggy (1,020.00) and Netflix (649.00) fall below the top 6.
+
+**Filter counts** (BR-F03-59). Check B, `from=2026-10-01&to=2026-10-31&cat=food`:
+
+| Field      | Filters applied | Counts                                                                                           |
+| ---------- | --------------- | ------------------------------------------------------------------------------------------------ |
+| `type`     | October, food   | expense 4; the other four types 0                                                                |
+| `category` | October         | food 4, entertainment 2, shopping 2, housing 1, salary 1, transportation 1; every other key 0    |
+| `date`     | food            | `all` 7, `this_month` 1, `last_month` 4, `last_3_months` 7, `year_to_date` 7, `last_12_months` 7 |
+| `source`   | October, food   | `manual` 4, `subscription` 0                                                                     |
+
+**Amount histogram** (BR-F03-60)
+
+- **Check B:** the amounts are 380.00, 640.00, 2,300.00 and 2,900.00. The edges are 315.00, 400.00, 500.00, 630.00, 800.00, 1,000.00, 1,250.00, 1,600.00, 2,000.00, 2,500.00 and 3,150.00, and the counts are 1, 0, 0, 1, 0, 0, 0, 0, 1, 1.
+- **Thinning:** amounts of 1 and 99,999,999,999 minor units give 103 buckets on the full series and 52 on the second, so the third applies: edges 1, 2, 5, 10, 20, 50 and on up to 100,000,000,000, which is 34 edges and 33 buckets.
+
+**Payee history** (BR-F03-62)
+
+| Payee     | `months` | Rows              | `count` | `inMinor`  | `outMinor` | `usualDay`            |
+| --------- | -------- | ----------------- | ------- | ---------- | ---------- | --------------------- |
+| Swiggy    | 3        | #4, #24, #25, #26 | 4       | 0          | 3,290.00   | 3 (days 1, 3, 19, 31) |
+| Swiggy    | 1        | #24, #25, #26     | 3       | 0          | 1,440.00   | 19 (days 1, 19, 31)   |
+| Acme Corp | 3        | #2, #13           | 2       | 170,000.00 | 0          | 1                     |
+
+Three months before 2026-11-02 is 2026-08-02, and one month before is 2026-10-02.
+
+**Category counts** (BR-F03-44). All golden income, expense and refund rows fall within 365 days: food 7, entertainment 3, housing 3, shopping 3, salary 2, transportation 2, freelance 1, health 1.
 
 ## 6. Screens and states
 
@@ -551,20 +660,23 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
     - 409 `version_conflict` opens the conflict view;
     - `goal_read_only`, `date_out_of_window`, `currency_mismatch`, `parent_missing` and `validation_failed` mark the item rejected, with the message from section 8;
     - 404 on a delete counts as done (D-239).
-- **Needs a connection:** a filter or search not already cached shows the offline state.
+- **Needs a connection:** a filter or search not already cached shows the offline state. Filter counts, the amount histogram, payee history and payee search are never persisted, so offline their controls show no counts, no histogram, no history and device suggestions only.
 
 ## 11. Server surface
 
-| Endpoint                                  | Method | Input                                                                                                                  | Output                                                                           | Errors                                                                                                                                   | Idempotency and versioning                |
-| ----------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `/api/transactions`                       | GET    | Filter parameters (root 6.9), `sort`, `dir`, `limit` (default 50, maximum 100), `cursor`                               | `{ items, nextCursor, prevCursor, currency }`                                    | 400, 401, 403 `profile_required`                                                                                                         | Read; repeatable read (P2)                |
-| `/api/transactions/summary`               | GET    | Filter parameters                                                                                                      | `{ count, incomeMinor, spendingMinor, toGoalsMinor, currency }`                  | 400, 401, 403                                                                                                                            | Read; same filter function as the list    |
-| `/api/transactions/[id]`                  | GET    | none                                                                                                                   | The row                                                                          | 401, 403, 404                                                                                                                            | Read                                      |
-| `/api/transactions`                       | POST   | `{ id, type, amountMinor, currency, occurredAt, occurredOn, createdAt, category or goalId, payee, description, note }` | 201 with the row, or 200 with the existing row                                   | 400, 401, 403, 409 `id_conflict`, 422 `validation_failed`, `date_out_of_window`, `parent_missing`, `goal_read_only`, `currency_mismatch` | `Idempotency-Key` required                |
-| `/api/transactions/[id]`                  | PATCH  | Changed fields; `currency` when `amountMinor` is sent                                                                  | 200 with the row                                                                 | 400, 401, 403, 404, 409 `version_conflict`, 422 as for POST                                                                              | `Idempotency-Key` and `If-Match` required |
-| `/api/transactions/[id]`                  | DELETE | `{}`; for a charge, `{ subscriptionId, dueOn }` as a hint (BR-F03-17)                                                  | 204                                                                              | 400, 401, 403, 404, 409 `version_conflict`, 422 `goal_read_only` or `validation_failed` (Goal floor)                                     | `Idempotency-Key` and `If-Match` required |
-| `/api/payees`                             | GET    | none                                                                                                                   | `{ items: [{ payee, count, lastUsedOn, lastType, lastCategory }] }`, at most 200 | 401, 403                                                                                                                                 | Read                                      |
-| `/api/transactions/bulk-delete` (Stretch) | POST   | `{ items: [{ id, version }] }`, 1 to 100                                                                               | 200 `{ deleted }`                                                                | 401, 403 `feature_off`, 409 `version_conflict` with `details.ids`, 422                                                                   | `Idempotency-Key` required                |
+| Endpoint                                  | Method | Input                                                                                                                  | Output                                                                                                                                                              | Errors                                                                                                                                   | Idempotency and versioning                |
+| ----------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `/api/transactions`                       | GET    | Filter parameters (root 6.9), `sort`, `dir`, `group`, `limit` (default 50, maximum 100), `cursor`                      | `{ items, nextCursor, prevCursor, currency, groups, order }` (BR-F03-56, BR-F03-57)                                                                                 | 400, 401, 403 `profile_required`                                                                                                         | Read; repeatable read (P2)                |
+| `/api/transactions/summary`               | GET    | Filter parameters; `by`, a comma list of `category` and `payee`                                                        | `{ count, incomeMinor, spendingMinor, toGoalsMinor, currency, firstOn, lastOn }`, plus `byCategory` and `byPayee` when asked (BR-F03-58)                            | 400, 401, 403                                                                                                                            | Read; same filter function as the list    |
+| `/api/transactions/facets`                | GET    | Filter parameters                                                                                                      | `{ type, category, date, source }`, each an object of option to count (BR-F03-59)                                                                                   | 400, 401, 403                                                                                                                            | Read; same filter function as the list    |
+| `/api/transactions/amount-histogram`      | GET    | Filter parameters; `min` and `max` are ignored                                                                         | `{ edges, counts, currency }` (BR-F03-60)                                                                                                                           | 400, 401, 403                                                                                                                            | Read; same filter function as the list    |
+| `/api/transactions/[id]`                  | GET    | none                                                                                                                   | The row                                                                                                                                                             | 401, 403, 404                                                                                                                            | Read                                      |
+| `/api/transactions`                       | POST   | `{ id, type, amountMinor, currency, occurredAt, occurredOn, createdAt, category or goalId, payee, description, note }` | 201 with the row, or 200 with the existing row                                                                                                                      | 400, 401, 403, 409 `id_conflict`, 422 `validation_failed`, `date_out_of_window`, `parent_missing`, `goal_read_only`, `currency_mismatch` | `Idempotency-Key` required                |
+| `/api/transactions/[id]`                  | PATCH  | Changed fields; `currency` when `amountMinor` is sent                                                                  | 200 with the row                                                                                                                                                    | 400, 401, 403, 404, 409 `version_conflict`, 422 as for POST                                                                              | `Idempotency-Key` and `If-Match` required |
+| `/api/transactions/[id]`                  | DELETE | `{}`; for a charge, `{ subscriptionId, dueOn }` as a hint (BR-F03-17)                                                  | 204                                                                                                                                                                 | 400, 401, 403, 404, 409 `version_conflict`, 422 `goal_read_only` or `validation_failed` (Goal floor)                                     | `Idempotency-Key` and `If-Match` required |
+| `/api/payees`                             | GET    | none, or `q` (BR-F03-61)                                                                                               | `{ items: [{ payee, count, lastUsedOn, lastType, lastCategory }], categories: [{ key, count }] }`, at most 200 items; with `q`, at most 8 items and no `categories` | 400, 401, 403                                                                                                                            | Read                                      |
+| `/api/payees/history`                     | GET    | `payee`, `months` (1 to 12, default 3)                                                                                 | `{ count, inMinor, outMinor, usualDay, currency }` (BR-F03-62)                                                                                                      | 400, 401, 403                                                                                                                            | Read                                      |
+| `/api/transactions/bulk-delete` (Stretch) | POST   | `{ items: [{ id, version }] }`, 1 to 100                                                                               | 200 `{ deleted }`                                                                                                                                                   | 401, 403 `feature_off`, 409 `version_conflict` with `details.ids`, 422                                                                   | `Idempotency-Key` required                |
 
 **Error code added by this spec**
 
@@ -577,11 +689,13 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
 **Shared functions** (the filter-to-SQL module, FIL-2)
 
 - **`rollup(tx, ctx, requests)`:** takes one or more `{ filter, by }` requests and answers all of them in one SQL statement (D-293).
-    - **`by`:** `total`, `category`, `day`, `week` (from the profile's week start), `month` (grouped by `occurredOn`) or `subscription` (charges per Subscription, F11); or `bounds`.
+    - **`by`:** `total`, `category`, `payee` (BR-F03-55's payee key), `day`, `week` (from the profile's week start), `month` (grouped by `occurredOn`) or `subscription` (charges per Subscription, F11); or `bounds`.
     - **Each group:** count, income, spending (Out), To Goals and net.
     - **`bounds`:** the earliest and latest `occurredOn` of the filter's confirmed rows, or none.
-    - **Used by:** the summary endpoint, F08's dashboard and F09's charts.
-- **`listTransactions(tx, ctx, filter, { sort, dir, limit, cursor })`:** the list query, one statement. F08's Recent Transactions uses it with `limit: 8`.
+    - **Used by:** the summary endpoint, the list's group totals, F08's dashboard and F09's charts.
+- **`listTransactions(tx, ctx, filter, { sort, dir, group, limit, cursor })`:** the list query, one statement, including the group order and its fingerprint. F08's Recent Transactions uses it with `limit: 8`.
+- **`facetCounts(tx, ctx, filter)`:** the filter counts, one statement (BR-F03-59).
+- **`amountHistogram(tx, ctx, filter)`:** the histogram, one statement (BR-F03-60).
 - **`matchesFilter(row, filter)`:** mirrors the SQL predicate for pending rows (BR-F03-43).
 
 **Server-side check order for a write** (locks in SRV-7 order). The handler first reads the row, without a lock, to learn its Goal and Subscription. The row's own lock comes only from the versioned write in step 7, after the Goal and Subscription locks.
@@ -630,6 +744,11 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
 - **Very old cursors:** keyset cursors stay valid after rows before them are deleted.
 - **Scrolling far down, then back up:** pages trimmed by `maxPages` reload through `prevCursor`.
 - **Case folding of non-ASCII letters** can differ slightly between JavaScript and Postgres. This only affects the pending-row match, never confirmed figures.
+- **Groups reorder mid-scroll:** under category grouping, an edit on another device lifts food above housing. The next page comes back empty with a new `order`, and the list reloads from the top (BR-F03-57).
+- **A category whose refunds exceed its expenses** in the filter: its Out is negative and shows a minus sign (TXN-7), its weight uses the size of that Out, and it is left out of the summary breakdowns, which need Out above zero.
+- **One payee, two spellings:** "swiggy" and "Swiggy" form one payee group, labeled in the spelling of the latest row.
+- **A payee with `/`, `?`, `#` or `%`:** payee history takes the payee as a query parameter, so any payee the entry form accepts works.
+- **A histogram over a single amount:** 640.00 alone gives the edges 630.00 and 800.00 and one bucket counting 1.
 
 ## 14. Acceptance criteria
 
@@ -685,6 +804,33 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
 - **AC-F03-30** (client integration) A delete refused with 409 after the Undo window opens the conflict view, and Keep theirs brings the row back. From M2, a delete refused by the Goal floor brings the row back with its reason.
 - **AC-F03-31** (integration) `q=swiggy monthly` does not match a row with payee Swiggy and description "Monthly groceries", because the fields never join into one string.
 - **AC-F03-32** (client integration) After golden moves to `America/Los_Angeles`, row 26's dialog shows 1 November and 12:00 pm. Changing only the time keeps `occurredOn` 2026-11-01.
+- **AC-F03-33** (unit) Group normalization:
+    - `?sort=amount&group=day` drops `group` with the notice and lists with no grouping;
+    - `?group=day` normalizes to no `group`, and so does `?sort=amount&group=none`;
+    - `?sort=amount&group=payee` keeps both;
+    - `?group=week` is dropped with the notice.
+- **AC-F03-34** (integration) Group totals: check A, oldest first, with `limit=1` returns only #12 and the group `2026-10-01` with count 2, In 85,000.00 and Out 18,000.00. With `group=none`, `groups` is empty and `order` is null.
+- **AC-F03-35** (integration) Category grouping on golden's income, expense and refund rows, check A:
+    - the groups run salary, housing, food, shopping, entertainment, transportation;
+    - food's rows run #25, #24, #21, #15 newest first;
+    - paging with `limit=2` returns every row exactly once, in that order.
+
+    From M2, with Goal rows, the order is section 5's full table.
+
+- **AC-F03-36** (integration) Payee grouping, all time: Swiggy's group has key `swiggy`, label "Swiggy", count 4 and Out 3,290.00. After a create with payee "SWIGGY" dated today, the label reads "SWIGGY" and the count is 5.
+- **AC-F03-37** (integration) Order change: check A by category with `limit=2` returns #13 and #12. A new food expense of 20,000.00 on 2026-10-20 lifts food above housing, so the next cursor returns no items, no cursors and a different `order`. Reloading the first page returns #13, then food's newest row.
+- **AC-F03-38** (integration) A cursor made under `group=day` and sent with `group=none`, or under the date sort and sent with the amount sort, gets 400 `bad_request`.
+- **AC-F03-39** (integration) The summary for check A with `by=category,payee` matches section 5's breakdowns and span. Without `by`, the answer has neither breakdown. `by=week` gets 400.
+- **AC-F03-40** (integration) Filter counts for check B match section 5's table, and every option appears, zero counts included.
+- **AC-F03-41** (integration) The histogram for check B matches section 5. Adding `min=1000.00` to the request changes nothing. A filter with no rows gives two empty arrays. A filter selecting only #24 gives edges 630.00 and 800.00 with counts 1.
+- **AC-F03-42** (unit) The edge function, on its own: amounts of 1 and 99,999,999,999 minor units give 34 edges from 1 to 100,000,000,000, in steps 1, 2, 5. An amount equal to a series value is that bucket's first edge.
+- **AC-F03-43** (integration) Payee history matches section 5's table. `payee=swiggy` answers the same as `payee=Swiggy`. A payee with no rows answers count 0 and a null `usualDay`. `months=0`, `months=13` and an 81-character payee get 400.
+- **AC-F03-44** (integration) Payees:
+    - `categories` matches section 5's category counts, and Goal rows add nothing to it;
+    - `q=apart` returns Sunrise Apartments, `q=o` returns Indian Oil, and `q=rise` returns nothing, because "rise" starts no word;
+    - `q=%` matches only a payee holding a literal `%`;
+    - an answer to `q` has no `categories` and at most 8 items;
+    - an empty `q` gets 400.
 
 ## 15. Illustrations
 
@@ -703,6 +849,39 @@ Illustrative, a create request:
 	"payee": "Swiggy",
 	"description": null,
 	"note": null
+}
+```
+
+Illustrative, the first page of check A grouped by payee with `limit=2`, items shortened:
+
+```json
+{
+	"items": [
+		{ "id": "0192…", "payee": "Acme Corp" },
+		{ "id": "0192…", "payee": "Sunrise Apartments" }
+	],
+	"nextCursor": "eyJzb3J0Ijoi…",
+	"prevCursor": null,
+	"currency": "INR",
+	"groups": [
+		{
+			"key": "acme corp",
+			"label": "Acme Corp",
+			"count": 1,
+			"inMinor": 8500000,
+			"outMinor": 0,
+			"toGoalsMinor": 0
+		},
+		{
+			"key": "sunrise apartments",
+			"label": "Sunrise Apartments",
+			"count": 1,
+			"inMinor": 0,
+			"outMinor": 1800000,
+			"toGoalsMinor": 0
+		}
+	],
+	"order": "9c1f0a7e2b44d3a1"
 }
 ```
 

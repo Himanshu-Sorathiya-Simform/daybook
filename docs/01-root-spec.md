@@ -327,18 +327,19 @@ Text is trimmed and normalized to Unicode NFC, and control characters are reject
 
 One filter object drives the list, its totals, Analytics and drill-downs. One server function turns it into SQL, so they cannot disagree (D-88).
 
-| Field        | URL parameter | Values                                               | Used by                      |
-| ------------ | ------------- | ---------------------------------------------------- | ---------------------------- |
-| Date range   | `from`, `to`  | `YYYY-MM-DD`                                         | Transactions, Analytics      |
-| Month        | `month`       | `YYYY-MM`                                            | Dashboard, Budgets, Insights |
-| Types        | `type`        | Comma list of TXN-1 types                            | Transactions                 |
-| Categories   | `cat`         | Comma list of keys                                   | Transactions, Analytics      |
-| Text         | `q`           | FIL-3                                                | Transactions                 |
-| Amount range | `min`, `max`  | Major units, for example `1500.00`                   | Transactions                 |
-| Source       | `src`         | `manual`, `subscription`                             | Transactions                 |
-| Goal         | `goal`        | Goal id                                              | Transactions                 |
-| Subscription | `sub`         | Subscription id: that Subscription's charges (D-255) | Transactions                 |
-| Sort         | `sort`, `dir` | `date` or `amount`; `desc` or `asc`                  | Transactions                 |
+| Field        | URL parameter | Values                                                                          | Used by                      |
+| ------------ | ------------- | ------------------------------------------------------------------------------- | ---------------------------- |
+| Date range   | `from`, `to`  | `YYYY-MM-DD`                                                                    | Transactions, Analytics      |
+| Month        | `month`       | `YYYY-MM`                                                                       | Dashboard, Budgets, Insights |
+| Types        | `type`        | Comma list of TXN-1 types                                                       | Transactions                 |
+| Categories   | `cat`         | Comma list of keys                                                              | Transactions, Analytics      |
+| Text         | `q`           | FIL-3                                                                           | Transactions                 |
+| Amount range | `min`, `max`  | Major units, for example `1500.00`                                              | Transactions                 |
+| Source       | `src`         | `manual`, `subscription`                                                        | Transactions                 |
+| Goal         | `goal`        | Goal id                                                                         | Transactions                 |
+| Subscription | `sub`         | Subscription id: that Subscription's charges (D-255)                            | Transactions                 |
+| Sort         | `sort`, `dir` | `date` or `amount`; `desc` or `asc`                                             | Transactions                 |
+| Group        | `group`       | `day`, `category`, `payee` or `none`; sets the list's grouping, selects no rows | Transactions                 |
 
 - **FIL-1** Fields combine with AND; values inside one list combine with OR.
 - **FIL-2** The list, its header totals, Analytics and chart drill-downs all use the same filter-to-SQL function.
@@ -509,7 +510,7 @@ The browser never touches the database. Every private read and write passes the 
 - **API-7** Lists use cursors:
     - Request: `?limit=` (default 50, maximum 100) and `?cursor=`.
     - Response: `data` holds `{ "items": [...], "nextCursor": "...", "prevCursor": "..." }` (API-11).
-    - Cursors are opaque, encode the sort key and id, and stay stable when rows are inserted.
+    - Cursors are opaque, encode the sort key and id, and stay stable when rows are inserted. One exception: a list ordered by group totals, such as F03's category and payee grouping, ends its cursors when a write reorders the groups (D-446).
 - **API-8** Every response carries `x-request-id` and `Server-Timing`.
 
 **Errors (API-9).** Every error uses one envelope:
@@ -564,7 +565,8 @@ Default messages for every code are in P2, section 8. A feature spec may add its
 | `/api/layout`                                                                        | GET, PUT                                                        | F08          |
 | `/api/transactions`, `/api/transactions/[id]`                                        | GET, POST, PATCH, DELETE                                        | F03          |
 | `/api/transactions/summary`                                                          | GET                                                             | F03          |
-| `/api/payees`                                                                        | GET (suggestions)                                               | F03          |
+| `/api/transactions/facets`, `/api/transactions/amount-histogram`                     | GET                                                             | F03          |
+| `/api/payees`, `/api/payees/history`                                                 | GET (suggestions and search; one payee's recent rows)           | F03          |
 | `/api/transactions/bulk-delete`                                                      | POST (Stretch)                                                  | F03          |
 | `/api/budgets`, `/api/budgets/[id]`                                                  | GET, POST, PATCH, DELETE                                        | F04          |
 | `/api/subscriptions`, `/api/subscriptions/[id]`                                      | GET, POST, PATCH, DELETE                                        | F05          |
