@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-456, D-459, D-460                                                                        |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460                                                                                      |
 
 ## 1. User stories
 
@@ -304,23 +304,26 @@ A view's `filter` holds the filter object's fields with these differences from t
 
 - **BR-F03-33** The committed filter lives in the URL (FIL-4) and is normalized before use:
     - parameters in a fixed order: `from`, `to`, `type`, `cat`, `goal`, `sub`, `src`, `min`, `max`, `q`, `sort`, `dir`, `group`;
-    - lists sorted and deduplicated;
+    - lists sorted alphabetically and deduplicated, with literal commas;
+    - amounts written with the currency's full decimals, such as `min=500.00`, `min=500` for JPY and `min=1.250` for KWD;
+    - Goal and Subscription ids in lowercase, and `q` trimmed and in NFC (root 6.7);
     - defaults omitted (`sort=date`, `dir=desc`, the sort's default `group`, no dates for all time).
 
-    The normalized object is the query key, so equivalent URLs share one cache entry.
+    The normalized object is the query key, so equivalent URLs share one cache entry. The same reader serves the page and the API: a page drops invalid parameters with the notice below, and an API route answers 400 `bad_request` naming them (D-457).
 
 - **BR-F03-34** An invalid parameter is dropped and the page says "Some filters in this link weren't valid and were removed." (FIL-5). Invalid means any of:
     - an unknown type or category;
-    - a malformed date;
-    - `from` after `to` (both dropped);
+    - a malformed date, or one that does not exist, such as 2026-02-30;
+    - `from` after `to` (both dropped), or only one of them (that one dropped);
     - `min` above `max` (both dropped);
-    - an amount that does not parse in major units with `.`, has more decimals than the currency allows, or exceeds MON-5;
+    - an amount that does not parse in major units with `.`, has grouping signs, has more decimals than the currency allows, is zero, or exceeds MON-5;
+    - a parameter given more than once;
     - a non-numeric `q` under 3 characters, any `q` over 100, or a `q` with control characters;
     - a `goal` or `sub` that is not a UUID;
     - an unknown `sort` or `dir`;
     - an unknown `group`, or `group=day` with `sort=amount`.
 
-    A well-formed Goal or Subscription id that is not the user's simply matches no rows.
+    A well-formed Goal or Subscription id that is not the user's simply matches no rows. An empty value, such as `cat=`, counts as absent and gives no notice, and names other than the filter and list parameters are ignored (D-458).
 
 - **BR-F03-35** Text search (FIL-3):
     - **Text:** `q` matches the expression `coalesce(payee, '') || U+001F || coalesce(description, '') || U+001F || coalesce(note, '')`, case-insensitively, as a substring, through one trigram index on that expression. Stored text never holds U+001F (BR-F03-12), and `q` may not contain control characters, so a match never spans two fields. `%`, `_` and `\` in `q` match literally.
