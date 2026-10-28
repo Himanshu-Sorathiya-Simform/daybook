@@ -7,7 +7,7 @@ export function canonicalJson(value: unknown): string {
 	if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
 	if (value !== null && typeof value === "object") {
 		const entries = Object.keys(value)
-			.sort()
+			.sort((a, b) => a.localeCompare(b, "en"))
 			.map(
 				(key) =>
 					`${JSON.stringify(key)}:${canonicalJson((value as Record<string, unknown>)[key])}`,

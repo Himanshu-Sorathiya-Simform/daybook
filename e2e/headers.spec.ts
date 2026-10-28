@@ -16,7 +16,7 @@ test("a page carries a CSP with a fresh nonce, and every Next.js script carries 
 	const nonce = nonceOf(first.headers()["content-security-policy"]);
 	expect(nonceOf(second.headers()["content-security-policy"])).not.toBe(nonce);
 	const html = await first.text();
-	const scripts = html.match(/<script\b[^>]*>/g) ?? [];
+	const scripts = html.match(/<script\b[^>]*>/gi) ?? [];
 	expect(scripts.length).toBeGreaterThan(0);
 	for (const tag of scripts) expect(tag).toContain(`nonce="${nonce}"`);
 });
