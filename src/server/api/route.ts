@@ -81,6 +81,137 @@ function parseJson(text: string): Parsed {
 	}
 }
 
+/** What a mutation's headers and body give before the session is checked. */
+type MutationInput = {
+	parsed: Parsed;
+	/** The `Idempotency-Key`, lower-cased; `null` on a route that is not idempotent. */
+	key: string | null;
+	/** The `If-Match` version; `null` on a route that is not versioned. */
+	version: number | null;
+};
+
+/** Steps 2 to 6 for a mutation: media type, body size, origin, idempotency key and build,
+ * `If-Match`. The first failure throws. */
+async function readMutation(
+	request: Request,
+	env: ReturnType<typeof serverEnv>,
+	{ idempotent, versioned }: { idempotent: boolean; versioned: boolean },
+): Promise<MutationInput> {
+	if (!isJsonMediaType(request.headers.get("content-type"))) {
+		throw new ApiError("unsupported_media_type");
+	}
+	const text = await readBody(request);
+	checkOrigin(request, env.APP_ORIGIN);
+	let key: string | null = null;
+	if (idempotent) {
+		const given = request.headers.get("idempotency-key");
+		if (!isUuidV7(given)) throw new ApiError("bad_request");
+		key = given.toLowerCase();
+		const build = request.headers.get("daybook-build");
+		if (build !== null && build !== env.BUILD_ID) {
+			throw new ApiError("build_mismatch", {
+				details: { buildId: env.BUILD_ID },
+			});
+		}
+	}
+	let version: number | null = null;
+	if (versioned) {
+		version = parseIfMatch(request.headers.get("if-match"));
+		if (version === null) throw new ApiError("bad_request");
+	}
+	return { parsed: parseJson(text), key, version };
+}
+
+/** Step 13: the body against the route's schema. A read has none. */
+function bodyOf(
+	mutation: boolean,
+	parsed: Parsed,
+	schema: z.ZodType | undefined,
+): unknown {
+	if (!mutation) return {};
+	if (!parsed.ok) throw new ApiError("bad_request");
+	if (!schema) return parsed.value;
+	const result = schema.safeParse(parsed.value);
+	if (!result.success) throw fromZodError(result.error);
+	return result.data;
+}
+
+/** The stored answer for a key the transaction lost the race to claim. */
+async function replayAnswer(
+	tx: Tx,
+	key: string,
+	hash: string,
+): Promise<StoredAnswer> {
+	const stored = await findAnswer(tx, key, hash);
+	if (!stored) throw new ApiError("internal");
+	return stored;
+}
+
+type Transaction<S extends z.ZodType | undefined> = {
+	base: RequestContext;
+	mutation: boolean;
+	profileRequired: boolean;
+	schema: S | undefined;
+	input: MutationInput;
+	hash: string | null;
+	url: URL;
+	params: RouteInput<unknown>["params"];
+	handler: RouteHandler<BodyOf<S>>;
+};
+
+/** Steps 10 to 15, inside the route's one `withUser` transaction. */
+async function answerInTransaction<S extends z.ZodType | undefined>(
+	tx: Tx,
+	{
+		base,
+		mutation,
+		profileRequired,
+		schema,
+		input,
+		hash,
+		url,
+		params,
+		handler,
+	}: Transaction<S>,
+): Promise<StoredAnswer> {
+	const { key, version } = input;
+	if (key && hash) {
+		const stored = await findAnswer(tx, key, hash);
+		if (stored) return stored;
+	}
+
+	const profile = await readProfile(tx);
+	if (profile) noteCatchUp(base.user.id, profile);
+	if (profileRequired && !profile) throw new ApiError("profile_required");
+	const ctx = withProfile(base, profile);
+
+	const body = bodyOf(mutation, input.parsed, schema);
+
+	let recordId: string | null = null;
+	if (key && hash) {
+		recordId = await claimKey(tx, {
+			userId: base.user.id,
+			key,
+			hash,
+			now: base.now,
+		});
+		if (!recordId) return replayAnswer(tx, key, hash);
+	}
+
+	const result = await handler(ctx, tx, {
+		body: body as BodyOf<S>,
+		query: url.searchParams,
+		params,
+		version,
+	});
+	const success = successOf(result);
+	if (!recordId) return success;
+	return {
+		status: success.status,
+		body: await storeAnswer(tx, recordId, success, base.now),
+	};
+}
+
 /** Declares a `user` route handler (BR-P2-15). It runs P2's steps in order, and the first
  * failure answers (BR-P2-17):
  *
@@ -121,32 +252,13 @@ export function route<S extends z.ZodType | undefined = undefined>(
 		try {
 			const env = serverEnv();
 			const url = new URL(request.url);
-			let parsed: Parsed = { ok: true, value: {} };
-			let key: string | null = null;
-			let version: number | null = null;
-			if (mutation) {
-				if (!isJsonMediaType(request.headers.get("content-type"))) {
-					throw new ApiError("unsupported_media_type");
-				}
-				const text = await readBody(request);
-				checkOrigin(request, env.APP_ORIGIN);
-				if (idempotent) {
-					const given = request.headers.get("idempotency-key");
-					if (!isUuidV7(given)) throw new ApiError("bad_request");
-					key = given.toLowerCase();
-					const build = request.headers.get("daybook-build");
-					if (build !== null && build !== env.BUILD_ID) {
-						throw new ApiError("build_mismatch", {
-							details: { buildId: env.BUILD_ID },
-						});
-					}
-				}
-				if (options.versioned) {
-					version = parseIfMatch(request.headers.get("if-match"));
-					if (version === null) throw new ApiError("bad_request");
-				}
-				parsed = parseJson(text);
-			}
+			const input: MutationInput =
+				mutation ?
+					await readMutation(request, env, {
+						idempotent,
+						versioned: options.versioned ?? false,
+					})
+				:	{ parsed: { ok: true, value: {} }, key: null, version: null };
 
 			const user = await sessionUser(request.headers);
 			if (!user) throw new ApiError("unauthenticated");
@@ -159,8 +271,8 @@ export function route<S extends z.ZodType | undefined = undefined>(
 			// Computed once, before the transaction, from the body as sent (BR-P2-18). A body that
 			// is not JSON has no hash; it fails at step 13 before any record is touched.
 			const hash =
-				idempotent && parsed.ok ?
-					requestHash(method, url, parsed.value)
+				idempotent && input.parsed.ok ?
+					requestHash(method, url, input.parsed.value)
 				:	null;
 			const params = (await context?.params) ?? {};
 			const base: RequestContext = {
@@ -175,60 +287,18 @@ export function route<S extends z.ZodType | undefined = undefined>(
 			const answer = await withUser(
 				base,
 				mutation ? "write" : "read",
-				async (tx): Promise<StoredAnswer> => {
-					if (key && hash) {
-						const stored = await findAnswer(tx, key, hash);
-						if (stored) return stored;
-					}
-
-					const profile = await readProfile(tx);
-					if (profile) noteCatchUp(user.id, profile);
-					if (profileRequired && !profile)
-						throw new ApiError("profile_required");
-					const ctx = withProfile(base, profile);
-
-					let body: unknown = {};
-					if (mutation) {
-						if (!parsed.ok) throw new ApiError("bad_request");
-						if (options.body) {
-							const result = options.body.safeParse(parsed.value);
-							if (!result.success) throw fromZodError(result.error);
-							body = result.data;
-						} else {
-							body = parsed.value;
-						}
-					}
-
-					let recordId: string | null = null;
-					if (key && hash) {
-						recordId = await claimKey(tx, {
-							userId: user.id,
-							key,
-							hash,
-							now,
-						});
-						if (!recordId) {
-							const stored = await findAnswer(tx, key, hash);
-							if (!stored) throw new ApiError("internal");
-							return stored;
-						}
-					}
-
-					const result = await handler(ctx, tx, {
-						body: body as BodyOf<S>,
-						query: url.searchParams,
+				(tx) =>
+					answerInTransaction(tx, {
+						base,
+						mutation,
+						profileRequired,
+						schema: options.body,
+						input,
+						hash,
+						url,
 						params,
-						version,
-					});
-					const success = successOf(result);
-					if (recordId) {
-						return {
-							status: success.status,
-							body: await storeAnswer(tx, recordId, success, now),
-						};
-					}
-					return success;
-				},
+						handler,
+					}),
 				{ timing },
 			);
 			return respond(answer.status, answer.body, meta);

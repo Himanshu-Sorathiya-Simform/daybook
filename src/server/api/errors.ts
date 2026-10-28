@@ -178,6 +178,44 @@ export function describeError(error: unknown): Record<string, string> {
 	return { name: error instanceof Error ? error.name : typeof error };
 }
 
+type FieldIndex = {
+	byConstraint: Map<string, string[]>;
+	byColumn: Map<string, string>;
+};
+
+/** Adds one table's unique constraints, primary key and columns to `index`. */
+function indexTable(table: (typeof ALL_TABLES)[number], index: FieldIndex): void {
+	const config = getTableConfig(table);
+	const schema = config.schema ?? "public";
+	const fieldOf = new Map(
+		Object.entries(getTableColumns(table)).map(([field, column]) => [
+			column.name,
+			field,
+		]),
+	);
+	const fields = (columns: { name: string }[]) =>
+		columns.map((column) => fieldOf.get(column.name) ?? column.name);
+	for (const [column, field] of fieldOf) {
+		index.byColumn.set(`${schema}.${config.name}.${column}`, field);
+	}
+	const primary = config.columns.filter((column) => column.primary);
+	if (primary.length)
+		index.byConstraint.set(`${schema}.${config.name}_pkey`, fields(primary));
+	for (const column of config.columns) {
+		if (column.isUnique && column.uniqueName) {
+			index.byConstraint.set(
+				`${schema}.${column.uniqueName}`,
+				fields([column]),
+			);
+		}
+	}
+	for (const constraint of config.uniqueConstraints) {
+		const name = constraint.getName();
+		if (name)
+			index.byConstraint.set(`${schema}.${name}`, fields(constraint.columns));
+	}
+}
+
 /** Field names for database errors, read once from the schema. A field is the API's name for
  * a column (`weekStart` for `week_start`), so a message lands on the field the client sent.
  *
@@ -185,38 +223,10 @@ export function describeError(error: unknown): Record<string, string> {
  *   Postgres always names the constraint; on a table with RLS it leaves out the
  *   `Key (...)=(...)` detail on purpose, so the detail cannot be relied on.
  * - `byColumn`: `schema.table.column` to the field, for a NOT NULL violation. */
-const FIELDS = (() => {
-	const byConstraint = new Map<string, string[]>();
-	const byColumn = new Map<string, string>();
-	for (const table of ALL_TABLES) {
-		const config = getTableConfig(table);
-		const schema = config.schema ?? "public";
-		const fieldOf = new Map(
-			Object.entries(getTableColumns(table)).map(([field, column]) => [
-				column.name,
-				field,
-			]),
-		);
-		const fields = (columns: { name: string }[]) =>
-			columns.map((column) => fieldOf.get(column.name) ?? column.name);
-		for (const [column, field] of fieldOf) {
-			byColumn.set(`${schema}.${config.name}.${column}`, field);
-		}
-		const primary = config.columns.filter((column) => column.primary);
-		if (primary.length)
-			byConstraint.set(`${schema}.${config.name}_pkey`, fields(primary));
-		for (const column of config.columns) {
-			if (column.isUnique && column.uniqueName) {
-				byConstraint.set(`${schema}.${column.uniqueName}`, fields([column]));
-			}
-		}
-		for (const constraint of config.uniqueConstraints) {
-			const name = constraint.getName();
-			if (name)
-				byConstraint.set(`${schema}.${name}`, fields(constraint.columns));
-		}
-	}
-	return { byConstraint, byColumn };
+const FIELDS: FieldIndex = (() => {
+	const index: FieldIndex = { byConstraint: new Map(), byColumn: new Map() };
+	for (const table of ALL_TABLES) indexTable(table, index);
+	return index;
 })();
 
 /** The fields of the unique constraint a violation names, or none for a constraint the

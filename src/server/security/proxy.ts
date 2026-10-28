@@ -39,6 +39,45 @@ const under = (path: string, prefixes: string[]) =>
 
 export type ProxyOptions = { origin: string; development: boolean };
 
+/** The early refusal of a mutation to `/api` that is not JSON or not from `APP_ORIGIN`, or
+ * `null` when it may go on. Better Auth and webhooks check their own origin. */
+function apiRefusal(request: NextRequest, origin: string): ApiError | null {
+	if (
+		!isMutation(request.method)
+		|| under(request.nextUrl.pathname, OWN_ORIGIN_CHECK)
+	) {
+		return null;
+	}
+	if (!isJsonMediaType(request.headers.get("content-type"))) {
+		return new ApiError("unsupported_media_type");
+	}
+	if (request.headers.get("origin") !== origin)
+		return new ApiError("cross_origin");
+	return null;
+}
+
+/** Where a page request is sent by cookie presence alone, or `null` to serve the page. */
+function pageRedirect(request: NextRequest): string | null {
+	const { pathname, search, searchParams } = request.nextUrl;
+	const cookies = parseCookies(request.headers.get("cookie"));
+	if (cookies.get(LOGOUT_COOKIE) === "1" && !under(pathname, LOGOUT_EXEMPT)) {
+		return "/api/session/expired?reason=logout";
+	}
+	const hasSession =
+		getSessionCookie(request, { cookiePrefix: "daybook" }) !== null;
+	if (!hasSession && under(pathname, LOGGED_IN)) {
+		return `/login?${new URLSearchParams({ next: `${pathname}${search}` })}`;
+	}
+	if (
+		hasSession
+		&& under(pathname, LOGGED_OUT)
+		&& searchParams.get("expired") !== "1"
+	) {
+		return "/dashboard";
+	}
+	return null;
+}
+
 /** Everything `proxy.ts` does (BR-P2-28 to BR-P2-32, D-172), in order:
  *
  * 1. **Request id:** a new UUIDv7 on the forwarded request and the response, replacing any
@@ -59,7 +98,7 @@ export function handleProxy(
 	{ origin, development }: ProxyOptions,
 ): NextResponse {
 	const requestId = randomUUIDv7();
-	const { pathname, search, searchParams } = request.nextUrl;
+	const { pathname, search } = request.nextUrl;
 	const finish = (response: NextResponse) => {
 		response.headers.set("x-request-id", requestId);
 		for (const [name, value] of Object.entries(securityHeaders(origin))) {
@@ -73,42 +112,19 @@ export function handleProxy(
 	forwarded.set("x-request-id", requestId);
 
 	if (under(pathname, ["/api"])) {
-		if (isMutation(request.method) && !under(pathname, OWN_ORIGIN_CHECK)) {
-			const refusal =
-				!isJsonMediaType(request.headers.get("content-type")) ?
-					new ApiError("unsupported_media_type")
-				: request.headers.get("origin") !== origin ?
-					new ApiError("cross_origin")
-				:	null;
-			if (refusal) {
-				return finish(
-					NextResponse.json(envelope(refusal, requestId), {
-						status: refusal.status,
-					}),
-				);
-			}
+		const refusal = apiRefusal(request, origin);
+		if (refusal) {
+			return finish(
+				NextResponse.json(envelope(refusal, requestId), {
+					status: refusal.status,
+				}),
+			);
 		}
 		return finish(NextResponse.next({ request: { headers: forwarded } }));
 	}
 
-	const cookies = parseCookies(request.headers.get("cookie"));
-	if (cookies.get(LOGOUT_COOKIE) === "1" && !under(pathname, LOGOUT_EXEMPT)) {
-		return redirect("/api/session/expired?reason=logout");
-	}
-	const hasSession =
-		getSessionCookie(request, { cookiePrefix: "daybook" }) !== null;
-	if (!hasSession && under(pathname, LOGGED_IN)) {
-		return redirect(
-			`/login?${new URLSearchParams({ next: `${pathname}${search}` })}`,
-		);
-	}
-	if (
-		hasSession
-		&& under(pathname, LOGGED_OUT)
-		&& searchParams.get("expired") !== "1"
-	) {
-		return redirect("/dashboard");
-	}
+	const target = pageRedirect(request);
+	if (target) return redirect(target);
 
 	const nonce = newNonce();
 	const csp = buildCsp(nonce, { origin, development });

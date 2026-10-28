@@ -289,6 +289,68 @@ function checkRoles(facts: Facts): string[] {
 	return problems;
 }
 
+type AppTable = Facts["appTables"][number];
+type PolicyFact = Facts["policies"][number];
+
+/** A table that is not private holds no user's data, so it has no RLS and no policy. */
+function checkOpenTable(
+	label: string,
+	tableClass: TableClass,
+	table: AppTable,
+	own: PolicyFact[],
+): string[] {
+	const problems: string[] = [];
+	if (table.rls)
+		problems.push(`${label} is ${tableClass} data but has RLS enabled`);
+	for (const p of own) {
+		problems.push(
+			`${label} is ${tableClass} data but has policy ${p.policyname}`,
+		);
+	}
+	return problems;
+}
+
+/** The two policies a private table has, word for word, and no others (BR-P2-04). */
+function checkPolicies(label: string, own: PolicyFact[]): string[] {
+	const problems: string[] = [];
+	for (const expected of EXPECTED_POLICIES) {
+		const actual = own.find((p) => p.policyname === expected.policyname);
+		if (!actual) {
+			problems.push(`${label} is missing policy ${expected.policyname}`);
+			continue;
+		}
+		const differs: string[] = (
+			["permissive", "cmd", "qual", "with_check"] as const
+		).filter((field) => actual[field] !== expected[field]);
+		if (actual.roles.join(",") !== expected.roles.join(","))
+			differs.unshift("roles");
+		if (differs.length > 0) {
+			problems.push(
+				`${label} policy ${expected.policyname} differs from P2 in: ${differs.join(", ")}`,
+			);
+		}
+	}
+	for (const p of own) {
+		if (!EXPECTED_POLICIES.some((e) => e.policyname === p.policyname)) {
+			problems.push(`${label} has an extra policy ${p.policyname}`);
+		}
+	}
+	return problems;
+}
+
+function checkPrivateTable(
+	label: string,
+	table: AppTable,
+	own: PolicyFact[],
+): string[] {
+	const problems: string[] = [];
+	if (!table.hasUserId)
+		problems.push(`${label} has no NOT NULL uuid column user_id`);
+	if (!table.rls) problems.push(`${label} does not have RLS enabled`);
+	if (!table.forced) problems.push(`${label} does not force RLS`);
+	return [...problems, ...checkPolicies(label, own)];
+}
+
 function checkTablesAndPolicies(facts: Facts): string[] {
 	const problems: string[] = [];
 	const classes: Record<string, TableClass> = TABLE_CLASSES;
@@ -300,43 +362,10 @@ function checkTablesAndPolicies(facts: Facts): string[] {
 			problems.push(
 				`${label} is not in TABLE_CLASSES, so its access cannot be checked`,
 			);
-			continue;
-		}
-		if (!isPrivateClass(tableClass)) {
-			if (table.rls)
-				problems.push(`${label} is ${tableClass} data but has RLS enabled`);
-			for (const p of own) {
-				problems.push(
-					`${label} is ${tableClass} data but has policy ${p.policyname}`,
-				);
-			}
-			continue;
-		}
-		if (!table.hasUserId)
-			problems.push(`${label} has no NOT NULL uuid column user_id`);
-		if (!table.rls) problems.push(`${label} does not have RLS enabled`);
-		if (!table.forced) problems.push(`${label} does not force RLS`);
-		for (const expected of EXPECTED_POLICIES) {
-			const actual = own.find((p) => p.policyname === expected.policyname);
-			if (!actual) {
-				problems.push(`${label} is missing policy ${expected.policyname}`);
-				continue;
-			}
-			const differs: string[] = (
-				["permissive", "cmd", "qual", "with_check"] as const
-			).filter((field) => actual[field] !== expected[field]);
-			if (actual.roles.join(",") !== expected.roles.join(","))
-				differs.unshift("roles");
-			if (differs.length > 0) {
-				problems.push(
-					`${label} policy ${expected.policyname} differs from P2 in: ${differs.join(", ")}`,
-				);
-			}
-		}
-		for (const p of own) {
-			if (!EXPECTED_POLICIES.some((e) => e.policyname === p.policyname)) {
-				problems.push(`${label} has an extra policy ${p.policyname}`);
-			}
+		} else if (isPrivateClass(tableClass)) {
+			problems.push(...checkPrivateTable(label, table, own));
+		} else {
+			problems.push(...checkOpenTable(label, tableClass, table, own));
 		}
 	}
 	for (const name of Object.keys(classes)) {
