@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-455                                                                                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-456, D-459, D-460                                                                        |
 
 ## 1. User stories
 
@@ -142,12 +142,12 @@ A view's `filter` holds the filter object's fields with these differences from t
     | KWD                | 999,999,999,999       | 999,999,999.999 |
 
 - **BR-F03-04** The amount field takes major units in the user's own format (F02, BR-F02-18; D-214, D-230):
-    - **The signs:** the decimal sign is the `decimal` part of `Intl.NumberFormat(numberLocale, { style: 'currency', currency }).formatToParts(…)`. The grouping signs are the `group` parts of that formatter and of the plain-number formatter; Austria has two. A space group accepts U+0020, U+00A0 and U+202F alike, and `'` and `’` count as the same sign.
+    - **The signs:** the decimal sign is the `decimal` part of `Intl.NumberFormat(numberLocale, { style: 'currency', currency }).formatToParts(…)`, with two decimals forced so that JPY has one too. The grouping signs are the `group` parts of that formatter and of the plain-number formatter; Austria has two. A space group accepts U+0020, U+00A0 and U+202F alike, and `'` and `’` count as the same sign.
     - **Accepted characters:** digits, the decimal sign once, and the grouping signs.
-    - **Grouping:** a grouping sign is accepted only inside a valid grouping of the whole-number part: thousands (`12.345,50` in `de-DE`) or Indian (`1,23,456.50` in `hi-IN`).
-    - **The other mark:** `.` or `,`, whichever is not the decimal sign, is refused outside a valid grouping, with a message naming the right sign. A German user's `12.50` is therefore never read as 1,250.
+    - **Grouping:** a grouping sign is accepted only inside a valid grouping of the whole-number part: thousands (`12.345,50` in `de-DE`), or Indian (`1,23,456.50` in `hi-IN`) where the user's format groups that way. One amount uses one grouping sign throughout (D-459).
+    - **The other mark:** `.` or `,`, whichever is not the decimal sign, is refused outside a valid grouping, with a message naming the right sign. A German user's `12.50` is therefore never read as 1,250. For JPY, which has no decimals, the same mistake shows the decimals message instead.
     - **Decimals:** at most the currency's exponent (none for JPY, three for KWD).
-    - **Conversion:** to `amountMinor` by string arithmetic, never through a float.
+    - **Conversion:** to `amountMinor` by string arithmetic, never through a float. A lint rule on the parser's module refuses float operations (D-460).
     - **On blur:** the field is re-formatted with grouping.
     - **Phone keyboard:** `inputmode="decimal"`, or `numeric` for JPY.
 - **BR-F03-05** Every Transaction write (create, edit or delete) first reads the profile with `SELECT currency ... FOR KEY SHARE` in its write transaction (D-213).
@@ -324,7 +324,7 @@ A view's `filter` holds the filter object's fields with these differences from t
 
 - **BR-F03-35** Text search (FIL-3):
     - **Text:** `q` matches the expression `coalesce(payee, '') || U+001F || coalesce(description, '') || U+001F || coalesce(note, '')`, case-insensitively, as a substring, through one trigram index on that expression. Stored text never holds U+001F (BR-F03-12), and `q` may not contain control characters, so a match never spans two fields. `%`, `_` and `\` in `q` match literally.
-    - **Numbers:** a numeric `q` also matches `amountMinor` exactly. A numeric `q` is one that the amount field would accept (BR-F03-04): digits, commas only in a valid grouping, one `.`, and no more decimals than the currency allows.
+    - **Numbers:** a numeric `q` also matches `amountMinor` exactly. A numeric `q` is one that the amount field would accept (BR-F03-04): digits, commas only in a valid thousands or Indian grouping, one `.`, and no more decimals than the currency allows.
     - **Short numbers:** a numeric `q` under 3 characters matches amounts only.
 
     Golden checks D, G and H.
@@ -679,7 +679,7 @@ On desktop, each row also has a menu (⋯) with Edit, Duplicate and Delete. On p
 | Save                            | Offline before M5                                  | You are offline. Connect to save.                                                                                                                                                                                       |
 | Amount                          | Above zero                                         | Enter an amount above zero.                                                                                                                                                                                             |
 | Amount                          | Too many decimals                                  | Use at most 2 decimal places. (JPY: Yen amounts have no decimals. KWD: Use at most 3 decimal places.)                                                                                                                   |
-| Amount                          | Above MON-5                                        | The largest amount is 999,999,999.99. (Formatted for the currency)                                                                                                                                                      |
+| Amount                          | Above MON-5                                        | The largest amount is 999,999,999.99. (Formatted for the currency in the user's format, so 99,99,99,999.99 in India)                                                                                                    |
 | Payee                           | Required (income, expense, refund)                 | Enter who you paid, or who paid you.                                                                                                                                                                                    |
 | Payee                           | Length                                             | Use 80 characters or fewer.                                                                                                                                                                                             |
 | Description                     | Length                                             | Use 120 characters or fewer.                                                                                                                                                                                            |

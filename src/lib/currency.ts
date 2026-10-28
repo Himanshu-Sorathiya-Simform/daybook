@@ -15,6 +15,12 @@ export function currencyExponent(currency: CurrencyCode): number {
 	return CURRENCY_EXPONENTS[currency];
 }
 
+/** The largest amount in minor units: 999,999,999 major units plus a full fraction (MON-5),
+ * for INR 99,999,999,999. Built from digits, so it is exact for every exponent. */
+export function maxMinor(currency: CurrencyCode): number {
+	return Number.parseInt("9".repeat(9 + currencyExponent(currency)), 10);
+}
+
 /** The currency's sign as the user's number format writes it, for example `₹` for INR and `€`
  * for EUR (MON-4). `numberLocale` comes from the profile, for example `de-DE-u-nu-latn`. */
 export function currencySymbol(
