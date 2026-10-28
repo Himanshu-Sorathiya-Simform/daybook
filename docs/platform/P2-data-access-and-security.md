@@ -9,7 +9,7 @@ Every private read and write reaches Postgres through one path. A route-handler 
 | Milestone  | M0                                                                                                                                                                                                                           |
 | Plan       | Free and Premium                                                                                                                                                                                                             |
 | Depends on | [01-root-spec.md](../01-root-spec.md) sections 7 to 9                                                                                                                                                                        |
-| Decisions  | D-06, D-07, D-12 to D-19, D-39, D-137, D-153, D-165, D-172, D-173, D-180, D-192 to D-197, D-199, D-201 to D-207, D-242 to D-244, D-292, D-300, D-325, D-343, D-362, D-367, D-368, D-370, D-382, D-383, D-386, D-409 to D-439 |
+| Decisions  | D-06, D-07, D-12 to D-19, D-39, D-137, D-153, D-165, D-172, D-173, D-180, D-192 to D-197, D-199, D-201 to D-207, D-242 to D-244, D-292, D-300, D-325, D-343, D-362, D-367, D-368, D-370, D-382, D-383, D-386, D-409 to D-444 |
 
 ## 1. User stories
 
@@ -491,7 +491,8 @@ Requests from the service worker carry `Origin` and pass the same checks.
 | `server/api/route`            | `route(options, handler)`                                        | Route handlers                                                                                                                 |
 | `server/api/errors`           | Error classes, envelope builder, Postgres error mapping          | Route handlers, `server/dal`, `server/system`, `server/auth` (its log filter)                                                  |
 | `server/system/*`             | The functions in BR-P2-26 and BR-P2-27                           | Webhook and billing handlers, the `/api/me` handler (lazy billing check), Better Auth hooks, the wrapper (daily pass), scripts |
-| `server/security/csp`         | `buildCsp(nonce)`, the header set                                | `proxy.ts`                                                                                                                     |
+| `server/security/csp`         | `buildCsp`, `securityHeaders`, `newNonce`                        | `server/security/proxy`                                                                                                        |
+| `server/security/proxy`       | `handleProxy(request, options)`                                  | `proxy.ts`                                                                                                                     |
 | `server/security/print-token` | `signPrintToken`, `verifyPrintToken`                             | F11                                                                                                                            |
 
 **Pools.** Runtime: up to 10 connections; auth: 5; system: 3. Connect timeout 10 s, idle timeout 30 s. All use the pooled endpoint over TLS.

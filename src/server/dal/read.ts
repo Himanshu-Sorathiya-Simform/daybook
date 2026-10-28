@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { requestIdOf, queuePending } from "../api/checks";
+import { PATH_HEADER } from "../security/proxy";
 import { runDailyPassIfDue } from "../system/daily-pass";
 import { noteCatchUp, runCatchUpIfDue } from "./catch-up";
 import {
@@ -13,9 +14,6 @@ import {
 	withProfile,
 } from "./context";
 import { type Tx, withUser } from "./with-user";
-
-/** The page's path, which `proxy.ts` puts on every page request (Slice 9), for `next`. */
-const PATH_HEADER = "x-daybook-path";
 
 /** What a server component's read needs before its transaction: the session, then the daily
  * pass when due, then the catch-up check unless the queue holds Subscription items
@@ -52,7 +50,7 @@ export async function readWith<T>(
 }
 
 /** Where a page with no valid session goes: `/api/session/expired`, which clears the cookies
- * and opens login (BR-P2-39, flow 7.5), with the page's path as `next` when the proxy gave it. */
+ * and opens login (BR-P2-39, flow 7.5), with the page's path as `next`, which `proxy.ts` puts on every page request. */
 export function expiredPath(requestHeaders: Headers): string {
 	const path = requestHeaders.get(PATH_HEADER);
 	return path ?
