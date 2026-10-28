@@ -1,5 +1,8 @@
 pnpm-lock.yaml
 
+# Drizzle Kit writes these on every `pnpm db:generate`; they are never edited by hand.
+drizzle/meta
+
 # Skills copied from other projects. They stay byte for byte as upstream, and each
 # has a SOURCE.md. Add a line here for every new one.
 .claude/skills/animate
