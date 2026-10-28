@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-451                                                                                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-455                                                                                      |
 
 ## 1. User stories
 
@@ -29,9 +29,9 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 
 ## 2. Scope
 
-| In                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Stretch (M8)                                                | Out                                                                                                                                                                                                                                                |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The entry dialog (create, edit, duplicate); the infinite, virtualized list; filters in the URL; sort; header totals; payee suggestions; delete with Undo; deep links; pending, rejected and conflict display; how Subscription charges and demo rows behave in the list; the server rules for Goal Transactions; keyboard shortcuts; grouping by day, category or payee with group totals; the summary breakdowns; filter counts; the amount histogram; payee history and search | Bulk delete with one Undo (D-85, `transactions.bulkDelete`) | Import (D-86); attachments and receipts; split Transactions (D-22); tags (D-23); accounts and transfers (D-24); multi-currency; recurring income (D-72); linking a refund to its original expense; changing a charge's date; export (F01, Stretch) |
+| In                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Stretch (M8)                                                | Out                                                                                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The entry dialog (create, edit, duplicate); the infinite, virtualized list; filters in the URL; sort; header totals; payee suggestions; delete with Undo; deep links; pending, rejected and conflict display; how Subscription charges and demo rows behave in the list; the server rules for Goal Transactions; keyboard shortcuts; grouping by day, category or payee with group totals; the summary breakdowns; filter counts; the amount histogram; payee history and search; saved views | Bulk delete with one Undo (D-85, `transactions.bulkDelete`) | Import (D-86); attachments and receipts; split Transactions (D-22); tags (D-23); accounts and transfers (D-24); multi-currency; recurring income (D-72); linking a refund to its original expense; changing a charge's date; export (F01, Stretch) |
 
 **Milestones (D-241).** Each acceptance criterion names its milestone when it is not M1.
 
@@ -80,12 +80,13 @@ Requests also carry `currency` (BR-F03-05). Responses add `goal: { id, name, ico
 
 A plus sign means money becomes free to spend: income, a refund, money back from a Goal. A minus sign means it stops being free (D-231). Positive amounts also use the positive color token, but the sign always carries the meaning, never the color alone.
 
-**Filter object.** Root section 6.9, plus two interface parameters that are not filters and never enter query keys (D-229):
+**Filter object.** Root section 6.9, plus three interface parameters that are not filters and never enter query keys (D-229, D-454):
 
-| Parameter  | Effect                                             |
-| ---------- | -------------------------------------------------- |
-| `txn=<id>` | Opens that Transaction in the dialog over the list |
-| `new=1`    | Opens an empty entry dialog                        |
+| Parameter   | Effect                                                |
+| ----------- | ----------------------------------------------------- |
+| `txn=<id>`  | Opens that Transaction in the dialog over the list    |
+| `new=1`     | Opens an empty entry dialog                           |
+| `view=<id>` | Marks that saved view as the one selected (BR-F03-65) |
 
 **List parameters.** `sort` and `dir` (BR-F03-40) and `group` (BR-F03-55) shape the list but select no rows. The summary, the filter counts and the amount histogram ignore them, valid or not.
 
@@ -100,6 +101,23 @@ A plus sign means money becomes free to spend: income, a refund, money back from
 | Year to date       | `year_to_date`   | 1 January to today                     | 2026-01-01 to 2026-11-02 |
 | Last 12 months     | `last_12_months` | The current month and the 11 before    | 2025-12-01 to 2026-11-30 |
 | Custom             | `custom`         | Any inclusive range                    |                          |
+
+**Saved view** (D-452)
+
+| Field                    | Meaning                       | Rules                                                 | Example                                      |
+| ------------------------ | ----------------------------- | ----------------------------------------------------- | -------------------------------------------- |
+| `id`                     | UUIDv7                        | Client-generated (ID-1)                               | `0192f0c4-…`                                 |
+| `name`                   | What the view is called       | 1 to 40; BR-F03-63                                    | `Food last month`                            |
+| `filter`                 | The filter, stored normalized | BR-F03-64                                             | `{ "range": "last_month", "cat": ["food"] }` |
+| `sort`, `dir`, `group`   | The list parameters           | BR-F03-40, BR-F03-55; `group=day` needs the date sort | `date`, `desc`, `day`                        |
+| `version`                | P2                            | API-4                                                 | `1`                                          |
+| `createdAt`, `updatedAt` | P2                            | System                                                |                                              |
+
+A view's `filter` holds the filter object's fields with these differences from the URL:
+
+- **Dates:** `range`, a preset key other than `all` and `custom`, or `from` and `to` for a custom range, or neither for all time. Never both.
+- **Amounts:** `minMinor` and `maxMinor`, integers in minor units (MON-1), instead of the URL's major units.
+- **Lists:** `type` and `cat` are arrays, sorted and deduplicated.
 
 **Cursor.** Opaque base64url JSON holding the sort, the group, the direction of travel, and the boundary row's sort key and id. Under category or payee grouping it also holds the boundary row's group key and the order fingerprint (BR-F03-57). A cursor used with a different sort or group, or one that fails to decode, gets 400 `bad_request`.
 
@@ -418,6 +436,42 @@ A plus sign means money becomes free to spend: income, a refund, money back from
 
 - **BR-F03-53** `txn=<id>` opens that Transaction's dialog over the list, loaded through `GET /api/transactions/[id]`. A 404 shows "We couldn't find that Transaction." `new=1` opens an empty dialog. Closing the dialog removes the parameter by replacing the URL.
 
+**Saved views**
+
+- **BR-F03-63** Each user keeps up to 20 saved views beside one built-in view (D-452).
+    - **All Transactions:** built in and defined in code: all time, newest first, grouped by day. It always comes first, is never stored, and can't be renamed, updated or deleted.
+    - **The limit:** a 21st create gets 422 `limit_reached`. A create takes a per-user transaction-level advisory lock before it counts, so two creates at once can never pass 20.
+    - **Names:** BR-F03-12's text rules, 1 to 40 characters. Unique per user by `lower()`, backed by a unique index, and never "All Transactions" in any case. A taken name gets 422 `validation_failed` on `name`, also when two writes race for it.
+    - **Create check order:** first the existing id (API-5), so a retried create returns 200 with its view even at 20 views or with a name now taken; then the shape and the currency (BR-F03-64), the limit and the name.
+    - **Order:** All Transactions, then saved views by `createdAt`, then `id`. Views can't be reordered.
+    - **Online only:** every write (create, update, rename, delete) needs a connection and never enters the write queue (P1). Offline, these controls are disabled with "You are offline. Connect to save."
+- **BR-F03-64** The server checks a view's `filter`, `sort`, `dir` and `group` by BR-F03-34's rules, but refuses instead of dropping: 422 `validation_failed`, with the field path, such as `filter.cat` (D-452).
+    - **The keys:** `range` (a preset key), `from` and `to` (dates), `type` (an array of TXN-1 types), `cat` (an array of category keys), `goal` and `sub` (one UUID each), `src` (`manual` or `subscription`), `minMinor` and `maxMinor` (integers from 1 to the MON-5 maximum, `minMinor` at most `maxMinor`) and `q` (BR-F03-34's rules). Any other key is refused.
+    - **Dates:** `range` together with `from` or `to`, or a `range` of `all` or `custom`, is refused, and so is `from` after `to` or only one of them.
+    - **Lists:** stored sorted and deduplicated; an empty list is stored as absent.
+    - **Currency:** a write whose `filter` holds `minMinor` or `maxMinor` carries `currency` and reads the profile `FOR KEY SHARE` first, as BR-F03-05 does. A mismatch gets 422 `currency_mismatch`. A currency change removes both bounds from every view (F02, BR-F02-15).
+    - **Ids that later disappear:** a Goal or Subscription id stays in the view, which then matches no rows for it (BR-F03-34).
+- **BR-F03-65** Choosing a view applies it (D-453, D-454).
+    - **The URL:** its `filter`, `sort`, `dir` and `group` replace the URL's, with a new history entry, and `view=<id>` marks it selected. A `range` becomes that preset's explicit dates for today in the profile zone (TIME-5, D-227), so "Last month" always shows the month before the current one.
+    - **No `view`:** All Transactions is selected.
+    - **An unknown `view`:** once the views list has loaded, an id that is not in it is removed by replacing the URL, without a notice, and All Transactions is selected. Until the list loads, the id stays.
+    - **Queries:** the list, header and counts follow the URL's filter alone. `view` never enters a query key.
+- **BR-F03-66** The selected view is edited when the URL's normalized filter, `sort`, `dir` or `group` differs from the view's, with its `range` resolved for today (D-454).
+    - **The label:** "Food last month · edited".
+    - **All Transactions edited:** offers "Save as view".
+    - **A saved view edited:** offers "Update view", "Save as view" and "Revert". Revert applies the view again (BR-F03-65).
+    - **Nothing edited:** "Save as view" is disabled, with the hint "Change a filter, then save it as a view."
+- **BR-F03-67** "Save as view" creates a view from the URL and selects it, with "Saved as a new view." (D-453).
+    - **Dates:** dates equal to a preset's dates for today in the profile zone are saved as that preset's `range`; other dates as `from` and `to`; all time as neither.
+    - **The name:** the active filter chips' labels joined by ", ", such as "Food, Last month", or "My view" with no chip. If that name is taken, " 2", " 3" and so on are added, taking the first free one. The base is cut so the whole name fits 40 characters. If the server still answers 422 on `name`, because the list on the device was stale, the next suffix is tried.
+    - **At 20 views:** the button is disabled with "You have 20 views. Delete one to save another."
+- **BR-F03-68** "Update view" saves the URL's filter, `sort`, `dir` and `group` into the selected view with BR-F03-67's date rule, through `PATCH` with `If-Match`, then shows "View updated." A `PATCH` must carry all four of these together or none of them; a partial set, or a body with neither `name` nor the four, gets 422 `validation_failed`.
+- **BR-F03-69** A selected saved view has a menu with Rename and Delete (D-452).
+    - **Rename:** a dialog with the name field. Save sends `{ name }` with `If-Match`, then "View renamed."
+    - **Delete:** asks "Delete “Food last month”?" with "Your Transactions stay as they are." and Delete or Cancel. `DELETE` with `If-Match`, then "View deleted." The URL keeps its filter and loses `view`, so All Transactions is selected, edited when the filter differs from its defaults.
+    - **409 `version_conflict`:** "This view changed on another device. Try again." The views list reloads.
+    - **404:** on a rename or update, "This view was deleted on another device." and the views list reloads. On a delete it counts as done.
+
 **Bulk delete (Stretch)**
 
 - **BR-F03-54** With `transactions.bulkDelete` on, the list gains a Select mode. Up to 100 loaded rows can be selected, and "Delete 12" deletes them with one Undo.
@@ -528,6 +582,7 @@ Three months before 2026-11-02 is 2026-08-02, and one month before is 2026-10-02
 
 **`/transactions`**, top to bottom:
 
+- **Saved views:** All Transactions, then the user's views; the selected one's menu and its edited actions (BR-F03-63 to BR-F03-69).
 - **Search box and filter controls.**
 - **Active-filter chips** with Clear all.
 - **Header:** Count · In · Out · To Goals, with pending annotations, and an "as of" time offline.
@@ -614,37 +669,46 @@ On desktop, each row also has a menu (⋯) with Edit, Duplicate and Delete. On p
 
 ## 8. Validation and messages
 
-| Field or action | Rule                                               | Message shown                                                                                                                                                                                                           |
-| --------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Amount          | Required                                           | Enter an amount.                                                                                                                                                                                                        |
-| Amount          | Not a number                                       | Enter a number, like 1,240.50. (The example is formatted with the user's `numberLocale`)                                                                                                                                |
-| Amount          | The non-decimal mark outside a digit grouping      | Use . for decimals, like 12.50. (Comma-decimal locales: Use , for decimals, like 12,50.)                                                                                                                                |
-| Goal            | Demo Transaction to a non-demo Goal                | Demo Transactions can only move between demo Goals.                                                                                                                                                                     |
-| Delete          | Network failure before M5                          | Couldn't delete. Check your connection and try again.                                                                                                                                                                   |
-| Save            | Offline before M5                                  | You are offline. Connect to save.                                                                                                                                                                                       |
-| Amount          | Above zero                                         | Enter an amount above zero.                                                                                                                                                                                             |
-| Amount          | Too many decimals                                  | Use at most 2 decimal places. (JPY: Yen amounts have no decimals. KWD: Use at most 3 decimal places.)                                                                                                                   |
-| Amount          | Above MON-5                                        | The largest amount is 999,999,999.99. (Formatted for the currency)                                                                                                                                                      |
-| Payee           | Required (income, expense, refund)                 | Enter who you paid, or who paid you.                                                                                                                                                                                    |
-| Payee           | Length                                             | Use 80 characters or fewer.                                                                                                                                                                                             |
-| Description     | Length                                             | Use 120 characters or fewer.                                                                                                                                                                                            |
-| Note            | Length                                             | Use 500 characters or fewer.                                                                                                                                                                                            |
-| Any text        | Control characters                                 | Remove unsupported characters.                                                                                                                                                                                          |
-| Category        | Required                                           | Choose a category.                                                                                                                                                                                                      |
-| Goal            | Required                                           | Choose a Goal.                                                                                                                                                                                                          |
-| Date            | `date_out_of_window` on create                     | Choose today or one of the 10 days before.                                                                                                                                                                              |
-| Date            | `date_out_of_window` on edit                       | Choose a date from 6 Oct to 16 Oct. (The row's own window)                                                                                                                                                              |
-| Time            | In the future                                      | The time can't be in the future.                                                                                                                                                                                        |
-| Goal            | `goal_read_only`                                   | Vacation is completed, so its Transactions can't be changed. (Archived: Vacation is archived, so its Transactions can't be changed. Locked: Vacation is locked. Upgrade, or choose it as one of your 3 editable Goals.) |
-| Withdrawal      | Above progress                                     | You can withdraw at most 5,000.00 from Vacation.                                                                                                                                                                        |
-| Edit or delete  | Would take a Goal below zero                       | This would take Vacation below zero. Change or remove a withdrawal first.                                                                                                                                               |
-| Contribution    | Above all-time unallocated (warning, not an error) | This is more than your unallocated savings of 89,363.00. You can still save it.                                                                                                                                         |
-| Save            | `currency_mismatch`                                | Not saved: your currency changed after this was made.                                                                                                                                                                   |
-| Edit or delete  | `not_found`                                        | This Transaction was deleted on another device.                                                                                                                                                                         |
-| Search box      | Under 3 characters, not numeric                    | Type at least 3 characters, or an amount. (No request is sent)                                                                                                                                                          |
-| Link            | Invalid parameters                                 | Some filters in this link weren't valid and were removed.                                                                                                                                                               |
-| Save            | Hidden by the filter                               | Saved. It's hidden by your filters.                                                                                                                                                                                     |
-| Deep link       | `txn` not found                                    | We couldn't find that Transaction.                                                                                                                                                                                      |
+| Field or action                 | Rule                                               | Message shown                                                                                                                                                                                                           |
+| ------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Amount                          | Required                                           | Enter an amount.                                                                                                                                                                                                        |
+| Amount                          | Not a number                                       | Enter a number, like 1,240.50. (The example is formatted with the user's `numberLocale`)                                                                                                                                |
+| Amount                          | The non-decimal mark outside a digit grouping      | Use . for decimals, like 12.50. (Comma-decimal locales: Use , for decimals, like 12,50.)                                                                                                                                |
+| Goal                            | Demo Transaction to a non-demo Goal                | Demo Transactions can only move between demo Goals.                                                                                                                                                                     |
+| Delete                          | Network failure before M5                          | Couldn't delete. Check your connection and try again.                                                                                                                                                                   |
+| Save                            | Offline before M5                                  | You are offline. Connect to save.                                                                                                                                                                                       |
+| Amount                          | Above zero                                         | Enter an amount above zero.                                                                                                                                                                                             |
+| Amount                          | Too many decimals                                  | Use at most 2 decimal places. (JPY: Yen amounts have no decimals. KWD: Use at most 3 decimal places.)                                                                                                                   |
+| Amount                          | Above MON-5                                        | The largest amount is 999,999,999.99. (Formatted for the currency)                                                                                                                                                      |
+| Payee                           | Required (income, expense, refund)                 | Enter who you paid, or who paid you.                                                                                                                                                                                    |
+| Payee                           | Length                                             | Use 80 characters or fewer.                                                                                                                                                                                             |
+| Description                     | Length                                             | Use 120 characters or fewer.                                                                                                                                                                                            |
+| Note                            | Length                                             | Use 500 characters or fewer.                                                                                                                                                                                            |
+| Any text                        | Control characters                                 | Remove unsupported characters.                                                                                                                                                                                          |
+| Category                        | Required                                           | Choose a category.                                                                                                                                                                                                      |
+| Goal                            | Required                                           | Choose a Goal.                                                                                                                                                                                                          |
+| Date                            | `date_out_of_window` on create                     | Choose today or one of the 10 days before.                                                                                                                                                                              |
+| Date                            | `date_out_of_window` on edit                       | Choose a date from 6 Oct to 16 Oct. (The row's own window)                                                                                                                                                              |
+| Time                            | In the future                                      | The time can't be in the future.                                                                                                                                                                                        |
+| Goal                            | `goal_read_only`                                   | Vacation is completed, so its Transactions can't be changed. (Archived: Vacation is archived, so its Transactions can't be changed. Locked: Vacation is locked. Upgrade, or choose it as one of your 3 editable Goals.) |
+| Withdrawal                      | Above progress                                     | You can withdraw at most 5,000.00 from Vacation.                                                                                                                                                                        |
+| Edit or delete                  | Would take a Goal below zero                       | This would take Vacation below zero. Change or remove a withdrawal first.                                                                                                                                               |
+| Contribution                    | Above all-time unallocated (warning, not an error) | This is more than your unallocated savings of 89,363.00. You can still save it.                                                                                                                                         |
+| Save                            | `currency_mismatch`                                | Not saved: your currency changed after this was made.                                                                                                                                                                   |
+| Edit or delete                  | `not_found`                                        | This Transaction was deleted on another device.                                                                                                                                                                         |
+| Search box                      | Under 3 characters, not numeric                    | Type at least 3 characters, or an amount. (No request is sent)                                                                                                                                                          |
+| Link                            | Invalid parameters                                 | Some filters in this link weren't valid and were removed.                                                                                                                                                               |
+| Save                            | Hidden by the filter                               | Saved. It's hidden by your filters.                                                                                                                                                                                     |
+| Deep link                       | `txn` not found                                    | We couldn't find that Transaction.                                                                                                                                                                                      |
+| View name                       | Required                                           | Enter a name.                                                                                                                                                                                                           |
+| View name                       | Length                                             | Use 40 characters or fewer.                                                                                                                                                                                             |
+| View name                       | Taken, or "All Transactions"                       | You already have a view with this name.                                                                                                                                                                                 |
+| Save as view                    | At 20 views (`limit_reached`)                      | You have 20 views. Delete one to save another.                                                                                                                                                                          |
+| Any view change                 | Offline                                            | You are offline. Connect to save.                                                                                                                                                                                       |
+| Any view change                 | `version_conflict`                                 | This view changed on another device. Try again.                                                                                                                                                                         |
+| Rename or update a view         | `not_found`                                        | This view was deleted on another device.                                                                                                                                                                                |
+| Save as view                    | Done                                               | Saved as a new view.                                                                                                                                                                                                    |
+| Update, rename or delete a view | Done                                               | View updated. View renamed. View deleted.                                                                                                                                                                               |
 
 ## 9. Plan gating
 
@@ -652,7 +716,7 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
 
 ## 10. Offline behavior
 
-- **Readable offline:** the first 2 pages and the summary of the default filter (all time, newest first), payee suggestions and the Goals list. All are persisted per STATE-3 and shown with their "as of" time.
+- **Readable offline:** the first 2 pages and the summary of the default filter (all time, newest first), payee suggestions, the saved views and the Goals list. All are persisted per STATE-3 and shown with their "as of" time.
 - **Writable offline:** creates, edits and deletes of every type queue in the write queue (OFF-4, P1).
     - **Offline entry:** the dialog uses the device clock in the profile zone for today and the window (F02).
     - **On the screen:** pending rows show per BR-F03-46, and header figures are annotated, never changed (TXN-6).
@@ -677,12 +741,17 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
 | `/api/payees`                             | GET    | none, or `q` (BR-F03-61)                                                                                               | `{ items: [{ payee, count, lastUsedOn, lastType, lastCategory }], categories: [{ key, count }] }`, at most 200 items; with `q`, at most 8 items and no `categories` | 400, 401, 403                                                                                                                            | Read                                      |
 | `/api/payees/history`                     | GET    | `payee`, `months` (1 to 12, default 3)                                                                                 | `{ count, inMinor, outMinor, usualDay, currency }` (BR-F03-62)                                                                                                      | 400, 401, 403                                                                                                                            | Read                                      |
 | `/api/transactions/bulk-delete` (Stretch) | POST   | `{ items: [{ id, version }] }`, 1 to 100                                                                               | 200 `{ deleted }`                                                                                                                                                   | 401, 403 `feature_off`, 409 `version_conflict` with `details.ids`, 422                                                                   | `Idempotency-Key` required                |
+| `/api/transaction-views`                  | GET    | none                                                                                                                   | `{ items, currency }`, at most 20, in BR-F03-63's order                                                                                                             | 401, 403                                                                                                                                 | Read                                      |
+| `/api/transaction-views`                  | POST   | `{ id, name, filter, sort, dir, group }`; `currency` with amounts (BR-F03-64)                                          | 201 with the view and `currency`, or 200 with the existing view and `currency`                                                                                      | 400, 401, 403, 409 `id_conflict`, 422 `validation_failed`, `limit_reached`, `currency_mismatch`                                          | `Idempotency-Key` required                |
+| `/api/transaction-views/[id]`             | PATCH  | `{ name }`, `{ filter, sort, dir, group }`, or both; `currency` with amounts (BR-F03-64)                               | 200 with the view and `currency`                                                                                                                                    | 400, 401, 403, 404, 409 `version_conflict`, 422 `validation_failed`, `currency_mismatch`                                                 | `Idempotency-Key` and `If-Match` required |
+| `/api/transaction-views/[id]`             | DELETE | `{}`                                                                                                                   | 204                                                                                                                                                                 | 400, 401, 403, 404, 409 `version_conflict`                                                                                               | `Idempotency-Key` and `If-Match` required |
 
-**Error code added by this spec**
+**Error codes added by this spec**
 
-| Status | Code             | Default message                       | Write queue does |
-| ------ | ---------------- | ------------------------------------- | ---------------- |
-| 422    | `goal_read_only` | This Goal can't be changed right now. | Reject           |
+| Status | Code             | Default message                                | Write queue does |
+| ------ | ---------------- | ---------------------------------------------- | ---------------- |
+| 422    | `goal_read_only` | This Goal can't be changed right now.          | Reject           |
+| 422    | `limit_reached`  | You have 20 views. Delete one to save another. | Reject           |
 
 `currency_mismatch` is a root code (API-9), since F04 to F06 use it too.
 
@@ -749,6 +818,11 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
 - **One payee, two spellings:** "swiggy" and "Swiggy" form one payee group, labeled in the spelling of the latest row.
 - **A payee with `/`, `?`, `#` or `%`:** payee history takes the payee as a query parameter, so any payee the entry form accepts works.
 - **A histogram over a single amount:** 640.00 alone gives the edges 630.00 and 800.00 and one bucket counting 1.
+- **A "Last month" view in January:** applied on 2027-01-15, it shows 2026-12-01 to 2026-12-31.
+- **A custom range equal to a preset:** 1 to 30 November saved on 2026-11-02 is saved as `this_month`, so it moves with the month.
+- **A "This month" view at midnight on the 1st:** its `range` now resolves to the new month while the URL keeps the old dates, so it shows edited until it is applied again.
+- **The selected view deleted on another device:** the next views fetch no longer has it, so `view` is removed, and All Transactions is selected, edited, over the same rows.
+- **A view naming a deleted Goal or Subscription:** it shows no rows until it is updated or deleted.
 
 ## 14. Acceptance criteria
 
@@ -831,6 +905,28 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
     - `q=%` matches only a payee holding a literal `%`;
     - an answer to `q` has no `categories` and at most 8 items;
     - an empty `q` gets 400.
+- **AC-F03-45** (integration) Creating and listing views: a create returns 201 with version 1, and the same id again returns 200 with the existing view, even after the user reaches 20 views or another view takes the name. The list returns the saved views in creation order with `currency`, and never All Transactions.
+- **AC-F03-46** (integration) The limit: with 20 views, a create gets 422 `limit_reached`. With 19, two creates sent at once leave exactly 20 views: one gets 201 and the other `limit_reached`.
+- **AC-F03-47** (integration) View names:
+    - " Food " is stored as "Food";
+    - a second view named "food" gets 422 on `name`, and so does "ALL TRANSACTIONS";
+    - a 41-character name, an empty name and a name with a control character each get 422;
+    - renaming "Food" to "FOOD" passes.
+- **AC-F03-48** (integration) View filters: `range: "custom"`, `range` with `from`, `cat: ["food", "pizza"]`, `minMinor: 0`, `minMinor` above `maxMinor`, an unknown key such as `month`, and `sort: "amount"` with `group: "day"` each get 422 with the field path. `minMinor` sent with `currency: "USD"` for an INR profile gets 422 `currency_mismatch`. `cat: ["shopping", "food", "food"]` is stored as `["food", "shopping"]`.
+- **AC-F03-49** (unit) Preset dates in views:
+    - on 2026-11-02, saving `from=2026-10-01&to=2026-10-31` stores `range: "last_month"`;
+    - applying that view with today 2027-01-15 writes `from=2026-12-01&to=2026-12-31`;
+    - saving `from=2026-10-05&to=2026-10-20` stores those dates, and saving no dates stores neither.
+- **AC-F03-50** (unit) Edited: a view of `last_month` and `food`, applied on 2026-11-02, is not edited. Adding `type=expense`, or switching to `group=payee`, makes it edited, and Revert clears either.
+- **AC-F03-51** (unit) Generated names: the chips Food and Last month give "Food, Last month", or "Food, Last month 2" when that is taken. No chips give "My view". A 60-character chip label gives a 40-character name, and its " 2" form also fits in 40.
+- **AC-F03-52** (integration) View changes: a `PATCH` of `{ name }` alone passes, and so does one of `filter`, `sort`, `dir` and `group` together. A `PATCH` of `filter` alone, or of `{}`, gets 422. A stale `If-Match` gets 409. A `PATCH` or `DELETE` of a deleted view gets 404.
+- **AC-F03-53** (integration) Isolation: user B's list never shows user A's views, and B's `PATCH` and `DELETE` of A's view get 404 (P2).
+- **AC-F03-54** (client integration) `view=<id>` for an id that is not the user's is removed from the URL and All Transactions is selected. Offline, Save as view, Update view, Rename and Delete are disabled with "You are offline. Connect to save." With nothing edited, Save as view is disabled with its hint.
+- **AC-F03-55** (client integration) View outcomes:
+    - Save as view, Update view, Rename and Delete show "Saved as a new view.", "View updated.", "View renamed." and "View deleted.";
+    - a 409 on any of them shows "This view changed on another device. Try again." and reloads the views list;
+    - a 404 on Rename or Update view shows "This view was deleted on another device." and reloads the list, and a 404 on Delete removes the view with "View deleted.";
+    - a 422 on `name` during Save as view retries with the next suffix.
 
 ## 15. Illustrations
 
@@ -882,6 +978,22 @@ Illustrative, the first page of check A grouped by payee with `limit=2`, items s
 		}
 	],
 	"order": "9c1f0a7e2b44d3a1"
+}
+```
+
+Illustrative, a saved view:
+
+```json
+{
+	"id": "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c02",
+	"name": "Food last month",
+	"filter": { "range": "last_month", "cat": ["food"] },
+	"sort": "date",
+	"dir": "desc",
+	"group": "day",
+	"version": 1,
+	"createdAt": "2026-11-02T06:30:00Z",
+	"updatedAt": "2026-11-02T06:30:00Z"
 }
 ```
 

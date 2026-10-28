@@ -11,7 +11,7 @@ Later, the user changes their name, time zone and week start in Settings. They c
 | Milestone  | M1                                                                                                                                                                                                                                                                     |
 | Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                  |
 | Depends on | [F01](F01-auth-and-account.md) (sign-up, display name through `/update-user`), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md) (`/api/me`); F07 (portfolio seeding, from M3), F08 (dashboard settings page), F12 (billing page) |
-| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241                                                                                                                                                                                      |
+| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452                                                                                                                                                                               |
 
 ## 1. User stories
 
@@ -164,11 +164,11 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
     The server runs one write transaction:
     1. Lock the profile row with `SELECT ... FOR UPDATE`.
     2. Re-check BR-F02-14. If any finance row exists, return 409 `currency_locked`.
-    3. Update the currency.
+    3. Update the currency, and remove `minMinor` and `maxMinor` from every saved Transactions view, whose minor units would change meaning (F03, BR-F03-64; D-452).
 
     The portfolio needs no rebuild: its trades hold units and dates only, and are valued in the current currency (F07, D-275).
 
-    The lock serializes the change with every write to a Transaction, Budget, Subscription or Goal, each of which first reads the profile with `FOR KEY SHARE` (D-213, F03, BR-F03-05). Either the create finishes first, and the re-check sees its row, or the change finishes first, and the create meets `currency_mismatch`. After success, every query is invalidated.
+    The lock serializes the change with every write to a Transaction, Budget, Subscription or Goal, each of which first reads the profile with `FOR KEY SHARE` (D-213, F03, BR-F03-05), and with every saved-view write that holds amounts (BR-F03-64). Either the create finishes first, and the re-check sees its row, or the change finishes first, and the create meets `currency_mismatch`. After success, every query is invalidated.
 
 - **BR-F02-16** A `PATCH` with a stale version gets 409 `version_conflict`. The form reloads the current profile and says "Your profile was changed on another device. We loaded the latest version; make your change again." Profile edits are online only and never queued, so there is no side-by-side conflict view.
 - **BR-F02-17** The country cannot be changed. The Profile page shows it as text with "Your country can't be changed. It sets your number format and the currency of Daybook Premium." It is fixed because a Stripe customer keeps one currency once it has subscriptions (F12).
@@ -424,6 +424,7 @@ None. The country decides the Premium price currency (F12), which gates nothing.
 - **AC-F02-17** (accessibility) Onboarding, Profile and Appearance pass axe with no serious or critical violations and can be completed by keyboard alone.
 - **AC-F02-18** (integration, M2) At the frozen clock, after the first request, golden's `lastCatchUpOn` is 2026-11-02. After a time-zone change to `America/Los_Angeles`, `lastCatchUpOn` stays 2026-11-02, the user's catch-up note is cleared, and the next request creates no charge, so none is created twice.
 - **AC-F02-19** (unit) In the generated geo module, every country's `numberLocale` passes the clean and consistent checks of BR-F02-18 for all six currencies, and KW, SA and EG use `en-<country>`.
+- **AC-F02-20** (integration) Given a user with no finance data and a saved Transactions view holding `cat: ["food"]` and `minMinor: 150000`, when the currency changes from INR to USD, then the view keeps `cat` and has neither `minMinor` nor `maxMinor`.
 
 ## 15. Illustrations
 

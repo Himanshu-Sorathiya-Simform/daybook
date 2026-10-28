@@ -409,20 +409,20 @@ The browser never touches the database. Every private read and write passes the 
 
 ### 7.3 Data per screen
 
-| Screen            | Rendering                           | Data                                         | Persisted for offline                                              | Writes offline                               |
-| ----------------- | ----------------------------------- | -------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------- |
-| Dashboard         | Server prefetch, client widgets     | Dashboard and insights queries for the month | Current and last viewed month                                      | n/a                                          |
-| Transactions      | Server prefetch, client list        | Infinite list and summary for the filter     | First 2 pages and summary of the default filter; payee suggestions | Yes                                          |
-| Budgets           | Client                              | Budgets for the month                        | Current month                                                      | Yes                                          |
-| Subscriptions     | Client                              | Subscriptions, upcoming renewals             | Yes                                                                | Yes                                          |
-| Goals             | Client                              | Goals list, viewed Goal details              | Yes                                                                | Yes, including contributions and withdrawals |
-| Investments       | Client                              | Portfolio summary, series and holdings       | Last viewed range, and the holdings                                | Read-only                                    |
-| Analytics         | Client                              | Chart rollups for the filter                 | Last viewed range                                                  | n/a                                          |
-| Insights          | Client                              | Insights for the month                       | Current and last viewed month                                      | Dismiss is online only                       |
-| Reports           | Client form, file download          | Report endpoint                              | No                                                                 | Online only                                  |
-| Search            | Palette                             | Search endpoint                              | No                                                                 | Online only                                  |
-| Learn             | Server components                   | Sanity                                       | Read posts, by the service worker                                  | n/a                                          |
-| Settings, billing | Server components with client forms | Profile, auth, billing endpoints             | Profile through `/api/me`                                          | Online only, except dashboard layout         |
+| Screen            | Rendering                           | Data                                                  | Persisted for offline                                                           | Writes offline                               |
+| ----------------- | ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------- |
+| Dashboard         | Server prefetch, client widgets     | Dashboard and insights queries for the month          | Current and last viewed month                                                   | n/a                                          |
+| Transactions      | Server prefetch, client list        | Infinite list and summary for the filter; saved views | First 2 pages and summary of the default filter; payee suggestions; saved views | Yes; saved views online only                 |
+| Budgets           | Client                              | Budgets for the month                                 | Current month                                                                   | Yes                                          |
+| Subscriptions     | Client                              | Subscriptions, upcoming renewals                      | Yes                                                                             | Yes                                          |
+| Goals             | Client                              | Goals list, viewed Goal details                       | Yes                                                                             | Yes, including contributions and withdrawals |
+| Investments       | Client                              | Portfolio summary, series and holdings                | Last viewed range, and the holdings                                             | Read-only                                    |
+| Analytics         | Client                              | Chart rollups for the filter                          | Last viewed range                                                               | n/a                                          |
+| Insights          | Client                              | Insights for the month                                | Current and last viewed month                                                   | Dismiss is online only                       |
+| Reports           | Client form, file download          | Report endpoint                                       | No                                                                              | Online only                                  |
+| Search            | Palette                             | Search endpoint                                       | No                                                                              | Online only                                  |
+| Learn             | Server components                   | Sanity                                                | Read posts, by the service worker                                               | n/a                                          |
+| Settings, billing | Server components with client forms | Profile, auth, billing endpoints                      | Profile through `/api/me`                                                       | Online only, except dashboard layout         |
 
 ### 7.4 State ownership
 
@@ -568,6 +568,7 @@ Default messages for every code are in P2, section 8. A feature spec may add its
 | `/api/transactions/facets`, `/api/transactions/amount-histogram`                     | GET                                                             | F03          |
 | `/api/payees`, `/api/payees/history`                                                 | GET (suggestions and search; one payee's recent rows)           | F03          |
 | `/api/transactions/bulk-delete`                                                      | POST (Stretch)                                                  | F03          |
+| `/api/transaction-views`, `/api/transaction-views/[id]`                              | GET, POST, PATCH, DELETE (saved views)                          | F03          |
 | `/api/budgets`, `/api/budgets/[id]`                                                  | GET, POST, PATCH, DELETE                                        | F04          |
 | `/api/subscriptions`, `/api/subscriptions/[id]`                                      | GET, POST, PATCH, DELETE                                        | F05          |
 | `/api/goals`, `/api/goals/[id]`                                                      | GET, POST, PATCH, DELETE                                        | F06          |
