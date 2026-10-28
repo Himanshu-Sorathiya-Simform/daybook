@@ -14,6 +14,7 @@ import {
 	text,
 	timestamp,
 	unique,
+	uniqueIndex,
 	uuid,
 	type AnyPgColumn,
 } from "drizzle-orm/pg-core";
@@ -231,6 +232,48 @@ export const transactions = appSchema.table(
 			sql`${t.source} IN ('manual', 'subscription')`,
 		),
 		check("transactions_version_positive", sql`${t.version} >= 1`),
+	],
+);
+
+/**
+ * Saved Transactions views (F03 section 3, BR-F03-63 to BR-F03-69). The filter is a JSON
+ * object whose keys and values the shared schema checks (BR-F03-64); `group` is a reserved
+ * word, so the column is `group_by`. Names are unique per user by `lower()`. The limit of 20
+ * has no backstop here: the create handler serializes creates per user (D-469).
+ */
+export const transactionViews = appSchema.table(
+	"transaction_views",
+	{
+		...privateColumns(),
+		name: text("name").notNull(),
+		filter: jsonb("filter").notNull(),
+		sort: text("sort").notNull(),
+		dir: text("dir").notNull(),
+		groupBy: text("group_by").notNull(),
+		version: integer("version").notNull().default(1),
+	},
+	(t) => [
+		uniqueIndex("transaction_views_user_id_name_key").on(
+			t.userId,
+			sql`lower(${t.name})`,
+		),
+		index("transaction_views_order_idx").on(t.userId, t.createdAt, t.id),
+		textCheck("transaction_views_name_text", t.name, 40),
+		check(
+			"transaction_views_filter_object",
+			sql`jsonb_typeof(${t.filter}) = 'object'`,
+		),
+		check("transaction_views_sort_values", sql`${t.sort} IN ('date', 'amount')`),
+		check("transaction_views_dir_values", sql`${t.dir} IN ('desc', 'asc')`),
+		check(
+			"transaction_views_group_by_values",
+			sql`${t.groupBy} IN ('day', 'category', 'payee', 'none')`,
+		),
+		check(
+			"transaction_views_day_needs_date_sort",
+			sql`NOT (${t.sort} = 'amount' AND ${t.groupBy} = 'day')`,
+		),
+		check("transaction_views_version_positive", sql`${t.version} >= 1`),
 	],
 );
 
