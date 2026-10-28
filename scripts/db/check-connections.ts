@@ -74,22 +74,24 @@ export async function checkConnections(
 	env: ServerEnv,
 	source: Readonly<Record<string, string | undefined>>,
 ): Promise<SlotResult[]> {
-	const results: SlotResult[] = [];
-	for (const slot of SLOTS) {
-		const problems = staticProblems(slot, env, source);
-		try {
-			const role = await loginAs(env[slot.url]);
-			if (role !== slot.role) problems.push(`it logged in as ${role}`);
-		} catch (error) {
-			// pg's messages name the problem (password authentication failed, timeout), never
-			// the password itself.
-			problems.push(
-				`login failed: ${error instanceof Error ? error.message : "unknown"}`,
-			);
-		}
-		results.push({ slot, problems });
-	}
-	return results;
+	// The three logins do not depend on each other, so they run together; the results keep
+	// the order of SLOTS.
+	return Promise.all(
+		SLOTS.map(async (slot): Promise<SlotResult> => {
+			const problems = staticProblems(slot, env, source);
+			try {
+				const role = await loginAs(env[slot.url]);
+				if (role !== slot.role) problems.push(`it logged in as ${role}`);
+			} catch (error) {
+				// pg's messages name the problem (password authentication failed, timeout), never
+				// the password itself.
+				problems.push(
+					`login failed: ${error instanceof Error ? error.message : "unknown"}`,
+				);
+			}
+			return { slot, problems };
+		}),
+	);
 }
 
 async function main(): Promise<void> {

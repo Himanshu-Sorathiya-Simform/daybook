@@ -72,10 +72,11 @@ const store = globalThis as typeof globalThis & { __daybookAuth?: Auth };
 /** The app's Better Auth instance, built on first use, so importing this module (as
  * `next build` does) needs no environment. */
 export function getAuth(): Auth {
-	return (store.__daybookAuth ??= createAuth(
+	store.__daybookAuth ??= createAuth(
 		serverEnv(),
 		drizzle({ client: authPool(), schema: tables }),
-	));
+	);
+	return store.__daybookAuth;
 }
 
 /** Answers one request to `/api/auth/*`. Better Auth turns its own errors (a wrong password,

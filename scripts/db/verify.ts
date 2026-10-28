@@ -125,8 +125,10 @@ export type Facts = {
 };
 
 /** A text array literal from Daybook's own constants (role and schema names), never input. */
-const textArray = (values: readonly string[]) =>
-	`ARRAY[${values.map((v) => `'${v.replaceAll("'", "''")}'`).join(", ")}]::text[]`;
+const textArray = (values: readonly string[]) => {
+	const literals = values.map((v) => "'" + v.replaceAll("'", "''") + "'");
+	return `ARRAY[${literals.join(", ")}]::text[]`;
+};
 
 const DAYBOOK_ROLES = textArray(ROLES);
 const PUBLIC_CHECKED = textArray(OUR_SCHEMAS);

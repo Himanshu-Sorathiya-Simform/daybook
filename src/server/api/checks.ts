@@ -80,7 +80,7 @@ const MAX_VERSION = 2_147_483_647;
 /** The version in `If-Match: "<version>"` (API-4), or `null` when it is missing or is not a
  * quoted whole number from 1 to the largest integer column value (step 6). */
 export function parseIfMatch(header: string | null): number | null {
-	const match = /^"([1-9][0-9]{0,9})"$/.exec(header ?? "");
+	const match = /^"([1-9]\d{0,9})"$/.exec(header ?? "");
 	if (!match) return null;
 	const version = Number(match[1]);
 	return version <= MAX_VERSION ? version : null;

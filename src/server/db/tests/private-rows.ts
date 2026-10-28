@@ -47,7 +47,7 @@ export const PRIVATE_ROWS: { [K in PrivateTable]: (userId: string) => Row } = {
 };
 
 /** Inserts one row into `app.<table>`. Table and column names come from this file only. */
-export async function insertRow(client: ClientBase, table: PrivateTable, row: Row) {
+export function insertRow(client: ClientBase, table: PrivateTable, row: Row) {
 	const columns = Object.keys(row);
 	const placeholders = columns.map((_, i) => `$${i + 1}`);
 	return client.query(

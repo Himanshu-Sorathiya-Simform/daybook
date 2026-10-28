@@ -53,10 +53,11 @@ async function main(): Promise<void> {
 	await client.connect();
 	try {
 		const applied = await runMigrations(client);
+		const noun = applied === 1 ? "migration" : "migrations";
 		console.log(
 			applied === 0 ?
 				"Nothing to apply: the database is up to date."
-			:	`Applied ${applied} migration${applied === 1 ? "" : "s"}.`,
+			:	`Applied ${applied} ${noun}.`,
 		);
 		if (!report(await verifyDatabase(client))) process.exitCode = 1;
 	} finally {
