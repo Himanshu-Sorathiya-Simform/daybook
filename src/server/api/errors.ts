@@ -169,6 +169,15 @@ export function describeDatabaseError(error: DatabaseError): Record<string, stri
 	return described;
 }
 
+/** What any error may say in a log: its name and, for a Postgres error (Drizzle's wrapper
+ * unwrapped), `describeDatabaseError`. Never its message: a Drizzle error's message holds the
+ * query's parameter values, such as emails, amounts and session tokens (D-381). */
+export function describeError(error: unknown): Record<string, string> {
+	const db = databaseErrorOf(error);
+	if (db) return { name: "DatabaseError", ...describeDatabaseError(db) };
+	return { name: error instanceof Error ? error.name : typeof error };
+}
+
 /** Field names for database errors, read once from the schema. A field is the API's name for
  * a column (`weekStart` for `week_start`), so a message lands on the field the client sent.
  *

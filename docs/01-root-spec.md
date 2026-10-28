@@ -508,7 +508,7 @@ The browser never touches the database. Every private read and write passes the 
     - Decimals (quantities) and ids are strings.
 - **API-7** Lists use cursors:
     - Request: `?limit=` (default 50, maximum 100) and `?cursor=`.
-    - Response: `{ "items": [...], "nextCursor": "...", "prevCursor": "..." }`.
+    - Response: `data` holds `{ "items": [...], "nextCursor": "...", "prevCursor": "..." }` (API-11).
     - Cursors are opaque, encode the sort key and id, and stay stable when rows are inserted.
 - **API-8** Every response carries `x-request-id` and `Server-Timing`.
 
@@ -582,6 +582,13 @@ Default messages for every code are in P2, section 8. A feature spec may add its
 | `/api/demo-data`                                                                     | GET, POST, DELETE                                               | F15          |
 | `/api/account/reset`, `/api/account/export`                                          | POST, GET (export is Stretch)                                   | F01          |
 | `/api/push/subscriptions`                                                            | POST, DELETE (Stretch)                                          | P1           |
+
+**Success (API-11).** Every successful Daybook response with a body is `{ "data": <output> }`, so a body holds exactly one of `data` and API-9's `error` (D-431).
+
+- **Feature specs:** an Output column describes what `data` holds. `200 { deleted }` means `{ "data": { "deleted": ... } }`.
+- **No body:** a 204 and a redirect have none.
+- **Replays:** the route wrapper wraps what a handler returns, and an idempotency record stores the whole body, so a replay is identical (P2).
+- **Not covered:** Better Auth's endpoints under `/api/auth/*` keep Better Auth's shapes, and webhook acknowledgements keep the provider's.
 
 ## 9. Security
 
@@ -762,7 +769,7 @@ The core codes are below. The full registry, including the codes added for Stret
 | `PRINT_TOKEN_SECRET`                                                               | SEC-11                                                                                                                                                |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`                                            | Push (Stretch)                                                                                                                                        |
 | `FLAG_<CODE>`                                                                      | Kill switches (CAP-3)                                                                                                                                 |
-| `BUILD_ID`                                                                         | Cache buster and update detection                                                                                                                     |
+| `BUILD_ID`                                                                         | Cache buster and update detection; `dev` when unset (D-434)                                                                                           |
 
 **Scripts:**
 

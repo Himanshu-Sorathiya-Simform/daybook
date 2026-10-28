@@ -101,6 +101,19 @@ export const serverEnvSchema = z.object({
 	DATABASE_URL_AUTH: roleUrl("DATABASE_URL_AUTH", "daybook_auth"),
 	DATABASE_URL_RUNTIME: roleUrl("DATABASE_URL_RUNTIME", "daybook_runtime"),
 	DATABASE_URL_SYSTEM: roleUrl("DATABASE_URL_SYSTEM", "daybook_system"),
+	// The build the write queue's `Daybook-Build` must match (D-383). Optional: `dev` when unset
+	// or empty, so a local queue and server always agree (D-434). It is echoed back in
+	// `build_mismatch`, so only a short id of safe characters is accepted.
+	BUILD_ID: z.preprocess(
+		(value) => (value === "" ? undefined : value),
+		z
+			.string()
+			.regex(
+				/^[A-Za-z0-9._-]{1,64}$/,
+				"BUILD_ID must be 1 to 64 letters, digits, dots, dashes or underscores",
+			)
+			.default("dev"),
+	),
 });
 
 /** What the database scripts (bootstrap, migrate, verify) read, over the direct endpoint. */

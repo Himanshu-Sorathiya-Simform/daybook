@@ -3,11 +3,12 @@ import { randomUUIDv7 } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { describeError } from "../api/errors";
 import { authPool } from "../db/pools";
 import { account, session, user, verification } from "../db/schema/auth";
 import { serverEnv, type ServerEnv } from "../env";
 import { beforeHook } from "./allow-list";
-import { describeError, logAuth } from "./log";
+import { logAuth } from "./log";
 
 const tables = { user, session, account, verification };
 

@@ -1,5 +1,11 @@
 import "server-only";
-import { categories, currencies, idempotencyRecords, profile } from "./app";
+import {
+	categories,
+	currencies,
+	dailyPassMarkers,
+	idempotencyRecords,
+	profile,
+} from "./app";
 import { account, session, user, verification } from "./auth";
 
 export * from "./app";
@@ -17,4 +23,5 @@ export const ALL_TABLES = [
 	categories,
 	profile,
 	idempotencyRecords,
+	dailyPassMarkers,
 ] as const;

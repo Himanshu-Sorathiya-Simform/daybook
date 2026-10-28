@@ -56,8 +56,10 @@ describe("reference rows", () => {
 });
 
 describe("the database clock (BR-P2-43)", () => {
+	// `performance.now()` is exempt: a monotonic timer for durations (Server-Timing), never a
+	// date or an instant. `Date.now()` and SQL's `now()` are still caught.
 	const CLOCK =
-		/\b(now\s*\(|current_date\b|current_timestamp\b|localtimestamp\b|transaction_timestamp\s*\(|statement_timestamp\s*\(|clock_timestamp\s*\(|defaultNow\s*\()/i;
+		/\b((?<!performance\.)now\s*\(|current_date\b|current_timestamp\b|localtimestamp\b|transaction_timestamp\s*\(|statement_timestamp\s*\(|clock_timestamp\s*\(|defaultNow\s*\()/i;
 
 	function sourceFiles(dir: string): string[] {
 		return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -89,14 +91,19 @@ describe("the database clock (BR-P2-43)", () => {
 		"localtimestamp",
 		".defaultNow()",
 		"clock_timestamp()",
+		"Date.now()",
+		"SELECT now ()",
 	])("the scan catches %s", (text) => {
 		expect(CLOCK.test(text)).toBe(true);
 	});
 
-	test.each(["nowhere", "known()", "current_dates_table", "acknowledgement"])(
-		"the scan ignores %s",
-		(text) => {
-			expect(CLOCK.test(text)).toBe(false);
-		},
-	);
+	test.each([
+		"nowhere",
+		"known()",
+		"current_dates_table",
+		"acknowledgement",
+		"performance.now()",
+	])("the scan ignores %s", (text) => {
+		expect(CLOCK.test(text)).toBe(false);
+	});
 });

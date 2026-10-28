@@ -35,7 +35,54 @@ function problemsOf(parse: () => unknown): readonly string[] {
 
 describe("parseServerEnv", () => {
 	test("returns every app variable from a valid source", () => {
-		expect(parseServerEnv(validServer)).toEqual(validServer);
+		expect(parseServerEnv(validServer)).toEqual({
+			...validServer,
+			BUILD_ID: "dev",
+		});
+	});
+
+	describe("BUILD_ID", () => {
+		test("is kept when set", () => {
+			expect(
+				parseServerEnv({ ...validServer, BUILD_ID: "3f2a9c1" }).BUILD_ID,
+			).toBe("3f2a9c1");
+		});
+
+		test.each([
+			["unset", undefined],
+			["empty", ""],
+		])("is dev when %s", (_name, value) => {
+			expect(
+				parseServerEnv({ ...validServer, BUILD_ID: value }).BUILD_ID,
+			).toBe("dev");
+		});
+
+		test("accepts letters, digits, dots, dashes and underscores", () => {
+			const id = "v1.2_rc-3";
+			expect(parseServerEnv({ ...validServer, BUILD_ID: id }).BUILD_ID).toBe(
+				id,
+			);
+		});
+
+		test.each([
+			["a space", "a b"],
+			["markup", "<script>"],
+			["65 characters", "a".repeat(65)],
+		])("refuses a value with %s, without echoing it", (_name, value) => {
+			const problems = problemsOf(() =>
+				parseServerEnv({ ...validServer, BUILD_ID: value }),
+			);
+			expect(problems).toEqual([
+				"BUILD_ID must be 1 to 64 letters, digits, dots, dashes or underscores",
+			]);
+		});
+
+		test("accepts exactly 64 characters", () => {
+			expect(
+				parseServerEnv({ ...validServer, BUILD_ID: "a".repeat(64) })
+					.BUILD_ID,
+			).toHaveLength(64);
+		});
 	});
 
 	test("drops variables the app does not use, such as the owner URL", () => {
@@ -377,9 +424,9 @@ describe("serverEnv", () => {
 	}
 
 	test("reads and validates process.env", async () => {
-		stubServerEnv(validServer);
+		stubServerEnv({ ...validServer, BUILD_ID: "" });
 		const { serverEnv } = await import("../env");
-		expect(serverEnv()).toEqual(validServer);
+		expect(serverEnv()).toEqual({ ...validServer, BUILD_ID: "dev" });
 	});
 
 	test("reads process.env once and reuses the result", async () => {

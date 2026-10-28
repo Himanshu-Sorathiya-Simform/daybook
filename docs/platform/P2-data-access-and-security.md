@@ -4,12 +4,12 @@
 
 Every private read and write reaches Postgres through one path. A route-handler wrapper checks the request and opens one database transaction. Inside it, the data access layer sets the user's identity, and row-level security makes the database refuse anything that belongs to someone else. The same path makes every change safe to retry and detects edits made on another device. This spec defines that path, the database roles behind it, the security headers in front of it, and the tests that prove it.
 
-| Item       | Value                                                                                                                                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Milestone  | M0                                                                                                                                                                                                           |
-| Plan       | Free and Premium                                                                                                                                                                                             |
-| Depends on | [01-root-spec.md](../01-root-spec.md) sections 7 to 9                                                                                                                                                        |
-| Decisions  | D-06, D-07, D-12 to D-19, D-39, D-137, D-153, D-165, D-172, D-173, D-180, D-192 to D-197, D-199, D-201 to D-207, D-242 to D-244, D-292, D-300, D-325, D-343, D-362, D-367, D-368, D-370, D-382, D-383, D-386 |
+| Item       | Value                                                                                                                                                                                                                        |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M0                                                                                                                                                                                                                           |
+| Plan       | Free and Premium                                                                                                                                                                                                             |
+| Depends on | [01-root-spec.md](../01-root-spec.md) sections 7 to 9                                                                                                                                                                        |
+| Decisions  | D-06, D-07, D-12 to D-19, D-39, D-137, D-153, D-165, D-172, D-173, D-180, D-192 to D-197, D-199, D-201 to D-207, D-242 to D-244, D-292, D-300, D-325, D-343, D-362, D-367, D-368, D-370, D-382, D-383, D-386, D-409 to D-439 |
 
 ## 1. User stories
 
@@ -65,7 +65,7 @@ A private table that other private rows reference also has `UNIQUE (user_id, id)
 | Field                          | Meaning                                                                      |
 | ------------------------------ | ---------------------------------------------------------------------------- |
 | `user_id`, `key`               | Unique together; the key is the request's `Idempotency-Key`, a UUIDv7 (ID-2) |
-| `request_hash`                 | SHA-256 of method, path and the canonical JSON body                          |
+| `request_hash`                 | SHA-256 of method, path with query and the canonical JSON body (D-432)       |
 | `status_code`, `response_body` | The stored response                                                          |
 | `created_at`                   | Deleted after 90 days (BR-P2-27); deleted with the account by the cascade    |
 
@@ -127,8 +127,8 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
 - **BR-P2-08** `withUser(ctx, mode, fn)` runs eight steps:
     1. Takes a connection from the runtime pool.
     2. Runs `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY` for reads, or `BEGIN` (read committed) for writes.
-    3. Runs `SELECT set_config('app.user_id', $1, true)` with `ctx.user.id`.
-    4. Runs `SET LOCAL statement_timeout = '15s'`.
+    3. Sets `app.user_id` to `ctx.user.id` for the transaction only, with `set_config('app.user_id', $1, true)`.
+    4. Limits every statement to 15 seconds for the transaction only, with `set_config('statement_timeout', '15s', true)`, which is `SET LOCAL`. Steps 3 and 4 run as one statement, one round trip (D-439).
     5. Calls `fn` with the transaction.
     6. Commits.
     7. Rolls back on any error.
@@ -142,7 +142,7 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
 
     Scripts run with `tsx --conditions=react-server`, and Vitest aliases `server-only` to an empty module, so both can import server modules.
 
-- **BR-P2-12** No session, or a session whose user no longer exists, gives 401 `unauthenticated`. API responses never touch cookies; pages clear them through BR-P2-39.
+- **BR-P2-12** No session, or a session whose user no longer exists, gives 401 `unauthenticated`. API responses never touch cookies; pages clear them through BR-P2-39. The wrapper and `readAsUser` read the session without extending it, so no request writes to the auth tables; F01's session check extends it (BR-F01-12, D-433).
 - **BR-P2-13** A `user` route called before onboarding gives 403 `profile_required`. These routes work without a profile: `/api/me`, `/api/profile`, `/api/account/*`.
 - **BR-P2-14** Lazy catch-up (JOB-1, D-207). It runs before every route with `catchUp: true` (the default whenever a profile is required), and in `readAsUser` before its read transaction opens, at most once per rendered request.
     - **Skipped:** for a request carrying `Daybook-Queue: pending`, or the cookie `daybook_queue=pending`, which the client keeps while Subscription items wait in its queue (D-244, D-325; P1, BR-P1-23).
@@ -185,7 +185,9 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
     - `afterCommit`: false by default (D-368). With it, the handler returns a continuation instead of a response. The wrapper commits and releases the transaction, then awaits the continuation, which builds the final response. The continuation may call the system module or remote services, never the runtime pool. F11's PDF route and F13's search, for its Learn call, use it.
         - **Timing** (D-386): `Server-Timing` `app;dur` ends at the commit, and the continuation is reported as `after;dur`. NFR-1's server-time budget applies to `app;dur`, so a remote call is never counted as database-bound server time.
 
-    The handler is called as `handler(ctx, tx, input)`.
+    The handler is called as `handler(ctx, tx, input)` (D-438):
+    - **`input`:** `body` (parsed by the `body` schema, or `{}`), `query` (the URL's search parameters), `params` (the route's dynamic segments) and `version` (from `If-Match`, on a versioned route).
+    - **Its return:** the value the response's `data` holds, with status 200 (root API-11), or `reply(data, { status })` for another status. A 204 has no body.
 
 - **BR-P2-16** A mutation is any POST, PUT, PATCH or DELETE. Every `user` mutation requires an `Idempotency-Key`, with three exceptions (D-201). They are online only and never queued:
     - `POST /api/sync/catch-up`, idempotent by design;
@@ -216,7 +218,7 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
 **Idempotency (D-197)**
 
 - **BR-P2-18** **The early lookup** (D-362). Right after opening the transaction (step 10), before the profile, capability and body checks, the wrapper selects any stored record for the key.
-    - **The hash:** computed once, before step 10, from the method, the path and the raw body's canonical JSON, and reused at step 14. A body that is not valid JSON skips the early lookup and fails at step 13.
+    - **The hash:** computed once, before step 10, from the method, the path with its query string and the raw body's canonical JSON, and reused at step 14 (D-432). A body that is not valid JSON skips the early lookup and fails at step 13.
     - **Same hash:** its stored response is returned at once. A replay of a request that committed therefore gets its answer, even if a flag or capability would now refuse it. A replay from an older build is refused at step 5 with `build_mismatch` first, and gets its answer once the client has updated (D-383).
     - **Different hash:** 422 `idempotency_key_reused`.
     - **Otherwise:** the steps continue.
@@ -479,12 +481,15 @@ Requests from the service worker carry `Origin` and pass the same checks.
 | `server/env`                  | Validated server and public env                                  | Any server module                                                                                                              |
 | `server/db/pools`             | `authPool`, `runtimePool`, `systemPool`; the safe-integer mapper | `server/auth`, `server/dal`, `server/api/route`, `server/system`                                                               |
 | `server/auth`                 | `getAuth()`, `handleAuthRequest()`, `sessionExpired()`           | Route handlers, `server/dal`, scripts                                                                                          |
-| `server/dal/context`          | `getRequestContext()`                                            | `server/dal/read`, `server/api/route`                                                                                          |
+| `server/dal/context`          | `readClock`, `sessionUser`, `readProfile`, `withProfile`         | `server/dal/read`, `server/api/route`                                                                                          |
 | `server/dal/read`             | `readAsUser(fn)`: context plus one read transaction              | Server components                                                                                                              |
 | `server/dal/with-user`        | `withUser(ctx, mode, fn)`                                        | `server/dal/*`, `server/api/route`                                                                                             |
+| `server/dal/catch-up`         | `runCatchUpIfDue`, the note, `CATCH_UP_STEPS`                    | `server/api/route`, `server/dal/read`; F05 adds its step; F01 and F02 clear the note                                           |
+| `server/dal/idempotency`      | `findAnswer`, `claimKey`, `storeAnswer`                          | `server/api/route`                                                                                                             |
+| `server/dal/versions`         | `versionedUpdate`, `versionedDelete` (BR-P2-21)                  | `server/dal/<feature>`, route handlers                                                                                         |
 | `server/dal/<feature>`        | Query and command functions that take a transaction              | Route handlers, server components                                                                                              |
 | `server/api/route`            | `route(options, handler)`                                        | Route handlers                                                                                                                 |
-| `server/api/errors`           | Error classes, envelope builder, Postgres error mapping          | Route handlers, `server/dal`, `server/auth` (its log filter)                                                                   |
+| `server/api/errors`           | Error classes, envelope builder, Postgres error mapping          | Route handlers, `server/dal`, `server/system`, `server/auth` (its log filter)                                                  |
 | `server/system/*`             | The functions in BR-P2-26 and BR-P2-27                           | Webhook and billing handlers, the `/api/me` handler (lazy billing check), Better Auth hooks, the wrapper (daily pass), scripts |
 | `server/security/csp`         | `buildCsp(nonce)`, the header set                                | `proxy.ts`                                                                                                                     |
 | `server/security/print-token` | `signPrintToken`, `verifyPrintToken`                             | F11                                                                                                                            |

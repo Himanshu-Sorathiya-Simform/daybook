@@ -128,3 +128,12 @@ export const idempotencyRecords = appSchema.table(
 		),
 	],
 );
+
+// --- System data: no user_id, no RLS; only the system role reads or writes (P2, section 3).
+
+/** One row per UTC day the global daily pass has run (BR-P2-27, D-437). Inserting the day's
+ * row is the pass's lock: a second process's insert waits, then finds it. */
+export const dailyPassMarkers = appSchema.table("daily_pass_markers", {
+	day: date("day", { mode: "string" }).primaryKey(),
+	createdAt: instant("created_at").notNull(),
+});

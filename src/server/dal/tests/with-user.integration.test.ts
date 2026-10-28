@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { Client, DatabaseError } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { toApiError } from "../../api/errors";
+import { Timing } from "../../api/timing";
 import { runtimePool } from "../../db/pools";
 import { idempotencyRecords, profile } from "../../db/schema";
 import {
@@ -336,5 +337,31 @@ describe("Postgres errors map to the API's codes (BR-P2-24)", () => {
 			})(),
 		);
 		expect(toApiError(error).code).toBe("has_dependents");
+	});
+});
+
+describe("timing (D-436)", () => {
+	test("adds every query's time, BEGIN and COMMIT included", async () => {
+		const timing = new Timing();
+		await withUser(
+			as(a),
+			"read",
+			(tx) => scalar(tx, sql`SELECT pg_sleep(0.2)`),
+			{ timing },
+		);
+		expect(timing.db).toBeGreaterThanOrEqual(200);
+	});
+
+	test("hands the connection back unpatched, so later use is not counted", async () => {
+		const timing = new Timing();
+		await withUser(as(a), "read", (tx) => scalar(tx, sql`SELECT 1`), { timing });
+		const counted = timing.db;
+		const client = await runtimePool().connect();
+		try {
+			await client.query("SELECT 1");
+		} finally {
+			client.release();
+		}
+		expect(timing.db).toBe(counted);
 	});
 });

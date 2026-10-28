@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { DrizzleQueryError } from "drizzle-orm";
+import { inspect } from "node:util";
 import { DatabaseError } from "pg";
 import { describe, expect, test } from "vitest";
 import { z } from "zod";
@@ -7,6 +8,7 @@ import {
 	ApiError,
 	databaseErrorOf,
 	describeDatabaseError,
+	describeError,
 	envelope,
 	ERRORS,
 	fromZodError,
@@ -208,6 +210,47 @@ describe("describeDatabaseError", () => {
 				dbError({ code: "23502", table: "profile", column: "country" }),
 			),
 		).toEqual({ sqlstate: "23502", table: "profile", column: "country" });
+	});
+});
+
+describe("describeError", () => {
+	const duplicate = () =>
+		dbError({
+			code: "23505",
+			table: "user",
+			constraint: "user_email_unique",
+			detail: "Key (email)=(asha@example.com) already exists.",
+		});
+
+	test("gives a Postgres error's SQLSTATE, table and constraint, never its detail", () => {
+		expect(describeError(duplicate())).toEqual({
+			name: "DatabaseError",
+			sqlstate: "23505",
+			table: "user",
+			constraint: "user_email_unique",
+		});
+	});
+
+	test("unwraps Drizzle's wrapper and leaves its query and parameters out", () => {
+		const wrapped = new DrizzleQueryError(
+			'insert into "auth"."user" ("email") values ($1)',
+			["asha@example.com"],
+			duplicate(),
+		);
+		const described = describeError(wrapped);
+		expect(described).toEqual(describeError(duplicate()));
+		expect(inspect(described)).not.toContain("asha@example.com");
+	});
+
+	test("gives only the name of any other error", () => {
+		expect(describeError(new TypeError("token abc123 failed"))).toEqual({
+			name: "TypeError",
+		});
+	});
+
+	test("gives the type of something thrown that is not an error", () => {
+		expect(describeError("asha@example.com")).toEqual({ name: "string" });
+		expect(describeError(undefined)).toEqual({ name: "undefined" });
 	});
 });
 

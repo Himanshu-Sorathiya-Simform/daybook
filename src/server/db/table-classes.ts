@@ -18,6 +18,7 @@ export const TABLE_CLASSES = {
 	categories: "reference",
 	profile: "private",
 	idempotency_records: "private",
+	daily_pass_markers: "system",
 } as const satisfies Record<string, TableClass>;
 
 export type AppTable = keyof typeof TABLE_CLASSES;

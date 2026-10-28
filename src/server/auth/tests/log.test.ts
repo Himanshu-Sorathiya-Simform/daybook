@@ -3,7 +3,7 @@ import { inspect } from "node:util";
 import { DrizzleQueryError } from "drizzle-orm/errors";
 import { DatabaseError } from "pg";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { describeError, logAuth } from "../log";
+import { logAuth } from "../log";
 
 function databaseError(): DatabaseError {
 	const error = new DatabaseError(
@@ -27,34 +27,6 @@ function drizzleError(): DrizzleQueryError {
 		databaseError(),
 	);
 }
-
-describe("describeError", () => {
-	test("gives a Postgres error's SQLSTATE, table and constraint, never its detail", () => {
-		expect(describeError(databaseError())).toEqual({
-			name: "DatabaseError",
-			sqlstate: "23505",
-			table: "user",
-			constraint: "user_email_unique",
-		});
-	});
-
-	test("unwraps Drizzle's wrapper and leaves its query and parameters out", () => {
-		const described = describeError(drizzleError());
-		expect(described).toEqual(describeError(databaseError()));
-		expect(JSON.stringify(described)).not.toContain("asha@example.com");
-	});
-
-	test("gives only the name of any other error", () => {
-		expect(describeError(new TypeError("token abc123 failed"))).toEqual({
-			name: "TypeError",
-		});
-	});
-
-	test("gives the type of something thrown that is not an error", () => {
-		expect(describeError("asha@example.com")).toEqual({ name: "string" });
-		expect(describeError(undefined)).toEqual({ name: "undefined" });
-	});
-});
 
 describe("logAuth", () => {
 	afterEach(() => {

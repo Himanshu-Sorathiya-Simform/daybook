@@ -1,6 +1,6 @@
 import "server-only";
 import { safeNextPath } from "@/lib/next-path";
-import { describeError } from "./log";
+import { describeError } from "../api/errors";
 
 /** The offline-logout marker cookie (F01, D-367). Only Daybook's own script sets it. */
 export const LOGOUT_COOKIE = "daybook_logout";
