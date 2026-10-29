@@ -63,7 +63,8 @@ export async function asUser<T>(
 }
 
 /** Inserts an expense for the user `asUser` runs as, on `occurredOn` at 12:00 IST unless
- * `occurredAt` says otherwise. Returns its id. */
+ * `occurredAt` says otherwise, recorded at the golden clock as a manual, non-demo row unless
+ * `createdAt`, `source` or `demo` say otherwise. Returns its id. */
 export async function addExpense(
 	tx: Tx,
 	userId: string,
@@ -75,16 +76,20 @@ export async function addExpense(
 		occurredAt?: string;
 		category?: string;
 		type?: "expense" | "income" | "refund";
+		createdAt?: string;
+		source?: "manual" | "subscription";
+		demo?: boolean;
 	},
 ): Promise<string> {
 	const id = fields.id ?? randomUUID();
 	const occurredAt = fields.occurredAt ?? `${fields.occurredOn}T06:30:00Z`;
+	const createdAt = fields.createdAt ?? GOLDEN_NOW;
 	await tx.execute(
 		sql`INSERT INTO app.transactions (id, user_id, created_at, updated_at, type, amount_minor,
-		   occurred_at, occurred_on, category, payee, source, version)
-		 VALUES (${id}, ${userId}, ${GOLDEN_NOW}, ${GOLDEN_NOW}, ${fields.type ?? "expense"},
+		   occurred_at, occurred_on, category, payee, source, demo, version)
+		 VALUES (${id}, ${userId}, ${createdAt}, ${createdAt}, ${fields.type ?? "expense"},
 		   ${fields.amountMinor}, ${occurredAt}, ${fields.occurredOn}, ${fields.category ?? "food"},
-		   ${fields.payee}, 'manual', 1)`,
+		   ${fields.payee}, ${fields.source ?? "manual"}, ${fields.demo ?? false}, 1)`,
 	);
 	return id;
 }

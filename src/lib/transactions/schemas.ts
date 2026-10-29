@@ -70,6 +70,10 @@ export const TRANSACTION_MESSAGES = {
 	timeInFuture: "The time can't be in the future.",
 	createdAtInFuture: "The recording time can't be in the future.",
 	dateOutOfWindow: "Choose today or one of the 10 days before.",
+	chargeTypeFixed: "A charge's type can't change.",
+	dateTimeFixed: "This Transaction's date and time can't change.",
+	typeGroupFixed:
+		"Delete this Transaction and add a new one to change to this type.",
 } as const;
 
 const M = TRANSACTION_MESSAGES;
