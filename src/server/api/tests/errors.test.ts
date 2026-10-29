@@ -43,6 +43,7 @@ describe("ERRORS", () => {
 		["idempotency_key_reused", 422],
 		["currency_mismatch", 422],
 		["date_out_of_window", 422],
+		["limit_reached", 422],
 		["rate_limited", 429],
 		["internal", 500],
 		["timeout", 503],
@@ -50,8 +51,8 @@ describe("ERRORS", () => {
 		expect(ERRORS[code].status).toBe(status);
 	});
 
-	test("holds exactly the twenty codes of P2, section 8, and F03's date_out_of_window", () => {
-		expect(Object.keys(ERRORS)).toHaveLength(21);
+	test("holds exactly the twenty codes of P2, section 8, and F03's date_out_of_window and limit_reached", () => {
+		expect(Object.keys(ERRORS)).toHaveLength(22);
 	});
 
 	test("gives every code a message that ends with a full stop", () => {

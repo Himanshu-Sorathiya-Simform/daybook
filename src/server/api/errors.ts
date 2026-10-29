@@ -67,6 +67,11 @@ export const ERRORS = {
 		status: 422,
 		message: "Choose today or one of the 10 days before.",
 	},
+	// F03: a 21st saved Transactions view (BR-F03-63).
+	limit_reached: {
+		status: 422,
+		message: "You have 20 views. Delete one to save another.",
+	},
 	rate_limited: {
 		status: 429,
 		message: "Too many attempts. Wait a few seconds and try again.",

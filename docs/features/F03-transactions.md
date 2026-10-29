@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-487                                                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-488                                                      |
 
 ## 1. User stories
 
@@ -772,6 +772,8 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
 **Reading the query** (D-478). The list, summary, filter counts and histogram read their filter through the URL reader of BR-F03-33, with the API's policy: every invalid parameter gets one 400 `bad_request`, naming them all in `details.params` in the URL's order, then `limit` and `cursor`. `limit` is digits from 1 to 100. An empty value counts as absent and a repeated name is invalid, as D-458 says; other names are ignored. The summary, filter counts and histogram ignore `sort`, `dir`, `group`, `limit` and `cursor`, valid or not, and the histogram also ignores `min` and `max`.
 
 **Write refusals** (D-483 to D-487). `date_out_of_window` names its field: `occurredOn` with `details: { firstOn, lastOn }`, the row's own window, from which the client writes the edit message; or `createdAt` when the recording time is ahead of the request clock. A future `occurredAt` is `validation_failed` on `occurredAt`, and an id whose time is ahead is `validation_failed` on `id` (BR-P2-20). Until F06 adds Goals, a `goalId` gets `parent_missing`. On an edit, a field sent with its stored value is no change, and only a changed date or time is checked (D-486). A 409 `version_conflict` carries the current row, with `currency`, in `details.current`, as `GET /api/transactions/[id]` answers it. A delete's hint is checked for shape only until F05 adds the tombstone (D-487).
+
+**Saved-view writes** (D-488). The handler checks the body against the profile currency's schema, after a create's id lookup, so a retried create answers its view whatever has changed since (BR-F03-63). The limit lock is the per-user advisory lock `hashtextextended(user_id::text || ':transactions.views', 0)`, taken after any profile lock, and the count runs in its own statement after it. A name the unique index refuses, also in a race, gets 422 `validation_failed` on `name` with "You already have a view with this name."
 
 **Error codes added by this spec**
 

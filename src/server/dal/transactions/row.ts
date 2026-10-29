@@ -3,8 +3,8 @@ import { sql } from "drizzle-orm";
 import type { Transaction } from "@/lib/transactions/model";
 import { safeInt } from "../../db/safe-int";
 
-/** An instant as `Date.toISOString()` writes it: UTC, with milliseconds. */
-const iso = (column: string) =>
+/** An instant column as `Date.toISOString()` writes it: UTC, with milliseconds. */
+export const iso = (column: string) =>
 	`to_char(${column} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
 /**
