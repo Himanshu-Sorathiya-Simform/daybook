@@ -104,3 +104,27 @@ export type FilterParam = (typeof FILTER_PARAMS)[number];
 /** Rows per page, and the most a request may ask for (BR-F03-30, API-7). */
 export const PAGE_SIZE = 50;
 export const MAX_LIMIT = 100;
+
+/** A Transaction as the API returns it (F03 section 3). Until M2 adds the columns, `goalId`,
+ * `subscriptionId` and `dueOn` are null and `edited` is false, so this shape never changes
+ * (D-475). Instants are UTC with milliseconds, as `Date.toISOString()` writes them. */
+export type Transaction = {
+	id: string;
+	type: TxnType;
+	amountMinor: number;
+	occurredAt: string;
+	occurredOn: string;
+	category: CategoryKey | null;
+	goalId: string | null;
+	payee: string | null;
+	description: string | null;
+	note: string | null;
+	source: Source;
+	demo: boolean;
+	subscriptionId: string | null;
+	dueOn: string | null;
+	edited: boolean;
+	version: number;
+	createdAt: string;
+	updatedAt: string;
+};

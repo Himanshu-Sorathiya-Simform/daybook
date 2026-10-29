@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473                                                               |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-475                                                      |
 
 ## 1. User stories
 
@@ -119,7 +119,7 @@ A view's `filter` holds the filter object's fields with these differences from t
 - **Amounts:** `minMinor` and `maxMinor`, integers in minor units (MON-1), instead of the URL's major units.
 - **Lists:** `type` and `cat` are arrays, sorted and deduplicated.
 
-**Cursor.** Opaque base64url JSON holding the sort, the group, the direction of travel, and the boundary row's sort key and id. Under category or payee grouping it also holds the boundary row's group key and the order fingerprint (BR-F03-57). A cursor used with a different sort or group, or one that fails to decode, gets 400 `bad_request`.
+**Cursor.** Opaque base64url JSON holding the sort, the direction (`dir`), the group, the direction of travel (next or previous), and the boundary row's sort key and id. Under category or payee grouping it also holds the boundary row's group key and the order fingerprint (BR-F03-57). A cursor used with a different sort, direction or group, or one that fails to decode, gets 400 `bad_request` naming `cursor` (D-474). `nextCursor` is null on the last page; `prevCursor` is null on the first page and on a page reached without a cursor.
 
 ## 4. Business rules
 
@@ -296,7 +296,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **No grouping:** with `group=none`, `groups` is empty.
     - **The header:** a group header shows its label and its figures that are not zero; category and payee headers also show the count. A group that spans two pages uses the entry of the page fetched last.
 - **BR-F03-57** Under category or payee grouping, a write anywhere can reorder groups between two page loads (D-446).
-    - **The fingerprint:** each page carries `order`: the first 16 hexadecimal characters of the SHA-256 of the filter's group keys, in their current order, joined by U+001F. It is null under day and no grouping, whose order never moves.
+    - **The fingerprint:** each page carries `order`: the first 16 hexadecimal characters of the SHA-256 of the filter's group keys, in their current order, joined by U+001F. A filter with no rows hashes the empty string, `e3b0c44298fc1c14` (D-474). It is null under day and no grouping, whose order never moves.
     - **The cursor:** next and previous cursors carry the fingerprint of the page they came from. If the order has changed since, the server answers with no items, no cursors and the new `order`.
     - **The client:** it keeps the `order` of the first page it loaded, apart from the pages, so trimming by `maxPages` never loses it. When a later page's `order` differs, it reloads the list from the first page and keeps the new `order`.
 
@@ -912,7 +912,7 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
 
 - **AC-F03-36** (integration) Payee grouping, all time: Swiggy's group has key `swiggy`, label "Swiggy", count 4 and Out 3,290.00. After a create with payee "SWIGGY" dated today, the label reads "SWIGGY" and the count is 5.
 - **AC-F03-37** (integration) Order change: check A by category with `limit=2` returns #13 and #12. A new food expense of 20,000.00 on 2026-10-20 lifts food above housing, so the next cursor returns no items, no cursors and a different `order`. Reloading the first page returns #13, then food's newest row.
-- **AC-F03-38** (integration) A cursor made under `group=day` and sent with `group=none`, or under the date sort and sent with the amount sort, gets 400 `bad_request`.
+- **AC-F03-38** (integration) A cursor made under `group=day` and sent with `group=none`, under the date sort and sent with the amount sort, or under `dir=desc` and sent with `dir=asc`, gets 400 `bad_request`.
 - **AC-F03-39** (integration) The summary for check A with `by=category,payee` matches section 5's breakdowns and span. Without `by`, the answer has neither breakdown. `by=week` gets 400.
 - **AC-F03-40** (integration) Filter counts for check B match section 5's table, and every option appears, zero counts included.
 - **AC-F03-41** (integration) The histogram for check B matches section 5. Adding `min=1000.00` to the request changes nothing. A filter with no rows gives two empty arrays. A filter selecting only #24 gives edges 630.00 and 800.00 with counts 1.

@@ -55,3 +55,8 @@ export function readTotals(json: TotalsJson): Totals {
 		netMinor: safeInt(json.netMinor),
 	};
 }
+
+/** The pairs of a list group's totals (BR-F03-56), named as the list's `groups` names them.
+ * Every figure is text, read through `safeInt`. */
+export const GROUP_JSON = sql`'count', count(*)::text, 'inMinor', ${INCOME}::text,
+	'outMinor', ${SPENDING}::text, 'toGoalsMinor', ${TO_GOALS}::text`;
