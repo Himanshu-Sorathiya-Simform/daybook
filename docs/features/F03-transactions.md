@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-479                                                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-480                                                      |
 
 ## 1. User stories
 
@@ -353,6 +353,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **The date span:** `firstOn` and `lastOn`, the earliest and latest `occurredOn` of the filter's confirmed rows, or null when there are none. These come from `rollup`'s `bounds`.
     - **Breakdowns:** `by` takes a comma list of `category` and `payee`, and the answer gains `byCategory`, `byPayee` or both. An empty `by`, an unknown value or a repeated value gets 400 `bad_request`.
     - **Each breakdown:** at most 6 groups whose Out is above zero, ordered by Out, largest first, then by key. Each has `key`, `label`, `count` (its expense and refund rows) and `outMinor`.
+    - **Its rows:** the filter's expense and refund rows. A `type` filter narrows them to the expense and refund types it holds, which may be none (D-480).
     - **Keys and labels:** as BR-F03-55 and BR-F03-56. Income and Goal rows never enter a breakdown.
 
 **Filter counts and the amount histogram**
@@ -763,7 +764,7 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
 | `/api/transaction-views/[id]`             | PATCH  | `{ name }`, `{ filter, sort, dir, group }`, or both; `currency` with amounts (BR-F03-64)                               | 200 with the view and `currency`                                                                                                                                    | 400, 401, 403, 404, 409 `version_conflict`, 422 `validation_failed`, `currency_mismatch`                                                 | `Idempotency-Key` and `If-Match` required |
 | `/api/transaction-views/[id]`             | DELETE | `{}`                                                                                                                   | 204                                                                                                                                                                 | 400, 401, 403, 404, 409 `version_conflict`                                                                                               | `Idempotency-Key` and `If-Match` required |
 
-**Reading the query** (D-478). The list, summary, filter counts and histogram read their filter through the URL reader of BR-F03-33, with the API's policy: every invalid parameter gets one 400 `bad_request`, naming them all in `details.params` in the URL's order, then `limit` and `cursor`. `limit` is digits from 1 to 100. An empty value counts as absent and a repeated name is invalid, as D-458 says; other names are ignored.
+**Reading the query** (D-478). The list, summary, filter counts and histogram read their filter through the URL reader of BR-F03-33, with the API's policy: every invalid parameter gets one 400 `bad_request`, naming them all in `details.params` in the URL's order, then `limit` and `cursor`. `limit` is digits from 1 to 100. An empty value counts as absent and a repeated name is invalid, as D-458 says; other names are ignored. The summary, filter counts and histogram ignore `sort`, `dir`, `group`, `limit` and `cursor`, valid or not, and the histogram also ignores `min` and `max`.
 
 **Error codes added by this spec**
 

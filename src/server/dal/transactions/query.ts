@@ -1,6 +1,6 @@
 import "server-only";
 import type { CurrencyCode } from "@/lib/currency";
-import { MAX_LIMIT, PAGE_SIZE } from "@/lib/transactions/model";
+import { type FilterParam, MAX_LIMIT, PAGE_SIZE } from "@/lib/transactions/model";
 import {
 	type ListParams,
 	readFilterParams,
@@ -60,4 +60,73 @@ export function readListQuery(
 
 	if (refused.length > 0) throw badParams(refused);
 	return { filter, list, limit, cursor: cursor ?? undefined };
+}
+
+/** The list parameters, which select no rows: the summary, the filter counts and the histogram
+ * ignore them, valid or not (F03 section 3, D-478). */
+export const LIST_PARAMS = [
+	"sort",
+	"dir",
+	"group",
+] as const satisfies readonly FilterParam[];
+
+/** The histogram also ignores the amount bounds, valid or not (F03 section 11, D-478). */
+export const HISTOGRAM_IGNORES = [...LIST_PARAMS, "min", "max"] as const;
+
+/** Whether `name` is among the ignored parameters. */
+const isIgnored = (ignore: readonly FilterParam[], name: FilterParam) =>
+	ignore.includes(name);
+
+/** The filter of a query, refusing every invalid parameter but the ignored ones (D-478). */
+function filterOf(
+	query: URLSearchParams,
+	currency: CurrencyCode,
+	ignore: readonly FilterParam[],
+): { filter: TransactionFilter; refused: string[] } {
+	const { filter, invalid } = readFilterParams(query, { currency });
+	return { filter, refused: invalid.filter((name) => !isIgnored(ignore, name)) };
+}
+
+/** The filter of a query for an endpoint that reads no list parameters: 400 naming every
+ * invalid parameter outside `ignore`. */
+export function readFilterQuery(
+	query: URLSearchParams,
+	currency: CurrencyCode,
+	ignore: readonly FilterParam[],
+): TransactionFilter {
+	const { filter, refused } = filterOf(query, currency, ignore);
+	if (refused.length > 0) throw badParams(refused);
+	return filter;
+}
+
+/** What a summary can break Out down by (BR-F03-58). */
+export const BREAKDOWNS = ["category", "payee"] as const;
+export type Breakdown = (typeof BREAKDOWNS)[number];
+
+/** `by`: absent for no breakdowns, else a comma list of distinct breakdowns. An empty value,
+ * an unknown or repeated value, or `by` given twice is invalid (BR-F03-58). */
+function readBy(query: URLSearchParams): Breakdown[] | null {
+	const values = query.getAll("by");
+	if (values.length === 0) return [];
+	if (values.length > 1) return null;
+	const items = (values[0] as string).split(",");
+	const known = items.every((item): item is Breakdown =>
+		(BREAKDOWNS as readonly string[]).includes(item),
+	);
+	return known && new Set(items).size === items.length ?
+			(items as Breakdown[])
+		:	null;
+}
+
+/** The summary's query: the filter, ignoring the list parameters, and `by`. One 400 names
+ * every invalid parameter, `by` last (D-478). */
+export function readSummaryQuery(
+	query: URLSearchParams,
+	currency: CurrencyCode,
+): { filter: TransactionFilter; by: Breakdown[] } {
+	const { filter, refused } = filterOf(query, currency, LIST_PARAMS);
+	const by = readBy(query);
+	if (by === null) refused.push("by");
+	if (refused.length > 0) throw badParams(refused);
+	return { filter, by: by as Breakdown[] };
 }
