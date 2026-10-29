@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-480                                                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-482                                                      |
 
 ## 1. User stories
 
@@ -376,9 +376,9 @@ A view's `filter` holds the filter object's fields with these differences from t
 
 **Payee suggestions**
 
-- **BR-F03-44** `GET /api/payees` returns up to 200 payees used in the last 365 days, by `occurredOn`:
+- **BR-F03-44** `GET /api/payees` returns up to 200 payees used in the last 365 days, by `occurredOn`: from today minus 364 days to today, both inclusive (D-481).
     - grouped case-insensitively and shown in their most recent spelling;
-    - ordered by count, then by last use;
+    - ordered by count, then by last use, then by key in code point order;
     - each with its last type and last category.
 
     The answer also carries `categories`: every category used by an income, expense or refund row in those 365 days, with its row count, ordered by count, then by key (D-451). The entry dialog orders its category choices by it.
@@ -389,7 +389,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **The category chip:** when that payee's last category is valid for the current type, a chip "Last time: Food" appears. Tapping it sets the category.
     - **Never automatic:** the category is never filled in on its own (D-89).
 - **BR-F03-61** `GET /api/payees?q=` searches the same 365 days on the server, for payees beyond the 200 on the device (D-451).
-    - **Matching:** as BR-F03-45: the payee starts with `q`, or has a word starting with it, case-insensitively. `%`, `_` and `\` in `q` match literally.
+    - **Matching:** as BR-F03-45: the payee starts with `q`, or has a word starting with it, case-insensitively. A word starts after a space. `%`, `_` and `\` in `q` match literally. One shared function, `payeeMatches`, states the rule for the device, and the server's SQL mirrors it (D-481).
     - **The answer:** at most 8 payees, in BR-F03-44's order and item shape, without `categories`.
     - **`q`:** 1 to 80 characters after BR-F03-12's trimming, without control characters; otherwise 400 `bad_request`.
     - **When:** online only, when the device list gives fewer than 8 suggestions, 300 ms after typing stops (as FIL-4).
@@ -398,7 +398,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **The rows:** income, expense and refund rows whose `lower()` payee equals `lower(payee)`, as BR-F03-55 groups them, and whose `occurredOn` runs from today minus `n` calendar months to today, both inclusive, with today in the profile zone (TIME-5). A month end clamps as date-fns `subMonths` does: 2026-05-31 minus 3 months is 2026-02-28.
     - **The answer:** `{ count, inMinor, outMinor, usualDay, currency }`. `inMinor` is Σ income; `outMinor` is Σ expense − Σ refund (TXN-5).
     - **`usualDay`:** the median day of the month of those rows' `occurredOn`, taking the lower middle value for an even count. Null with fewer than 2 rows.
-    - **`months`:** 1 to 12, default 3.
+    - **`months`:** `1` to `12`, written as digits, default 3. An empty or repeated `months` gets 400 (D-482).
     - **`payee`:** 1 to 80 characters after BR-F03-12's trimming, without control characters. Otherwise, or with a bad `months`, 400 `bad_request`. A payee with no rows answers a count of 0, zero sums and a null `usualDay`.
 
 **Pending, rejected and conflicting rows**

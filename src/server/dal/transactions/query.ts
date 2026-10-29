@@ -1,5 +1,6 @@
 import "server-only";
 import type { CurrencyCode } from "@/lib/currency";
+import { codePointLength, normalizeText } from "@/lib/text";
 import { type FilterParam, MAX_LIMIT, PAGE_SIZE } from "@/lib/transactions/model";
 import {
 	type ListParams,
@@ -129,4 +130,52 @@ export function readSummaryQuery(
 	if (by === null) refused.push("by");
 	if (refused.length > 0) throw badParams(refused);
 	return { filter, by: by as Breakdown[] };
+}
+
+/** A payee is 1 to 80 code points (BR-F03-12). */
+const PAYEE_MAX = 80;
+
+/** Payee text in a query (BR-F03-61, BR-F03-62): BR-F03-12's trimming and NFC, then 1 to 80
+ * code points without control characters. `undefined` when absent; `null` when empty,
+ * repeated or otherwise invalid, since here an empty value is a mistake, not "no filter". */
+function payeeText(query: URLSearchParams, name: string): string | undefined | null {
+	const values = query.getAll(name);
+	if (values.length === 0) return undefined;
+	if (values.length > 1) return null;
+	const text = normalizeText(values[0] as string);
+	if (!text.ok) return null;
+	const length = codePointLength(text.value);
+	return length >= 1 && length <= PAYEE_MAX ? text.value : null;
+}
+
+/** `GET /api/payees`'s query: an optional search `q` (BR-F03-61). */
+export function readPayeesQuery(query: URLSearchParams): { q?: string } {
+	const q = payeeText(query, "q");
+	if (q === null) throw badParams(["q"]);
+	return q === undefined ? {} : { q };
+}
+
+/** `months` for payee history: `1` to `12`, digits only (BR-F03-62, D-482). */
+const MONTHS = /^(?:[1-9]|1[0-2])$/;
+const DEFAULT_MONTHS = 3;
+
+/** `GET /api/payees/history`'s query: a required `payee` and `months`, default 3. One 400
+ * names each invalid one (BR-F03-62). */
+export function readHistoryQuery(query: URLSearchParams): {
+	payee: string;
+	months: number;
+} {
+	const refused: string[] = [];
+	const payee = payeeText(query, "payee");
+	if (payee === undefined || payee === null) refused.push("payee");
+	const values = query.getAll("months");
+	let months = DEFAULT_MONTHS;
+	if (values.length > 0) {
+		const [raw] = values;
+		if (values.length === 1 && MONTHS.test(raw as string))
+			months = Number.parseInt(raw as string, 10);
+		else refused.push("months");
+	}
+	if (refused.length > 0) throw badParams(refused);
+	return { payee: payee as string, months };
 }

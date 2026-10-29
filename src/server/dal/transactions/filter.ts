@@ -10,9 +10,14 @@ export const SEARCH_TEXT = sql.raw(
 	`(coalesce(payee, '') || E'\\x1f' || coalesce(description, '') || E'\\x1f' || coalesce(note, ''))`,
 );
 
+/** `text` for a `LIKE` pattern, with `\`, `%` and `_` taken literally (`\` escapes). */
+export function escapeLike(text: string): string {
+	return text.replace(/[\\%_]/g, (sign) => `\\${sign}`);
+}
+
 /** An `ILIKE` pattern matching `text` anywhere, with `\`, `%` and `_` taken literally. */
 export function containsPattern(text: string): string {
-	return `%${text.replace(/[\\%_]/g, (sign) => `\\${sign}`)}%`;
+	return `%${escapeLike(text)}%`;
 }
 
 function searchSql(q: string, currency: CurrencyCode): SQL {

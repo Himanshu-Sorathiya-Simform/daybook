@@ -7,7 +7,9 @@ import {
 	HISTOGRAM_IGNORES,
 	LIST_PARAMS,
 	readFilterQuery,
+	readHistoryQuery,
 	readListQuery,
+	readPayeesQuery,
 	readSummaryQuery,
 	single,
 } from "../query";
@@ -210,5 +212,81 @@ describe("readSummaryQuery (BR-F03-58)", () => {
 			filter: {},
 			by: ["payee"],
 		});
+	});
+});
+
+describe("readPayeesQuery (BR-F03-61)", () => {
+	const payees = (query: string) => readPayeesQuery(new URLSearchParams(query));
+
+	test("no q is the full list", () => {
+		expect(payees("")).toEqual({});
+		expect(payees("limit=5&page=2")).toEqual({});
+	});
+
+	test("q is trimmed and put in NFC", () => {
+		expect(payees("q=%20apart%20")).toEqual({ q: "apart" });
+		expect(payees(`q=${encodeURIComponent("Cafe\u0301")}`)).toEqual({
+			q: "Café",
+		});
+	});
+
+	test("takes 1 to 80 code points, an emoji counting as one", () => {
+		expect(payees("q=a")).toEqual({ q: "a" });
+		const eighty = "👍".repeat(80);
+		expect(payees(`q=${encodeURIComponent(eighty)}`)).toEqual({ q: eighty });
+	});
+
+	// AC-F03-44
+	test.each([
+		["an empty q", "q="],
+		["a q of spaces only", "q=%20%20"],
+		["81 code points", `q=${"a".repeat(81)}`],
+		["a control character", "q=a%09b"],
+		["q twice", "q=a&q=b"],
+	])("refuses %s, naming q", (_label, query) => {
+		expect(refused(query, payees)).toEqual(["q"]);
+	});
+});
+
+describe("readHistoryQuery (BR-F03-62)", () => {
+	const history = (query: string) => readHistoryQuery(new URLSearchParams(query));
+
+	test("months defaults to 3", () => {
+		expect(history("payee=Swiggy")).toEqual({ payee: "Swiggy", months: 3 });
+	});
+
+	test.each(["1", "9", "10", "12"])("takes months=%s", (months) => {
+		expect(history(`payee=Swiggy&months=${months}`).months).toBe(
+			Number.parseInt(months, 10),
+		);
+	});
+
+	// AC-F03-43
+	test.each(["0", "13", "01", "1.5", "-1", "abc", "", "3&months=3"])(
+		"refuses months=%s, naming months",
+		(months) => {
+			expect(refused(`payee=Swiggy&months=${months}`, history)).toEqual([
+				"months",
+			]);
+		},
+	);
+
+	// AC-F03-43
+	test.each([
+		["no payee", "months=3"],
+		["an empty payee", "payee="],
+		["81 code points", `payee=${"a".repeat(81)}`],
+		["a control character", "payee=a%0Ab"],
+		["payee twice", "payee=a&payee=b"],
+	])("refuses %s, naming payee", (_label, query) => {
+		expect(refused(query, history)).toEqual(["payee"]);
+	});
+
+	test("names both when both are invalid, payee first", () => {
+		expect(refused("months=13", history)).toEqual(["payee", "months"]);
+	});
+
+	test("trims the payee", () => {
+		expect(history("payee=%20Acme%20Corp%20").payee).toBe("Acme Corp");
 	});
 });

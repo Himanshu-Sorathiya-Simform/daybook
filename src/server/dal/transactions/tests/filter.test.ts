@@ -4,7 +4,13 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, test } from "vitest";
 
 import type { TransactionFilter } from "@/lib/transactions/url";
-import { SEARCH_TEXT, containsPattern, filterSql, withoutFields } from "../filter";
+import {
+	SEARCH_TEXT,
+	containsPattern,
+	escapeLike,
+	filterSql,
+	withoutFields,
+} from "../filter";
 
 /** The SQL text and parameters of the filter's clause. The integration test runs it. */
 const dialect = new PgDialect();
@@ -170,5 +176,12 @@ describe("withoutFields", () => {
 	test("ignores a named field the filter lacks, and leaves the filter itself alone", () => {
 		expect(withoutFields(filter, "q", "type")).toEqual(filter);
 		expect(filter.minMinor).toBe(50000);
+	});
+});
+
+describe("escapeLike", () => {
+	test("escapes \\, % and _ with a backslash and leaves the rest", () => {
+		expect(escapeLike("50%_off\\now")).toBe("50\\%\\_off\\\\now");
+		expect(escapeLike("Café Ümit")).toBe("Café Ümit");
 	});
 });
