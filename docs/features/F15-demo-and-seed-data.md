@@ -13,7 +13,7 @@ Daybook needs realistic data in two places.
 | Milestone  | M1: the generator for Transactions, the demo endpoints and the seed script. M2: Budgets, Subscriptions with charges, Goals. M3: portfolios, through F07. M4: seeded Premium states                                                                                                                                   |
 | Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                                                                |
 | Depends on | [F02](F02-onboarding-profile-settings.md), [F03](F03-transactions.md), [P2](../platform/P2-data-access-and-security.md) (system module), [P4](../platform/P4-capabilities.md) (seeded entitlements); F04 to F06 (the rules generated data must satisfy), F07 (portfolios), F08 (onboarding panel), F12 (plan status) |
-| Decisions  | D-62, D-104, D-154 to D-156, D-175, D-219, D-232 to D-235, D-237, D-241, D-245, D-270, D-271, D-461                                                                                                                                                                                                                  |
+| Decisions  | D-62, D-104, D-154 to D-156, D-175, D-219, D-232 to D-235, D-237, D-241, D-245, D-270, D-271, D-461, D-471                                                                                                                                                                                                           |
 
 ## 1. User stories
 

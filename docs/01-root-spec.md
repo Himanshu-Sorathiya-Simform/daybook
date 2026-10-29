@@ -343,7 +343,7 @@ One filter object drives the list, its totals, Analytics and drill-downs. One se
 
 - **FIL-1** Fields combine with AND; values inside one list combine with OR.
 - **FIL-2** The list, its header totals, Analytics and chart drill-downs all use the same filter-to-SQL function.
-- **FIL-3** Text matches payee, description and note, case-insensitively, as a substring, using a trigram index. A numeric query also matches the exact amount, converted to minor units.
+- **FIL-3** Text matches payee, description and note, case-insensitively, as a substring, over the user's own rows. No text index serves it: under row-level security, Postgres uses an index only for leakproof conditions, and `ILIKE` is not one (D-48). A numeric query also matches the exact amount, converted to minor units.
 - **FIL-4** Committed filters live in the URL. A text box keeps its own draft and commits after 300 ms without typing.
 - **FIL-5** An invalid parameter is dropped with a notice, never an error page.
 - **FIL-6** A category filter excludes Goal rows, which have no category.

@@ -161,8 +161,9 @@ function textCheck(
  * One user's ledger (F03 section 3). At M1 it holds income, expenses and refunds; `goal_id`,
  * the Goal types and the charge link (`subscription_id`, `due_on`, `edited`) arrive with F06's
  * and F05's migrations in M2 (D-465). The checks are backstops for the shared schemas'
- * rules (D-467). The trigram search index is written by hand in the migration, after
- * `CREATE EXTENSION pg_trgm`, so it is not declared here (D-468).
+ * rules (D-467). Both indexes lead with `user_id` and hold only leakproof comparisons, the
+ * only kind Postgres uses as an index condition under RLS; text search scans the user's
+ * rows instead (D-48, D-468).
  */
 export const transactions = appSchema.table(
 	"transactions",
@@ -202,10 +203,6 @@ export const transactions = appSchema.table(
 			t.occurredOn,
 			t.occurredAt,
 			t.id,
-		),
-		index("transactions_payee_idx").on(
-			t.userId,
-			sql`lower(${t.payee}) text_pattern_ops`,
 		),
 		check(
 			"transactions_type_values",

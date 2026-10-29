@@ -29,6 +29,13 @@
       "when": 1793190648329,
       "tag": "0003_transaction_views",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793245533483,
+      "tag": "0004_drop_unused_search_indexes",
+      "breakpoints": true
     }
   ]
 }

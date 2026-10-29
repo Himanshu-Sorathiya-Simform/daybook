@@ -329,7 +329,7 @@ describe("backstop constraints (D-467)", () => {
 });
 
 describe("indexes (D-468)", () => {
-	test("the order, payee and search indexes exist", async () => {
+	test("only the two order indexes exist, besides the primary key", async () => {
 		const result = await owner.query<{ indexname: string; indexdef: string }>(
 			`SELECT indexname, indexdef FROM pg_indexes
 			 WHERE schemaname = 'app' AND tablename = 'transactions' ORDER BY indexname`,
@@ -340,9 +340,7 @@ describe("indexes (D-468)", () => {
 		expect(Object.keys(indexes)).toEqual([
 			"transactions_amount_order_idx",
 			"transactions_date_order_idx",
-			"transactions_payee_idx",
 			"transactions_pkey",
-			"transactions_search_idx",
 		]);
 		expect(indexes["transactions_date_order_idx"]).toContain(
 			"(user_id, occurred_on, occurred_at, id)",
@@ -350,11 +348,14 @@ describe("indexes (D-468)", () => {
 		expect(indexes["transactions_amount_order_idx"]).toContain(
 			"(user_id, amount_minor, occurred_on, occurred_at, id)",
 		);
-		expect(indexes["transactions_payee_idx"]).toContain(
-			"lower(payee) text_pattern_ops",
+	});
+
+	// D-48: under RLS a trigram index could never serve the runtime role, so 0004 dropped it.
+	test("pg_trgm is not installed", async () => {
+		const result = await owner.query(
+			"SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'",
 		);
-		expect(indexes["transactions_search_idx"]).toContain("USING gin");
-		expect(indexes["transactions_search_idx"]).toContain("gin_trgm_ops");
+		expect(result.rowCount).toBe(0);
 	});
 
 	// golden check D: q=swiggy selects #4, #24, #25 and #26 (BR-F03-35).

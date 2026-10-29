@@ -16,7 +16,7 @@ This spec covers how Daybook is watched, measured and checked:
 | Milestone  | M0 (Sentry, logs, CI, SonarQube) and M7 (the performance runs, the accessibility pass, the release checklist). Session replay is Stretch (M8)                                                                                                                                                                             |
 | Plan       | n/a; flag `monitoring.sessionReplay` (Stretch)                                                                                                                                                                                                                                                                            |
 | Depends on | [P2](P2-data-access-and-security.md) (request ids, `Server-Timing`, the error envelope, the CSP, environment validation), [P1](P1-offline-and-pwa.md) (production builds with the worker), [F15](../features/F15-demo-and-seed-data.md) (the stress account), every feature spec's accessibility and performance criteria |
-| Decisions  | D-02, D-03, D-59 to D-61, D-63, D-161 to D-166, D-196, D-294, D-354 to D-360, D-379 to D-381, D-386                                                                                                                                                                                                                       |
+| Decisions  | D-02, D-03, D-59 to D-61, D-63, D-161 to D-166, D-196, D-294, D-354 to D-360, D-379 to D-381, D-386, D-472                                                                                                                                                                                                                |
 
 ## 1. User stories
 

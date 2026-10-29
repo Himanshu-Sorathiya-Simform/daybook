@@ -32,16 +32,29 @@ export function searchText(row: MatchableRow): string {
 	return [row.payee ?? "", row.description ?? "", row.note ?? ""].join("\u001f");
 }
 
+/** What a search matches (BR-F03-35): `amountMinor` exactly, when `q` is numeric, and `text`
+ * as a substring, unless `q` is a number under 3 characters. */
+export type SearchTerms = { amountMinor: number | null; text: string | null };
+
+/** The terms of `q`. `matchesFilter` and the SQL filter both read them, so the two always agree
+ * on what counts as a number and when a number is too short for text. */
+export function searchTerms(q: string, currency: CurrencyCode): SearchTerms {
+	const amountMinor = parseNumericQuery(q, currency);
+	const amountOnly = amountMinor !== null && codePointLength(q) < SHORT_QUERY;
+	return { amountMinor, text: amountOnly ? null : q };
+}
+
 function matchesQuery(
 	row: MatchableRow,
 	q: string,
 	currency: CurrencyCode,
 ): boolean {
-	const amount = parseNumericQuery(q, currency);
-	if (amount !== null && row.amountMinor === amount) return true;
-	if (amount !== null && codePointLength(q) < SHORT_QUERY) return false;
+	const { amountMinor, text } = searchTerms(q, currency);
+	if (amountMinor !== null && row.amountMinor === amountMinor) return true;
 	// A substring test takes %, _ and \ literally, as the SQL escapes them.
-	return searchText(row).toLowerCase().includes(q.toLowerCase());
+	return (
+		text !== null && searchText(row).toLowerCase().includes(text.toLowerCase())
+	);
 }
 
 /**

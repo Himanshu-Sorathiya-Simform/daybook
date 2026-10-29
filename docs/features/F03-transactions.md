@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-469                                                                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470                                                                      |
 
 ## 1. User stories
 
@@ -326,7 +326,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     A well-formed Goal or Subscription id that is not the user's simply matches no rows. An empty value, such as `cat=`, counts as absent and gives no notice, and names other than the filter and list parameters are ignored (D-458).
 
 - **BR-F03-35** Text search (FIL-3):
-    - **Text:** `q` matches the expression `coalesce(payee, '') || U+001F || coalesce(description, '') || U+001F || coalesce(note, '')`, case-insensitively, as a substring, through one trigram index on that expression. Stored text never holds U+001F (BR-F03-12), and `q` may not contain control characters, so a match never spans two fields. `%`, `_` and `\` in `q` match literally.
+    - **Text:** `q` matches the expression `coalesce(payee, '') || U+001F || coalesce(description, '') || U+001F || coalesce(note, '')`, case-insensitively, as a substring, over the user's own rows (FIL-3, D-48). Stored text never holds U+001F (BR-F03-12), and `q` may not contain control characters, so a match never spans two fields. `%`, `_` and `\` in `q` match literally.
     - **Numbers:** a numeric `q` also matches `amountMinor` exactly. A numeric `q` is one that the amount field would accept (BR-F03-04): digits, commas only in a valid thousands or Indian grouping, one `.`, and no more decimals than the currency allows.
     - **Short numbers:** a numeric `q` under 3 characters matches amounts only.
 

@@ -9,6 +9,7 @@ import {
 } from "../../../../seed/golden";
 import {
 	matchesFilter,
+	searchTerms,
 	searchText,
 	type MatchableRow,
 } from "@/lib/transactions/match";
@@ -349,5 +350,53 @@ describe("searchText", () => {
 		expect(searchText(row({ payee: null, description: null, note: null }))).toBe(
 			"\u001f\u001f",
 		);
+	});
+});
+
+describe("searchTerms (BR-F03-35)", () => {
+	test.each([
+		["swiggy", "INR", null, "swiggy"],
+		["SWIGGY", "INR", null, "SWIGGY"],
+		["649", "INR", 64900, "649"],
+		["6.49", "INR", 649, "6.49"],
+		["1,240.50", "INR", 124050, "1,240.50"],
+		["1,23,456.50", "INR", 12345650, "1,23,456.50"],
+		["649", "JPY", 649, "649"],
+		["1.250", "KWD", 1250, "1.250"],
+	] as const)(
+		"%j in %s searches the amount %j and the text %j",
+		(q, currency, amountMinor, text) => {
+			expect(searchTerms(q, currency)).toEqual({ amountMinor, text });
+		},
+	);
+
+	test.each([
+		["64", "INR", 6400],
+		["1", "INR", 100],
+		["99", "JPY", 99],
+	] as const)(
+		"%j in %s is a number under 3 characters, so it searches the amount %j only",
+		(q, currency, amountMinor) => {
+			expect(searchTerms(q, currency)).toEqual({ amountMinor, text: null });
+		},
+	);
+
+	test.each([
+		["0", "a zero amount"],
+		["6.499", "more decimals than INR allows"],
+		["12,34", "a grouping that is neither thousands nor Indian"],
+		["1.2.3", "two decimal signs"],
+		["999999999999", "an amount above the INR maximum"],
+		["ab", "two letters"],
+		["50%", "a percent sign"],
+	])("%j is text alone: %s", (q) => {
+		expect(searchTerms(q, "INR")).toEqual({ amountMinor: null, text: q });
+	});
+
+	test("counts code points, so a 3-character number still searches text", () => {
+		expect(searchTerms("100", "INR")).toEqual({
+			amountMinor: 10000,
+			text: "100",
+		});
 	});
 });

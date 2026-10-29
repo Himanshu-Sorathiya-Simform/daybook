@@ -63,7 +63,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON app.<table> TO daybook_system;
 - Never in a migration: `SECURITY DEFINER` functions, materialized views over private tables, role creation, or anything that gives a role `BYPASSRLS`. A view over a private table uses `security_invoker = true`.
 - A migration that git already tracks never changes. A fix is a new migration.
 - Read the generated SQL in order before running it. Drizzle Kit can write a unique constraint after a foreign key that points at it, which Postgres refuses; move the constraint up and say so in the hand-written block (`0002_transactions.sql` did).
-- An extension a table needs (`pg_trgm` for a trigram index) is created in the hand-written block, before the index that uses it. Such an index is left out of the Drizzle schema, since Drizzle Kit would write it above the extension.
+- An extension a table needs is created in the hand-written block, before the index that uses it. Such an index is left out of the Drizzle schema, since Drizzle Kit would write it above the extension.
+- **An index serves the runtime role only through leakproof conditions.** Under RLS, Postgres uses a condition as an index condition only when every operator and function in it is leakproof. Plain comparisons on columns (`=`, `<`, `>=` on dates, timestamps, integers, uuids and text) are; `ILIKE`, `LIKE`, `lower()` and `||` are not. So an expression index (`lower(name)`) or a trigram index never speeds up the runtime role's queries; `0004_drop_unused_search_indexes.sql` dropped two such indexes (D-48). Lead every index with `user_id` and put only plain columns after it. Check a new index with `EXPLAIN` as `daybook_runtime`, never as the owner.
 
 ## 5. Tests
 
