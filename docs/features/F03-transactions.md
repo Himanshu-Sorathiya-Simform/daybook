@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470                                                                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473                                                               |
 
 ## 1. User stories
 
@@ -776,7 +776,9 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
 
 - **`rollup(tx, ctx, requests)`:** takes one or more `{ filter, by }` requests and answers all of them in one SQL statement (D-293).
     - **`by`:** `total`, `category`, `payee` (BR-F03-55's payee key), `day`, `week` (from the profile's week start), `month` (grouped by `occurredOn`) or `subscription` (charges per Subscription, F11); or `bounds`.
-    - **Each group:** count, income, spending (Out), To Goals and net.
+    - **Each group:** count, income, spending (Out), To Goals and net (income minus spending).
+    - **Keys** (D-473): the category key; the payee key, labeled as BR-F03-56; the `occurredOn` date; the date of the week's first day; or the month as `YYYY-MM`.
+    - **Order** (D-473): category and payee groups by weight, then key, as BR-F03-55; day, week and month groups oldest first.
     - **`bounds`:** the earliest and latest `occurredOn` of the filter's confirmed rows, or none.
     - **Used by:** the summary endpoint, the list's group totals, F08's dashboard and F09's charts.
 - **`listTransactions(tx, ctx, filter, { sort, dir, group, limit, cursor })`:** the list query, one statement, including the group order and its fingerprint. F08's Recent Transactions uses it with `limit: 8`.
