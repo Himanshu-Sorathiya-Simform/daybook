@@ -3,7 +3,8 @@ import { ESLint } from "eslint";
 import { beforeAll, describe, expect, test } from "vitest";
 
 // AC-F03-14: no float operation appears in the amount parser. The ban is an ESLint rule on
-// `src/lib/amount.ts` (D-460); these tests prove the rule is on and covers each construct.
+// `src/lib/amount.ts` (D-460), and on the histogram's edges (BR-F03-60, D-477); these tests
+// prove the rule is on and covers each construct.
 
 let eslint: ESLint;
 
@@ -71,6 +72,29 @@ describe("the float ban on the amount module", () => {
 
 	test("passes on the module as written", async () => {
 		const [result] = await eslint.lintFiles(["src/lib/amount.ts"]);
+
+		expect(result?.messages).toEqual([]);
+	}, 30_000);
+});
+
+describe("the float ban on the histogram module (D-477)", () => {
+	const HISTOGRAM = "src/server/dal/transactions/histogram.ts";
+
+	test.each([
+		["division", "export const f = (a: number, b: number) => a / b;"],
+		["multiplication", "export const f = (a: number, b: number) => a * b;"],
+		["a power", "export const f = (a: number) => 10 ** a;"],
+		["Math", "export const f = (a: number) => Math.floor(a);"],
+	])(
+		"refuses %s",
+		async (_name, code) => {
+			expect(await bannedSyntax(code, HISTOGRAM)).toHaveLength(1);
+		},
+		30_000,
+	);
+
+	test("passes on the module as written", async () => {
+		const [result] = await eslint.lintFiles([HISTOGRAM]);
 
 		expect(result?.messages).toEqual([]);
 	}, 30_000);

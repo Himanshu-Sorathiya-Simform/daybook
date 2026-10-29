@@ -49,3 +49,16 @@ export function filterSql(filter: TransactionFilter, currency: CurrencyCode): SQ
 	if (q !== undefined) clauses.push(searchSql(q, currency));
 	return clauses.length ? sql`(${sql.join(clauses, sql` AND `)})` : sql`true`;
 }
+
+/** The filter without the given fields: a filter count leaves out its own field (BR-F03-59),
+ * and the histogram its amount bounds (BR-F03-60). */
+export function withoutFields(
+	filter: TransactionFilter,
+	...fields: (keyof TransactionFilter)[]
+): TransactionFilter {
+	return Object.fromEntries(
+		Object.entries(filter).filter(
+			([field]) => !fields.includes(field as keyof TransactionFilter),
+		),
+	) as TransactionFilter;
+}

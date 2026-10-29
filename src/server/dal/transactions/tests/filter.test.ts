@@ -4,7 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, test } from "vitest";
 
 import type { TransactionFilter } from "@/lib/transactions/url";
-import { SEARCH_TEXT, containsPattern, filterSql } from "../filter";
+import { SEARCH_TEXT, containsPattern, filterSql, withoutFields } from "../filter";
 
 /** The SQL text and parameters of the filter's clause. The integration test runs it. */
 const dialect = new PgDialect();
@@ -141,5 +141,34 @@ describe("containsPattern", () => {
 		["Crème brûlée", "%Crème brûlée%"],
 	])("escapes %j as %j", (text, pattern) => {
 		expect(containsPattern(text)).toBe(pattern);
+	});
+});
+
+describe("withoutFields", () => {
+	const filter: TransactionFilter = {
+		from: "2026-10-01",
+		to: "2026-10-31",
+		cat: ["food"],
+		minMinor: 50000,
+		maxMinor: 300000,
+	};
+
+	test("drops only the named fields", () => {
+		expect(withoutFields(filter, "minMinor", "maxMinor")).toEqual({
+			from: "2026-10-01",
+			to: "2026-10-31",
+			cat: ["food"],
+		});
+		expect(withoutFields(filter, "cat")).toEqual({
+			from: "2026-10-01",
+			to: "2026-10-31",
+			minMinor: 50000,
+			maxMinor: 300000,
+		});
+	});
+
+	test("ignores a named field the filter lacks, and leaves the filter itself alone", () => {
+		expect(withoutFields(filter, "q", "type")).toEqual(filter);
+		expect(filter.minMinor).toBe(50000);
 	});
 });

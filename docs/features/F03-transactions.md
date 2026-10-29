@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-475                                                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-477                                                      |
 
 ## 1. User stories
 
@@ -783,7 +783,7 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
     - **Used by:** the summary endpoint, the list's group totals, F08's dashboard and F09's charts.
 - **`listTransactions(tx, ctx, filter, { sort, dir, group, limit, cursor })`:** the list query, one statement, including the group order and its fingerprint. F08's Recent Transactions uses it with `limit: 8`.
 - **`facetCounts(tx, ctx, filter)`:** the filter counts, one statement (BR-F03-59).
-- **`amountHistogram(tx, ctx, filter)`:** the histogram, one statement (BR-F03-60).
+- **`amountHistogram(tx, ctx, filter)`:** the histogram, one statement (BR-F03-60). The statement counts amounts into the full series' buckets; the edges are chosen and the buckets merged in code, with no float (D-476, D-477).
 - **`matchesFilter(row, filter)`:** mirrors the SQL predicate for pending rows (BR-F03-43).
 
 **Server-side check order for a write** (locks in SRV-7 order). The handler first reads the row, without a lock, to learn its Goal and Subscription. The row's own lock comes only from the versioned write in step 7, after the Goal and Subscription locks.

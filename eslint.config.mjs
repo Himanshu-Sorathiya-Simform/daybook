@@ -96,7 +96,8 @@ const eslintConfig = defineConfig([
 		rules: restrict("withUser", "runtimePool", "systemPool"),
 	},
 	{
-		files: ["src/lib/amount.ts"],
+		// The amount parser (D-460) and the histogram edges (BR-F03-60, D-477).
+		files: ["src/lib/amount.ts", "src/server/dal/transactions/histogram.ts"],
 		rules: { "no-restricted-syntax": ["error", ...FLOAT_BANS] },
 	},
 ]);
