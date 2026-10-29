@@ -62,6 +62,23 @@ export async function asUser<T>(
 	}
 }
 
+/**
+ * `tx`, but running `between` once its first statement has answered: another connection's
+ * change, committed between a write's read and its update. Writes run at read committed, so
+ * the update sees it (P2).
+ */
+export function afterFirstStatement(tx: Tx, between: () => Promise<unknown>): Tx {
+	let sent = 0;
+	const spy = Object.create(tx) as Tx;
+	spy.execute = (async (query: Parameters<Tx["execute"]>[0]) => {
+		const answer = await tx.execute(query);
+		sent += 1;
+		if (sent === 1) await between();
+		return answer;
+	}) as Tx["execute"];
+	return spy;
+}
+
 /** Inserts an expense for the user `asUser` runs as, on `occurredOn` at 12:00 IST unless
  * `occurredAt` says otherwise, recorded at the golden clock as a manual, non-demo row unless
  * `createdAt`, `source` or `demo` say otherwise. Returns its id. */

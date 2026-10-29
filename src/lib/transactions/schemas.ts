@@ -74,6 +74,7 @@ export const TRANSACTION_MESSAGES = {
 	dateTimeFixed: "This Transaction's date and time can't change.",
 	typeGroupFixed:
 		"Delete this Transaction and add a new one to change to this type.",
+	hintTogether: "Send the Subscription and due date together.",
 } as const;
 
 const M = TRANSACTION_MESSAGES;
@@ -336,3 +337,20 @@ export const transactionEditSchema = z
 		checkAmountAndDate(body, ctx);
 	});
 export type TransactionEditBody = z.output<typeof transactionEditSchema>;
+
+/**
+ * `DELETE /api/transactions/[id]`: `{}`, or a charge's cached `{ subscriptionId, dueOn }` as a
+ * hint, both together (BR-F03-17), the one exception to BR-F03-19. At M1 no Subscription
+ * exists, so the hint is checked for shape only; F05 uses it to write the tombstone (D-487).
+ */
+export const transactionDeleteSchema = z
+	.strictObject({ subscriptionId: id.optional(), dueOn: date.optional() })
+	.superRefine((body, ctx) => {
+		if (body.subscriptionId !== undefined && body.dueOn === undefined) {
+			addIssue(ctx, "dueOn", M.hintTogether);
+		}
+		if (body.dueOn !== undefined && body.subscriptionId === undefined) {
+			addIssue(ctx, "subscriptionId", M.hintTogether);
+		}
+	});
+export type TransactionDeleteBody = z.output<typeof transactionDeleteSchema>;

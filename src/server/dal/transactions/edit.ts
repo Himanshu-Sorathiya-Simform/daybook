@@ -11,6 +11,7 @@ import { ApiError } from "../../api/errors";
 import type { ProfiledContext } from "../context";
 import { lockCurrency, requireCurrency } from "../currency";
 import type { Tx } from "../with-user";
+import { versionMismatch } from "./conflict";
 import { entryWindow, inWindow, pastSlack } from "./dates";
 import { getTransaction } from "./get";
 import { readRow, ROW_JSON, type RowJson } from "./row";
@@ -160,10 +161,5 @@ export async function editTransaction(
 	);
 	const [updated] = rows;
 	if (updated) return readRow(updated.row);
-
-	const current = await getTransaction(tx, id);
-	if (!current) throw new ApiError("not_found");
-	throw new ApiError("version_conflict", {
-		details: { current: { ...current, currency: ctx.profile.currency } },
-	});
+	throw await versionMismatch(tx, ctx, id);
 }

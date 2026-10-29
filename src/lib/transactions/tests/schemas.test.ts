@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest";
+import type { z } from "zod";
 
 import {
 	GOLDEN_ALL,
 	GOLDEN_GOALS,
+	GOLDEN_SUBSCRIPTIONS,
 	goldenRow,
 	type GoldenTransaction,
 } from "../../../../seed/golden";
@@ -11,6 +13,7 @@ import { TXN_TYPES, type TxnType } from "@/lib/transactions/model";
 import {
 	occurredOnFits,
 	transactionCreateSchema,
+	transactionDeleteSchema,
 	transactionEditSchema,
 	typeChangeAllowed,
 	typeRuleIssues,
@@ -60,10 +63,7 @@ const CONTRIBUTION = {
 };
 
 /** Each field's first message when `body` is refused, keyed by its dotted path. */
-function messages(
-	schema: typeof transactionCreateSchema | typeof transactionEditSchema,
-	body: unknown,
-) {
+function messages(schema: z.ZodType, body: unknown) {
 	const result = schema.safeParse(body);
 	if (result.success) return {};
 	const fields: Record<string, string> = {};
@@ -508,6 +508,61 @@ describe("the edit body (BR-F03-23)", () => {
 		expect(editErrors({ amountMinor: 0, currency: "INR" })).toEqual({
 			amountMinor: "Enter an amount above zero.",
 		});
+	});
+});
+
+// golden #12: the Sunrise Apartments charge for 1 October.
+const HINT = {
+	subscriptionId: GOLDEN_SUBSCRIPTIONS.sunrise.id,
+	dueOn: "2026-10-01",
+};
+const deleteErrors = (body: unknown) => messages(transactionDeleteSchema, body);
+
+describe("the delete body (BR-F03-17, BR-F03-19; D-487)", () => {
+	test("accepts an empty body", () => {
+		expect(transactionDeleteSchema.parse({})).toEqual({});
+	});
+
+	test("accepts a charge's whole hint, with the id lowercased", () => {
+		expect(
+			transactionDeleteSchema.parse({
+				...HINT,
+				subscriptionId: HINT.subscriptionId.toUpperCase(),
+			}),
+		).toEqual(HINT);
+	});
+
+	test("refuses half a hint on the missing field", () => {
+		expect(deleteErrors({ subscriptionId: HINT.subscriptionId })).toEqual({
+			dueOn: "Send the Subscription and due date together.",
+		});
+		expect(deleteErrors({ dueOn: HINT.dueOn })).toEqual({
+			subscriptionId: "Send the Subscription and due date together.",
+		});
+	});
+
+	test("refuses a hint that is not an id and a date, without a half-hint message", () => {
+		expect(deleteErrors({ subscriptionId: "sunrise", dueOn: "1 Oct" })).toEqual({
+			subscriptionId: "Use a UUIDv7 id.",
+			dueOn: "Use a date as YYYY-MM-DD.",
+		});
+		expect(deleteErrors({ ...HINT, dueOn: "2026-02-30" })).toEqual({
+			dueOn: "Use a date as YYYY-MM-DD.",
+		});
+	});
+
+	test("refuses null in place of a hint", () => {
+		expect(deleteErrors({ subscriptionId: null, dueOn: null })).toEqual({
+			subscriptionId: "Use a UUIDv7 id.",
+			dueOn: "Use a date as YYYY-MM-DD.",
+		});
+	});
+
+	test("refuses any other field", () => {
+		expect(Object.keys(deleteErrors({ ...HINT, version: 1 }))).toEqual([
+			"_body",
+		]);
+		expect(Object.keys(deleteErrors({ note: "x" }))).toEqual(["_body"]);
 	});
 });
 

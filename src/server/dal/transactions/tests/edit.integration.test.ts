@@ -12,7 +12,13 @@ import type { Profile } from "../../context";
 import type { Tx } from "../../with-user";
 import { editTransaction } from "../edit";
 import { getTransaction } from "../get";
-import { addExpense, asUser, goldenContext, uuidV7At } from "./helpers";
+import {
+	addExpense,
+	afterFirstStatement,
+	asUser,
+	goldenContext,
+	uuidV7At,
+} from "./helpers";
 
 /** `editTransaction` (F03 section 11, BR-F03-09, BR-F03-11, BR-F03-16, BR-F03-18, BR-F03-23;
  * D-486) through the runtime role and RLS. Every case rolls back, at its own request clock. */
@@ -522,17 +528,19 @@ describe("versions and missing rows (BR-P2-21, D-485)", () => {
 			[id, golden.userId, NOW],
 		);
 		const ctx = goldenContext(golden.userId);
-		const { result, statements } = await asUser(golden.userId, async (tx) => {
-			let sent = 0;
-			const spy = Object.create(tx) as Tx;
-			spy.execute = (async (query: Parameters<Tx["execute"]>[0]) => {
-				const answer = await tx.execute(query);
-				sent += 1;
-				if (sent === 1) await between(id);
-				return answer;
-			}) as Tx["execute"];
-			return refusal(editTransaction(spy, ctx, id, 1, { payee: "Mine" }));
-		});
+		const { result, statements } = await asUser(golden.userId, (tx) =>
+			refusal(
+				editTransaction(
+					afterFirstStatement(tx, () => between(id)),
+					ctx,
+					id,
+					1,
+					{
+						payee: "Mine",
+					},
+				),
+			),
+		);
 		return { id, refusal: result, statements };
 	}
 
