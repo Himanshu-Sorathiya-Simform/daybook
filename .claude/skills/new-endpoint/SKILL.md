@@ -18,25 +18,28 @@ If no endpoint is named above, ask me which one.
 - If the endpoint is not in a spec, stop and tell me. The spec changes first (`spec-change`).
 - Server Actions are never used (SRV-3).
 
-## 2. The wrapper must exist
+## 2. The wrapper
 
-Look for the real wrapper in `src/server/api/` and read its actual signature. Follow the code over this skill where they differ, and tell me about the difference. If no wrapper exists yet, stop and tell me: it belongs to the platform foundation (P2), not to this feature.
+The wrapper is `route(options, handler)` in `src/server/api/route.ts`. It runs P2's steps in order (BR-P2-17), opens one read or write transaction, and sends the handler's return value as `{ "data": ... }`; `reply(data, { status })` from the same module sets another status, such as 201 or 204. Read its doc comment before writing a handler, and follow the code over this skill where they differ, telling me about the difference.
+
+- `RouteOptions` today: `body` (a Zod schema), `profile` (default true), `versioned`, `idempotent` (default true for mutations) and `catchUp`. `mode`, `capability`, `stream` and `afterCommit` arrive with F12, P4 and F11 or F13 (D-435); until then, stop and tell me if an endpoint needs one.
+- The handler is `(ctx, tx, { body, query, params, version })`. Call `requireProfile(ctx)` from `src/server/dal/context.ts` to get a context whose profile is never null (403 `profile_required` otherwise).
+- Throw `ApiError` from `src/server/api/errors.ts` for a refusal; the wrapper turns it into the envelope.
 
 ## 3. Declare it
 
-Every handler is declared through `route(options, handler)` (BR-P2-15), and the handler is called as `handler(ctx, tx, input)`. Choose the options from the spec's row:
+Every handler is declared through `route(options, handler)` (BR-P2-15). Choose the options from the spec's row:
 
-- `mode`: `user` for every finance and account endpoint, `webhook` only for the Stripe webhook.
-- `body`: the Zod schema. It lives in `src/lib/schemas/` and the client form uses the same one.
+- `body`: the Zod schema, shared with the client form. Transactions' schemas live in `src/lib/transactions/`.
 - `versioned`: true for PATCH and DELETE on updatable rows (needs `If-Match`).
 - `idempotent`: true by default for mutations. The only exceptions are catch-up, billing and account reset (BR-P2-16).
-- `capability`: the capability code when the endpoint is Premium or limited.
 - `profile`: required by default. Only `/api/me`, `/api/profile` and `/api/account/*` work without one.
-- `stream` and `afterCommit`: only where the spec says, such as reports and search.
 
 ## 4. File layout
 
-- The route file `app/api/<path>/route.ts`, in the root `app/` folder, stays thin. Never create `src/app`; Next ignores it. It exports the method declared through `route(...)` and calls a function in `src/server/dal/`.
+- The route file `app/api/<path>/route.ts`, in the root `app/` folder, stays thin. Never create `src/app`; Next ignores it. It exports the method declared through `route(...)` and calls a function in `src/server/dal/`. `app/api/transactions/route.ts` is the model: read the query, call the query function, add `currency`.
+- Query strings are read in `src/server/dal/<feature>/query.ts`, which turns every invalid parameter into one 400 `bad_request` naming them in `details.params` (D-478). Reuse its `badParams` and `single`.
+- A dynamic segment arrives as `params["id"]`, a string or a string array; check it before use.
 - The data access function receives `ctx` and `tx` and never opens its own transaction.
 - Every server module starts with `import 'server-only'`. Only `src/server/dal` and the wrapper import `withUser` or the runtime pool (BR-P2-11).
 
@@ -61,7 +64,9 @@ The feature's hooks live in `src/features/<name>/`. A mutation sends an `Idempot
 
 Follow `.claude/rules/testing.md`, with the criterion ID in a comment above each test.
 
-- **Server (CI only):** every error in the spec's table; the same key and body twice gives one row and the same response; the same key with another body gives 422 `idempotency_key_reused`; a stale `If-Match` gives 409; another user's row on read, update or delete gives 404, and a create with another user's id gives 409 `id_conflict`; no session gives 401; a gated endpoint gives 403 `premium_required` without the entitlement.
+- **Where:** an endpoint's tests sit in a `tests/` folder beside its `route.ts`, such as `app/api/transactions/tests/route.integration.test.ts`. Next routes only `route.ts` and `page.tsx`, so the folder never becomes a route.
+- **How:** call the exported handler with `call(handler, path, { cookie, params })` from `src/server/api/tests/call.ts`. Make the user with `signedInUser`, load data with `loadGolden`, and freeze `Date` at `GOLDEN_NOW` with `vi.useFakeTimers({ toFake: ["Date"] })` in `beforeEach`.
+- **Server (integration, local against the Neon test branch and in CI):** every error in the spec's table; the same key and body twice gives one row and the same response; the same key with another body gives 422 `idempotency_key_reused`; a stale `If-Match` gives 409; another user's row on read, update or delete gives 404, and a create with another user's id gives 409 `id_conflict`; no session gives 401; a gated endpoint gives 403 `premium_required` without the entitlement.
 - **Unit:** the Zod schema and any pure mapping.
 - **Component with MSW:** the form, its messages and its states.
 
@@ -71,4 +76,4 @@ List the files, the `route(...)` declaration and the spec rows it satisfies, the
 
 ## Keep this skill current
 
-When the first real endpoint exists, compare this skill with it and fix any difference. Replace step 2 with the wrapper's real location and signature.
+Checked against `app/api/transactions/route.ts`, `app/api/transactions/[id]/route.ts` and `src/server/api/route.ts` on 29 Oct 2026. When the wrapper gains an option (D-435) or the first mutation endpoint lands, update steps 2, 3 and 5 in the same change.
