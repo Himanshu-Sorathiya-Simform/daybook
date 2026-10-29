@@ -1,5 +1,7 @@
-import { route } from "@/server/api/route";
+import { transactionCreateSchema } from "@/lib/transactions/schemas";
+import { reply, route } from "@/server/api/route";
 import { requireProfile } from "@/server/dal/context";
+import { createTransaction } from "@/server/dal/transactions/create";
 import { listTransactions } from "@/server/dal/transactions/list";
 import { readListQuery } from "@/server/dal/transactions/query";
 
@@ -16,3 +18,17 @@ export const GET = route({}, async (ctx, tx, { query }) => {
 	});
 	return { ...page, currency };
 });
+
+/** Creates a Transaction (F03 section 11, BR-F03-20): 201 with the row and the profile
+ * currency, or 200 with the row an earlier create of the same id made (API-5). */
+export const POST = route(
+	{ body: transactionCreateSchema },
+	async (ctx, tx, { body }) => {
+		const profiled = requireProfile(ctx);
+		const { row, created } = await createTransaction(tx, profiled, body);
+		return reply(
+			{ ...row, currency: profiled.profile.currency },
+			{ status: created ? 201 : 200 },
+		);
+	},
+);

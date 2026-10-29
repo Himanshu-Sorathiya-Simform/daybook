@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { isUuid, isUuidV7 } from "@/lib/ids";
+import { isUuid, isUuidV7, uuidV7Time } from "@/lib/ids";
 
 const V7 = "0192f0c4-8a1b-7c2d-9e3f-0123456789ab";
 
@@ -49,5 +49,24 @@ describe("isUuid", () => {
 		["undefined", undefined],
 	])("refuses %s", (_name, value) => {
 		expect(isUuid(value)).toBe(false);
+	});
+});
+
+describe("uuidV7Time (BR-P2-20)", () => {
+	test("reads the first 48 bits as milliseconds since 1970", () => {
+		const at = new Date("2026-11-02T06:30:00.000Z").getTime();
+		const hex = at.toString(16).padStart(12, "0");
+		const id = `${hex.slice(0, 8)}-${hex.slice(8)}-7abc-8def-0123456789ab`;
+		expect(uuidV7Time(id)).toBe(at);
+	});
+
+	test("ignores case and the bits after the time", () => {
+		expect(uuidV7Time("0199A000-0000-7FFF-BFFF-FFFFFFFFFFFF")).toBe(
+			uuidV7Time("0199a000-0000-7000-8000-000000000000"),
+		);
+	});
+
+	test("is 0 for the smallest time", () => {
+		expect(uuidV7Time("00000000-0000-7000-8000-000000000000")).toBe(0);
 	});
 });

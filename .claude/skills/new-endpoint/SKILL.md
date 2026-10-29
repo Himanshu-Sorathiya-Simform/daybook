@@ -65,7 +65,7 @@ The feature's hooks live in `src/features/<name>/`. A mutation sends an `Idempot
 Follow `.claude/rules/testing.md`, with the criterion ID in a comment above each test.
 
 - **Where:** an endpoint's tests sit in a `tests/` folder beside its `route.ts`, such as `app/api/transactions/tests/route.integration.test.ts`. Next routes only `route.ts` and `page.tsx`, so the folder never becomes a route.
-- **How:** call the exported handler with `call(handler, path, { cookie, params })` from `src/server/api/tests/call.ts`. Make the user with `signedInUser`, load data with `loadGolden`, and freeze `Date` at `GOLDEN_NOW` with `vi.useFakeTimers({ toFake: ["Date"] })` in `beforeEach`.
+- **How:** call the exported handler with `call(handler, path, { cookie, params, method, body })` from `src/server/api/tests/call.ts`. A write sends JSON from `APP_ORIGIN` with a fresh `Idempotency-Key`; pass `headers` to set one, or `null` to leave one out. Make the user with `signedInUser`, load data with `loadGolden`, and freeze `Date` at `GOLDEN_NOW` with `vi.useFakeTimers({ toFake: ["Date"] })` in `beforeEach`.
 - **Server (integration, local against the Neon test branch and in CI):** every error in the spec's table; the same key and body twice gives one row and the same response; the same key with another body gives 422 `idempotency_key_reused`; a stale `If-Match` gives 409; another user's row on read, update or delete gives 404, and a create with another user's id gives 409 `id_conflict`; no session gives 401; a gated endpoint gives 403 `premium_required` without the entitlement.
 - **Unit:** the Zod schema and any pure mapping.
 - **Component with MSW:** the form, its messages and its states.

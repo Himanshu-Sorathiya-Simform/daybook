@@ -42,6 +42,7 @@ describe("ERRORS", () => {
 		["parent_missing", 422],
 		["idempotency_key_reused", 422],
 		["currency_mismatch", 422],
+		["date_out_of_window", 422],
 		["rate_limited", 429],
 		["internal", 500],
 		["timeout", 503],
@@ -49,8 +50,8 @@ describe("ERRORS", () => {
 		expect(ERRORS[code].status).toBe(status);
 	});
 
-	test("holds exactly the twenty codes of P2, section 8", () => {
-		expect(Object.keys(ERRORS)).toHaveLength(20);
+	test("holds exactly the twenty codes of P2, section 8, and F03's date_out_of_window", () => {
+		expect(Object.keys(ERRORS)).toHaveLength(21);
 	});
 
 	test("gives every code a message that ends with a full stop", () => {

@@ -66,6 +66,10 @@ export const TRANSACTION_MESSAGES = {
 	dateAndTimeTogether: "Send the date and time together.",
 	id: "Use a UUIDv7 id.",
 	nothingToChange: "Send at least one change.",
+	idInFuture: "This item's time is in the future. Check your device's clock.",
+	timeInFuture: "The time can't be in the future.",
+	createdAtInFuture: "The recording time can't be in the future.",
+	dateOutOfWindow: "Choose today or one of the 10 days before.",
 } as const;
 
 const M = TRANSACTION_MESSAGES;

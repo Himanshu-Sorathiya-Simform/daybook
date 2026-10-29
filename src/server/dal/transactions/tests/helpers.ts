@@ -88,3 +88,15 @@ export async function addExpense(
 	);
 	return id;
 }
+
+/** A UUIDv7 whose embedded time is `instant`, with random bits after it (RFC 9562). */
+export function uuidV7At(instant: string | Date): string {
+	const time = new Date(instant).getTime().toString(16).padStart(12, "0");
+	const random = randomUUID().replace(/-/g, "");
+	const variant = (
+		(Number.parseInt(random[16] as string, 16) & 0x3)
+		| 0x8
+	).toString(16);
+	const hex = `${time}7${random.slice(13, 16)}${variant}${random.slice(17, 32)}`;
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}

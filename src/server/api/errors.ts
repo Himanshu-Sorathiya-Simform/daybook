@@ -62,6 +62,11 @@ export const ERRORS = {
 		status: 422,
 		message: "Not saved: your currency changed after this was made.",
 	},
+	// TIME-7: a user-entered date outside its entry window (F03, BR-F03-08).
+	date_out_of_window: {
+		status: 422,
+		message: "Choose today or one of the 10 days before.",
+	},
 	rate_limited: {
 		status: 429,
 		message: "Too many attempts. Wait a few seconds and try again.",

@@ -13,3 +13,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function isUuid(value: string | null | undefined): value is string {
 	return typeof value === "string" && UUID.test(value);
 }
+
+/** The instant a UUIDv7 was made, in milliseconds since 1970: its first 48 bits (RFC 9562).
+ * A create's id may be at most 5 minutes ahead of the request clock (BR-P2-20). */
+export function uuidV7Time(id: string): number {
+	return Number.parseInt(id.replace(/-/g, "").slice(0, 12), 16);
+}

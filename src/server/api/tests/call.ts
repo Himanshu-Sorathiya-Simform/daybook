@@ -1,3 +1,5 @@
+import { randomUUIDv7 } from "node:crypto";
+
 import { serverEnv } from "../../env";
 
 /** A route handler as `route(...)` returns it. */
@@ -13,21 +15,48 @@ export type Answer = {
 	headers: Headers;
 };
 
+export type CallOptions = {
+	cookie?: string;
+	params?: Record<string, string>;
+	/** `GET` by default. Any other method sends JSON from the app's origin with a fresh
+	 * `Idempotency-Key`, as the app's client does (BR-P2-17). */
+	method?: "GET" | "POST" | "PATCH" | "DELETE";
+	body?: unknown;
+	/** Extra headers; `null` removes one the call would otherwise send. */
+	headers?: Record<string, string | null>;
+};
+
 /**
- * Calls a route handler with a `GET` as the app's client sends it: the session cookie, the
- * route's params as Next passes them, at `APP_ORIGIN`. The caller freezes the clock
+ * Calls a route handler as the app's client does: the session cookie, the route's params as
+ * Next passes them, at `APP_ORIGIN`. The caller freezes the clock
  * (`vi.useFakeTimers({ toFake: ["Date"] })`), as every endpoint test runs at the golden one.
  */
 export async function call(
 	handler: Handler,
 	path: string,
-	{
-		cookie,
-		params = {},
-	}: { cookie?: string; params?: Record<string, string> } = {},
+	{ cookie, params = {}, method = "GET", body, headers = {} }: CallOptions = {},
 ): Promise<Answer> {
-	const request = new Request(`${serverEnv().APP_ORIGIN}${path}`, {
-		headers: cookie ? { cookie } : {},
+	const origin = serverEnv().APP_ORIGIN;
+	const mutation = method !== "GET";
+	const all: Record<string, string | null> = {
+		...(mutation ?
+			{
+				"content-type": "application/json",
+				origin,
+				"idempotency-key": randomUUIDv7(),
+			}
+		:	{}),
+		...(cookie ? { cookie } : {}),
+		...headers,
+	};
+	const request = new Request(`${origin}${path}`, {
+		method,
+		headers: Object.fromEntries(
+			Object.entries(all).filter(
+				(entry): entry is [string, string] => entry[1] !== null,
+			),
+		),
+		...(mutation ? { body: JSON.stringify(body ?? {}) } : {}),
 	});
 	const response = await handler(request, { params: Promise.resolve(params) });
 	const text = await response.text();
