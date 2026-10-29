@@ -35,3 +35,23 @@ export function viewBody(
 		...fields,
 	};
 }
+
+/** Inserts one view for the user `asUser` runs as, recorded at the golden clock at version 1:
+ * "Food" unless `name` says otherwise, food over last month, newest first, by day. Returns
+ * its id. */
+export async function addView(
+	tx: Tx,
+	userId: string,
+	{
+		name = "Food",
+		id = uuidV7At(GOLDEN_NOW),
+	}: { name?: string; id?: string } = {},
+): Promise<string> {
+	await tx.execute(
+		sql`INSERT INTO app.transaction_views (id, user_id, created_at, updated_at, name, filter,
+			sort, dir, group_by, version)
+		VALUES (${id}, ${userId}, ${GOLDEN_NOW}, ${GOLDEN_NOW}, ${name},
+			'{"range": "last_month", "cat": ["food"]}'::jsonb, 'date', 'desc', 'day', 1)`,
+	);
+	return id;
+}

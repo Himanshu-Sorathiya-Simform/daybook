@@ -301,6 +301,9 @@ export function viewEditSchema(currency: CurrencyCode) {
 		});
 }
 
+/** `DELETE /api/transaction-views/[id]`: an empty body; any field is refused. */
+export const viewDeleteSchema = z.strictObject({});
+
 /** The filter as a view stores it: dates equal to a preset's dates for `today` become that
  * preset (D-453), other dates stay as they are, and all time stores neither. */
 export function toViewFilter(filter: TransactionFilter, today: string): ViewFilter {

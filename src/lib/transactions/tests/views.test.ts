@@ -9,6 +9,7 @@ import {
 	isEdited,
 	toViewFilter,
 	viewCreateSchema,
+	viewDeleteSchema,
 	viewEditSchema,
 	viewName,
 	type ViewFilter,
@@ -374,6 +375,18 @@ describe("the edit body (BR-F03-68, BR-F03-69)", () => {
 });
 
 // AC-F03-49
+describe("the delete body", () => {
+	test("accepts an empty body", () => {
+		expect(viewDeleteSchema.parse({})).toEqual({});
+	});
+
+	test("refuses any field, the view's own included", () => {
+		for (const body of [{ name: "Food" }, { version: 1 }, { id: ID }]) {
+			expect(viewDeleteSchema.safeParse(body).success).toBe(false);
+		}
+	});
+});
+
 describe("dates in a view (D-453)", () => {
 	test("on 2026-11-02, October's dates are saved as last_month", () => {
 		expect(
