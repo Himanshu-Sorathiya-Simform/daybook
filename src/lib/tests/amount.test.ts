@@ -393,6 +393,254 @@ describe("parseAmount", () => {
 	});
 });
 
+// T1: the edges of BR-F03-04, each worked out from the rule, not from the code.
+describe("parseAmount edge cases (BR-F03-04, D-459, D-501)", () => {
+	describe("a bare decimal sign", () => {
+		test.each([
+			[".5", IN, "INR", 50],
+			["5.", IN, "INR", 500],
+			["0.5", IN, "INR", 50],
+			["00.5", IN, "INR", 50],
+			[",5", DE, "EUR", 50],
+			["5,", DE, "EUR", 500],
+		] as [...Case, number][])(
+			"reads %j in %s (%s) as %i, a decimal sign with digits on one side",
+			(typed, locale, currency, minor) => {
+				expect(ok(typed, locale, currency)).toEqual({ ok: true, minor });
+			},
+		);
+
+		test.each([
+			[".", IN, "INR", "not_a_number"],
+			[",", DE, "EUR", "not_a_number"],
+			["..", IN, "INR", "not_a_number"],
+			// The other mark, with nothing around it, still names the right sign.
+			[",", IN, "INR", "wrong_decimal"],
+			[".", DE, "EUR", "wrong_decimal"],
+		] as [...Case, AmountError][])(
+			"refuses %j in %s (%s): %s",
+			(typed, locale, currency, error) => {
+				expect(ok(typed, locale, currency)).toEqual({ ok: false, error });
+			},
+		);
+	});
+
+	// D-501: a grouping starts at a digit above 0. "0,001" is how a German user writes a
+	// thousandth, and reading it as 1,000 grouped with a leading zero would repeat the "12.50
+	// read as 1,250" mistake that BR-F03-04's other-mark rule exists to stop.
+	describe("a leading zero before a grouping sign", () => {
+		test.each([
+			["0,001", IN, "INR"],
+			["0,000", IN, "INR"],
+			["01,000", IN, "INR"],
+			["0,00,000", IN, "INR"],
+			["0,001", US, "USD"],
+			["0.001", DE, "EUR"],
+			["0.500", DE, "EUR"],
+			["00.001", DE, "EUR"],
+		] as Case[])(
+			"refuses %j in %s (%s) as the other mark",
+			(typed, locale, currency) => {
+				expect(ok(typed, locale, currency)).toEqual({
+					ok: false,
+					error: "wrong_decimal",
+				});
+			},
+		);
+
+		test("in yen it shows the decimals message, as any misplaced mark does", () => {
+			expect(ok("0,001", IN, "JPY")).toEqual({
+				ok: false,
+				error: "too_many_decimals",
+			});
+		});
+
+		test("the decimal sign still takes a leading zero", () => {
+			expect(ok("0,001", DE, "EUR")).toEqual({
+				ok: false,
+				error: "too_many_decimals",
+			});
+			expect(ok("0,001", DE, "KWD")).toEqual({ ok: true, minor: 1 });
+			expect(ok("0,5", DE, "EUR")).toEqual({ ok: true, minor: 50 });
+		});
+
+		test.each([
+			["1,000", IN, "INR", 100000],
+			["10,000", IN, "INR", 1000000],
+			["10,00,000", IN, "INR", 100000000],
+			["100,000", US, "USD", 10000000],
+			["1.000", DE, "EUR", 100000],
+		] as [...Case, number][])(
+			"a grouping that starts above 0 still reads: %j in %s (%s) is %i",
+			(typed, locale, currency, minor) => {
+				expect(ok(typed, locale, currency)).toEqual({ ok: true, minor });
+			},
+		);
+
+		test("a leading zero in the whole part alone is fine", () => {
+			expect(ok("0640", IN, "INR")).toEqual({ ok: true, minor: 64000 });
+			expect(ok("007.50", IN, "INR")).toEqual({ ok: true, minor: 750 });
+		});
+	});
+
+	// BR-F03-04: only U+0020, U+00A0 and U+202F read as a space group, and only where the
+	// format groups with a space; `trim` takes every kind of space at the two ends.
+	describe("spaces and invisible characters", () => {
+		test.each([
+			["thin space (U+2009)", "1\u2009000"],
+			["ideographic space (U+3000)", "1\u3000000"],
+			["figure space (U+2007)", "1\u2007000"],
+			["zero-width space (U+200B)", "1\u200b000"],
+			["zero-width no-break space (U+FEFF)", "1\ufeff000"],
+			["a line feed", "1\n000"],
+		])("refuses a %s inside a space-grouped amount", (_name, typed) => {
+			expect(ok(typed, FR, "EUR")).toEqual({
+				ok: false,
+				error: "not_a_number",
+			});
+			expect(ok(typed, IN, "INR")).toEqual({
+				ok: false,
+				error: "not_a_number",
+			});
+		});
+
+		test.each([
+			["a thin space", "\u20091240.50"],
+			["an ideographic space", "\u30001240.50"],
+			["a byte order mark", "\ufeff1240.50"],
+			["a no-break space", "\u00a01240.50"],
+			["a line feed", "\n1240.50"],
+		])("takes %s at either end, as any other space", (_name, typed) => {
+			expect(ok(typed, IN, "INR")).toEqual({ ok: true, minor: 124050 });
+			expect(ok(`${typed}\u2009`, IN, "INR")).toEqual({
+				ok: true,
+				minor: 124050,
+			});
+		});
+
+		test("refuses a zero-width space at an end, which is not whitespace", () => {
+			expect(ok("\u200b640", IN, "INR")).toEqual({
+				ok: false,
+				error: "not_a_number",
+			});
+			expect(ok("640\u200b", IN, "INR")).toEqual({
+				ok: false,
+				error: "not_a_number",
+			});
+		});
+
+		test.each([
+			["a space", "1 240,50"],
+			["a no-break space", `1${NBSP}240,50`],
+			["a narrow no-break space", `1${NNBSP}240,50`],
+		])("reads %s as the group in a French amount", (_name, typed) => {
+			expect(ok(typed, FR, "EUR")).toEqual({ ok: true, minor: 124050 });
+		});
+	});
+
+	// D-459: one grouping sign in a whole amount. Austria groups with "." and with a space.
+	describe("Austrian amounts, which hold two grouping signs", () => {
+		test.each([
+			["1.000,50", 100050],
+			["1 000,50", 100050],
+			[`1${NBSP}000,50`, 100050],
+			[`1${NNBSP}000,50`, 100050],
+			["1.234.567,89", 123456789],
+			["1 234 567,89", 123456789],
+		])("reads %j as %i", (typed, minor) => {
+			expect(ok(typed, AT, "EUR")).toEqual({ ok: true, minor });
+		});
+
+		test.each([
+			["1.000 000,50", "a point and a space"],
+			["1 000.000,50", "a space and a point"],
+			["1.000 000", "a point and a space with no decimals"],
+		])("refuses %j: %s, which is two grouping signs", (typed) => {
+			expect(ok(typed, AT, "EUR").ok).toBe(false);
+		});
+
+		test("refuses a point with the decimal comma, as the other mark", () => {
+			expect(ok("1 000.50", AT, "EUR")).toEqual({
+				ok: false,
+				error: "wrong_decimal",
+			});
+			expect(ok("12.50", AT, "EUR")).toEqual({
+				ok: false,
+				error: "wrong_decimal",
+			});
+		});
+
+		test("refuses an apostrophe, which Austria does not group with", () => {
+			expect(ok("1'000,50", AT, "EUR")).toEqual({
+				ok: false,
+				error: "not_a_number",
+			});
+		});
+	});
+
+	describe("yen in an Indian format", () => {
+		test.each([
+			["1,240", 1240],
+			["12,34,567", 1234567],
+			["1240", 1240],
+			// No decimal digits follow the sign, so none exceed yen's zero.
+			["1240.", 1240],
+		])("reads %j as %i yen", (typed, minor) => {
+			expect(ok(typed, IN, "JPY")).toEqual({ ok: true, minor });
+		});
+
+		test.each(["1.240", "1,24,0", "12.5", "0.5"])(
+			"shows the decimals message for %j",
+			(typed) => {
+				const result = ok(typed, IN, "JPY");
+				expect(result.ok).toBe(false);
+				if (!result.ok) expect(result.error).toBe("too_many_decimals");
+			},
+		);
+	});
+
+	// MON-5: 999,999,999.99 for INR, written with Indian grouping.
+	describe("the INR maximum with Indian grouping", () => {
+		test("99,99,99,999.99 is the largest amount", () => {
+			expect(ok("99,99,99,999.99", IN, "INR")).toEqual({
+				ok: true,
+				minor: maxMinor("INR"),
+			});
+			expect(maxMinor("INR")).toBe(99_999_999_999);
+		});
+
+		test.each(["1,00,00,00,000", "1,00,00,00,000.00", "1,00,00,00,000.01"])(
+			"%j is one past it, too large",
+			(typed) => {
+				expect(ok(typed, IN, "INR")).toEqual({
+					ok: false,
+					error: "too_large",
+				});
+			},
+		);
+
+		test("99,99,99,999 with no decimals is 999,999,999.00", () => {
+			expect(ok("99,99,99,999", IN, "INR")).toEqual({
+				ok: true,
+				minor: 99_999_999_900,
+			});
+		});
+
+		test("the same amount in thousands grouping is the same amount", () => {
+			expect(ok("999,999,999.99", IN, "INR")).toEqual(
+				ok("99,99,99,999.99", IN, "INR"),
+			);
+		});
+
+		test("100,00,00,000 is a broken Indian grouping, not an amount", () => {
+			expect(ok("100,00,00,000", IN, "INR")).toEqual({
+				ok: false,
+				error: "wrong_decimal",
+			});
+		});
+	});
+});
+
 describe("amountMessage (F03 section 8)", () => {
 	test.each([
 		["required", IN, "INR", "Enter an amount."],
@@ -568,6 +816,33 @@ describe("parseNumericQuery (BR-F03-35)", () => {
 			expect(parseNumericQuery(q, currency)).toBe(minor);
 		},
 	);
+
+	// T1, D-501: a leading zero before a grouping sign is not an amount, so it is text.
+	test.each([
+		["0,001", "INR"],
+		["01,000", "INR"],
+		["0.001", "EUR"],
+	] as [string, CurrencyCode][])(
+		"treats %j as text, not an amount (D-501)",
+		(q, currency) => {
+			// Search reads one fixed format: "." decimal, "," grouping.
+			expect(parseNumericQuery(q, currency)).toBeNull();
+		},
+	);
+
+	test.each([
+		[".5", "INR", 50],
+		["5.", "INR", 500],
+	] as [string, CurrencyCode, number][])(
+		"reads %j as %i minor units",
+		(q, currency, minor) => {
+			expect(parseNumericQuery(q, currency)).toBe(minor);
+		},
+	);
+
+	test.each([".", ",", "..", ",5"])("treats %j as text", (q) => {
+		expect(parseNumericQuery(q, "INR")).toBeNull();
+	});
 
 	test.each([
 		["swiggy", "INR", "text"],

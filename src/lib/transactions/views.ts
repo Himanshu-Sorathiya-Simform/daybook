@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { CURRENCY_EXPONENTS, maxMinor, type CurrencyCode } from "@/lib/currency";
 import { isUuid, isUuidV7 } from "@/lib/ids";
-import { lowercase, textSchema } from "@/lib/text";
+import { lowercase, normalizeText, textSchema } from "@/lib/text";
 import { isIsoDate } from "@/lib/time";
 
 import {
@@ -360,7 +360,9 @@ function cut(text: string, length: number): string {
 
 /**
  * A new view's name (BR-F03-67): the active filter chips' labels joined by ", ", or "My view"
- * with none. A taken name, compared without case and including "All Transactions", gets
+ * with none. A blank label, which is empty once trimmed or only invisible characters, is no
+ * chip, and a base that would cut down to nothing is "My view" too, so a name is never empty
+ * (D-501). A taken name, compared without case and including "All Transactions", gets
  * " 2", " 3" and so on, the first free one. The whole name fits 40 characters.
  */
 export function viewName(
@@ -368,7 +370,13 @@ export function viewName(
 	takenNames: readonly string[],
 ): string {
 	const taken = new Set([BUILT_IN, ...takenNames.map(lowercase)]);
-	const base = chipLabels.join(", ") || "My view";
+	const joined = chipLabels
+		.filter((label) => {
+			const text = normalizeText(label);
+			return !text.ok || text.value !== "";
+		})
+		.join(", ");
+	const base = cut(joined, NAME_MAX) === "" ? "My view" : joined;
 	const plain = cut(base, NAME_MAX);
 	if (!taken.has(lowercase(plain))) return plain;
 	for (let n = 2; ; n++) {

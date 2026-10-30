@@ -28,6 +28,14 @@ describe("payeeMatches (BR-F03-45, BR-F03-61, D-481)", () => {
 		["Big  Basket", "basket", true, "any space starts a word"],
 		["Big-Basket", "basket", false, "a hyphen does not start a word"],
 		["Zeta", "zetas", false, "a longer query never matches"],
+		// T1
+		["Big Bazaar", "baz", true, "a later word starts with it"],
+		["Big Bazaar", "azaar", false, "it sits inside a word"],
+		["Big Bazaar", "big b", true, "it spans two words from the start"],
+		["", "a", false, "an empty payee matches no text"],
+		["Swiggy", "", true, "empty text is the start of every payee"],
+		["", "", true, "empty text matches an empty payee too"],
+		["Swiggy ", "swiggy ", true, "a trailing space is part of the text"],
 		// B9, D-497: Postgres's `lower()`, not JavaScript's, so both sides agree.
 		["İstanbul Kebab", "ist", true, "İ lowers to a plain i"],
 		["Big İstanbul", "ist", true, "İ lowers to a plain i in a later word"],

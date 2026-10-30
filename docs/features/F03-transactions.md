@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-500                                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501                                      |
 
 ## 1. User stories
 
@@ -144,7 +144,7 @@ A view's `filter` holds the filter object's fields with these differences from t
 - **BR-F03-04** The amount field takes major units in the user's own format (F02, BR-F02-18; D-214, D-230):
     - **The signs:** the decimal sign is the `decimal` part of `Intl.NumberFormat(numberLocale, { style: 'currency', currency }).formatToParts(…)`, with two decimals forced so that JPY has one too. The grouping signs are the `group` parts of that formatter and of the plain-number formatter; Austria has two. A space group accepts U+0020, U+00A0 and U+202F alike, and `'` and `’` count as the same sign.
     - **Accepted characters:** digits, the decimal sign once, and the grouping signs.
-    - **Grouping:** a grouping sign is accepted only inside a valid grouping of the whole-number part: thousands (`12.345,50` in `de-DE`), or Indian (`1,23,456.50` in `hi-IN`) where the user's format groups that way. One amount uses one grouping sign throughout (D-459).
+    - **Grouping:** a grouping sign is accepted only inside a valid grouping of the whole-number part: thousands (`12.345,50` in `de-DE`), or Indian (`1,23,456.50` in `hi-IN`) where the user's format groups that way. One amount uses one grouping sign throughout (D-459), and a grouping starts at a digit above 0, so `0,001` is refused as the other mark and not read as 1.00 (D-501).
     - **The other mark:** `.` or `,`, whichever is not the decimal sign, is refused outside a valid grouping, with a message naming the right sign. A German user's `12.50` is therefore never read as 1,250. For JPY, which has no decimals, the same mistake shows the decimals message instead.
     - **Decimals:** at most the currency's exponent (none for JPY, three for KWD).
     - **Conversion:** to `amountMinor` by string arithmetic, never through a float. A lint rule on the parser's module refuses float operations (D-460).
@@ -468,7 +468,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **Nothing edited:** "Save as view" is disabled, with the hint "Change a filter, then save it as a view."
 - **BR-F03-67** "Save as view" creates a view from the URL and selects it, with "Saved as a new view." (D-453).
     - **Dates:** dates equal to a preset's dates for today in the profile zone are saved as that preset's `range`; other dates as `from` and `to`; all time as neither.
-    - **The name:** the active filter chips' labels joined by ", ", such as "Food, Last month", or "My view" with no chip. If that name is taken, compared as Postgres's `lower()` compares it, which is how the unique index does (D-497), " 2", " 3" and so on are added, taking the first free one. The base is cut so the whole name fits 40 characters. If the server still answers 422 on `name`, because the list on the device was stale, the next suffix is tried.
+    - **The name:** the active filter chips' labels joined by ", ", such as "Food, Last month", or "My view" with no chip. If that name is taken, compared as Postgres's `lower()` compares it, which is how the unique index does (D-497), " 2", " 3" and so on are added, taking the first free one. A chip label that is blank is no chip, and with none left the name is "My view". The base is cut so the whole name fits 40 characters. If the server still answers 422 on `name`, because the list on the device was stale, the next suffix is tried.
     - **At 20 views:** the button is disabled with "You have 20 views. Delete one to save another."
 - **BR-F03-68** "Update view" saves the URL's filter, `sort`, `dir` and `group` into the selected view with BR-F03-67's date rule, through `PATCH` with `If-Match`, then shows "View updated." A `PATCH` must carry all four of these together or none of them; a partial set, or a body with neither `name` nor the four, gets 422 `validation_failed`.
 - **BR-F03-69** A selected saved view has a menu with Rename and Delete (D-452).

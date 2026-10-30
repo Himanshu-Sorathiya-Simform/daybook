@@ -431,3 +431,113 @@ describe("checkQuery (BR-F03-34)", () => {
 		expect(checkQuery("12", "INR")).toEqual({ ok: true, q: "12" });
 	});
 });
+
+// T1: the reader's edges (BR-F03-33, BR-F03-34, D-458).
+describe("reading a URL, edge cases", () => {
+	test.each([
+		["q=%2B91", "+91", "an encoded plus"],
+		["q=a%2Bb", "a+b", "an encoded plus between letters"],
+		["q=a+b", "a b", "a plus is a space"],
+		["q=%ZZ", "%ZZ", "a malformed escape is kept as written"],
+		["q=100%25", "100%", "an encoded percent"],
+		["q=%E2%80%A8abc", "abc", "a line separator at the start is trimmed"],
+	])("reads %j as the search %j: %s", (query, q) => {
+		expect(read(query)).toMatchObject({ filter: { q }, invalid: [] });
+	});
+
+	test("refuses a line separator inside the search", () => {
+		expect(read("q=a%E2%80%A8bc")).toMatchObject({ filter: {}, invalid: ["q"] });
+	});
+
+	test("takes a search of one line separator as no search", () => {
+		expect(read("q=%E2%80%A8")).toEqual({
+			filter: {},
+			list: DEFAULT_LIST,
+			invalid: [],
+		});
+	});
+
+	test("normalizes a decomposed search to NFC", () => {
+		expect(read("q=Cafe%CC%81").filter.q).toBe("Caf\u00e9");
+		expect(normalize("q=Cafe%CC%81").query).toBe("q=Caf%C3%A9");
+	});
+
+	test("holds a search of 100 emoji and refuses 101, counting code points", () => {
+		expect(read(`q=${"\u{1f44d}".repeat(100)}`).invalid).toEqual([]);
+		expect(read(`q=${"\u{1f44d}".repeat(101)}`).invalid).toEqual(["q"]);
+	});
+
+	test("reads an encoded comma in a list as the comma", () => {
+		expect(read("cat=food%2Cshopping").filter).toEqual(
+			read("cat=food,shopping").filter,
+		);
+		expect(read("cat=food%2Cshopping").filter.cat).toEqual(["food", "shopping"]);
+	});
+
+	test("reads the nil UUID and any hex UUID as a Goal, in lowercase", () => {
+		const nil = "00000000-0000-0000-0000-000000000000";
+		expect(read(`goal=${nil}`).filter.goal).toBe(nil);
+		expect(
+			read(`goal=${"F".repeat(8)}-FFFF-FFFF-FFFF-${"F".repeat(12)}`).filter
+				.goal,
+		).toBe(`${"f".repeat(8)}-ffff-ffff-ffff-${"f".repeat(12)}`);
+	});
+
+	test("refuses a UUID with a wrong length or a stray character", () => {
+		for (const goal of [
+			"00000000-0000-0000-0000-00000000000",
+			"00000000-0000-0000-0000-0000000000000",
+			"0000000000000000000000000000000",
+			"00000000-0000-0000-0000-00000000000g",
+			" 00000000-0000-0000-0000-000000000000",
+		]) {
+			expect(read(`goal=${encodeURIComponent(goal)}`).invalid).toEqual([
+				"goal",
+			]);
+		}
+	});
+
+	// D-458: two values, even two empty ones, are a repeated name.
+	test("a repeated name is invalid even when both values are empty", () => {
+		expect(read("type=&type=").invalid).toEqual(["type"]);
+		expect(read("type=expense&type=").invalid).toEqual(["type"]);
+		expect(read("q=&q=").invalid).toEqual(["q"]);
+	});
+
+	test("an empty value counts as absent", () => {
+		expect(read("type=&cat=&q=&from=&to=")).toEqual({
+			filter: {},
+			list: DEFAULT_LIST,
+			invalid: [],
+		});
+	});
+
+	test("names are case-sensitive: Type is not type", () => {
+		expect(read("Type=expense&CAT=food&Q=swiggy")).toEqual({
+			filter: {},
+			list: DEFAULT_LIST,
+			invalid: [],
+		});
+	});
+
+	test("values are case-sensitive: Expense and FOOD are invalid", () => {
+		expect(read("type=Expense").invalid).toEqual(["type"]);
+		expect(read("cat=FOOD").invalid).toEqual(["cat"]);
+		expect(read("src=Manual").invalid).toEqual(["src"]);
+		expect(read("sort=Amount").invalid).toEqual(["sort"]);
+	});
+
+	test("a list with one bad item is invalid as a whole", () => {
+		expect(read("cat=food,pizza")).toMatchObject({
+			filter: {},
+			invalid: ["cat"],
+		});
+	});
+
+	test("skips empty items in a list", () => {
+		expect(read("cat=,food,,shopping,").filter.cat).toEqual([
+			"food",
+			"shopping",
+		]);
+	});
+});

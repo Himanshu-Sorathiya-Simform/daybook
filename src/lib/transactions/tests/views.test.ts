@@ -156,6 +156,10 @@ describe("the create body (BR-F03-63, BR-F03-64)", () => {
 			[{ goal: "vacation" }, "filter.goal", "Use a UUID."],
 			[{ sub: "netflix" }, "filter.sub", "Use a UUID."],
 			[{ src: "bank" }, "filter.src", "Choose a source."],
+			// T1: a search that is not text gets the characters message, like any bad character.
+			[{ q: null }, "filter.q", "Remove unsupported characters."],
+			[{ q: 5 }, "filter.q", "Remove unsupported characters."],
+			[{ q: ["swiggy"] }, "filter.q", "Remove unsupported characters."],
 			[{ q: "ab" }, "filter.q", "Type at least 3 characters, or an amount."],
 			[{ q: "a".repeat(101) }, "filter.q", "Use 100 characters or fewer."],
 			[{ q: "ab\tc" }, "filter.q", "Remove unsupported characters."],
@@ -602,6 +606,63 @@ describe("viewName (BR-F03-67)", () => {
 	test("is My view with no chip", () => {
 		expect(viewName([], [])).toBe("My view");
 		expect(viewName([], ["My view"])).toBe("My view 2");
+	});
+
+	// T1, D-501: a blank label is no chip, so it adds no comma and can't leave an empty name.
+	test.each([
+		[[""], "My view"],
+		[[" "], "My view"],
+		[["", " ", "\t"], "My view"],
+		[["Food", ""], "Food"],
+		[["", "Food"], "Food"],
+		[["Food", " ", "Last month"], "Food, Last month"],
+		[["\u200b"], "My view"],
+	])("ignores blank chip labels: %j is %j", (labels, name) => {
+		expect(viewName(labels, [])).toBe(name);
+	});
+
+	test("a blank-only chip list takes the next free My view", () => {
+		expect(viewName([" "], ["My view"])).toBe("My view 2");
+	});
+
+	test("the name is never empty, whatever the chips", () => {
+		for (const labels of [[], [""], [" "], [","], [", ,"], ["\n"]]) {
+			expect(viewName(labels, [])).not.toBe("");
+		}
+	});
+
+	// A cut by code points can fall inside a letter with its accent, or inside an emoji
+	// sequence. The result still fits and the server's name check still takes it.
+	describe("a cut inside a grapheme (D-230)", () => {
+		const accepted = (name: string) =>
+			viewCreateSchema("INR").safeParse({ ...FOOD_LAST_MONTH, name }).success;
+
+		test.each([
+			["an accent", `${"a".repeat(39)}e\u0301`],
+			[
+				"a family emoji",
+				`${"a".repeat(38)}\u{1f468}\u200d\u{1f469}\u200d\u{1f467}`,
+			],
+			["a flag", `${"a".repeat(39)}\u{1f1ee}\u{1f1f3}`],
+			["a skin tone", `${"a".repeat(39)}\u{1f44d}\u{1f3fd}`],
+		])(
+			"a label ending in %s is cut to at most 40 code points and accepted",
+			(_name, label) => {
+				const name = viewName([label], []);
+				expect([...name].length).toBeLessThanOrEqual(40);
+				expect(name.length).toBeGreaterThan(0);
+				expect(accepted(name)).toBe(true);
+			},
+		);
+
+		test("a numbered name after such a cut fits too", () => {
+			const label = `${"a".repeat(39)}e\u0301`;
+			const first = viewName([label], []);
+			const second = viewName([label], [first]);
+			expect(second).not.toBe(first);
+			expect([...second].length).toBeLessThanOrEqual(40);
+			expect(accepted(second)).toBe(true);
+		});
 	});
 
 	test("never takes the built-in name", () => {

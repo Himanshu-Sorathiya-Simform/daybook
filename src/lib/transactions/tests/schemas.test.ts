@@ -679,6 +679,132 @@ describe("typeChangeAllowed", () => {
 	});
 });
 
+// T1: the edges of the create and delete bodies (BR-F03-12, BR-F03-19, root 6.7).
+describe("body edge cases", () => {
+	const UPPER_ID = ID.toUpperCase();
+
+	test("lowercases an uppercase id, Goal and delete hint", () => {
+		expect(transactionCreateSchema.parse({ ...EXPENSE, id: UPPER_ID }).id).toBe(
+			ID,
+		);
+		expect(
+			transactionCreateSchema.parse({
+				...CONTRIBUTION,
+				goalId: GOLDEN_GOALS.vacation.id.toUpperCase(),
+			}).goalId,
+		).toBe(GOLDEN_GOALS.vacation.id);
+		expect(
+			transactionDeleteSchema.parse({
+				subscriptionId: UPPER_ID,
+				dueOn: "2026-10-05",
+			}),
+		).toEqual({ subscriptionId: ID, dueOn: "2026-10-05" });
+	});
+
+	test("refuses an id that is a UUID but not a v7, and one of the wrong length", () => {
+		for (const id of [
+			"0192f0c4-7a1e-4c3b-9d2a-5b8e1f0a1c01",
+			"0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c0",
+			"0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c011",
+			"0192f0c47a1e7c3b9d2a5b8e1f0a1c01",
+		]) {
+			expect(createErrors({ id })).toEqual({ id: "Use a UUIDv7 id." });
+		}
+	});
+
+	describe("createdAt, an instant in UTC with Z", () => {
+		test.each([
+			["no fraction", "2026-10-19T16:46:12Z"],
+			["one fraction digit", "2026-10-19T16:46:12.3Z"],
+			["three fraction digits", "2026-10-19T16:46:12.345Z"],
+			["the first second of a day", "2026-10-19T00:00:00Z"],
+			["the last second of a day", "2026-10-19T23:59:59.999Z"],
+		])("accepts %s", (_name, createdAt) => {
+			expect(createErrors({ createdAt })).toEqual({});
+		});
+
+		test.each([
+			["an offset", "2026-10-19T22:16:12+05:30"],
+			["a zero offset", "2026-10-19T16:46:12+00:00"],
+			["a lowercase z", "2026-10-19T16:46:12z"],
+			["a lowercase t", "2026-10-19t16:46:12Z"],
+			["six fraction digits", "2026-10-19T16:46:12.123456Z"],
+			["four fraction digits", "2026-10-19T16:46:12.1234Z"],
+			["a dot and no digits", "2026-10-19T16:46:12.Z"],
+			["no seconds", "2026-10-19T16:46Z"],
+			["no zone", "2026-10-19T16:46:12"],
+			["a space for the T", "2026-10-19 16:46:12Z"],
+			["hour 24", "2026-10-19T24:00:00Z"],
+			["a leap second", "2026-10-19T16:46:60Z"],
+			["a date that does not exist", "2026-02-30T16:46:12Z"],
+			["a date alone", "2026-10-19"],
+			["epoch milliseconds", "1792428372000"],
+			["a trailing space", "2026-10-19T16:46:12Z "],
+		])("refuses %s", (_name, createdAt) => {
+			expect(createErrors({ createdAt })).toEqual({
+				createdAt: "Use an ISO date and time in UTC.",
+			});
+		});
+	});
+
+	describe("the payee's length counts code points after NFC", () => {
+		test("accepts 81 code points typed decomposed that compose to 80", () => {
+			const typed = `${"a".repeat(79)}e\u0301`;
+			expect([...typed]).toHaveLength(81);
+			expect(createErrors({ payee: typed })).toEqual({});
+			expect(
+				transactionCreateSchema.parse({ ...EXPENSE, payee: typed }).payee,
+			).toBe(`${"a".repeat(79)}\u00e9`);
+		});
+
+		test("refuses 81 composed code points", () => {
+			expect(createErrors({ payee: `${"a".repeat(80)}\u00e9` })).toEqual({
+				payee: "Use 80 characters or fewer.",
+			});
+		});
+
+		test("accepts 80 emoji and refuses 81", () => {
+			expect(createErrors({ payee: "\u{1f44d}".repeat(80) })).toEqual({});
+			expect(createErrors({ payee: "\u{1f44d}".repeat(81) })).toEqual({
+				payee: "Use 80 characters or fewer.",
+			});
+		});
+	});
+
+	describe("a note of 500, where a CRLF is one character", () => {
+		const note = (typed: string) => createErrors({ note: typed });
+
+		test("accepts 500 stored characters typed as 501 with one CRLF", () => {
+			const typed = `${"a".repeat(249)}\r\n${"b".repeat(250)}`;
+			expect(typed).toHaveLength(501);
+			expect(note(typed)).toEqual({});
+			expect(
+				transactionCreateSchema.parse({ ...EXPENSE, note: typed }).note,
+			).toHaveLength(500);
+		});
+
+		test("refuses 501 stored characters typed as 502 with one CRLF", () => {
+			expect(note(`${"a".repeat(250)}\r\n${"b".repeat(250)}`)).toEqual({
+				note: "Use 500 characters or fewer.",
+			});
+		});
+
+		test("counts every CRLF, so 250 of them are 250 characters", () => {
+			expect(note("\r\n".repeat(250) + "x".repeat(250))).toEqual({});
+		});
+
+		test("trims line breaks at the ends before it counts", () => {
+			expect(note(`\r\n\r\n${"a".repeat(500)}\r\n`)).toEqual({});
+		});
+	});
+
+	test("a Goal row's hint of a Subscription id and no due date is half a hint", () => {
+		expect(
+			messages(transactionDeleteSchema, { subscriptionId: ID.toUpperCase() }),
+		).toEqual({ dueOn: "Send the Subscription and due date together." });
+	});
+});
+
 describe("occurredOnFits (BR-F03-10, D-220)", () => {
 	test.each([
 		["2026-10-31T19:00:00Z", "2026-10-31", true],

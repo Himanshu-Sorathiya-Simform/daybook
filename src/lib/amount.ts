@@ -74,11 +74,13 @@ function escape(sign: string): string {
 	return sign.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-/** Whether `whole` is a valid grouping with `sign`: thousands, or Indian when allowed. */
+/** Whether `whole` is a valid grouping with `sign`: thousands, or Indian when allowed. The
+ * first group starts above 0, so "0,001" is no grouping but a thousandth written the German
+ * way, and is refused as the other mark (D-501). */
 function validGrouping(whole: string, sign: string, indian: boolean): boolean {
 	const s = escape(sign);
-	if (new RegExp(`^\\d{1,3}(?:${s}\\d{3})+$`).test(whole)) return true;
-	return indian && new RegExp(`^\\d{1,2}(?:${s}\\d{2})*${s}\\d{3}$`).test(whole);
+	if (new RegExp(`^[1-9]\\d{0,2}(?:${s}\\d{3})+$`).test(whole)) return true;
+	return indian && new RegExp(`^[1-9]\\d?(?:${s}\\d{2})*${s}\\d{3}$`).test(whole);
 }
 
 type Read =

@@ -124,6 +124,35 @@ describe("text search (BR-F03-35)", () => {
 		expect(matches({ payee: "Café Coffee Day" }, { q: "CAFÉ" })).toBe(true);
 	});
 
+	// T1
+	describe("search edge cases", () => {
+		test.each(["baz", "BAZAAR", "g b", "big baz", "azaa"])(
+			'"Big Bazaar" is found by %j, anywhere in the text',
+			(q) => {
+				expect(matches({ payee: "Big Bazaar" }, { q })).toBe(true);
+			},
+		);
+
+		test("a decomposed search read from a URL finds the composed payee, since the reader normalizes it (BR-F03-33)", () => {
+			const filter = filterOf("q=Cafe%CC%81");
+			expect(filter.q).toBe("Caf\u00e9");
+			expect(matches({ payee: "Caf\u00e9" }, filter)).toBe(true);
+			expect(matches({ payee: "CAF\u00c9 Coffee Day" }, filter)).toBe(true);
+		});
+
+		// FIL-1: an empty list is a filter that nothing passes, not one that is switched off.
+		test.each([
+			["type", { type: [] }],
+			["cat", { cat: [] }],
+		] as [string, TransactionFilter][])(
+			"an empty %s list matches no row",
+			(_name, filter) => {
+				expect(matching(filter)).toEqual([]);
+				expect(matches({}, filter)).toBe(false);
+			},
+		);
+	});
+
 	// B9, D-497, BR-F03-43: the browser must find what SQL's `ILIKE` finds, letter for letter.
 	describe("case folding the way Postgres does it", () => {
 		test('"İstanbul Kebab" is found by "ist" and by "İST"', () => {

@@ -407,3 +407,65 @@ describe("lowercase (D-497)", () => {
 		}
 	});
 });
+
+// T1: lengths count code points after NFC, in both directions (D-230, BR-F03-12).
+describe("length after NFC", () => {
+	const payee = textSchema(PAYEE);
+
+	test("a composition-excluded letter grows: 41 of U+0958 is 82 code points, refused at 80", () => {
+		// U+0958 (QA) has no composed form in NFC: it becomes U+0915 U+093C, two code points.
+		expect([..."\u0958".normalize("NFC")]).toHaveLength(2);
+		expect(payee.parse("\u0958".repeat(40))).toHaveLength(80);
+		expect(payee.safeParse("\u0958".repeat(41)).error?.issues[0]?.message).toBe(
+			"Use 80 characters or fewer.",
+		);
+	});
+
+	test("decomposed letters shrink: 80 NFD é is 80 code points once composed, and fits", () => {
+		const decomposed = "e\u0301".repeat(80);
+		expect([...decomposed]).toHaveLength(160);
+		expect(payee.parse(decomposed)).toBe("\u00e9".repeat(80));
+	});
+
+	test("81 code points typed decomposed that compose to 80 are accepted; 81 composed are not", () => {
+		const typed = `${"a".repeat(79)}e\u0301`;
+		expect([...typed]).toHaveLength(81);
+		expect(payee.parse(typed)).toBe(`${"a".repeat(79)}\u00e9`);
+		expect(payee.safeParse("a".repeat(81)).success).toBe(false);
+	});
+
+	test("a note counts a CRLF as one code point, since it is stored as a line feed", () => {
+		const note = optionalTextSchema({ max: 500, multiline: true });
+		// 249 + CRLF + 250 is 501 typed, 500 stored. 250 + CRLF + 250 is 502 typed, 501 stored.
+		expect(note.parse(`${"a".repeat(249)}\r\n${"b".repeat(250)}`)).toHaveLength(
+			500,
+		);
+		expect(
+			note.safeParse(`${"a".repeat(250)}\r\n${"b".repeat(250)}`).error
+				?.issues[0]?.message,
+		).toBe("Use 500 characters or fewer.");
+	});
+});
+
+describe("line breaks at the ends of single-line text", () => {
+	test.each([
+		["a line feed", "\nSwiggy\n"],
+		["a carriage return and line feed", "\r\nSwiggy\r\n"],
+		["a tab", "\tSwiggy\t"],
+		["a line separator and a paragraph separator", "\u2028Swiggy\u2029"],
+		["several kinds", " \n\t Swiggy \r\n "],
+	])("trims %s, then accepts the text", (_name, text) => {
+		expect(normalizeText(text)).toEqual({ ok: true, value: "Swiggy" });
+	});
+
+	test("refuses one inside the text", () => {
+		expect(normalizeText("Swi\nggy")).toEqual({ ok: false });
+		expect(normalizeText("Swi\r\nggy")).toEqual({ ok: false });
+	});
+
+	// JavaScript's trim does not take U+0085, so it stays and is the control character it is.
+	test("refuses a next-line character even at the ends, since it is not trimmed", () => {
+		expect(normalizeText("\u0085Swiggy")).toEqual({ ok: false });
+		expect(normalizeText("Swiggy\u0085")).toEqual({ ok: false });
+	});
+});

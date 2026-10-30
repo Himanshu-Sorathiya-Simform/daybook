@@ -26,6 +26,14 @@ const AMOUNT_CATEGORY: Cursor = {
 	order: "0123456789abcdef",
 };
 
+/** The date sort grouped by category, which holds a group key but no amount. */
+const DATE_CATEGORY: Cursor = {
+	...DATE_DAY,
+	group: "category",
+	groupKey: "salary",
+	order: "0123456789abcdef",
+};
+
 const listOf = ({ sort, dir, group }: Cursor) => ({ sort, dir, group });
 
 /** The cursor text for raw JSON, as a client could forge it. */
@@ -119,6 +127,14 @@ describe("decodeCursor refuses with 400 bad_request naming cursor", () => {
 		// D-490: Postgres has no year 0; casting either would fail as a 500.
 		["a date in the year 0000", { on: "0000-12-31" }],
 		["an instant in the year 0000", { at: "0000-12-31T23:59:00.000Z" }],
+		// T1: Postgres reads at most 4 digits of year here, and no sign.
+		["an instant after the year 9999", { at: "+010000-01-01T00:00:00.000Z" }],
+		["an instant with a signed year", { at: "+002026-10-01T04:35:00.000Z" }],
+		["an instant with a lowercase z", { at: "2026-10-01T04:35:00.000z" }],
+		[
+			"an instant with more fraction digits",
+			{ at: "2026-10-01T04:35:00.0000Z" },
+		],
 		["an id that is not a UUID", { id: "13" }],
 		["an amount under the date sort", { amount: 100 }],
 		["a group key under day grouping", { groupKey: "food" }],
@@ -219,5 +235,75 @@ describe("readCursor", () => {
 	// compare with, so only the contents count.
 	test("without list parameters, checks the contents only", () => {
 		expect(readCursor(encodeCursor(AMOUNT_CATEGORY))).toEqual(AMOUNT_CATEGORY);
+	});
+});
+
+// T1
+describe("cursor contents, edge cases", () => {
+	/** A cursor written by hand: `fields` as raw JSON text, so `1e3` stays as written. */
+	const rawForge = (fields: string) =>
+		Buffer.from(
+			`{"v":1,"sort":"amount","dir":"desc","group":"none","travel":"next","on":"2026-10-01","at":"2026-10-01T04:35:00.000Z","id":"0199a000-0000-7000-8000-000000000013",${fields}}`,
+		).toString("base64url");
+	const amountList = { sort: "amount", dir: "desc", group: "none" } as const;
+
+	test.each([
+		["1e3", 1000],
+		["1.5e3", 1500],
+		["1E3", 1000],
+		["10e-1", 1],
+	])(
+		"reads an amount written as %s, which JSON makes the integer %i",
+		(written, amount) => {
+			expect(
+				decodeCursor(rawForge(`"amount":${written}`), amountList).amount,
+			).toBe(amount);
+		},
+	);
+
+	test.each(["1e-3", "1e12", "0e0", "-1e3", "1E400", "1.5e-1"])(
+		"refuses an amount written as %s",
+		(written) => {
+			expect(refusal(rawForge(`"amount":${written}`), amountList)).toEqual(
+				BAD_REQUEST,
+			);
+		},
+	);
+
+	test("keeps an uppercase id as written, for the database to read as a uuid", () => {
+		const cursor: Cursor = {
+			...DATE_DAY,
+			id: "0199A000-0000-7000-8000-00000000AB13",
+		};
+		expect(decodeCursor(encodeCursor(cursor), listOf(cursor)).id).toBe(
+			cursor.id,
+		);
+	});
+
+	test("refuses an id with a wrong length or a stray character", () => {
+		for (const id of [
+			"0199a000-0000-7000-8000-00000000001",
+			"0199a000-0000-7000-8000-0000000000133",
+			"0199a000-0000-7000-8000-00000000001g",
+			"0199a00000007000800000000000013",
+		]) {
+			expect(refusal(forge({ ...DATE_DAY, id }))).toEqual(BAD_REQUEST);
+		}
+	});
+
+	test("refuses a group key of 321 code points and takes 320", () => {
+		const ranked = DATE_CATEGORY;
+		const list = listOf(ranked);
+		const key = (length: number) =>
+			JSON.parse(JSON.stringify({ ...ranked, groupKey: "k".repeat(length) }));
+		expect(decodeCursor(forge(key(320)), list).groupKey).toHaveLength(320);
+		expect(refusal(forge(key(321)), list)).toEqual(BAD_REQUEST);
+	});
+
+	test("takes a group key with an emoji, which is one code point", () => {
+		const cursor: Cursor = { ...DATE_CATEGORY, groupKey: "\u{1f44d} cafe" };
+		expect(decodeCursor(encodeCursor(cursor), listOf(cursor)).groupKey).toBe(
+			"\u{1f44d} cafe",
+		);
 	});
 });
