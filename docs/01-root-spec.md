@@ -112,6 +112,7 @@ These names are fixed. "Subscription" always means a recurring bill the user tra
     - A Premium badge or an Upgrade link.
     - The user menu.
 - Global banners: offline (with "as of" time), update available, payment failed (past due), session expired, Premium lapse with Goals to choose.
+- Until its feature is built, a header control or the bottom bar's Add item is absent, and a navigation item opens a placeholder page; the user menu holds the name, the email and Log out until the settings pages exist (D-504).
 
 ## 5. Global flows
 
@@ -162,6 +163,8 @@ The data access layer also runs catch-up lazily, once per user per day, before a
 5. On the next online page request, the proxy sees the cookie and revokes the session before anything renders. The app's own sign-out at the next start also revokes it, then the marker is removed.
 
 The marker exists because the session cookie is `httpOnly` and cannot be removed by JavaScript. Without it, the next online visit would silently log the user back in.
+
+Until P1 arrives in M5, there is no queue, persisted cache or service worker, and logout follows D-502: only the marker's cookie is written, and the proxy stands in for the boot check in 5.2.
 
 ### 5.4 Session expiry
 

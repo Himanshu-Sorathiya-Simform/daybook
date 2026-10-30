@@ -9,7 +9,7 @@ People create a Daybook account with an email and password, log in and out on an
 | Milestone  | M0 (auth core), M1 (account settings)                                                                                                                                                                         |
 | Plan       | Free and Premium; export of all Transactions is Stretch (`account.export`)                                                                                                                                    |
 | Depends on | [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F02 (onboarding and display name), F12 (Stripe Customer), F14 (posts on the landing page), P1 (cache and queue wipes) |
-| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385, D-433, D-452                                                                                              |
+| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385, D-433, D-452, D-502, D-503                                                                                |
 
 ## 1. User stories
 
@@ -28,6 +28,11 @@ People create a Daybook account with an email and password, log in and out on an
 | In                                                                                                                                                                                                                                                                                                             | Stretch (M8)                                         | Out                                                                                                                                                           |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Landing page `/`; sign-up; login with `next`; logout online and offline (logout-pending marker); session expiry handling; active sessions list and revoke; change password; display-name updates for F02; reset my data; delete account; developer password-reset script; offline states for every auth screen | Export of all Transactions as CSV (`account.export`) | Email verification; password reset by email; two-factor; passkeys; social login; changing email (D-189); a "remember me" choice (sessions always last 7 days) |
+
+**Milestones.** Two parts wait for the specs they rely on:
+
+- **Until P1 (M5):** logout calls sign-out, clears the in-memory query cache and opens `/login`. A sign-out that did not count as done writes only the marker's cookie and shows the login screen in the open tab; back online, the tab loads `/api/session/expired?reason=logout` (D-502). The marker's other copies, the sign-out at the next start (BR-F01-15), the unsaved-changes modal, the replay and BR-F01-11 arrive with P1.
+- **Until F14 (M7):** the landing page has no posts section (D-503).
 
 ## 3. Concepts and fields
 
@@ -344,9 +349,9 @@ Daybook's own endpoints:
 - **AC-F01-04** (integration) A wrong password and an unknown email produce identical responses and messages.
 - **AC-F01-05** (integration) With the rate limiter enabled in the test config and a fixed `x-forwarded-for` client address, the fourth sign-in attempt within 10 seconds returns 429.
 - **AC-F01-06** (unit) `next` values `//evil.example`, `/\evil.example`, `https://evil.example` and `javascript:alert(1)` are ignored; `/transactions?cat=food` is honored.
-- **AC-F01-07** (E2E) Given 2 queued items offline, when the user logs out and confirms, then the queue and caches are empty and the marker exists. When the app next starts with a connection, then a request with the old cookie gets 401 and the marker is gone.
-- **AC-F01-08** (E2E) Given an expired session with 1 queued item, when the same user logs in again, then the item syncs.
-- **AC-F01-09** (E2E) Given user A's cache with 1 waiting item, when B's email is typed and Cancel is chosen, then no sign-in happens and A's item remains.
+- **AC-F01-07** (E2E, M5) Given 2 queued items offline, when the user logs out and confirms, then the queue and caches are empty and the marker exists. When the app next starts with a connection, then a request with the old cookie gets 401 and the marker is gone.
+- **AC-F01-08** (E2E, M5) Given an expired session with 1 queued item, when the same user logs in again, then the item syncs.
+- **AC-F01-09** (E2E, M5) Given user A's cache with 1 waiting item, when B's email is typed and Cancel is chosen, then no sign-in happens and A's item remains.
 - **AC-F01-10** (integration) "Sign out all other devices" leaves only the current session. A password change with the option checked revokes the others and keeps the current one.
 - **AC-F01-11** (integration) `/update-user` with `image` or any field other than `name` is refused; a 51-character name is refused.
 - **AC-F01-12** (integration) Given the golden dataset, when reset runs, then:
