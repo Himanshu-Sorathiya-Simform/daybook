@@ -317,3 +317,96 @@ describe("the wrapper's refusals", () => {
 		expect(errorOf(body).code).toBe("validation_failed");
 	});
 });
+
+// T3: a key reused (BR-P2-18, D-432), and the body's forms.
+describe("a key reused", () => {
+	test("with the same body written in another key order, it is the same request", async () => {
+		const me = await user("views-key-order");
+		const input = viewBody();
+		const key = randomUUIDv7();
+		const first = await post(me, input, key);
+		const again = await post(
+			me,
+			Object.fromEntries(Object.entries(input).reverse()),
+			key,
+		);
+		expect([first.status, again.status]).toEqual([201, 201]);
+		expect(again.body).toEqual(first.body);
+		expect((await list(me)).items).toHaveLength(1);
+	});
+
+	test("with a changed body it is 422 idempotency_key_reused, and no second view is made", async () => {
+		const me = await user("views-key-changed");
+		const key = randomUUIDv7();
+		await post(me, viewBody({ name: "First" }), key);
+		const { status, body } = await post(me, viewBody({ name: "Second" }), key);
+		expect(status).toBe(422);
+		expect(errorOf(body).code).toBe("idempotency_key_reused");
+		expect((await list(me)).items.map(({ name }) => name)).toEqual(["First"]);
+	});
+
+	test("with a list in another order it is another request, since an array's order is part of its meaning", async () => {
+		const me = await user("views-key-list");
+		const key = randomUUIDv7();
+		const base = viewBody({ filter: { cat: ["food", "shopping"] } });
+		const first = await post(me, base, key);
+		const swapped = await post(
+			me,
+			{ ...base, filter: { cat: ["shopping", "food"] } },
+			key,
+		);
+		expect(first.status).toBe(201);
+		expect(swapped.status).toBe(422);
+		expect(errorOf(swapped.body).code).toBe("idempotency_key_reused");
+	});
+});
+
+describe("the body's forms", () => {
+	const raw = (who: User, rawBody: string) =>
+		call(POST, "/api/transaction-views", {
+			method: "POST",
+			cookie: who.cookie,
+			rawBody,
+		});
+
+	test.each([
+		["null", "null"],
+		["an array", "[]"],
+		["a string", '"name"'],
+		["a number", "5"],
+	])("%s gets 422 on the body as a whole", async (_name, text) => {
+		const { status, body } = await raw(shared, text);
+		expect(status).toBe(422);
+		expect(Object.keys(errorOf(body).fields)).toEqual(["_body"]);
+	});
+
+	test.each([
+		["an empty body", ""],
+		["an unfinished object", '{"id":'],
+	])("%s gets 400: it is not JSON", async (_name, text) => {
+		expect((await raw(shared, text)).status).toBe(400);
+	});
+
+	// B4, D-491
+	test("a body nested more than 32 levels deep gets 400", async () => {
+		const { status, body } = await raw(
+			shared,
+			"[".repeat(30_000) + "]".repeat(30_000),
+		);
+		expect(status).toBe(400);
+		expect(errorOf(body).code).toBe("bad_request");
+	});
+
+	test("an empty object names the fields it lacks, each at its own path", async () => {
+		const { status, body } = await post(shared, {});
+		expect(status).toBe(422);
+		expect(Object.keys(errorOf(body).fields).sort()).toEqual([
+			"dir",
+			"filter",
+			"group",
+			"id",
+			"name",
+			"sort",
+		]);
+	});
+});

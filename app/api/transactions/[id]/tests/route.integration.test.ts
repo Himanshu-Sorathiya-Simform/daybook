@@ -23,6 +23,7 @@ import { GET } from "../route";
 let owner: Client;
 let golden: LoadedGolden & { cookie: string };
 let other: LoadedGolden & { cookie: string };
+let noProfile: { id: string; cookie: string };
 
 async function goldenUser(label: string) {
 	const user = await signedInUser(owner, label);
@@ -36,11 +37,12 @@ beforeAll(async () => {
 	await owner.connect();
 	golden = await goldenUser("by-id");
 	other = await goldenUser("by-id-other");
+	noProfile = await signedInUser(owner, "by-id-new");
 });
 
 afterAll(async () => {
 	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [
-		[golden?.userId, other?.userId].filter(Boolean),
+		[golden?.userId, other?.userId, noProfile?.id].filter(Boolean),
 	]);
 	await owner?.end();
 	await runtimePool().end();
@@ -121,4 +123,15 @@ test("no session gets 401", async () => {
 		params: { id: golden.id(21) },
 	});
 	expect(status).toBe(401);
+});
+
+// T3, BR-P2-13: a signed-in user who has not finished onboarding has no Transactions to read.
+test("a user with no profile gets 403 profile_required, even for an id that exists", async () => {
+	const { status, body } = await byId(golden.id(21), noProfile.cookie);
+	expect(status).toBe(403);
+	expect(body).toMatchObject({ error: { code: "profile_required" } });
+});
+
+test("a user with no profile gets 403 for an id that is not one, before the id is read", async () => {
+	expect((await byId("abc", noProfile.cookie)).status).toBe(403);
 });

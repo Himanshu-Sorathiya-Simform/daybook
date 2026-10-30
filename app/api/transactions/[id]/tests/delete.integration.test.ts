@@ -246,3 +246,152 @@ describe("the wrapper's refusals", () => {
 		expect((await read(id)).status).toBe(200);
 	});
 });
+
+// T3
+describe("the If-Match header's forms", () => {
+	const send = (id: string, header: string) =>
+		call(DELETE, `/api/transactions/${id}`, {
+			method: "DELETE",
+			params: { id },
+			cookie: golden.cookie,
+			body: {},
+			headers: { "if-match": header },
+		});
+
+	test.each([
+		['W/"1"', "a weak validator"],
+		['"01"', "a leading zero"],
+		['"0"', "version 0"],
+		["1", "no quotes"],
+		['""', "an empty version"],
+		['"1", "2"', "two values"],
+		["*", "the wildcard"],
+		['"2147483648"', "one past the largest integer"],
+	])("%s gets 400 and deletes nothing: %s", async (header) => {
+		const id = await fresh();
+		const { status, body } = await send(id, header);
+		expect(status).toBe(400);
+		expect(errorOf(body).code).toBe("bad_request");
+		expect((await read(id)).status).toBe(200);
+	});
+
+	test('"2147483647" is well formed and stale: 409 with the row, and nothing deleted', async () => {
+		const id = await fresh();
+		const { status, body } = await send(id, '"2147483647"');
+		expect(status).toBe(409);
+		expect(errorOf(body).details).toMatchObject({ current: { id, version: 1 } });
+		expect((await read(id)).status).toBe(200);
+	});
+});
+
+describe("the body's forms", () => {
+	const raw = (id: string, rawBody: string) =>
+		call(DELETE, `/api/transactions/${id}`, {
+			method: "DELETE",
+			params: { id },
+			cookie: golden.cookie,
+			rawBody,
+			headers: { "if-match": '"1"' },
+		});
+
+	test.each([
+		["null", "null"],
+		["an array", "[]"],
+		["a string", '"gone"'],
+		["a number", "1"],
+	])(
+		"%s gets 422 on the body as a whole, and deletes nothing",
+		async (_name, text) => {
+			const id = await fresh();
+			const { status, body } = await raw(id, text);
+			expect(status).toBe(422);
+			expect(Object.keys(errorOf(body).fields)).toEqual(["_body"]);
+			expect((await read(id)).status).toBe(200);
+		},
+	);
+
+	test.each([
+		["an empty body", ""],
+		["an unfinished object", "{"],
+	])("%s gets 400: it is not JSON", async (_name, text) => {
+		const id = await fresh();
+		expect((await raw(id, text)).status).toBe(400);
+		expect((await read(id)).status).toBe(200);
+	});
+
+	// B4, D-491
+	test("a body nested more than 32 levels deep gets 400", async () => {
+		const id = await fresh();
+		expect((await raw(id, "[".repeat(30_000) + "]".repeat(30_000))).status).toBe(
+			400,
+		);
+		expect((await read(id)).status).toBe(200);
+	});
+
+	test("a hint with a field the schema does not know gets 422 on that field", async () => {
+		const id = await fresh();
+		const { status, body } = await remove(id, {
+			dueOn: "2026-10-05",
+			colour: "red",
+		});
+		expect(status).toBe(422);
+		expect(errorOf(body).fields).toMatchObject({ colour: "Remove this field." });
+		expect((await read(id)).status).toBe(200);
+	});
+});
+
+describe("the id, and other users' rows (BR-P2-21, SEC-2)", () => {
+	test("an id in capitals deletes the row", async () => {
+		const id = await fresh();
+		const { status, body } = await remove(id.toUpperCase());
+		expect(status).toBe(204);
+		expect(body).toBeNull();
+		expect((await read(id)).status).toBe(404);
+	});
+
+	test.each(["1", "2", "99"])(
+		"another user's row with If-Match %s gets 404, never 409, and the row stays",
+		async (version) => {
+			const { status, body } = await remove(other.id(24), {}, { version });
+			expect(status).toBe(404);
+			expect(errorOf(body).code).toBe("not_found");
+			expect(errorOf(body).details).toEqual({});
+			expect((await read(other.id(24), other.cookie)).status).toBe(200);
+		},
+	);
+});
+
+describe("a key reused (BR-P2-18, D-432)", () => {
+	// If-Match is not in the request hash, so a replay answers from the stored answer.
+	test("with another If-Match, it is the same request and answers 204 again", async () => {
+		const id = await fresh();
+		const key = randomUUIDv7();
+		const first = await remove(id, {}, { key, version: "1" });
+		const again = await remove(id, {}, { key, version: "9" });
+		expect([first.status, again.status]).toEqual([204, 204]);
+	});
+
+	test("on another id it is 422 idempotency_key_reused, and that row stays", async () => {
+		const first = await fresh();
+		const second = await fresh();
+		const key = randomUUIDv7();
+		await remove(first, {}, { key });
+		const { status, body } = await remove(second, {}, { key });
+		expect(status).toBe(422);
+		expect(errorOf(body).code).toBe("idempotency_key_reused");
+		expect((await read(second)).status).toBe(200);
+	});
+
+	test("with a hint where the first had none, it is 422 idempotency_key_reused", async () => {
+		const id = await fresh();
+		const key = randomUUIDv7();
+		await remove(id, {}, { key });
+		const { status, body } = await remove(
+			id,
+			{ subscriptionId: uuidV7At(GOLDEN_NOW), dueOn: "2026-10-05" },
+			{ key },
+		);
+		expect(status).toBe(422);
+		expect(errorOf(body).code).toBe("idempotency_key_reused");
+	});
+});

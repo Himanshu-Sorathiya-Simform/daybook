@@ -137,8 +137,8 @@ describe("normalizing a filter URL (BR-F03-33, BR-F03-34)", () => {
 		},
 	);
 
-	// AC-F03-33
 	describe("grouping", () => {
+		// AC-F03-33
 		test("day grouping with the amount sort is dropped with the notice", () => {
 			expect(normalize("sort=amount&group=day")).toEqual({
 				query: "sort=amount",
@@ -146,6 +146,7 @@ describe("normalizing a filter URL (BR-F03-33, BR-F03-34)", () => {
 			});
 		});
 
+		// AC-F03-33
 		test("day grouping and no grouping are each their sort's default", () => {
 			expect(normalize("group=day")).toEqual({ query: "", invalid: [] });
 			expect(normalize("sort=amount&group=none")).toEqual({
@@ -154,6 +155,7 @@ describe("normalizing a filter URL (BR-F03-33, BR-F03-34)", () => {
 			});
 		});
 
+		// AC-F03-33
 		test("payee grouping is kept with the amount sort", () => {
 			expect(normalize("sort=amount&group=payee")).toEqual({
 				query: "sort=amount&group=payee",
@@ -161,6 +163,7 @@ describe("normalizing a filter URL (BR-F03-33, BR-F03-34)", () => {
 			});
 		});
 
+		// AC-F03-33
 		test("an unknown group is dropped with the notice", () => {
 			expect(normalize("group=week")).toEqual({
 				query: "",
@@ -168,6 +171,7 @@ describe("normalizing a filter URL (BR-F03-33, BR-F03-34)", () => {
 			});
 		});
 
+		// AC-F03-33
 		test("with an unknown sort, the date sort's day grouping stays valid", () => {
 			expect(read("sort=price&group=day")).toEqual({
 				filter: {},
@@ -176,6 +180,7 @@ describe("normalizing a filter URL (BR-F03-33, BR-F03-34)", () => {
 			});
 		});
 
+		// AC-F03-33
 		test("no grouping with the date sort is kept", () => {
 			expect(normalize("group=none")).toEqual({
 				query: "group=none",

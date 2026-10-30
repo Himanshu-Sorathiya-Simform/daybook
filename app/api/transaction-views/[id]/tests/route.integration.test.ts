@@ -287,3 +287,192 @@ describe("the wrapper's refusals", () => {
 		expect(errorOf(body).code).toBe("profile_required");
 	});
 });
+
+// T3
+describe("the If-Match header's forms", () => {
+	const sendRaw = (
+		handler: typeof PATCH,
+		method: "PATCH" | "DELETE",
+		id: string,
+		header: string,
+		input: unknown,
+	) =>
+		call(handler, `/api/transaction-views/${id}`, {
+			method,
+			params: { id },
+			cookie: me.cookie,
+			body: input,
+			headers: { "if-match": header },
+		});
+
+	test.each([
+		['W/"1"', "a weak validator"],
+		['"01"', "a leading zero"],
+		['"0"', "version 0"],
+		["1", "no quotes"],
+		['"1", "2"', "two values"],
+		["*", "the wildcard"],
+		['"2147483648"', "one past the largest integer"],
+	])(
+		"%s gets 400 on a PATCH and on a DELETE, and changes nothing: %s",
+		async (header) => {
+			const { id, name } = await view();
+			expect(
+				(await sendRaw(PATCH, "PATCH", id, header, { name: "Changed" }))
+					.status,
+			).toBe(400);
+			expect((await sendRaw(DELETE, "DELETE", id, header, {})).status).toBe(
+				400,
+			);
+			expect((await listed()).get(id)).toMatchObject({ name, version: 1 });
+		},
+	);
+
+	test('"2147483647" is well formed and stale: 409 with the view', async () => {
+		const { id } = await view();
+		const { status, body } = await sendRaw(PATCH, "PATCH", id, '"2147483647"', {
+			name: "X",
+		});
+		expect(status).toBe(409);
+		expect(errorOf(body).details).toMatchObject({ current: { id, version: 1 } });
+	});
+});
+
+describe("the body's forms", () => {
+	const raw = (
+		handler: typeof PATCH,
+		method: "PATCH" | "DELETE",
+		id: string,
+		rawBody: string,
+	) =>
+		call(handler, `/api/transaction-views/${id}`, {
+			method,
+			params: { id },
+			cookie: me.cookie,
+			rawBody,
+			headers: { "if-match": '"1"' },
+		});
+
+	test.each([
+		["null", "null"],
+		["an array", "[]"],
+		["a string", '"x"'],
+	])(
+		"%s gets 422 on a PATCH and on a DELETE, and changes nothing",
+		async (_name, text) => {
+			const { id, name } = await view();
+			for (const [handler, method] of [
+				[PATCH, "PATCH"],
+				[DELETE, "DELETE"],
+			] as const) {
+				const { status, body } = await raw(handler, method, id, text);
+				expect(status).toBe(422);
+				expect(Object.keys(errorOf(body).fields)).toEqual(["_body"]);
+			}
+			expect((await listed()).get(id)).toMatchObject({ name, version: 1 });
+		},
+	);
+
+	test("an empty body gets 400 on a PATCH and on a DELETE", async () => {
+		const { id } = await view();
+		expect((await raw(PATCH, "PATCH", id, "")).status).toBe(400);
+		expect((await raw(DELETE, "DELETE", id, "")).status).toBe(400);
+	});
+
+	// B4, D-491
+	test("a body nested more than 32 levels deep gets 400 on both", async () => {
+		const { id } = await view();
+		const deep = "[".repeat(30_000) + "]".repeat(30_000);
+		expect((await raw(PATCH, "PATCH", id, deep)).status).toBe(400);
+		expect((await raw(DELETE, "DELETE", id, deep)).status).toBe(400);
+		expect((await listed()).has(id)).toBe(true);
+	});
+
+	test("a DELETE with a field gets 422 naming it, not the whole body", async () => {
+		const { id } = await view();
+		const { body } = await send(DELETE, "DELETE", id, {
+			name: "Food",
+			reason: "x",
+		});
+		expect(errorOf(body).fields).toEqual({
+			name: "Remove this field.",
+			reason: "Remove this field.",
+		});
+	});
+});
+
+describe("the id, and other users' views (BR-P2-21, SEC-2)", () => {
+	test("an id in capitals renames and deletes the view", async () => {
+		const { id } = await view();
+		const renamed = await patch(id.toUpperCase(), { name: "Capitals" });
+		expect(renamed.status).toBe(200);
+		expect(renamed.body).toMatchObject({
+			data: { id, name: "Capitals", version: 2 },
+		});
+		expect((await remove(id.toUpperCase(), { version: "2" })).status).toBe(204);
+	});
+
+	test.each(["1", "2", "99"])(
+		"another user's view with If-Match %s gets 404, never 409, on a PATCH and a DELETE",
+		async (version) => {
+			const { id, name } = await view(me);
+			const asOther = { cookie: other.cookie, version };
+			const edited = await patch(id, { name: "Theirs" }, asOther);
+			const deleted = await remove(id, asOther);
+			expect([edited.status, deleted.status]).toEqual([404, 404]);
+			expect(errorOf(edited.body).details).toEqual({});
+			expect((await listed(me)).get(id)).toMatchObject({ name, version: 1 });
+		},
+	);
+
+	test('the id "all", the built-in view, gets 404 on both', async () => {
+		expect((await patch("all", { name: "Mine" })).status).toBe(404);
+		expect((await remove("all")).status).toBe(404);
+	});
+});
+
+describe("a key reused (BR-P2-18, D-432)", () => {
+	test("a PATCH with a changed body gets 422 idempotency_key_reused, and the view is as the first left it", async () => {
+		const { id } = await view();
+		const key = randomUUIDv7();
+		await patch(id, { name: "First" }, { key });
+		const { status, body } = await patch(
+			id,
+			{ name: "Second" },
+			{ key, version: "2" },
+		);
+		expect(status).toBe(422);
+		expect(errorOf(body).code).toBe("idempotency_key_reused");
+		expect((await listed()).get(id)).toMatchObject({
+			name: "First",
+			version: 2,
+		});
+	});
+
+	// If-Match is not in the request hash, so a replay is answered from the stored answer.
+	test("a PATCH or DELETE replayed with another If-Match is the same request", async () => {
+		const { id } = await view();
+		const key = randomUUIDv7();
+		const first = await patch(id, { name: "Once" }, { key, version: "1" });
+		const again = await patch(id, { name: "Once" }, { key, version: "9" });
+		expect(again).toMatchObject({ status: 200, body: first.body });
+		const deleteKey = randomUUIDv7();
+		const gone = await remove(id, { key: deleteKey, version: "2" });
+		const goneAgain = await remove(id, { key: deleteKey, version: "9" });
+		expect([gone.status, goneAgain.status]).toEqual([204, 204]);
+	});
+
+	test("on another view it is 422 idempotency_key_reused", async () => {
+		const first = await view();
+		const second = await view();
+		const key = randomUUIDv7();
+		await patch(first.id, { name: "Same" }, { key });
+		const { status, body } = await patch(second.id, { name: "Same" }, { key });
+		expect(status).toBe(422);
+		expect(errorOf(body).code).toBe("idempotency_key_reused");
+		expect((await listed()).get(second.id)).toMatchObject({
+			name: second.name,
+			version: 1,
+		});
+	});
+});

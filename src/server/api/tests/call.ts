@@ -22,6 +22,9 @@ export type CallOptions = {
 	 * `Idempotency-Key`, as the app's client does (BR-P2-17). */
 	method?: "GET" | "POST" | "PATCH" | "DELETE";
 	body?: unknown;
+	/** The body as text, sent as it is instead of `body`: JSON the helper would not write, such
+	 * as `null`, or a nesting too deep for `JSON.stringify`. */
+	rawBody?: string;
 	/** Extra headers; `null` removes one the call would otherwise send. */
 	headers?: Record<string, string | null>;
 };
@@ -34,7 +37,14 @@ export type CallOptions = {
 export async function call(
 	handler: Handler,
 	path: string,
-	{ cookie, params = {}, method = "GET", body, headers = {} }: CallOptions = {},
+	{
+		cookie,
+		params = {},
+		method = "GET",
+		body,
+		rawBody,
+		headers = {},
+	}: CallOptions = {},
 ): Promise<Answer> {
 	const origin = serverEnv().APP_ORIGIN;
 	const mutation = method !== "GET";
@@ -56,7 +66,7 @@ export async function call(
 				(entry): entry is [string, string] => entry[1] !== null,
 			),
 		),
-		...(mutation ? { body: JSON.stringify(body ?? {}) } : {}),
+		...(mutation ? { body: rawBody ?? JSON.stringify(body ?? {}) } : {}),
 	});
 	const response = await handler(request, { params: Promise.resolve(params) });
 	const text = await response.text();

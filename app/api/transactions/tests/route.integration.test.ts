@@ -253,3 +253,117 @@ describe("isolation (SEC-2)", () => {
 		expect(mine.filter((id) => theirs.includes(id))).toEqual([]);
 	});
 });
+
+// T3: the query's edges (F03 section 11, D-478, D-458, D-500).
+describe("the query's edges", () => {
+	test("`sort=amount&group=day` gets 400 naming group", async () => {
+		const { status, body } = await list("sort=amount&group=day");
+		expect(status).toBe(400);
+		expect(errorOf(body).details).toEqual({ params: ["group"] });
+	});
+
+	test("a repeated cat gets 400 naming cat, repeated or not valid", async () => {
+		for (const query of [
+			"cat=food&cat=shopping",
+			"cat=food&cat=food",
+			"cat=&cat=",
+		]) {
+			const { status, body } = await list(query);
+			expect(status).toBe(400);
+			expect(errorOf(body).details).toEqual({ params: ["cat"] });
+		}
+	});
+
+	test("an empty cat is no filter, and answers every row", async () => {
+		const empty = pageOf((await list("cat=")).body);
+		expect(numbers(empty)).toEqual(NEWEST_FIRST);
+	});
+
+	test("txn, view and new are the page's own, so the list ignores them", async () => {
+		const plain = pageOf((await list("")).body);
+		const noisy = pageOf(
+			(
+				await list(
+					`txn=${golden.id(21)}&view=0199a000-0000-7000-8000-000000000001&new=1&page=3`,
+				)
+			).body,
+		);
+		expect(noisy).toEqual(plain);
+	});
+
+	test.each([
+		["1", 200],
+		["100", 200],
+		["101", 400],
+		["0", 400],
+		["01", 400],
+		["1.5", 400],
+		["-1", 400],
+		["abc", 400],
+		["1e2", 400],
+	])("limit=%s answers %i", async (limit, status) => {
+		const answer = await list(`limit=${limit}`);
+		expect(answer.status).toBe(status);
+		if (status === 400)
+			expect(errorOf(answer.body).details).toEqual({ params: ["limit"] });
+	});
+
+	test("limit=100 answers all 22 rows on one page with no cursor", async () => {
+		const page = pageOf((await list("limit=100")).body);
+		expect(page.items).toHaveLength(22);
+		expect(page.nextCursor).toBeNull();
+	});
+
+	test("the bad parameters are named in the reader's fixed order, then limit and cursor", async () => {
+		const { body } = await list(
+			"limit=0&group=week&cat=pizza&from=2026-13-01&cursor=junk",
+		);
+		expect(errorOf(body).details).toEqual({
+			params: ["from", "cat", "group", "limit", "cursor"],
+		});
+	});
+
+	// BR-F03-35: % in a search is a percent sign, not a wildcard.
+	test("`q=50%25` finds a row with 50% in it and not one with 500", async () => {
+		const user = await goldenUser("list-route-percent");
+		try {
+			for (const [payee, description] of [
+				["Deal shop", "50% off"],
+				["Deal shop", "500 off"],
+			] as const) {
+				await owner.query(
+					`INSERT INTO app.transactions (id, user_id, created_at, updated_at, type, amount_minor,
+					   occurred_at, occurred_on, category, payee, description, source, version)
+					 VALUES (gen_random_uuid(), $1, $2, $2, 'expense', 100, $2, '2026-11-02', 'food', $3, $4,
+					   'manual', 1)`,
+					[user.userId, GOLDEN_NOW, payee, description],
+				);
+			}
+			const page = pageOf((await list("q=50%25", user.cookie)).body);
+			expect(page.items.map((item) => item.description)).toEqual(["50% off"]);
+			// Three underscores would match every row with 3 characters, if _ were a wildcard.
+			const underscore = pageOf((await list("q=___", user.cookie)).body);
+			expect(underscore.items).toEqual([]);
+		} finally {
+			await owner.query(`DELETE FROM auth."user" WHERE id = $1`, [
+				user.userId,
+			]);
+		}
+	});
+
+	// D-470: no user has a Goal before M2, so a Goal filter matches nothing: it is valid.
+	test.each([
+		["an uppercase UUID", "0199A000-0000-7000-8001-00000000ABCD"],
+		["the nil UUID", "00000000-0000-0000-0000-000000000000"],
+	])("goal=%s is read, not refused, and matches no row", async (_name, goal) => {
+		const answer = await list(`goal=${goal}`);
+		expect(answer.status).toBe(200);
+		expect(pageOf(answer.body).items).toEqual([]);
+	});
+
+	test("goal=nope is not a UUID, so it gets 400 naming goal", async () => {
+		const { status, body } = await list("goal=nope");
+		expect(status).toBe(400);
+		expect(errorOf(body).details).toEqual({ params: ["goal"] });
+	});
+});

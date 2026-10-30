@@ -298,3 +298,169 @@ describe("the wrapper's refusals", () => {
 		expect(errorOf(answer).code).toBe("profile_required");
 	});
 });
+
+// T3: what a client may not send, replays, and the Goal that does not exist yet.
+describe("system fields with real values (BR-F03-19)", () => {
+	test.each([
+		["source", "subscription"],
+		["source", "manual"],
+		["demo", true],
+		["demo", false],
+		["edited", true],
+		["subscriptionId", "0199a000-0000-7000-8001-000000000001"],
+		["dueOn", "2026-10-05"],
+		["version", 5],
+		["updatedAt", "2026-11-02T06:30:00.000Z"],
+	])(
+		"%s: %j is refused by name, even where it is true to what Daybook would set",
+		async (field, value) => {
+			const input = body({ [field]: value });
+			const { status, body: answer } = await post(input);
+			expect(status).toBe(422);
+			expect(errorOf(answer).fields).toEqual({
+				[field]: "Daybook sets this field.",
+			});
+			// Nothing was created.
+			const { rows } = await owner.query(
+				"SELECT 1 FROM app.transactions WHERE id = $1",
+				[input.id],
+			);
+			expect(rows).toHaveLength(0);
+		},
+	);
+
+	test("two system fields are each named", async () => {
+		const { body: answer } = await post(
+			body({ demo: true, source: "subscription" }),
+		);
+		expect(errorOf(answer).fields).toEqual({
+			demo: "Daybook sets this field.",
+			source: "Daybook sets this field.",
+		});
+	});
+
+	test("a row made through the API is manual and not demo, whatever the client hopes", async () => {
+		const { body: answer } = await post(body());
+		expect(answer).toMatchObject({
+			data: { source: "manual", demo: false, edited: false },
+		});
+	});
+});
+
+describe("a key reused (BR-P2-18, D-432)", () => {
+	test("with the same body written in another key order, it is the same request", async () => {
+		const input = body();
+		const key = randomUUIDv7();
+		const first = await post(input, { key });
+		const reordered = Object.fromEntries(Object.entries(input).reverse());
+		const again = await post(reordered, { key });
+		expect(first.status).toBe(201);
+		expect(again).toMatchObject({ status: 201, body: first.body });
+		const { rows } = await owner.query(
+			"SELECT count(*)::int AS n FROM app.transactions WHERE id = $1",
+			[input.id],
+		);
+		expect(rows[0]).toEqual({ n: 1 });
+	});
+
+	test("with a nested field written in another order too, it is still the same request", async () => {
+		const key = randomUUIDv7();
+		const input = body({ note: "n", description: "d" });
+		const first = await post(input, { key });
+		const again = await post(
+			{
+				description: "d",
+				...Object.fromEntries(Object.entries(input).reverse()),
+			},
+			{ key },
+		);
+		expect(again.body).toEqual(first.body);
+	});
+
+	test("with the id in capitals, it is another body, so 422 idempotency_key_reused", async () => {
+		const input = body();
+		const key = randomUUIDv7();
+		await post(input, { key });
+		const { status, body: answer } = await post(
+			{ ...input, id: input.id.toUpperCase() },
+			{ key },
+		);
+		expect(status).toBe(422);
+		expect(errorOf(answer).code).toBe("idempotency_key_reused");
+	});
+
+	test("with the same body on the same key by another user, it is that user's own request", async () => {
+		const input = body();
+		const key = randomUUIDv7();
+		await post(input, { key });
+		// Another user holds no record under this key, so the create runs for them: the id is
+		// the first user's, which their row hides, so it is an id conflict.
+		const second = await signedInUser(owner, "create-route-second");
+		try {
+			await loadGolden(owner, second.id);
+			const { status, body: answer } = await post(input, {
+				cookie: second.cookie,
+				key,
+			});
+			expect(status).toBe(409);
+			expect(errorOf(answer).code).toBe("id_conflict");
+		} finally {
+			await owner.query(`DELETE FROM auth."user" WHERE id = $1`, [second.id]);
+		}
+	});
+});
+
+describe("a Goal Transaction, before Goals exist (D-483)", () => {
+	const goal = (fields: Record<string, unknown> = {}) =>
+		body({
+			type: "goal_contribution",
+			goalId: "0199a000-0000-7000-8001-000000000001",
+			category: undefined,
+			payee: undefined,
+			...fields,
+		});
+
+	test.each(["goal_contribution", "goal_withdrawal"])(
+		"a %s gets 422 parent_missing on goalId",
+		async (type) => {
+			const input = goal({ type });
+			const { status, body: answer } = await post(input);
+			expect(status).toBe(422);
+			expect(errorOf(answer)).toMatchObject({
+				code: "parent_missing",
+				fields: { goalId: "Choose a Goal." },
+			});
+			const { rows } = await owner.query(
+				"SELECT 1 FROM app.transactions WHERE id = $1",
+				[input.id],
+			);
+			expect(rows).toHaveLength(0);
+		},
+	);
+
+	test("a goalId on an expense is the type rules' refusal, not parent_missing", async () => {
+		const { status, body: answer } = await post(
+			body({ goalId: "0199a000-0000-7000-8001-000000000001" }),
+		);
+		expect(status).toBe(422);
+		expect(errorOf(answer)).toMatchObject({
+			code: "validation_failed",
+			fields: { goalId: "Only Goal Transactions have a Goal." },
+		});
+	});
+
+	test("a goal row's own refusals come first: a payee on it is validation_failed, not parent_missing", async () => {
+		const { body: answer } = await post(goal({ payee: "Someone" }));
+		expect(errorOf(answer).code).toBe("validation_failed");
+	});
+
+	test("an id in capitals answers the row with its id in lowercase", async () => {
+		const input = body();
+		const { status, body: answer } = await post({
+			...input,
+			id: input.id.toUpperCase(),
+		});
+		expect(status).toBe(201);
+		expect(answer).toMatchObject({ data: { id: input.id } });
+	});
+});
