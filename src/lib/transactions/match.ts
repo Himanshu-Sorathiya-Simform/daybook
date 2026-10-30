@@ -56,6 +56,26 @@ function matchesQuery(
 	return text !== null && lowercase(searchText(row)).includes(lowercase(text));
 }
 
+/** The date and amount bounds of a filter; dates are the row's local `occurredOn`. */
+function withinBounds(row: MatchableRow, filter: TransactionFilter): boolean {
+	const { from, to, minMinor, maxMinor } = filter;
+	if (from !== undefined && row.occurredOn < from) return false;
+	if (to !== undefined && row.occurredOn > to) return false;
+	if (minMinor !== undefined && row.amountMinor < minMinor) return false;
+	if (maxMinor !== undefined && row.amountMinor > maxMinor) return false;
+	return true;
+}
+
+/** The type, category, Goal, Subscription and source fields of a filter. */
+function matchesFields(row: MatchableRow, filter: TransactionFilter): boolean {
+	const { type, cat, goal, sub, src } = filter;
+	if (type && !type.includes(row.type)) return false;
+	if (cat && (row.category === null || !cat.includes(row.category))) return false;
+	if (goal !== undefined && row.goalId !== goal) return false;
+	if (sub !== undefined && row.subscriptionId !== sub) return false;
+	return src === undefined || row.source === src;
+}
+
 /**
  * Whether a row matches the filter, rule for rule as the SQL predicate (BR-F03-43). Fields
  * combine with AND (FIL-1), a category filter excludes Goal rows (FIL-6), and dates are the
@@ -66,16 +86,6 @@ export function matchesFilter(
 	filter: TransactionFilter,
 	currency: CurrencyCode,
 ): boolean {
-	const { from, to, type, cat, goal, sub, src, minMinor, maxMinor, q } = filter;
-	if (from !== undefined && row.occurredOn < from) return false;
-	if (to !== undefined && row.occurredOn > to) return false;
-	if (type && !type.includes(row.type)) return false;
-	if (cat && (row.category === null || !cat.includes(row.category))) return false;
-	if (goal !== undefined && row.goalId !== goal) return false;
-	if (sub !== undefined && row.subscriptionId !== sub) return false;
-	if (src !== undefined && row.source !== src) return false;
-	if (minMinor !== undefined && row.amountMinor < minMinor) return false;
-	if (maxMinor !== undefined && row.amountMinor > maxMinor) return false;
-	if (q !== undefined && !matchesQuery(row, q, currency)) return false;
-	return true;
+	if (!withinBounds(row, filter) || !matchesFields(row, filter)) return false;
+	return filter.q === undefined || matchesQuery(row, filter.q, currency);
 }

@@ -87,6 +87,34 @@ type Read =
 	| { ok: true; whole: string; fraction: string }
 	| { ok: false; error: AmountError };
 
+/** Whether `character` is a digit, the decimal sign or a grouping sign. */
+function isAllowed(character: string, signs: NumberSigns): boolean {
+	return (
+		DIGITS.test(character)
+		|| character === signs.decimal
+		|| signs.groups.includes(character)
+	);
+}
+
+type Whole = { ok: true; digits: string } | { ok: false; error: AmountError };
+
+/** The whole part without its grouping sign, or the error when the grouping is not valid. A
+ * second kind of grouping sign breaks the pattern too, so one sign per amount holds (D-459). */
+function stripGrouping(whole: string, other: string, signs: NumberSigns): Whole {
+	const used = [
+		...new Set([...whole].filter((character) => !DIGITS.test(character))),
+	];
+	const [sign] = used;
+	if (sign === undefined) return { ok: true, digits: whole };
+	if (!validGrouping(whole, sign, signs.indian)) {
+		return {
+			ok: false,
+			error: used.includes(other) ? "wrong_decimal" : "not_a_number",
+		};
+	}
+	return { ok: true, digits: whole.split(sign).join("") };
+}
+
 /**
  * Splits canonical text into whole digits and fraction digits. The mark that is not the decimal
  * sign (`.` or `,`) is the "other mark": used outside a valid grouping, it gives `wrong_decimal`,
@@ -94,13 +122,11 @@ type Read =
  */
 function readNumber(text: string, signs: NumberSigns): Read {
 	const other = signs.decimal === "." ? "," : ".";
-	for (const character of text) {
-		if (DIGITS.test(character)) continue;
-		if (character === signs.decimal || signs.groups.includes(character))
-			continue;
+	const stray = [...text].find((character) => !isAllowed(character, signs));
+	if (stray !== undefined) {
 		return {
 			ok: false,
-			error: character === other ? "wrong_decimal" : "not_a_number",
+			error: stray === other ? "wrong_decimal" : "not_a_number",
 		};
 	}
 	const pieces = text.split(signs.decimal);
@@ -112,21 +138,11 @@ function readNumber(text: string, signs: NumberSigns): Read {
 			error: fraction.includes(other) ? "wrong_decimal" : "not_a_number",
 		};
 	}
-	const used = [
-		...new Set([...whole].filter((character) => !DIGITS.test(character))),
-	];
-	const [sign] = used;
-	// A second kind of grouping sign breaks the pattern too, so one sign per amount holds (D-459).
-	if (sign !== undefined && !validGrouping(whole, sign, signs.indian)) {
-		return {
-			ok: false,
-			error: used.includes(other) ? "wrong_decimal" : "not_a_number",
-		};
-	}
-	const digits = sign === undefined ? whole : whole.split(sign).join("");
-	if (digits === "" && fraction === "")
+	const grouped = stripGrouping(whole, other, signs);
+	if (!grouped.ok) return grouped;
+	if (grouped.digits === "" && fraction === "")
 		return { ok: false, error: "not_a_number" };
-	return { ok: true, whole: digits, fraction };
+	return { ok: true, whole: grouped.digits, fraction };
 }
 
 /** Whole and fraction digits as minor units, checked against the exponent and MON-5. Nine

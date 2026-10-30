@@ -22,6 +22,7 @@ import { presetOf, presetRange } from "./presets";
 import { TRANSACTION_MESSAGES, largestAmountMessage } from "./schemas";
 import {
 	checkQuery,
+	sortedUnique,
 	writeFilterQuery,
 	type ListParams,
 	type TransactionFilter,
@@ -94,10 +95,6 @@ const QUERY_MESSAGES = {
 	too_long: V.queryLong,
 	too_short: V.queryShort,
 } as const;
-
-function sortedUnique<T extends string>(items: readonly T[]): T[] {
-	return [...new Set(items)].sort();
-}
 
 /** The keys of a view filter after its dates, in the URL's order. */
 const OTHER_KEYS = [
@@ -350,12 +347,14 @@ export function isEdited(
 	return saved !== writeFilterQuery(current.filter, current.list, { currency });
 }
 
+const TRAILING = /^[\s,]$/;
+
 /** The first `length` code points of `text`, without a trailing comma or space. */
 function cut(text: string, length: number): string {
-	return [...text]
-		.slice(0, length)
-		.join("")
-		.replace(/[\s,]+$/, "");
+	const characters = [...text].slice(0, length);
+	let end = characters.length;
+	while (end > 0 && TRAILING.test(characters[end - 1] ?? "")) end--;
+	return characters.slice(0, end).join("");
 }
 
 /**

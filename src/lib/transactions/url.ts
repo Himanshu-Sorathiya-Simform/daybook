@@ -56,9 +56,111 @@ function oneOf<T extends string>(allowed: readonly T[], value: string): value is
 	return (allowed as readonly string[]).includes(value);
 }
 
-/** A comma list sorted and deduplicated, so equivalent lists compare equal. */
-function sortedUnique<T extends string>(items: readonly T[]): T[] {
-	return [...new Set(items)].sort();
+/** A comma list sorted by UTF-16 code unit, which is what `sort()` does and never varies with
+ * the locale, and deduplicated, so equivalent lists compare equal. */
+export function sortedUnique<T extends string>(items: readonly T[]): T[] {
+	return [...new Set(items)].sort((a, b) => {
+		if (a < b) return -1;
+		return a > b ? 1 : 0;
+	});
+}
+
+type Reader = ReturnType<typeof createReader>;
+
+/** Reads single parameters of a URL and records the invalid ones. */
+function createReader(params: URLSearchParams) {
+	const invalid = new Set<FilterParam>();
+	const drop = (name: FilterParam) => {
+		invalid.add(name);
+		return undefined;
+	};
+	const one = (name: FilterParam): string | undefined => {
+		const values = params.getAll(name);
+		if (values.length > 1) return drop(name);
+		return values[0] === "" ? undefined : values[0];
+	};
+	const items = <T extends string>(name: FilterParam, allowed: readonly T[]) => {
+		const raw = one(name);
+		if (raw === undefined) return undefined;
+		const parts = raw.split(",").filter((item) => item !== "");
+		if (!parts.every((item) => oneOf(allowed, item))) return drop(name);
+		return parts.length === 0 ? undefined : sortedUnique(parts as T[]);
+	};
+	const value = <T>(name: FilterParam, check: (raw: string) => T | null) => {
+		const raw = one(name);
+		if (raw === undefined) return undefined;
+		return check(raw) ?? drop(name);
+	};
+	return { invalid, drop, one, items, value };
+}
+
+/** A range needs both ends, in order (D-458, BR-F03-34). Otherwise every end given is dropped. */
+function readRange({
+	value,
+	drop,
+}: Reader): { from: string; to: string } | undefined {
+	const date = (raw: string) => (isIsoDate(raw) ? raw : null);
+	const from = value("from", date);
+	const to = value("to", date);
+	if (from !== undefined && to !== undefined && from <= to) return { from, to };
+	if (from !== undefined) drop("from");
+	if (to !== undefined) drop("to");
+	return undefined;
+}
+
+/** The amount bounds in minor units. A bound pair out of order is dropped together. */
+function readAmounts(
+	{ value, drop }: Reader,
+	currency: CurrencyCode,
+): { minMinor: number | undefined; maxMinor: number | undefined } {
+	const minMinor = value("min", (raw) => parseUrlAmount(raw, currency));
+	const maxMinor = value("max", (raw) => parseUrlAmount(raw, currency));
+	if (minMinor !== undefined && maxMinor !== undefined && minMinor > maxMinor) {
+		drop("min");
+		drop("max");
+		return { minMinor: undefined, maxMinor: undefined };
+	}
+	return { minMinor, maxMinor };
+}
+
+function readListParams({ value }: Reader): ListParams {
+	const sort =
+		value("sort", (raw) => (oneOf(SORTS, raw) ? raw : null)) ?? DEFAULT_SORT;
+	const dir =
+		value("dir", (raw) => (oneOf(DIRS, raw) ? raw : null)) ?? DEFAULT_DIR;
+	// Day grouping needs the date sort (BR-F03-55).
+	const group =
+		value("group", (raw) =>
+			oneOf(GROUPS, raw) && !(raw === "day" && sort === "amount") ? raw : null,
+		) ?? defaultGroup(sort);
+	return { sort, dir, group };
+}
+
+type FilterParts = {
+	range: { from: string; to: string } | undefined;
+} & {
+	[K in Exclude<keyof TransactionFilter, "from" | "to">]:
+		TransactionFilter[K] | undefined;
+};
+
+/** The filter object from what was read, with the keys in the URL's order and absent fields
+ * left out. */
+function assembleFilter(parts: FilterParts): TransactionFilter {
+	const { range, type, cat, goal, sub, src, minMinor, maxMinor, q } = parts;
+	const filter: TransactionFilter = {};
+	if (range) {
+		filter.from = range.from;
+		filter.to = range.to;
+	}
+	if (type) filter.type = type;
+	if (cat) filter.cat = cat;
+	if (goal) filter.goal = goal;
+	if (sub) filter.sub = sub;
+	if (src) filter.src = src;
+	if (minMinor !== undefined) filter.minMinor = minMinor;
+	if (maxMinor !== undefined) filter.maxMinor = maxMinor;
+	if (typeof q === "string") filter.q = q;
+	return filter;
 }
 
 /**
@@ -71,80 +173,25 @@ export function readFilterParams(
 	params: URLSearchParams,
 	{ currency }: { currency: CurrencyCode },
 ): ReadFilter {
-	const invalid = new Set<FilterParam>();
-	const drop = (name: FilterParam) => {
-		invalid.add(name);
-		return undefined;
-	};
-	const one = (name: FilterParam): string | undefined => {
-		const values = params.getAll(name);
-		if (values.length > 1) return drop(name);
-		return values[0] === "" ? undefined : values[0];
-	};
-	const list = <T extends string>(name: FilterParam, allowed: readonly T[]) => {
-		const raw = one(name);
-		if (raw === undefined) return undefined;
-		const items = raw.split(",").filter((item) => item !== "");
-		if (!items.every((item) => oneOf(allowed, item))) return drop(name);
-		return items.length === 0 ? undefined : sortedUnique(items as T[]);
-	};
-	const value = <T>(name: FilterParam, check: (raw: string) => T | null) => {
-		const raw = one(name);
-		if (raw === undefined) return undefined;
-		return check(raw) ?? drop(name);
-	};
+	const reader = createReader(params);
+	const { invalid, drop, one, items, value } = reader;
 
-	// A range needs both ends, in order (D-458, BR-F03-34). Otherwise every end given is dropped.
-	let from = value("from", (raw) => (isIsoDate(raw) ? raw : null));
-	let to = value("to", (raw) => (isIsoDate(raw) ? raw : null));
-	if (from === undefined || to === undefined || from > to) {
-		if (from !== undefined) from = drop("from");
-		if (to !== undefined) to = drop("to");
-	}
-
-	const type = list("type", TXN_TYPES);
-	const cat = list("cat", CATEGORY_KEYS);
 	const uuid = (raw: string) => (isUuid(raw) ? raw.toLowerCase() : null);
-	const goal = value("goal", uuid);
-	const sub = value("sub", uuid);
-	const src = value("src", (raw) => (oneOf(SOURCES, raw) ? raw : null));
-	let minMinor = value("min", (raw) => parseUrlAmount(raw, currency));
-	let maxMinor = value("max", (raw) => parseUrlAmount(raw, currency));
-	if (minMinor !== undefined && maxMinor !== undefined && minMinor > maxMinor) {
-		minMinor = drop("min");
-		maxMinor = drop("max");
-	}
 	const query = checkQuery(one("q"), currency);
-	const q = query.ok ? query.q : null;
-	if (q === null) drop("q");
-
-	const sort =
-		value("sort", (raw) => (oneOf(SORTS, raw) ? raw : null)) ?? DEFAULT_SORT;
-	const dir =
-		value("dir", (raw) => (oneOf(DIRS, raw) ? raw : null)) ?? DEFAULT_DIR;
-	// Day grouping needs the date sort (BR-F03-55).
-	const group =
-		value("group", (raw) =>
-			oneOf(GROUPS, raw) && !(raw === "day" && sort === "amount") ? raw : null,
-		) ?? defaultGroup(sort);
-
-	const filter: TransactionFilter = {};
-	if (from !== undefined && to !== undefined) {
-		filter.from = from;
-		filter.to = to;
-	}
-	if (type) filter.type = type;
-	if (cat) filter.cat = cat;
-	if (goal) filter.goal = goal;
-	if (sub) filter.sub = sub;
-	if (src) filter.src = src;
-	if (minMinor !== undefined) filter.minMinor = minMinor;
-	if (maxMinor !== undefined) filter.maxMinor = maxMinor;
-	if (typeof q === "string") filter.q = q;
+	const filter = assembleFilter({
+		range: readRange(reader),
+		type: items("type", TXN_TYPES),
+		cat: items("cat", CATEGORY_KEYS),
+		goal: value("goal", uuid),
+		sub: value("sub", uuid),
+		src: value("src", (raw) => (oneOf(SOURCES, raw) ? raw : null)),
+		...readAmounts(reader, currency),
+		q: query.ok ? query.q : drop("q"),
+	});
 
 	return {
 		filter,
-		list: { sort, dir, group },
+		list: readListParams(reader),
 		invalid: FILTER_PARAMS.filter((name) => invalid.has(name)),
 	};
 }

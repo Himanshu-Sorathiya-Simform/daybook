@@ -62,7 +62,8 @@ export function readListQuery(
 	const rawLimit = single(query, "limit");
 	if (rawLimit === null) refused.push("limit");
 	else if (rawLimit !== undefined) {
-		const parsed = LIMIT.test(rawLimit) ? Number.parseInt(rawLimit, 10) : NaN;
+		const parsed =
+			LIMIT.test(rawLimit) ? Number.parseInt(rawLimit, 10) : Number.NaN;
 		if (parsed <= MAX_LIMIT) limit = parsed;
 		else refused.push("limit");
 	}
