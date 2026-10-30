@@ -73,7 +73,9 @@ function checkEditFields(stored: Transaction, body: TransactionEditBody): void {
  * and the schema has already checked that `occurredOn` fits `occurredAt`.
  * 1. A new `occurredAt` may run at most 5 minutes past the request clock.
  * 2. A new `occurredOn` lies in the window of the stored `createdAt`, read in the current
- *    profile zone. Keeping the date skips the window, even after a zone change.
+ *    profile zone. Keeping the date skips the window, even after a zone change. A refusal says
+ *    "this Transaction's entry window", since the window is the row's own, not today's; the
+ *    client writes the dated message from `details` (D-499).
  */
 function checkEditDates(
 	ctx: ProfiledContext,
@@ -93,7 +95,7 @@ function checkEditDates(
 		const window = entryWindow(stored.createdAt, ctx.profile.timezone);
 		if (!inWindow(body.occurredOn, window)) {
 			throw new ApiError("date_out_of_window", {
-				fields: { occurredOn: M.dateOutOfWindow },
+				fields: { occurredOn: M.dateOutOfWindowEdit },
 				details: { ...window },
 			});
 		}

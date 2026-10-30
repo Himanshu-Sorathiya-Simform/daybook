@@ -4,12 +4,12 @@
 
 Every private read and write reaches Postgres through one path. A route-handler wrapper checks the request and opens one database transaction. Inside it, the data access layer sets the user's identity, and row-level security makes the database refuse anything that belongs to someone else. The same path makes every change safe to retry and detects edits made on another device. This spec defines that path, the database roles behind it, the security headers in front of it, and the tests that prove it.
 
-| Item       | Value                                                                                                                                                                                                                                      |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Milestone  | M0                                                                                                                                                                                                                                         |
-| Plan       | Free and Premium                                                                                                                                                                                                                           |
-| Depends on | [01-root-spec.md](../01-root-spec.md) sections 7 to 9                                                                                                                                                                                      |
-| Decisions  | D-06, D-07, D-12 to D-19, D-39, D-137, D-153, D-165, D-172, D-173, D-180, D-192 to D-197, D-199, D-201 to D-207, D-242 to D-244, D-292, D-300, D-325, D-343, D-362, D-367, D-368, D-370, D-382, D-383, D-386, D-409 to D-444, D-491, D-492 |
+| Item       | Value                                                                                                                                                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M0                                                                                                                                                                                                                                                |
+| Plan       | Free and Premium                                                                                                                                                                                                                                  |
+| Depends on | [01-root-spec.md](../01-root-spec.md) sections 7 to 9                                                                                                                                                                                             |
+| Decisions  | D-06, D-07, D-12 to D-19, D-39, D-137, D-153, D-165, D-172, D-173, D-180, D-192 to D-197, D-199, D-201 to D-207, D-242 to D-244, D-292, D-300, D-325, D-343, D-362, D-367, D-368, D-370, D-382, D-383, D-386, D-409 to D-444, D-491, D-492, D-499 |
 
 ## 1. User stories
 
@@ -430,28 +430,29 @@ None. Error codes reach the user through each feature's states. The messages in 
 
 ## 8. Validation and messages
 
-| Code                     | Default message                                                                                    |
-| ------------------------ | -------------------------------------------------------------------------------------------------- |
-| `bad_request`            | The request could not be read.                                                                     |
-| `unauthenticated`        | Your session has expired. Log in again.                                                            |
-| `cross_origin`           | This request came from another site and was blocked.                                               |
-| `profile_required`       | Finish setting up your profile first.                                                              |
-| `premium_required`       | This is part of Daybook Premium.                                                                   |
-| `feature_off`            | This feature is switched off right now.                                                            |
-| `not_found`              | We could not find that. It may have been deleted.                                                  |
-| `version_conflict`       | This was changed on another device.                                                                |
-| `build_mismatch`         | Daybook was updated. Reload to keep saving changes. (The queue pauses rather than showing it, P1.) |
-| `id_conflict`            | This could not be created. Try again.                                                              |
-| `has_dependents`         | This still has linked items. Remove them first.                                                    |
-| `payload_too_large`      | That is too much data for one request.                                                             |
-| `unsupported_media_type` | This request format is not supported.                                                              |
-| `validation_failed`      | Some fields need attention. (Each field gets its own message from its spec.)                       |
-| `parent_missing`         | The item this belongs to no longer exists.                                                         |
-| `idempotency_key_reused` | This change conflicts with an earlier one. Discard it and try again.                               |
-| `currency_mismatch`      | Not saved: your currency changed after this was made.                                              |
-| `rate_limited`           | Too many attempts. Wait a few seconds and try again.                                               |
-| `timeout`                | This took too long. We will try again.                                                             |
-| `internal`               | Something went wrong on our side. Your change was not saved. (Reads: "This could not be loaded.")  |
+| Code                     | Default message                                                                                                                                     |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bad_request`            | The request could not be read.                                                                                                                      |
+| `unauthenticated`        | Your session has expired. Log in again.                                                                                                             |
+| `cross_origin`           | This request came from another site and was blocked.                                                                                                |
+| `profile_required`       | Finish setting up your profile first.                                                                                                               |
+| `premium_required`       | This is part of Daybook Premium.                                                                                                                    |
+| `feature_off`            | This feature is switched off right now.                                                                                                             |
+| `not_found`              | We could not find that. It may have been deleted.                                                                                                   |
+| `version_conflict`       | This was changed on another device.                                                                                                                 |
+| `build_mismatch`         | Daybook was updated. Reload to keep saving changes. (The queue pauses rather than showing it, P1.)                                                  |
+| `id_conflict`            | This could not be created. Try again.                                                                                                               |
+| `has_dependents`         | This still has linked items. Remove them first.                                                                                                     |
+| `payload_too_large`      | That is too much data for one request.                                                                                                              |
+| `unsupported_media_type` | This request format is not supported.                                                                                                               |
+| `validation_failed`      | Some fields need attention. (Each field gets its own message from its spec.)                                                                        |
+| `date_out_of_window`     | Choose today or one of the 10 days before. (An edit of a Transaction says "Choose a date in this Transaction's entry window." instead, F03, D-499.) |
+| `parent_missing`         | The item this belongs to no longer exists.                                                                                                          |
+| `idempotency_key_reused` | This change conflicts with an earlier one. Discard it and try again.                                                                                |
+| `currency_mismatch`      | Not saved: your currency changed after this was made.                                                                                               |
+| `rate_limited`           | Too many attempts. Wait a few seconds and try again.                                                                                                |
+| `timeout`                | This took too long. We will try again.                                                                                                              |
+| `internal`               | Something went wrong on our side. Your change was not saved. (Reads: "This could not be loaded.")                                                   |
 
 A body field that no schema knows gets `validation_failed` at its own path, such as `filter.month`, with "Remove this field." (D-492).
 

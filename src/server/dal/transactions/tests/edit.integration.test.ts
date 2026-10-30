@@ -384,11 +384,15 @@ describe("the entry window on an edit (AC-F03-06, TIME-7, BR-F03-11)", () => {
 		expect(result).toMatchObject({ occurredOn: "2026-10-06" });
 	});
 
+	// D-499: the window is the row's own, not today's, so the message does not say "today"; the
+	// client writes its dated message from `details`.
 	test("two months later, 2026-10-17 and 2026-10-05 get date_out_of_window with the window", async () => {
 		for (const day of ["2026-10-17", "2026-10-05"]) {
 			expect(await refusal(edit(recorded, on(day), later))).toEqual({
 				code: "date_out_of_window",
-				fields: { occurredOn: "Choose today or one of the 10 days before." },
+				fields: {
+					occurredOn: "Choose a date in this Transaction's entry window.",
+				},
 				details: { firstOn: "2026-10-06", lastOn: "2026-10-16" },
 			});
 		}
