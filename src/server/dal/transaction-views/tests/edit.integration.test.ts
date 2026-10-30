@@ -303,3 +303,109 @@ describe("versions and missing views (BR-P2-21, BR-F03-69)", () => {
 		expect(statements).toBe(0);
 	});
 });
+
+// T2
+describe("edits at the edges (BR-F03-68, BR-F03-69)", () => {
+	const CHANGE = {
+		filter: { cat: ["shopping"] },
+		sort: "amount",
+		dir: "asc",
+		group: "category",
+	};
+
+	test("a taken name sent with the four fields changes none of them", async () => {
+		const ctx = { ...goldenContext(userId), now: new Date(LATER) };
+		const { result } = await asUser(userId, async (tx) => {
+			const food = await addView(tx, userId);
+			await addView(tx, userId, { name: "Rent", id: uuidV7At(GOLDEN_NOW) });
+			const before = await getView(tx, food);
+			// The refused update is one statement; a savepoint lets the test read on afterwards.
+			await tx.execute(sql`SAVEPOINT before_edit`);
+			const answer = await refusal(
+				editView(tx, ctx, food, 1, { ...CHANGE, name: "rent" }),
+			);
+			await tx.execute(sql`ROLLBACK TO SAVEPOINT before_edit`);
+			return { answer, before, after: await getView(tx, food) };
+		});
+		expect(result.answer).toEqual(invalid({ name: TAKEN }));
+		expect(result.after).toEqual(result.before);
+		expect(result.after).toMatchObject({
+			name: "Food",
+			version: 1,
+			sort: "date",
+			group: "day",
+		});
+	});
+
+	test.each(["Food", " Food ", "food", "FOOD"])(
+		"a view renamed to %j, its own name, passes: it is not taken by itself",
+		async (name) => {
+			const { result } = await edit({ name });
+			expect(result.view).toMatchObject({ name: name.trim(), version: 2 });
+		},
+	);
+
+	test("a name that collides only after NFC with another view is refused", async () => {
+		const answer = await refusal(
+			edit({ name: "e\u0301cole" }, { extra: ["école"] }),
+		);
+		expect(answer).toEqual(invalid({ name: TAKEN }));
+	});
+
+	// Zod stops the cross-field checks of a body once a field's own transform has refused, so a
+	// bad name is reported alone and the day-with-amount error follows once the name is fixed.
+	test("a bad name hides the day-grouping error until the name is fixed", async () => {
+		const body = {
+			name: "",
+			filter: { minMinor: 100 },
+			sort: "amount",
+			dir: "desc",
+			group: "day",
+			currency: "INR",
+		};
+		expect(await refusal(edit(body))).toEqual(
+			invalid({ name: "Enter a name." }),
+		);
+		expect(await refusal(edit({ ...body, name: "Big spends" }))).toEqual(
+			invalid({ group: "Day grouping needs the date sort." }),
+		);
+	});
+
+	test("a bad name and an unknown field are both reported", async () => {
+		expect(await refusal(edit({ name: "a".repeat(41), position: 1 }))).toEqual(
+			invalid({
+				name: "Use 40 characters or fewer.",
+				position: "Remove this field.",
+			}),
+		);
+	});
+
+	test('the id "all", the built-in view, gets 404 before any statement', async () => {
+		const ctx = goldenContext(userId);
+		const { result, statements } = await asUser(userId, (tx) =>
+			refusal(editView(tx, ctx, "all", 1, { name: "Mine" })),
+		);
+		expect(result).toMatchObject({ code: "not_found" });
+		expect(statements).toBe(0);
+	});
+
+	test("a name of the built-in view is refused as taken, in any case", async () => {
+		for (const name of [
+			"All Transactions",
+			"ALL TRANSACTIONS",
+			"all transactions",
+		]) {
+			expect(await refusal(edit({ name }))).toEqual(invalid({ name: TAKEN }));
+		}
+	});
+
+	test("an edit that sends the same four fields it has still raises the version", async () => {
+		const { result } = await edit({
+			filter: { range: "last_month", cat: ["food"] },
+			sort: "date",
+			dir: "desc",
+			group: "day",
+		});
+		expect(result.view).toMatchObject({ version: 2, updatedAt: LATER });
+	});
+});

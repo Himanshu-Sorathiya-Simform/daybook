@@ -17,6 +17,7 @@ import { addExpense, asUser, goldenContext } from "./helpers";
 let owner: Client;
 let golden: LoadedGolden;
 let empty: string;
+let other: LoadedGolden;
 
 beforeAll(async () => {
 	owner = new Client({
@@ -26,11 +27,12 @@ beforeAll(async () => {
 	golden = await loadGolden(owner, await createUser(owner, "payees"));
 	// A user with no rows of their own, for the matching mirror.
 	empty = await createUser(owner, "payees-empty");
+	other = await loadGolden(owner, await createUser(owner, "payees-other"));
 });
 
 afterAll(async () => {
 	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [
-		[golden?.userId, empty].filter(Boolean),
+		[golden?.userId, empty, other?.userId].filter(Boolean),
 	]);
 	await owner?.end();
 	await runtimePool().end();
@@ -458,5 +460,86 @@ describe("history (BR-F03-62)", () => {
 			return payeeHistory(tx, ctx(), "Edgecase", 1);
 		});
 		expect(result.count).toBe(1);
+	});
+});
+
+// T2: another user's payees never reach this user's list, search or history, and never change
+// a count (SEC-2).
+describe("another user's rows add nothing", () => {
+	/** Adds rows for the other user, who also holds a golden copy: a new payee and more Swiggy,
+	 * runs `fn`, then removes them, since they commit and later tests count the same rows. */
+	async function withOtherRows<T>(fn: () => Promise<T>): Promise<T> {
+		const ids: string[] = [];
+		try {
+			for (const [payee, amountMinor, type] of [
+				["Zebra Zone", 123400, "expense"],
+				["Swiggy", 555500, "expense"],
+				["Swiggy", 100, "income"],
+			] as const) {
+				const { rows } = await owner.query<{ id: string }>(
+					`INSERT INTO app.transactions (id, user_id, created_at, updated_at, type, amount_minor,
+					   occurred_at, occurred_on, category, payee, source, version)
+					 VALUES (gen_random_uuid(), $1, $2, $2, $3, $4, $2, '2026-11-02', $5, $6, 'manual', 1)
+					 RETURNING id`,
+					[
+						other.userId,
+						"2026-11-02T06:30:00Z",
+						type,
+						amountMinor,
+						type === "income" ? "salary" : "food",
+						payee,
+					],
+				);
+				ids.push(rows[0]!.id);
+			}
+			return await fn();
+		} finally {
+			await owner.query(
+				"DELETE FROM app.transactions WHERE id = ANY($1::uuid[])",
+				[ids],
+			);
+		}
+	}
+
+	test("the list, the search and the history of this user are unchanged", async () => {
+		const mine = () =>
+			asUser(golden.userId, async (tx) => ({
+				list: await listPayees(tx, ctx()),
+				search: await listPayees(tx, ctx(), { q: "zebra" }),
+				history: await payeeHistory(tx, ctx(), "Swiggy", 3),
+			}));
+		const before = (await mine()).result;
+		const after = await withOtherRows(async () => (await mine()).result);
+		expect(after).toEqual(before);
+		expect(after.search.items).toEqual([]);
+		expect(after.list.items.map((item) => item.payee)).not.toContain(
+			"Zebra Zone",
+		);
+		expect(after.history).toMatchObject({
+			count: 4,
+			inMinor: 0,
+			outMinor: 329000,
+		});
+	});
+
+	test("the other user's own list counts their rows alone", async () => {
+		const { result } = await withOtherRows(() =>
+			asUser(other.userId, async (tx) => ({
+				list: await listPayees(tx, goldenContext(other.userId)),
+				history: await payeeHistory(
+					tx,
+					goldenContext(other.userId),
+					"Swiggy",
+					3,
+				),
+			})),
+		);
+		expect(result.list.items.map((item) => item.payee)).toContain("Zebra Zone");
+		// Their golden Swiggy rows, and the two added: 4 + 2 over three months.
+		expect(result.history).toMatchObject({
+			count: 6,
+			inMinor: 100,
+			outMinor: 329000 + 555500,
+		});
 	});
 });

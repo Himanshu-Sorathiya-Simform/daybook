@@ -622,3 +622,256 @@ describe("versions and missing rows (BR-P2-21, D-485)", () => {
 		expect(answer).toMatchObject({ code: "not_found" });
 	});
 });
+
+// T2: edits at the edges of what a client may send.
+describe("the same instant written two ways, with a new date", () => {
+	// Recorded 2026-10-20 12:00 IST, so its window is 10 to 20 October; its time is 19 October
+	// 16:45Z, which is 20 October 22:15 in India. The date can be the 19th or the 20th.
+	const recorded = row({
+		createdAt: "2026-10-20T06:30:00.000Z",
+		occurredAt: "2026-10-19T16:45:00Z",
+		occurredOn: "2026-10-19",
+	});
+	// The request clock is before that time, so a time that changed would be "in the future".
+	const early = { now: "2026-10-19T00:00:00.000Z" };
+
+	test.each([
+		["no fraction", "2026-10-19T16:45:00Z"],
+		["three fraction digits", "2026-10-19T16:45:00.000Z"],
+		["one fraction digit", "2026-10-19T16:45:00.0Z"],
+	])(
+		"%s: the time is no change, so only the date is checked",
+		async (_name, occurredAt) => {
+			const { result } = await edit(
+				recorded,
+				{ occurredAt, occurredOn: "2026-10-20" },
+				early,
+			);
+			expect(result).toMatchObject({
+				occurredAt: "2026-10-19T16:45:00.000Z",
+				occurredOn: "2026-10-20",
+				version: 2,
+			});
+		},
+	);
+
+	test("a time one minute later is a change, and in the future it is refused", async () => {
+		expect(
+			await refusal(
+				edit(
+					recorded,
+					{ occurredAt: "2026-10-19T16:46:00Z", occurredOn: "2026-10-20" },
+					early,
+				),
+			),
+		).toEqual(invalid({ occurredAt: "The time can't be in the future." }));
+	});
+
+	test("the same instant with a date outside the window is refused with the window", async () => {
+		// The date must fit the time, so the 19th and the 20th are all there is; move the row's
+		// recording date back so the 20th is outside.
+		const older = row({
+			createdAt: "2026-10-19T06:30:00.000Z",
+			occurredAt: "2026-10-19T16:45:00Z",
+			occurredOn: "2026-10-19",
+		});
+		expect(
+			await refusal(
+				edit(
+					older,
+					{ occurredAt: "2026-10-19T16:45:00Z", occurredOn: "2026-10-20" },
+					early,
+				),
+			),
+		).toEqual({
+			code: "date_out_of_window",
+			fields: {
+				occurredOn: "Choose a date in this Transaction's entry window.",
+			},
+			details: { firstOn: "2026-10-09", lastOn: "2026-10-19" },
+		});
+	});
+});
+
+describe("a demo row's type (BR-F03-02, BR-F03-18, D-486)", () => {
+	const demo = row({ demo: true });
+
+	test.each([
+		[
+			"goal_contribution",
+			{
+				goalId: "0199a000-0000-7000-8001-000000000001",
+				category: null,
+				payee: null,
+			},
+		],
+		["goal_withdrawal", {}],
+	])("cannot become %s, across the groups", async (type, extra) => {
+		const answer = await refusal(edit(demo, { type, ...extra }));
+		expect(answer.code).toBe("validation_failed");
+		expect(answer.fields["type"]).toBe(
+			"Delete this Transaction and add a new one to change to this type.",
+		);
+	});
+
+	test.each(["income", "refund"] as const)(
+		"can become %s inside its group, and stays demo",
+		async (type) => {
+			const { result } = await edit(demo, {
+				type,
+				category: type === "income" ? "freelance" : "food",
+			});
+			expect(result).toMatchObject({ type, demo: true });
+		},
+	);
+
+	test("an income demo row becomes an expense with a category of its new kind", async () => {
+		const income = row({ demo: true, type: "income", category: "salary" });
+		const { result } = await edit(income, {
+			type: "expense",
+			category: "housing",
+		});
+		expect(result).toMatchObject({
+			type: "expense",
+			category: "housing",
+			demo: true,
+		});
+	});
+});
+
+describe("a charge with a cross-group type and a new date (BR-F03-11, BR-F03-16; D-486)", () => {
+	// golden #12, the Sunrise Apartments charge, 1 October at 00:00 IST.
+	test("every refusal is reported at once: the type, and the date and the time", async () => {
+		expect(
+			await refusal(
+				edit(golden.id(12), {
+					type: "goal_contribution",
+					occurredAt: "2026-10-02T06:30:00Z",
+					occurredOn: "2026-10-02",
+				}),
+			),
+		).toEqual(
+			invalid({
+				type: "A charge's type can't change.",
+				occurredAt: "This Transaction's date and time can't change.",
+				occurredOn: "This Transaction's date and time can't change.",
+			}),
+		);
+	});
+
+	test("a charge's own type sent again, with its own date and time, is no change", async () => {
+		const { result } = await edit(golden.id(12), {
+			type: "expense",
+			occurredAt: "2026-09-30T18:30:00Z",
+			occurredOn: "2026-10-01",
+			note: "Same",
+		});
+		expect(result).toMatchObject({
+			type: "expense",
+			occurredOn: "2026-10-01",
+			note: "Same",
+		});
+	});
+
+	test("a charge's type is refused even within its group", async () => {
+		expect(await refusal(edit(golden.id(12), { type: "refund" }))).toEqual(
+			invalid({ type: "A charge's type can't change." }),
+		);
+	});
+});
+
+describe("a currency sent alone (BR-F03-05, D-486)", () => {
+	test("changes nothing but the version and the clock, once the profile lock matches", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			const before = await getTransaction(tx, golden.id(24));
+			const ctx = goldenContext(golden.userId);
+			const after = await editTransaction(tx, ctx, golden.id(24), 1, {
+				currency: "INR",
+			});
+			return { before, after };
+		});
+		const { currency, ...row } = result.after;
+		expect(currency).toBe("INR");
+		expect(row).toEqual({ ...result.before, version: 2, updatedAt: NOW });
+	});
+
+	test("with no match, it is refused before anything is read about the row's dates", async () => {
+		expect(
+			await refusal(edit(golden.id(24), { currency: "KWD" }, { now: NOW })),
+		).toMatchObject({ code: "currency_mismatch", fields: {} });
+	});
+});
+
+describe("the entry window on an edit, in a zone with clock changes (TIME-7, BR-F03-11)", () => {
+	const NY = { profile: { timezone: "America/New_York" } };
+	const on = (day: string) => ({
+		occurredAt: `${day}T16:00:00Z`,
+		occurredOn: day,
+	});
+
+	// The window is the stored recording date in the profile zone and the 10 days before it,
+	// counted in dates, so a clock change inside it adds or takes away no day.
+	test.each([
+		// 01:30 EDT on the fall-back day, and 01:30 EST an hour later: one recording date.
+		["2026-11-01T05:30:00.000Z", "2026-10-22", "2026-11-01"],
+		["2026-11-01T06:30:00.000Z", "2026-10-22", "2026-11-01"],
+		// 03:30 EDT on the spring-forward day.
+		["2026-03-08T07:30:00.000Z", "2026-02-26", "2026-03-08"],
+	])("recorded %s: %s to %s", async (createdAt, firstOn, lastOn) => {
+		const recorded = row({
+			createdAt,
+			occurredAt: createdAt,
+			occurredOn: lastOn,
+		});
+		const later = { ...NY, now: "2026-12-20T12:00:00.000Z" };
+		const first = await edit(recorded, on(firstOn), later);
+		expect(first.result).toMatchObject({ occurredOn: firstOn });
+		const before = new Date(Date.parse(`${firstOn}T00:00:00Z`) - 86_400_000)
+			.toISOString()
+			.slice(0, 10);
+		expect(await refusal(edit(recorded, on(before), later))).toEqual({
+			code: "date_out_of_window",
+			fields: {
+				occurredOn: "Choose a date in this Transaction's entry window.",
+			},
+			details: { firstOn, lastOn },
+		});
+	});
+
+	test("the same row has another window in another profile zone", async () => {
+		// 07:30Z on 8 March is 03:30 EDT on the 8th in New York, and still 23:30 PST on the 7th in
+		// Los Angeles, so its recording date and its window are a day apart.
+		// Its own date is the 7th, so changing it to the 8th is a change the window must check.
+		const recorded = row({
+			createdAt: "2026-03-08T07:30:00.000Z",
+			occurredAt: "2026-03-07T16:00:00Z",
+			occurredOn: "2026-03-07",
+		});
+		const now = "2026-12-20T12:00:00.000Z";
+		const newYork = { now, profile: { timezone: "America/New_York" } };
+		const losAngeles = { now, profile: { timezone: "America/Los_Angeles" } };
+		// New York: 26 February to 8 March. Los Angeles: 25 February to 7 March.
+		expect(
+			await refusal(edit(recorded, on("2026-02-25"), newYork)),
+		).toMatchObject({
+			code: "date_out_of_window",
+			details: { firstOn: "2026-02-26", lastOn: "2026-03-08" },
+		});
+		expect(
+			(await edit(recorded, on("2026-02-25"), losAngeles)).result,
+		).toMatchObject({
+			occurredOn: "2026-02-25",
+		});
+		expect(
+			await refusal(edit(recorded, on("2026-03-08"), losAngeles)),
+		).toMatchObject({
+			code: "date_out_of_window",
+			details: { firstOn: "2026-02-25", lastOn: "2026-03-07" },
+		});
+		expect(
+			(await edit(recorded, on("2026-03-08"), newYork)).result,
+		).toMatchObject({
+			occurredOn: "2026-03-08",
+		});
+	});
+});

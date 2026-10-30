@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { sql } from "drizzle-orm";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
@@ -595,5 +596,417 @@ describe("the call", () => {
 				other.userId,
 			]);
 		}
+	});
+});
+
+// T2: the edges of paging (API-7, D-474), each worked out from the rule.
+describe("page boundaries", () => {
+	const WHOLE = NEWEST_FIRST;
+
+	// 22 rows: a page of exactly the rows left has no next cursor, and one fewer has one.
+	test.each([1, 2, 11, 21, 22, 23, 50])(
+		"limit %i pages forward and back with no row lost, repeated or cut short",
+		async (limit) => {
+			const { result } = await asUser(golden.userId, async (tx) => {
+				const ahead = await forward(tx, {}, { limit });
+				const back = await backward(tx, {}, { limit }, ahead.at(-1)!);
+				return { ahead, back };
+			});
+			const { ahead, back } = result;
+			expect(ahead.flatMap(numbers)).toEqual(WHOLE);
+			expect(ahead).toHaveLength(Math.ceil(22 / limit));
+			// Every page is full but the last, which holds what is left.
+			for (const full of ahead.slice(0, -1))
+				expect(full.items).toHaveLength(limit);
+			expect(ahead.at(-1)!.items).toHaveLength(
+				22 - limit * (ahead.length - 1),
+			);
+			expect(ahead[0]!.prevCursor).toBeNull();
+			expect(ahead.at(-1)!.nextCursor).toBeNull();
+			expect(back.map(numbers)).toEqual(ahead.map(numbers));
+			expect(back[0]!.prevCursor).toBeNull();
+		},
+	);
+
+	test("a page of exactly the rows left is the last, and the page before it is not", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			const first = await list(tx, {}, { limit: 11 });
+			const second = await list(
+				tx,
+				{},
+				{ limit: 11, cursor: first.nextCursor! },
+			);
+			return { first, second };
+		});
+		expect(result.first.nextCursor).not.toBeNull();
+		expect(result.second.items).toHaveLength(11);
+		expect(result.second.nextCursor).toBeNull();
+		expect(result.second.prevCursor).not.toBeNull();
+	});
+
+	test("going back from the second page to a first page of exactly one page leaves no earlier cursor", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			const first = await list(tx, {}, { limit: 21 });
+			const second = await list(
+				tx,
+				{},
+				{ limit: 21, cursor: first.nextCursor! },
+			);
+			const back = await list(
+				tx,
+				{},
+				{ limit: 21, cursor: second.prevCursor! },
+			);
+			return { second, back };
+		});
+		expect(numbers(result.second)).toEqual([1]);
+		expect(numbers(result.back)).toEqual(WHOLE.slice(0, 21));
+		expect(result.back.prevCursor).toBeNull();
+		expect(result.back.nextCursor).not.toBeNull();
+	});
+});
+
+describe("a single row and no rows, under every grouping", () => {
+	const GROUPS = ["day", "category", "payee", "none"] as const;
+	// golden #13, Acme Corp, 85,000.00 on 1 October: #2 has the same amount in September.
+	const ONE: TransactionFilter = {
+		from: "2026-10-01",
+		to: "2026-10-01",
+		minMinor: 8500000,
+		maxMinor: 8500000,
+	};
+	const NONE: TransactionFilter = { q: "zzz" };
+
+	test.each(
+		GROUPS.flatMap((group) =>
+			(["desc", "asc"] as const).map((dir) => [group, dir] as const),
+		),
+	)(
+		"one row, %s %s: one item, no cursors, its group and fingerprint",
+		async (group, dir) => {
+			const result = await page(ONE, { group, dir, limit: 5 });
+			expect(numbers(result)).toEqual([13]);
+			expect(result.nextCursor).toBeNull();
+			expect(result.prevCursor).toBeNull();
+			expect(result.groups).toHaveLength(group === "none" ? 0 : 1);
+			expect(result.order === null).toBe(group === "day" || group === "none");
+			if (group === "category" || group === "payee")
+				expect(result.order).toBe(
+					fingerprint([group === "category" ? "salary" : "acme corp"]),
+				);
+		},
+	);
+
+	test.each(
+		GROUPS.flatMap((group) =>
+			(["desc", "asc"] as const).map((dir) => [group, dir] as const),
+		),
+	)(
+		"no rows, %s %s: nothing, and the fingerprint of no keys for category and payee",
+		async (group, dir) => {
+			expect(await page(NONE, { group, dir })).toEqual({
+				items: [],
+				nextCursor: null,
+				prevCursor: null,
+				groups: [],
+				order:
+					group === "category" || group === "payee" ?
+						"e3b0c44298fc1c14"
+					:	null,
+			});
+		},
+	);
+
+	test.each(["category", "payee", "none"] as const)(
+		"no rows by the amount sort, %s: nothing",
+		async (group) => {
+			const result = await page(NONE, { sort: "amount", group });
+			expect(result.items).toEqual([]);
+			expect(result.nextCursor).toBeNull();
+			expect(result.prevCursor).toBeNull();
+		},
+	);
+});
+
+describe("a cursor whose row is gone or whose order moved", () => {
+	test("a deleted boundary row does not end the cursor: the next page carries on past where it was", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			const first = await list(tx, {}, { limit: 5 });
+			const wanted = await list(
+				tx,
+				{},
+				{ limit: 5, cursor: first.nextCursor! },
+			);
+			// The boundary is the last row of the first page, #21.
+			await tx.execute(
+				sql`DELETE FROM app.transactions WHERE id = ${golden.id(21)}::uuid`,
+			);
+			const after = await list(
+				tx,
+				{},
+				{ limit: 5, cursor: first.nextCursor! },
+			);
+			return { first, wanted, after };
+		});
+		expect(numbers(result.first)).toEqual([26, 27, 25, 24, 21]);
+		expect(numbers(result.after)).toEqual(numbers(result.wanted));
+		expect(numbers(result.after)).toEqual([20, 19, 18, 17, 16]);
+	});
+
+	test("a previous cursor whose row is gone still goes back", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			const first = await list(tx, {}, { limit: 5 });
+			const second = await list(
+				tx,
+				{},
+				{ limit: 5, cursor: first.nextCursor! },
+			);
+			// The first row of the second page is the boundary of its previous cursor.
+			await tx.execute(
+				sql`DELETE FROM app.transactions WHERE id = ${golden.id(20)}::uuid`,
+			);
+			const back = await list(
+				tx,
+				{},
+				{ limit: 5, cursor: second.prevCursor! },
+			);
+			return { first, back };
+		});
+		expect(numbers(result.back)).toEqual(numbers(result.first));
+	});
+
+	// AC-F03-37: the previous cursor carries the order's fingerprint like the next one does.
+	test("a write that reorders the groups ends a previous cursor too", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			const first = await list(tx, OCTOBER, { group: "category", limit: 2 });
+			const second = await list(tx, OCTOBER, {
+				group: "category",
+				limit: 2,
+				cursor: first.nextCursor!,
+			});
+			await addExpense(tx, golden.userId, {
+				payee: "Feast",
+				amountMinor: 2000000,
+				occurredOn: "2026-10-20",
+			});
+			const stale = await list(tx, OCTOBER, {
+				group: "category",
+				limit: 2,
+				cursor: second.prevCursor!,
+			});
+			return { first, stale };
+		});
+		expect(result.stale).toEqual({
+			items: [],
+			nextCursor: null,
+			prevCursor: null,
+			groups: [],
+			order: fingerprint([
+				"salary",
+				"food",
+				"housing",
+				"shopping",
+				"entertainment",
+				"transportation",
+			]),
+		});
+		expect(result.stale.order).not.toBe(result.first.order);
+	});
+
+	test("deleting the only row of the boundary's group ends the cursor, with the order without that group", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			// #13 is salary's only October row; the first page of one row ends on it.
+			const first = await list(tx, OCTOBER, { group: "category", limit: 1 });
+			await tx.execute(
+				sql`DELETE FROM app.transactions WHERE id = ${golden.id(13)}::uuid`,
+			);
+			const stale = await list(tx, OCTOBER, {
+				group: "category",
+				limit: 1,
+				cursor: first.nextCursor!,
+			});
+			return { first, stale };
+		});
+		expect(numbers(result.first)).toEqual([13]);
+		expect(result.stale.items).toEqual([]);
+		expect(result.stale.nextCursor).toBeNull();
+		expect(result.stale.order).toBe(
+			fingerprint([
+				"housing",
+				"food",
+				"shopping",
+				"entertainment",
+				"transportation",
+			]),
+		);
+	});
+});
+
+describe("payee groups of equal weight", () => {
+	// Tie A, B and C each hold 1.00 and Tie D 2.00, so D ranks first and the rest by key.
+	const TIES: TransactionFilter = { q: "tie " };
+
+	async function seed(tx: Tx) {
+		for (const [payee, amountMinor] of [
+			["Tie C", 100],
+			["Tie A", 100],
+			["Tie D", 200],
+			["Tie B", 100],
+		] as const) {
+			await addExpense(tx, golden.userId, {
+				payee,
+				amountMinor,
+				occurredOn: "2026-11-02",
+			});
+		}
+	}
+
+	test("paged one at a time, they run heaviest first, then by key, each group once", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await seed(tx);
+			const ahead = await forward(tx, TIES, { group: "payee", limit: 1 });
+			const back = await backward(
+				tx,
+				TIES,
+				{ group: "payee", limit: 1 },
+				ahead.at(-1)!,
+			);
+			return { ahead, back };
+		});
+		const keys = (pages: TransactionPage[]) =>
+			pages.map((entry) => entry.groups.map((group) => group.key).join());
+		expect(keys(result.ahead)).toEqual(["tie d", "tie a", "tie b", "tie c"]);
+		expect(keys(result.back)).toEqual(keys(result.ahead));
+		expect(result.ahead.map((entry) => entry.items.length)).toEqual([
+			1, 1, 1, 1,
+		]);
+		expect(result.ahead.at(-1)!.nextCursor).toBeNull();
+	});
+
+	test("the same order whole as in pages, and the labels keep their case", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await seed(tx);
+			return list(tx, TIES, { group: "payee", limit: 50 });
+		});
+		expect(result.items.map((item) => item.payee)).toEqual([
+			"Tie D",
+			"Tie A",
+			"Tie B",
+			"Tie C",
+		]);
+		expect(result.groups.map((group) => group.label)).toEqual([
+			"Tie D",
+			"Tie A",
+			"Tie B",
+			"Tie C",
+		]);
+	});
+});
+
+describe("a day split across pages, going back", () => {
+	test("each page back carries the day's whole totals, as each page forward does", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			const ahead = await forward(tx, {}, { limit: 1 });
+			const back = await backward(tx, {}, { limit: 1 }, ahead.at(-1)!);
+			return { ahead, back };
+		});
+		// 1 November holds #26 and #27, 18,420.00 out between them.
+		const day = {
+			key: "2026-11-01",
+			label: null,
+			count: 2,
+			inMinor: 0,
+			outMinor: 1842000,
+			toGoalsMinor: 0,
+		};
+		expect(result.back[0]!.groups).toEqual([day]);
+		expect(result.back[1]!.groups).toEqual([day]);
+		expect(result.back[2]!.groups[0]!.key).not.toBe("2026-11-01");
+		expect(result.back.map((entry) => entry.groups)).toEqual(
+			result.ahead.map((entry) => entry.groups),
+		);
+	});
+});
+
+describe("the largest Kuwaiti amount under the amount sort", () => {
+	// 999,999,999.999 KWD is 999,999,999,999 fils, the largest amount (MON-5): also the largest
+	// number a cursor may hold.
+	const MAX = 999_999_999_999;
+	const KUWAIT: TransactionFilter = { q: "kuwait" };
+	const kuwait = (tx: Tx, options: Partial<ListOptions>) =>
+		listTransactions(
+			tx,
+			goldenContext(golden.userId, { currency: "KWD" }),
+			KUWAIT,
+			{
+				...DEFAULTS,
+				group: "none",
+				sort: "amount",
+				...options,
+			},
+		);
+
+	async function seed(tx: Tx) {
+		await addExpense(tx, golden.userId, {
+			payee: "Kuwait A",
+			amountMinor: MAX,
+			occurredOn: "2026-11-02",
+		});
+		await addExpense(tx, golden.userId, {
+			payee: "Kuwait B",
+			amountMinor: MAX,
+			occurredOn: "2026-11-01",
+		});
+		await addExpense(tx, golden.userId, {
+			payee: "Kuwait C",
+			amountMinor: MAX - 1,
+			occurredOn: "2026-11-02",
+		});
+	}
+
+	test.each([
+		["desc", ["Kuwait A", "Kuwait B", "Kuwait C"]],
+		["asc", ["Kuwait C", "Kuwait B", "Kuwait A"]],
+	] as const)(
+		"%s, one row a page: amounts read back exactly and the tie breaks by date",
+		async (dir, payees) => {
+			const { result } = await asUser(golden.userId, async (tx) => {
+				await seed(tx);
+				const pages = [await kuwait(tx, { dir, limit: 1 })];
+				while (pages.at(-1)!.nextCursor) {
+					pages.push(
+						await kuwait(tx, {
+							dir,
+							limit: 1,
+							cursor: pages.at(-1)!.nextCursor!,
+						}),
+					);
+				}
+				return pages;
+			});
+			expect(
+				result.flatMap((entry) => entry.items.map((item) => item.payee)),
+			).toEqual(payees);
+			expect(
+				result.flatMap((entry) =>
+					entry.items.map((item) => item.amountMinor),
+				),
+			).toEqual(dir === "desc" ? [MAX, MAX, MAX - 1] : [MAX - 1, MAX, MAX]);
+		},
+	);
+
+	test("the cursor holds the largest amount and goes back too", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await seed(tx);
+			const first = await kuwait(tx, { limit: 1 });
+			const second = await kuwait(tx, { limit: 1, cursor: first.nextCursor! });
+			const back = await kuwait(tx, { limit: 1, cursor: second.prevCursor! });
+			return { first, back };
+		});
+		const cursor = JSON.parse(
+			Buffer.from(result.first.nextCursor!, "base64url").toString("utf8"),
+		) as { amount: number };
+		expect(cursor.amount).toBe(MAX);
+		expect(result.back.items).toEqual(result.first.items);
 	});
 });

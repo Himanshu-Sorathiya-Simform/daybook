@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
@@ -12,7 +13,9 @@ import { runtimePool } from "../../../db/pools";
 import { createUser } from "../../../db/tests/private-rows";
 import { parseOwnerEnv } from "../../../env";
 import type { Profile } from "../../context";
+import { toOccurred } from "@/lib/transactions/occurred";
 import { createTransaction } from "../create";
+import { getTransaction } from "../get";
 import { afterStatement, asUser, goldenContext, uuidV7At } from "./helpers";
 
 /** `createTransaction` (F03 section 11, BR-F03-05 to BR-F03-10, BR-F03-20) through the runtime
@@ -432,5 +435,209 @@ describe("the check order (F03 section 11)", () => {
 			occurredOn: "2026-10-01",
 		});
 		expect((await refusal(create(NOW, input))).code).toBe("date_out_of_window");
+	});
+});
+
+// T2: the entry window at the extremes of the world's offsets and on both clock changes. Each
+// case is recorded at `createdAt`, in `zone`, where the recording date is `lastOn` and the 10
+// days before it start at `firstOn` (TIME-7, BR-F03-08).
+describe("the entry window's edges, by zone", () => {
+	const OCCURRED_ON = "occurredOn";
+	const CASES = [
+		// UTC+14:00, the first zone into a day: 12:00 UTC on 2 November is 02:00 on the 3rd.
+		[
+			"Pacific/Kiritimati",
+			"2026-11-02T12:00:00.000Z",
+			"2026-10-24",
+			"2026-11-03",
+		],
+		// UTC-12:00, the last: 06:30 UTC on 2 November is 18:30 on the 1st.
+		["Etc/GMT+12", "2026-11-02T06:30:00.000Z", "2026-10-22", "2026-11-01"],
+		// The spring-forward day, 03:30 EDT.
+		["America/New_York", "2026-03-08T07:30:00.000Z", "2026-02-26", "2026-03-08"],
+		// The fall-back day, both 01:30s: EDT first, then EST.
+		["America/New_York", "2026-11-01T05:30:00.000Z", "2026-10-22", "2026-11-01"],
+		["America/New_York", "2026-11-01T06:30:00.000Z", "2026-10-22", "2026-11-01"],
+		// The day before the fall-back, so a window that spans it.
+		["America/New_York", "2026-11-02T05:00:00.000Z", "2026-10-23", "2026-11-02"],
+	] as const;
+
+	/** A create recorded at `now` with its date and time at noon on `day` in `zone`. */
+	function on(now: string, zone: string, day: string) {
+		return body(now, {
+			occurredAt: toOccurred(day, "12:00", zone).occurredAt,
+			occurredOn: day,
+		});
+	}
+
+	test.each(CASES)(
+		"%s, recorded %s: the window starts on %s and ends on %s",
+		async (zone, now, firstOn, lastOn) => {
+			const profile = { timezone: zone };
+			// The first day passes and the day before it is refused, with the window in details.
+			expect(
+				(await create(now, on(now, zone, firstOn), profile)).result.created,
+			).toBe(true);
+			const before = new Date(Date.parse(`${firstOn}T00:00:00Z`) - 86_400_000)
+				.toISOString()
+				.slice(0, 10);
+			expect(
+				await refusal(create(now, on(now, zone, before), profile)),
+			).toEqual({
+				code: "date_out_of_window",
+				fields: {
+					[OCCURRED_ON]: "Choose today or one of the 10 days before.",
+				},
+				details: { firstOn, lastOn },
+			});
+			// The recording date itself passes, at the recording instant.
+			const today = body(now, { occurredAt: now, occurredOn: lastOn });
+			expect((await create(now, today, profile)).result.created).toBe(true);
+		},
+	);
+
+	// The day after the recording date can be written only where it fits the time: a date past
+	// the UTC+14:00 reading of the instant is refused by the schema first (BR-F03-10), so these
+	// are instants late enough in the UTC day for the next date to fit.
+	test.each([
+		["Etc/GMT+12", "2026-11-02T06:30:00.000Z", "2026-11-02"],
+		// 15:00 EST on 2 November is 20:00Z, and 14 hours on is the 3rd.
+		["America/New_York", "2026-11-02T20:00:00.000Z", "2026-11-03"],
+		// 16:00 EDT on the spring-forward day, after the change.
+		["America/New_York", "2026-03-08T20:00:00.000Z", "2026-03-09"],
+	])(
+		"%s, recorded %s: %s, the day after, is out of the window",
+		async (zone, now, next) => {
+			const input = body(now, { occurredAt: now, occurredOn: next });
+			expect(
+				await refusal(create(now, input, { timezone: zone })),
+			).toMatchObject({
+				code: "date_out_of_window",
+				fields: { occurredOn: "Choose today or one of the 10 days before." },
+			});
+		},
+	);
+
+	test.each([
+		["America/New_York", "2026-03-08T07:30:00.000Z", "2026-03-09"],
+		["America/New_York", "2026-11-01T05:30:00.000Z", "2026-11-02"],
+	])(
+		"%s, recorded %s: %s does not fit the time, so the schema refuses it first",
+		(_zone, now, next) => {
+			expect(() => body(now, { occurredAt: now, occurredOn: next })).toThrow();
+		},
+	);
+
+	test("in UTC+14:00 the day after does not fit the time, so the schema refuses it before the window", () => {
+		const now = "2026-11-02T12:00:00.000Z";
+		expect(() =>
+			body(now, { occurredAt: now, occurredOn: "2026-11-04" }),
+		).toThrow();
+	});
+});
+
+describe("the largest amounts, in yen and Kuwaiti dinars", () => {
+	// MON-5: 999,999,999 yen, and 999,999,999.999 dinars, which is 999,999,999,999 fils.
+	test.each([
+		["JPY", 999_999_999],
+		["KWD", 999_999_999_999],
+		["INR", 99_999_999_999],
+		["USD", 99_999_999_999],
+	] as const)(
+		"a %s Transaction of %i is stored and read back exactly",
+		async (currency, amountMinor) => {
+			const input = body(NOW, { currency, amountMinor });
+			const { result } = await asUser(golden.userId, async (tx) => {
+				// The profile's currency is changed for this transaction only, which rolls back.
+				await tx.execute(sql`UPDATE app.profile SET currency = ${currency}`);
+				const ctx = {
+					...goldenContext(golden.userId, { currency }),
+					now: new Date(NOW),
+				};
+				const created = await createTransaction(tx, ctx, input);
+				return { created, read: await getTransaction(tx, input.id) };
+			});
+			expect(result.created.row.amountMinor).toBe(amountMinor);
+			expect(result.created.row.currency).toBe(currency);
+			expect(result.read?.amountMinor).toBe(amountMinor);
+		},
+	);
+
+	test("one past each is refused before the database, with the currency's own largest amount", () => {
+		expect(() =>
+			body(NOW, { currency: "JPY", amountMinor: 1_000_000_000 }),
+		).toThrow();
+		expect(() =>
+			body(NOW, { currency: "KWD", amountMinor: 1_000_000_000_000 }),
+		).toThrow();
+	});
+});
+
+describe("ids and the check order, edge cases", () => {
+	test("an id written in capitals finds the row already created, which answers 200", async () => {
+		const input = body(NOW);
+		const { result } = await asUser(golden.userId, async (tx) => {
+			const ctx = goldenContext(golden.userId);
+			const first = await createTransaction(tx, ctx, input);
+			// The schema lowercases an id, so the capitals reach the lookup as the same id.
+			const again = await createTransaction(
+				tx,
+				ctx,
+				body(NOW, { id: input.id.toUpperCase(), amountMinor: 1 }),
+			);
+			return { first, again };
+		});
+		expect(result.again).toEqual({ created: false, row: result.first.row });
+	});
+
+	// The currency is read under the lock before the dates, so a request in the wrong currency
+	// is told that, not that its id is from the future.
+	test("a wrong currency is refused before an id from the future", async () => {
+		const future = uuidV7At(new Date(Date.parse(NOW) + 10 * 60_000));
+		const input = { ...body(NOW, { currency: "USD" }), id: future };
+		expect((await refusal(create(NOW, input))).code).toBe("currency_mismatch");
+		const right = { ...body(NOW), id: future };
+		expect(await refusal(create(NOW, right))).toMatchObject({
+			code: "validation_failed",
+			fields: {
+				id: "This item's time is in the future. Check your device's clock.",
+			},
+		});
+	});
+
+	test("an id from the future is refused before a date outside the window, both reported", async () => {
+		const future = uuidV7At(new Date(Date.parse(NOW) + 10 * 60_000));
+		const input = {
+			...body(NOW, {
+				occurredAt: "2026-10-01T06:30:00.000Z",
+				occurredOn: "2026-10-01",
+			}),
+			id: future,
+		};
+		expect((await refusal(create(NOW, input))).code).toBe("validation_failed");
+	});
+
+	test("an id of the user's own that the window would now refuse still answers 200", async () => {
+		// Created recorded on 16 October; asked again on 2 November with the same id.
+		const RECORDED = "2026-10-16T06:30:00.000Z";
+		const input = body(RECORDED, {
+			occurredAt: RECORDED,
+			occurredOn: "2026-10-16",
+		});
+		const { result } = await asUser(golden.userId, async (tx) => {
+			const first = await createTransaction(
+				tx,
+				goldenContext(golden.userId),
+				input,
+			);
+			const again = await createTransaction(tx, goldenContext(golden.userId), {
+				...input,
+				occurredOn: "2026-10-01",
+			});
+			return { first, again };
+		});
+		expect(result.again.created).toBe(false);
+		expect(result.again.row.occurredOn).toBe("2026-10-16");
+		expect(result.first.created).toBe(true);
 	});
 });

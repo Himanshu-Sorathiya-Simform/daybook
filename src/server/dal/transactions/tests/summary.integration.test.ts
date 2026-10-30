@@ -7,7 +7,9 @@ import { runtimePool } from "../../../db/pools";
 import { createUser } from "../../../db/tests/private-rows";
 import { parseOwnerEnv } from "../../../env";
 import type { Breakdown } from "../query";
+import { listTransactions } from "../list";
 import { transactionSummary } from "../summary";
+import type { Tx } from "../../with-user";
 import { addExpense, asUser, goldenContext } from "./helpers";
 
 /** `transactionSummary` (BR-F03-41, BR-F03-58, D-480) on golden's M1 rows, through the
@@ -241,5 +243,161 @@ test("a filter with no rows answers zeros and a null span", async () => {
 		lastOn: null,
 		byCategory: [],
 		byPayee: [],
+	});
+});
+
+// T2: the breakdowns at their edges (BR-F03-58, D-480). Rows are dated 2030, clear of golden's.
+describe("a payee with refunds only", () => {
+	const FROM_2030: TransactionFilter = { from: "2030-01-01" };
+
+	async function seed(tx: Tx) {
+		await addExpense(tx, golden.userId, {
+			payee: "Shopco",
+			amountMinor: 50000,
+			occurredOn: "2030-01-01",
+		});
+		await addExpense(tx, golden.userId, {
+			payee: "Refundco",
+			type: "refund",
+			amountMinor: 30000,
+			occurredOn: "2030-01-02",
+		});
+	}
+
+	test("is left out of byPayee, while its refund still nets its category", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await seed(tx);
+			return transactionSummary(tx, goldenContext(golden.userId), FROM_2030, [
+				"payee",
+				"category",
+			]);
+		});
+		// Out is 500.00 of spending less 300.00 refunded.
+		expect(result).toMatchObject({ count: 2, spendingMinor: 20000 });
+		expect(result.byPayee).toEqual([
+			{ key: "shopco", label: "Shopco", count: 1, outMinor: 50000 },
+		]);
+		expect(result.byCategory).toEqual([
+			{ key: "food", label: null, count: 2, outMinor: 20000 },
+		]);
+	});
+
+	test("never reaches the cut of six, however many refund-only payees there are", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await seed(tx);
+			for (let n = 1; n <= 8; n++) {
+				await addExpense(tx, golden.userId, {
+					payee: `Refund ${n}`,
+					type: "refund",
+					amountMinor: 1000 * n,
+					occurredOn: "2030-01-03",
+				});
+			}
+			return transactionSummary(tx, goldenContext(golden.userId), FROM_2030, [
+				"payee",
+			]);
+		});
+		expect(result.byPayee).toEqual([
+			{ key: "shopco", label: "Shopco", count: 1, outMinor: 50000 },
+		]);
+	});
+});
+
+describe("by, in either order", () => {
+	test.each([[["payee", "category"]], [["category", "payee"]]] as [Breakdown[]][])(
+		"%j gives both breakdowns, as fields of one answer",
+		async (by) => {
+			const { result } = await summarize(OCTOBER, by);
+			expect(Object.keys(result).sort()).toEqual([
+				"byCategory",
+				"byPayee",
+				"count",
+				"firstOn",
+				"incomeMinor",
+				"lastOn",
+				"spendingMinor",
+				"toGoalsMinor",
+			]);
+			expect(result.byCategory?.[0]).toMatchObject({
+				key: "housing",
+				outMinor: 1800000,
+			});
+			expect(result.byPayee?.[0]).toMatchObject({ key: "sunrise apartments" });
+		},
+	);
+});
+
+describe("a payee group's label (BR-F03-58)", () => {
+	// Newest spelling among the rows a breakdown reads, which leave out income.
+	async function seed(tx: Tx) {
+		await addExpense(tx, golden.userId, {
+			payee: "Label Probe",
+			amountMinor: 1000,
+			occurredOn: "2030-02-01",
+		});
+		await addExpense(tx, golden.userId, {
+			payee: "LABEL PROBE",
+			type: "refund",
+			amountMinor: 200,
+			occurredOn: "2030-02-02",
+		});
+		await addExpense(tx, golden.userId, {
+			payee: "label probe",
+			type: "income",
+			category: "salary",
+			amountMinor: 5000,
+			occurredOn: "2030-02-03",
+		});
+	}
+	const FEBRUARY: TransactionFilter = { from: "2030-02-01", to: "2030-02-28" };
+
+	test("comes from the newest expense or refund row, though an income row is newer", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await seed(tx);
+			return transactionSummary(tx, goldenContext(golden.userId), FEBRUARY, [
+				"payee",
+			]);
+		});
+		expect(result.byPayee).toEqual([
+			{ key: "label probe", label: "LABEL PROBE", count: 2, outMinor: 800 },
+		]);
+	});
+
+	test("so it can differ from the label the list gives the same group, which reads income too", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await seed(tx);
+			const ctx = goldenContext(golden.userId);
+			return listTransactions(tx, ctx, FEBRUARY, {
+				sort: "date",
+				dir: "desc",
+				group: "payee",
+				limit: 50,
+			});
+		});
+		expect(result.groups).toHaveLength(1);
+		expect(result.groups[0]).toMatchObject({
+			key: "label probe",
+			label: "label probe",
+			count: 3,
+		});
+	});
+
+	test("goes to the newer spelling when a still newer row is added", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await seed(tx);
+			await addExpense(tx, golden.userId, {
+				payee: "Label probe",
+				amountMinor: 100,
+				occurredOn: "2030-02-04",
+			});
+			return transactionSummary(tx, goldenContext(golden.userId), FEBRUARY, [
+				"payee",
+			]);
+		});
+		expect(result.byPayee?.[0]).toMatchObject({
+			label: "Label probe",
+			count: 3,
+			outMinor: 900,
+		});
 	});
 });

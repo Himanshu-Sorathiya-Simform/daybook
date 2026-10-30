@@ -17,7 +17,7 @@ import {
 import type { Tx } from "../../with-user";
 import { createView } from "../create";
 import { withUniqueName } from "../row";
-import { addViews, viewBody } from "./helpers";
+import { addView, addViews, viewBody } from "./helpers";
 
 /** `createView` (F03 section 11, BR-F03-63, BR-F03-64; D-488) through the runtime role and RLS.
  * Every case rolls back. The limit and name races, which need two connections, are tested
@@ -536,5 +536,296 @@ describe("the check order (BR-F03-63)", () => {
 				)
 			).code,
 		).toBe("limit_reached");
+	});
+});
+
+// T2: names, filters and currencies at their edges (BR-F03-63, BR-F03-64, D-497).
+describe("names that collide the way Postgres compares them", () => {
+	// The unique index is on lower(name) under the built-in C.UTF-8, which maps one code point to
+	// one, and a name is stored in NFC. Each pair is two spellings of one name.
+	test.each([
+		["école", "ÉCOLE", "a capital with an accent"],
+		["école", "e\u0301cole", "a decomposed accent, which NFC composes"],
+		["ÉCOLE", "école", "the other way round"],
+		[
+			"οδοσ",
+			"ΟΔΟΣ",
+			"a capital sigma, which Postgres lowers to σ at the end too",
+		],
+		["İstanbul", "istanbul", "the dotted capital I"],
+		["ß", "\u1e9e", "the capital sharp s"],
+		["Food", "  FOOD  ", "spaces round a different case"],
+	])("%j and %j are one name: %s", async (existing, name) => {
+		expect(
+			await refusal(
+				create(viewBody({ name }), (tx) =>
+					addView(tx, userId, { name: existing }),
+				),
+			),
+		).toEqual(invalid({ name: TAKEN }));
+	});
+
+	test.each([
+		["οδοσ", "οδος", "the final sigma ς is another letter"],
+		["Food", "Foods", "a longer name"],
+		["Food", "F00d", "a zero for an o"],
+		["ae", "\u00e6", "æ is not ae"],
+	])("%j and %j are two names: %s", async (existing, name) => {
+		const { result } = await create(viewBody({ name }), (tx) =>
+			addView(tx, userId, { name: existing }),
+		);
+		expect(result.created).toBe(true);
+	});
+});
+
+describe("names, edge cases", () => {
+	test("40 astral characters pass and 41 are refused, counting code points", async () => {
+		const { result } = await create(viewBody({ name: "\u{1f44d}".repeat(40) }));
+		expect([...result.view.name]).toHaveLength(40);
+		expect(
+			await refusal(create(viewBody({ name: "\u{1f44d}".repeat(41) }))),
+		).toEqual(invalid({ name: "Use 40 characters or fewer." }));
+	});
+
+	test.each([
+		[" All Transactions ", "spaces round the built-in name"],
+		["ALL TRANSACTIONS", "capitals"],
+		["all transactions", "lowercase"],
+		["ALL TRANSACTİONS", "a dotted capital I, which Postgres lowers to i"],
+	])("%j is refused as the built-in name: %s", async (name) => {
+		expect(await refusal(create(viewBody({ name })))).toEqual(
+			invalid({ name: TAKEN }),
+		);
+	});
+
+	test.each([
+		["All  Transactions", "two spaces inside"],
+		["All Transaction", "no s"],
+		["All Transactions 2", "a number after it"],
+		["All-Transactions", "a hyphen"],
+	])("%j is a different name from the built-in one: %s", async (name) => {
+		expect((await create(viewBody({ name }))).result.created).toBe(true);
+	});
+
+	test.each([
+		["Food\nview", "a line feed"],
+		["Food\r\nview", "a carriage return and line feed"],
+		["Food\u2028view", "a line separator"],
+		["Food\tview", "a tab"],
+		["Food\ud800view", "a lone surrogate"],
+	])("%j is refused: %s", async (name) => {
+		expect(await refusal(create(viewBody({ name })))).toEqual(
+			invalid({ name: "Remove unsupported characters." }),
+		);
+	});
+
+	test("a name of zero-width spaces is empty", async () => {
+		expect(await refusal(create(viewBody({ name: "\u200b\u200b" })))).toEqual(
+			invalid({ name: "Enter a name." }),
+		);
+	});
+});
+
+describe("filters, edge cases (BR-F03-64)", () => {
+	const stored = async (
+		filter: Record<string, unknown>,
+		extra: Record<string, unknown> = {},
+	) => (await create(viewBody({ filter, ...extra }))).result.view.filter;
+
+	test("minMinor equal to maxMinor is one amount and is kept", async () => {
+		expect(
+			await stored({ minMinor: 5000, maxMinor: 5000 }, { currency: "INR" }),
+		).toEqual({
+			minMinor: 5000,
+			maxMinor: 5000,
+		});
+	});
+
+	test("one past the largest amount is refused with the largest, and the largest passes", async () => {
+		expect(
+			await stored({ maxMinor: 99_999_999_999 }, { currency: "INR" }),
+		).toEqual({ maxMinor: 99_999_999_999 });
+		expect(
+			await refusal(
+				create(
+					viewBody({
+						filter: { maxMinor: 100_000_000_000 },
+						currency: "INR",
+					}),
+				),
+			),
+		).toEqual(
+			invalid({ "filter.maxMinor": "The largest amount is 999,999,999.99." }),
+		);
+		expect(
+			await refusal(
+				create(
+					viewBody({
+						filter: { minMinor: 100_000_000_000 },
+						currency: "INR",
+					}),
+				),
+			),
+		).toEqual(
+			invalid({ "filter.minMinor": "The largest amount is 999,999,999.99." }),
+		);
+	});
+
+	test.each([
+		[{ from: "2026-10-01" }, "only a first date"],
+		[{ to: "2026-10-31" }, "only a last date"],
+	] as [Record<string, string>, string][])("%j is refused: %s", async (filter) => {
+		expect(await refusal(create(viewBody({ filter })))).toEqual(
+			invalid({
+				"filter.from": "Send both dates, the first on or before the second.",
+			}),
+		);
+	});
+
+	test("one day, the same date twice, is a range of one day", async () => {
+		expect(await stored({ from: "2026-10-01", to: "2026-10-01" })).toEqual({
+			from: "2026-10-01",
+			to: "2026-10-01",
+		});
+	});
+
+	test.each([
+		["", {}, "an empty search is no search"],
+		["   ", {}, "a blank search is none"],
+		["649", { q: "649" }, "a number of 3 digits"],
+		["12", { q: "12" }, "a number of 2 digits is an amount, so it is kept"],
+		["1,00,000", { q: "1,00,000" }, "an Indian amount"],
+		["swiggy", { q: "swiggy" }, "text"],
+		["a".repeat(100), { q: "a".repeat(100) }, "100 characters"],
+		["\u{1f44d}".repeat(100), { q: "\u{1f44d}".repeat(100) }, "100 emoji"],
+		// D-501: not an amount, but five characters of text, which a search takes.
+		["0,001", { q: "0,001" }, "a thousandth written the German way is text"],
+		[
+			"1,0",
+			{ q: "1,0" },
+			"a broken amount of 3 characters is long enough as text",
+		],
+	] as [string, Record<string, unknown>, string][])(
+		"a search of %j is stored as %j: %s",
+		async (q, expected) => {
+			expect(await stored({ q })).toEqual(expected);
+		},
+	);
+
+	test.each([
+		["ab", "Type at least 3 characters, or an amount.", "two letters"],
+		["a".repeat(101), "Use 100 characters or fewer.", "101 characters"],
+		["\u{1f44d}".repeat(101), "Use 100 characters or fewer.", "101 emoji"],
+	])("a search of %j is refused: %s", async (q, message) => {
+		expect(await refusal(create(viewBody({ filter: { q } })))).toEqual(
+			invalid({ "filter.q": message }),
+		);
+	});
+
+	test("lists are sorted and deduplicated, and an empty one is dropped", async () => {
+		expect(
+			await stored({ type: ["income", "expense", "income"], cat: [] }),
+		).toEqual({
+			type: ["expense", "income"],
+		});
+		expect(
+			await stored({ type: [], cat: ["shopping", "food", "shopping"] }),
+		).toEqual({
+			cat: ["food", "shopping"],
+		});
+	});
+
+	test("a Goal of any case, or a version 4 UUID, is kept in lowercase", async () => {
+		const goal = "F47AC10B-58CC-4372-A567-0E02B2C3D479";
+		expect(await stored({ goal })).toEqual({ goal: goal.toLowerCase() });
+		expect(await stored({ sub: goal })).toEqual({ sub: goal.toLowerCase() });
+	});
+
+	test.each([
+		[{ goal: "not-a-uuid" }, "filter.goal", "Use a UUID."],
+		[
+			{ sub: "F47AC10B-58CC-4372-A567-0E02B2C3D47" },
+			"filter.sub",
+			"Use a UUID.",
+		],
+		[{ src: "demo" }, "filter.src", "Choose a source."],
+		[{ src: "" }, "filter.src", "Choose a source."],
+		[{ cat: null }, "filter.cat", "Choose a category."],
+		[{ type: null }, "filter.type", "Choose a type."],
+		[{ cat: "food" }, "filter.cat", "Choose a category."],
+	])("%j is refused at %s", async (filter, path, message) => {
+		expect(await refusal(create(viewBody({ filter })))).toEqual(
+			invalid({ [path]: message }),
+		);
+	});
+
+	test("src manual and subscription are kept", async () => {
+		expect(await stored({ src: "manual" })).toEqual({ src: "manual" });
+		expect(await stored({ src: "subscription" })).toEqual({
+			src: "subscription",
+		});
+	});
+});
+
+describe("a profile in yen or Kuwaiti dinars (MON-2, MON-5)", () => {
+	/** A create in a profile of `currency`, which is set on the profile for this transaction. */
+	function createIn(currency: "JPY" | "KWD", input: unknown) {
+		const ctx = goldenContext(userId, { currency });
+		return asUser(userId, async (tx) => {
+			await tx.execute(sql`UPDATE app.profile SET currency = ${currency}`);
+			return createView(tx, ctx, input);
+		});
+	}
+
+	test.each([
+		["JPY", 999_999_999, "The largest amount is 999,999,999."],
+		["KWD", 999_999_999_999, "The largest amount is 999,999,999.999."],
+	] as const)(
+		"%s: the largest amount, %i, passes and one more is refused",
+		async (currency, max, message) => {
+			const { result } = await createIn(
+				currency,
+				viewBody({ filter: { maxMinor: max }, currency }),
+			);
+			expect(result.view.filter).toEqual({ maxMinor: max });
+			expect(
+				await refusal(
+					createIn(
+						currency,
+						viewBody({ filter: { maxMinor: max + 1 }, currency }),
+					),
+				),
+			).toEqual(invalid({ "filter.maxMinor": message }));
+		},
+	);
+
+	test.each(["JPY", "KWD"] as const)(
+		"%s: a short numeric search is kept, since it can be an amount",
+		async (currency) => {
+			const { result } = await createIn(
+				currency,
+				viewBody({ filter: { q: "12" } }),
+			);
+			expect(result.view.filter).toEqual({ q: "12" });
+		},
+	);
+
+	test("a currency of another kind than the profile's is refused, whichever it is", async () => {
+		expect(
+			await refusal(
+				createIn(
+					"JPY",
+					viewBody({ filter: { minMinor: 100 }, currency: "INR" }),
+				),
+			),
+		).toMatchObject({ code: "currency_mismatch" });
+		expect(
+			await refusal(
+				createIn(
+					"KWD",
+					viewBody({ filter: { minMinor: 100 }, currency: "JPY" }),
+				),
+			),
+		).toMatchObject({ code: "currency_mismatch" });
 	});
 });

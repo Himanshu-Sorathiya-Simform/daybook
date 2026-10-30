@@ -1,11 +1,12 @@
 import { Client } from "pg";
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { loadGolden, type LoadedGolden } from "../../../../../seed/load-golden";
 import type { TransactionFilter } from "@/lib/transactions/url";
 import { runtimePool } from "../../../db/pools";
 import { createUser } from "../../../db/tests/private-rows";
 import { parseOwnerEnv } from "../../../env";
+import type { Tx } from "../../with-user";
 import { amountHistogram } from "../histogram";
 import { addExpense, asUser, goldenContext } from "./helpers";
 
@@ -14,6 +15,7 @@ import { addExpense, asUser, goldenContext } from "./helpers";
 
 let owner: Client;
 let golden: LoadedGolden;
+let other: LoadedGolden;
 
 beforeAll(async () => {
 	owner = new Client({
@@ -21,10 +23,13 @@ beforeAll(async () => {
 	});
 	await owner.connect();
 	golden = await loadGolden(owner, await createUser(owner, "histogram"));
+	other = await loadGolden(owner, await createUser(owner, "histogram-other"));
 });
 
 afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = $1`, [golden?.userId]);
+	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [
+		[golden?.userId, other?.userId].filter(Boolean),
+	]);
 	await owner?.end();
 	await runtimePool().end();
 });
@@ -131,4 +136,145 @@ test("the largest amount any currency allows still has a bucket", async () => {
 		return amountHistogram(tx, goldenContext(golden.userId), { q: "dinar" });
 	});
 	expect(result).toEqual({ edges: [800000000000, 1000000000000], counts: [1] });
+});
+
+// T2: the filters the histogram honors, in other currencies, and under other users.
+describe("a type and a category together (BR-F03-60)", () => {
+	const total = (counts: number[]) =>
+		counts.reduce((sum, count) => sum + count, 0);
+
+	test("count exactly the rows that are both, with edges around their amounts", async () => {
+		const both = golden.rows.filter(
+			(row) => row.type === "expense" && row.category === "food",
+		);
+		expect(both.length).toBeGreaterThan(0);
+		const { result } = await histogram({ type: ["expense"], cat: ["food"] });
+		expect(total(result.counts)).toBe(both.length);
+		const amounts = both.map((row) => row.amountMinor);
+		expect(result.edges[0]!).toBeLessThanOrEqual(Math.min(...amounts));
+		expect(result.edges.at(-1)!).toBeGreaterThan(Math.max(...amounts));
+	});
+
+	test("differ from the category alone when another type holds rows in it", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "Food refund",
+				type: "refund",
+				amountMinor: 250000,
+				occurredOn: "2026-11-02",
+			});
+			const ctx = goldenContext(golden.userId);
+			return {
+				food: await amountHistogram(tx, ctx, { cat: ["food"] }),
+				expenses: await amountHistogram(tx, ctx, {
+					type: ["expense"],
+					cat: ["food"],
+				}),
+				refunds: await amountHistogram(tx, ctx, {
+					type: ["refund"],
+					cat: ["food"],
+				}),
+			};
+		});
+		expect(total(result.food.counts)).toBe(
+			total(result.expenses.counts) + total(result.refunds.counts),
+		);
+		expect(total(result.refunds.counts)).toBe(1);
+		expect(result.refunds.edges).toEqual([250000, 315000]);
+	});
+
+	test("an empty type list or category list selects no row, so no bucket", async () => {
+		expect((await histogram({ type: [] })).result).toEqual({
+			edges: [],
+			counts: [],
+		});
+		expect((await histogram({ cat: [] })).result).toEqual({
+			edges: [],
+			counts: [],
+		});
+	});
+});
+
+describe("Kuwaiti dinars, three decimals", () => {
+	// The edges are in minor units of any currency, so 1.250 dinars is 1,250 fils, which is on
+	// the series; 0.001 is 1.
+	const kuwait = (
+		tx: Tx,
+		filter: TransactionFilter,
+		currency: "KWD" | "INR" = "KWD",
+	) => amountHistogram(tx, goldenContext(golden.userId, { currency }), filter);
+
+	test("a search for 1.250 finds the 1,250 fils row, and none in an Indian profile", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "Kuwait Mid",
+				amountMinor: 1250,
+				occurredOn: "2026-11-02",
+			});
+			return {
+				kwd: await kuwait(tx, { q: "1.250" }),
+				inr: await kuwait(tx, { q: "1.250" }, "INR"),
+			};
+		});
+		expect(result.kwd).toEqual({ edges: [1250, 1600], counts: [1] });
+		expect(result.inr).toEqual({ edges: [], counts: [] });
+	});
+
+	test("the smallest dinar amount, 0.001, has the bucket 1 to 2", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "Kuwait Low",
+				amountMinor: 1,
+				occurredOn: "2026-11-02",
+			});
+			return kuwait(tx, { q: "0.001" });
+		});
+		expect(result).toEqual({ edges: [1, 2], counts: [1] });
+	});
+
+	test("the amount bounds are still ignored when they name fils", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "Kuwait Mid",
+				amountMinor: 1250,
+				occurredOn: "2026-11-02",
+			});
+			return kuwait(tx, { q: "kuwait", minMinor: 5000, maxMinor: 9999 });
+		});
+		expect(result).toEqual({ edges: [1250, 1600], counts: [1] });
+	});
+});
+
+describe("another user's rows add nothing", () => {
+	test("an extreme amount of another user widens no bucket of this one", async () => {
+		const before = (await histogram({})).result;
+		const ids: string[] = [];
+		try {
+			for (const amountMinor of [1, 99_999_999_999]) {
+				const { rows } = await owner.query<{ id: string }>(
+					`INSERT INTO app.transactions (id, user_id, created_at, updated_at, type, amount_minor,
+					   occurred_at, occurred_on, category, payee, source, version)
+					 VALUES (gen_random_uuid(), $1, $2, $2, 'expense', $3, $2, '2026-11-02', 'food', 'Other', 'manual', 1)
+					 RETURNING id`,
+					[other.userId, "2026-11-02T06:30:00Z", amountMinor],
+				);
+				ids.push(rows[0]!.id);
+			}
+			expect((await histogram({})).result).toEqual(before);
+			expect((await histogram({ q: "other" })).result).toEqual({
+				edges: [],
+				counts: [],
+			});
+			const mine = await asUser(other.userId, (tx) =>
+				amountHistogram(tx, goldenContext(other.userId), {}),
+			);
+			expect(mine.result.edges[0]).toBe(1);
+			expect(mine.result.edges.at(-1)).toBe(100_000_000_000);
+		} finally {
+			await owner.query(
+				"DELETE FROM app.transactions WHERE id = ANY($1::uuid[])",
+				[ids],
+			);
+		}
+	});
 });

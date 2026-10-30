@@ -421,6 +421,150 @@ function drawFilters(count: number): TransactionFilter[] {
 	});
 }
 
+// T2: search cases that need rows of their own, held by a throwaway user for one test.
+describe("search, with rows of its own (BR-F03-35)", () => {
+	type Spec = {
+		payee?: string;
+		description?: string;
+		note?: string;
+		amountMinor?: number;
+	};
+
+	/** Runs `fn` for a new user holding one expense for each of `specs`, in order, and gives it
+	 * a way to say which specs a filter selects, by index. */
+	async function withRows(
+		specs: Spec[],
+		fn: (
+			selected: (filter: TransactionFilter) => Promise<number[]>,
+		) => Promise<void>,
+	) {
+		const userId = await createUser(owner, "filter-rows");
+		try {
+			const ids: string[] = [];
+			for (const spec of specs) {
+				const id = randomUUID();
+				ids.push(id);
+				await owner.query(
+					`INSERT INTO app.transactions (id, user_id, created_at, updated_at, type, amount_minor,
+					   occurred_at, occurred_on, category, payee, description, note, source, version)
+					 VALUES ($1, $2, $3, $3, 'expense', $4, $3, '2026-11-02', 'food', $5, $6, $7, 'manual', 1)`,
+					[
+						id,
+						userId,
+						GOLDEN_NOW,
+						spec.amountMinor ?? 100,
+						spec.payee ?? "Plain",
+						spec.description ?? null,
+						spec.note ?? null,
+					],
+				);
+			}
+			await fn(async (filter) => {
+				const [found] = await idsFor(userId, [filter]);
+				return found!.map((id) => ids.indexOf(id)).sort((a, b) => a - b);
+			});
+		} finally {
+			await owner.query(`DELETE FROM auth."user" WHERE id = $1`, [userId]);
+		}
+	}
+
+	// AC-F03-31: the fields join with U+001F, so a search never spans two of them.
+	test("`swiggy monthly` does not match a Swiggy row described Monthly groceries", async () => {
+		await withRows(
+			[
+				{ payee: "Swiggy", description: "Monthly groceries" },
+				{ payee: "Swiggy" },
+				{ payee: "Other", description: "Monthly rent" },
+			],
+			async (selected) => {
+				expect(await selected({ q: "swiggy monthly" })).toEqual([]);
+				expect(await selected({ q: "swiggy" })).toEqual([0, 1]);
+				expect(await selected({ q: "monthly" })).toEqual([0, 2]);
+				expect(await selected({ q: "ggymon" })).toEqual([]);
+				expect(await selected({ q: "swiggymonthly" })).toEqual([]);
+			},
+		);
+	});
+
+	test("a search never spans the payee and the note, or the description and the note", async () => {
+		await withRows(
+			[{ payee: "Cafe", description: "Lunch", note: "With Asha" }],
+			async (selected) => {
+				expect(await selected({ q: "cafe lunch" })).toEqual([]);
+				expect(await selected({ q: "lunch with" })).toEqual([]);
+				expect(await selected({ q: "lunch" })).toEqual([0]);
+				expect(await selected({ q: "with asha" })).toEqual([0]);
+			},
+		);
+	});
+
+	// BR-F03-35: a numeric search is the amount or the text, either.
+	test("a numeric search finds the amount and the text that holds the digits", async () => {
+		await withRows(
+			[
+				{ payee: "Route 649", amountMinor: 100 },
+				{ payee: "Plain", amountMinor: 64900 },
+				{ payee: "Other", description: "ref 6490", amountMinor: 100 },
+				{ payee: "Nothing", amountMinor: 650 },
+			],
+			async (selected) => {
+				// 649 is 64,900 minor units as an amount, and text in the first and third rows.
+				expect(await selected({ q: "649" })).toEqual([0, 1, 2]);
+				expect(await selected({ q: "649.00" })).toEqual([1]);
+			},
+		);
+	});
+
+	test("a numeric search of under 3 characters is an amount only", async () => {
+		await withRows(
+			[
+				{ payee: "Route 64", amountMinor: 100 },
+				{ payee: "Plain", amountMinor: 6400 },
+				{ payee: "Seven 7", amountMinor: 700 },
+			],
+			async (selected) => {
+				// "64" is 64.00, so 6,400 minor units, and the text "Route 64" is not searched.
+				expect(await selected({ q: "64" })).toEqual([1]);
+				expect(await selected({ q: "7" })).toEqual([2]);
+				expect(await selected({ q: "route 64" })).toEqual([0]);
+			},
+		);
+	});
+
+	// MON-5: 999,999,999.99 is the largest INR amount; a search reads Indian grouping too.
+	test.each(["999999999.99", "999,999,999.99", "99,99,99,999.99"])(
+		"the largest rupee amount is found by the search %s",
+		async (q) => {
+			await withRows(
+				[{ amountMinor: 99_999_999_999 }, { amountMinor: 99_999_999_998 }],
+				async (selected) => {
+					expect(await selected({ q })).toEqual([0]);
+				},
+			);
+		},
+	);
+
+	test("one past the largest amount is text, and finds nothing", async () => {
+		await withRows([{ amountMinor: 99_999_999_999 }], async (selected) => {
+			expect(await selected({ q: "1000000000.00" })).toEqual([]);
+			expect(await selected({ q: "1,00,00,00,000" })).toEqual([]);
+		});
+	});
+
+	test("the amount is found whatever the grouping the search is written with, when it is valid", async () => {
+		await withRows(
+			[{ amountMinor: 123456789 }, { amountMinor: 100 }],
+			async (selected) => {
+				for (const q of ["1234567.89", "1,234,567.89", "12,34,567.89"]) {
+					expect(await selected({ q })).toEqual([0]);
+				}
+				// D-501: not an amount, since the grouping would start with a zero, and not text here.
+				expect(await selected({ q: "0,001" })).toEqual([]);
+			},
+		);
+	});
+});
+
 // B9, D-497, BR-F03-43: the browser lowers text as Postgres does, so a search finds the same
 // rows on both sides, letter for letter.
 describe("case folding agrees between SQL and the browser", () => {
