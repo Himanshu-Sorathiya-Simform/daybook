@@ -66,7 +66,8 @@ function pageRedirect(request: NextRequest): string | null {
 	const hasSession =
 		getSessionCookie(request, { cookiePrefix: "daybook" }) !== null;
 	if (!hasSession && under(pathname, LOGGED_IN)) {
-		return `/login?${new URLSearchParams({ next: `${pathname}${search}` })}`;
+		const next = `${pathname}${search}`;
+		return `/login?${new URLSearchParams({ next })}`;
 	}
 	if (
 		hasSession

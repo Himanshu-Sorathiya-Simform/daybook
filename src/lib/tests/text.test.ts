@@ -217,7 +217,7 @@ describe("codePointLength (D-230)", () => {
 	});
 
 	test("differs from String length for characters outside the BMP", () => {
-		expect("👍".length).toBe(2);
+		expect("👍").toHaveLength(2);
 		expect(codePointLength("👍")).toBe(1);
 	});
 });

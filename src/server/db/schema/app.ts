@@ -147,8 +147,8 @@ function textCheck(
 ) {
 	const control =
 		multiline ?
-			"[\\x01-\\x09\\x0b-\\x1f\\x7f-\\x9f]"
-		:	"[\\x01-\\x1f\\x7f-\\x9f]";
+			String.raw`[\x01-\x09\x0b-\x1f\x7f-\x9f]`
+		:	String.raw`[\x01-\x1f\x7f-\x9f]`;
 	return check(
 		name,
 		sql`char_length(${column}) BETWEEN 1 AND ${sql.raw(String(max))}

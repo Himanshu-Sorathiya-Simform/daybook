@@ -21,7 +21,7 @@ export type NumberSigns = { decimal: string; groups: string[]; indian: boolean }
 
 type Locale = { currency: CurrencyCode; numberLocale: string };
 
-const DIGITS = /^[0-9]*$/;
+const DIGITS = /^\d*$/;
 const MAX_WHOLE_DIGITS = 9;
 
 /** U+00A0 and U+202F read as a plain space, and `’` as `'` (BR-F03-04). */
@@ -71,7 +71,7 @@ export function numberSigns(
 }
 
 function escape(sign: string): string {
-	return sign.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	return sign.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /** Whether `whole` is a valid grouping with `sign`: thousands, or Indian when allowed. The
@@ -79,8 +79,12 @@ function escape(sign: string): string {
  * way, and is refused as the other mark (D-501). */
 function validGrouping(whole: string, sign: string, indian: boolean): boolean {
 	const s = escape(sign);
-	if (new RegExp(`^[1-9]\\d{0,2}(?:${s}\\d{3})+$`).test(whole)) return true;
-	return indian && new RegExp(`^[1-9]\\d?(?:${s}\\d{2})*${s}\\d{3}$`).test(whole);
+	if (new RegExp(String.raw`^[1-9]\d{0,2}(?:${s}\d{3})+$`).test(whole))
+		return true;
+	return (
+		indian
+		&& new RegExp(String.raw`^[1-9]\d?(?:${s}\d{2})*${s}\d{3}$`).test(whole)
+	);
 }
 
 type Read =
@@ -229,7 +233,7 @@ export function amountMessage(error: AmountError, locale: Locale): string {
 	}
 }
 
-const URL_AMOUNT = /^([0-9]+)(?:\.([0-9]+))?$/;
+const URL_AMOUNT = /^(\d+)(?:\.(\d+))?$/;
 
 /** `min` or `max` from the URL: major units with `.`, no grouping (root 6.9, BR-F03-36). `null`
  * when it does not parse, has too many decimals, is zero or exceeds MON-5 (BR-F03-34). */

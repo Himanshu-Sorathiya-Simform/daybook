@@ -69,8 +69,9 @@ export async function createView(
 		created,
 	});
 
+	const lockKey = `${ctx.user.id}:transactions.views`;
 	await tx.execute(
-		sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${ctx.user.id}:transactions.views`}, 0))`,
+		sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
 	);
 	const { rows: counted } = await tx.execute<{ count: number }>(
 		sql`SELECT count(*)::int AS count FROM app.transaction_views`,

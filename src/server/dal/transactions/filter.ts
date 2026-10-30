@@ -7,7 +7,7 @@ import type { TransactionFilter } from "@/lib/transactions/url";
 /** F03's search text (BR-F03-35): payee, description and note joined by U+001F, missing ones
  * as empty strings, exactly as `searchText` in `match.ts` builds it. */
 export const SEARCH_TEXT = sql.raw(
-	`(coalesce(payee, '') || E'\\x1f' || coalesce(description, '') || E'\\x1f' || coalesce(note, ''))`,
+	String.raw`(coalesce(payee, '') || E'\x1f' || coalesce(description, '') || E'\x1f' || coalesce(note, ''))`,
 );
 
 /** `text` for a `LIKE` pattern, with `\`, `%` and `_` taken literally (`\` escapes). */
@@ -26,7 +26,8 @@ function searchSql(q: string, currency: CurrencyCode): SQL {
 	if (amountMinor !== null) parts.push(sql`amount_minor = ${amountMinor}`);
 	if (text !== null)
 		parts.push(sql`${SEARCH_TEXT} ILIKE ${containsPattern(text)}`);
-	return sql`(${sql.join(parts, sql` OR `)})`;
+	const alternatives = sql.join(parts, sql` OR `);
+	return sql`(${alternatives})`;
 }
 
 /**
@@ -52,7 +53,9 @@ export function filterSql(filter: TransactionFilter, currency: CurrencyCode): SQ
 	if (minMinor !== undefined) clauses.push(sql`amount_minor >= ${minMinor}`);
 	if (maxMinor !== undefined) clauses.push(sql`amount_minor <= ${maxMinor}`);
 	if (q !== undefined) clauses.push(searchSql(q, currency));
-	return clauses.length ? sql`(${sql.join(clauses, sql` AND `)})` : sql`true`;
+	if (clauses.length === 0) return sql`true`;
+	const all = sql.join(clauses, sql` AND `);
+	return sql`(${all})`;
 }
 
 /** The filter without the given fields: a filter count leaves out its own field (BR-F03-59),

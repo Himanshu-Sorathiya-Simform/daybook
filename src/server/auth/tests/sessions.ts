@@ -21,7 +21,8 @@ export async function sessionFor(
 		[randomUUIDv7(), EXPIRES, token, userId, GOLDEN_NOW],
 	);
 	const signature = await makeSignature(token, serverEnv().BETTER_AUTH_SECRET);
-	return `daybook.session_token=${encodeURIComponent(`${token}.${signature}`)}`;
+	const signed = encodeURIComponent(`${token}.${signature}`);
+	return `daybook.session_token=${signed}`;
 }
 
 /** A new user with a session: its id and its cookie. */

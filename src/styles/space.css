@@ -14,25 +14,13 @@
 	--ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
-/* Elevation: sections never float. Only overlays get a shadow, always with a 1px --line border.
-   The values are plain variables so the dark values switch under .dark; the inline theme makes
-   shadow-popover and shadow-dialog read them live. */
 :root {
+	/* Elevation: sections never float. Only overlays get a shadow, always with a 1px --line border.
+	   The values are plain variables so the dark values switch under .dark; the inline theme makes
+	   shadow-popover and shadow-dialog read them live. */
 	--elevation-popover: 0 8px 24px rgba(16, 24, 40, 0.12);
 	--elevation-dialog: 0 24px 48px rgba(16, 24, 40, 0.18);
-}
 
-.dark {
-	--elevation-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
-	--elevation-dialog: 0 24px 48px rgba(0, 0, 0, 0.55);
-}
-
-@theme inline {
-	--shadow-popover: var(--elevation-popover);
-	--shadow-dialog: var(--elevation-dialog);
-}
-
-:root {
 	/* Layout */
 	--sidebar-width: 232px;
 	--rail-width: 64px;
@@ -51,6 +39,16 @@
 	/* Focus: 2px ring, 2px offset, accent colour, on every interactive element */
 	--focus-ring: 2px solid var(--focus);
 	--focus-offset: 2px;
+}
+
+.dark {
+	--elevation-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
+	--elevation-dialog: 0 24px 48px rgba(0, 0, 0, 0.55);
+}
+
+@theme inline {
+	--shadow-popover: var(--elevation-popover);
+	--shadow-dialog: var(--elevation-dialog);
 }
 
 @media (prefers-reduced-motion: reduce) {

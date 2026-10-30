@@ -108,9 +108,10 @@ export async function rollup<const R extends readonly RollupRequest[]>(
 	requests: R,
 ): Promise<Results<R>> {
 	if (requests.length === 0) return [] as unknown as Results<R>;
+	const alias = (index: number) => `r${index}`;
 	const columns = requests.map(
 		(request, index) =>
-			sql`${requestSql(request, ctx)} AS ${sql.identifier(`r${index}`)}`,
+			sql`${requestSql(request, ctx)} AS ${sql.identifier(alias(index))}`,
 	);
 	const { rows } = await tx.execute<Record<string, unknown>>(
 		sql`SELECT ${sql.join(columns, sql`, `)}`,
@@ -118,6 +119,6 @@ export async function rollup<const R extends readonly RollupRequest[]>(
 	// A SELECT without FROM returns exactly one row.
 	const row = rows[0] as Record<string, unknown>;
 	return requests.map((request, index) =>
-		readResult(request.by, row[`r${index}`]),
+		readResult(request.by, row[alias(index)]),
 	) as unknown as Results<R>;
 }

@@ -28,17 +28,21 @@ export type PendingNoteProps = Shared
 		  }
 	);
 
+function pendingText(props: Readonly<PendingNoteProps>): string {
+	if (props.label !== undefined) return props.label;
+	if (props.count !== undefined) return `+${props.count} pending`;
+	const amount = formatMoney(props.minor, props.currency, props.numberLocale, {
+		signDisplay: "always",
+	});
+	return `${amount} pending`;
+}
+
 /**
  * The one pending signal: a dashed outline with ink-2 text. It sits beside a confirmed figure
  * and never replaces it or is added into it.
  */
 export function PendingNote(props: Readonly<PendingNoteProps>) {
-	const text =
-		props.label !== undefined ? props.label
-		: props.count !== undefined ? `+${props.count} pending`
-		: `${formatMoney(props.minor, props.currency, props.numberLocale, {
-				signDisplay: "always",
-			})} pending`;
+	const text = pendingText(props);
 	return (
 		<span
 			className={cn(

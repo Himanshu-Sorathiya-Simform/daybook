@@ -72,9 +72,8 @@ function orderBy(sort: Sort, dir: Dir, travel: Travel, ranked: boolean): SQL {
 		.split(", ")
 		.map((key) => `${key} ${rows}`)
 		.join(", ");
-	return sql.raw(
-		ranked ? `rank ${travel === "next" ? "ASC" : "DESC"}, ${keys}` : keys,
-	);
+	const rankOrder = travel === "next" ? "ASC" : "DESC";
+	return sql.raw(ranked ? `rank ${rankOrder}, ${keys}` : keys);
 }
 
 /** Rows past the cursor's boundary row in its direction of travel, by a row comparison over
@@ -87,7 +86,8 @@ function pastBoundary(cursor: Cursor): SQL {
 	];
 	if (cursor.sort === "amount") values.unshift(sql`${cursor.amount}::bigint`);
 	const op = descending(cursor.dir, cursor.travel) ? "<" : ">";
-	return sql`(${sql.raw(SORT_KEYS[cursor.sort])}) ${sql.raw(op)} (${sql.join(values, sql`, `)})`;
+	const bounds = sql.join(values, sql`, `);
+	return sql`(${sql.raw(SORT_KEYS[cursor.sort])}) ${sql.raw(op)} (${bounds})`;
 }
 
 /** Category or payee grouping: every group of the filter ranked by weight, then key

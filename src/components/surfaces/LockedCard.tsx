@@ -31,6 +31,7 @@ export function LockedCard({
 	compareHref,
 	className,
 }: Readonly<LockedCardProps>) {
+	const upgradeProps = onUpgrade ? { onPress: onUpgrade } : {};
 	return (
 		<div
 			className={cn(
@@ -54,10 +55,7 @@ export function LockedCard({
 					>
 						Connect to upgrade
 					</Button>
-				:	<Button {...(onUpgrade ? { onPress: onUpgrade } : {})}>
-						Upgrade
-					</Button>
-				}
+				:	<Button {...upgradeProps}>Upgrade</Button>}
 				<AriaLink
 					href={compareHref}
 					className="text-label"
