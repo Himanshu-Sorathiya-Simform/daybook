@@ -47,6 +47,8 @@ jobs:
                     POSTGRES_USER: postgres
                     POSTGRES_PASSWORD: ci-placeholder-owner-password
                     POSTGRES_DB: daybook
+                    # Neon's locale, so lower() and text order match production (D-472).
+                    POSTGRES_INITDB_ARGS: "--locale-provider=builtin --locale=C.UTF-8"
                 ports:
                     - 5432:5432
                 options: >-

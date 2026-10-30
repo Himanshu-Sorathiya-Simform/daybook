@@ -481,6 +481,25 @@ describe("refusals, in step order (BR-P2-17)", () => {
 		expect(rows).toHaveLength(0);
 	});
 
+	// D-491: 30,000 levels fit in 64 KB; the canonical hash recursed through them and threw.
+	test("JSON nested more than 32 levels deep gives 400 and stores nothing", async () => {
+		const user = await newUser(false);
+		const response = await createProfile(
+			request("/api/test", {
+				method: "POST",
+				cookie: user.cookie,
+				rawBody: "[".repeat(30_000) + "]".repeat(30_000),
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect((await response.json()).error.code).toBe("bad_request");
+		const { rows } = await owner.query(
+			"SELECT 1 FROM app.idempotency_records WHERE user_id = $1",
+			[user.id],
+		);
+		expect(rows).toHaveLength(0);
+	});
+
 	test("an invalid body gives 422 with one message per field", async () => {
 		const user = await newUser(false);
 		const response = await createProfile(

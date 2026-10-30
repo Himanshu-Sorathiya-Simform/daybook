@@ -96,9 +96,8 @@ export async function checkConnections(
 
 async function main(): Promise<void> {
 	const file = loadEnvFile(process.argv.slice(2));
-	console.log(
-		`Checking database connections${file ? ` (variables from ${file})` : ""}`,
-	);
+	const source = file ? ` (variables from ${file})` : "";
+	console.log(`Checking database connections${source}`);
 	const env = parseServerEnv(process.env);
 	const results = await checkConnections(env, process.env);
 	for (const { slot, problems } of results) {

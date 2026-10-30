@@ -137,6 +137,60 @@ describe.each(PRIVATE_TABLES)("app.%s, as the runtime role", (table) => {
 		expect(state).toBe(INSUFFICIENT_PRIVILEGE);
 	});
 
+	// BR-P2-20, T2: a create with an id that is another user's never reaches the row. With
+	// ON CONFLICT (id) DO NOTHING it inserts nothing and raises nothing, so the route can read
+	// the id under RLS, find nothing and answer 409 id_conflict, without learning that it exists.
+	test("user A's insert with B's id and ON CONFLICT DO NOTHING returns nothing and leaves B's row alone", async () => {
+		const {
+			rows: [theirs],
+		} = await owner.query(`SELECT * FROM app.${table} WHERE user_id = $1`, [b]);
+		const mine = { ...PRIVATE_ROWS[table](a), id: theirs.id };
+		const columns = Object.keys(mine);
+		const result = await as(runtime, a, (client) =>
+			client.query(
+				`INSERT INTO app.${table} (${columns.join(", ")})
+				 VALUES (${columns.map((_, i) => `$${i + 1}`).join(", ")})
+				 ON CONFLICT (id) DO NOTHING RETURNING id`,
+				Object.values(mine),
+			),
+		);
+		expect(result.rowCount).toBe(0);
+		const {
+			rows: [after],
+		} = await owner.query(`SELECT * FROM app.${table} WHERE id = $1`, [
+			theirs.id,
+		]);
+		expect(after).toEqual(theirs);
+		expect(await ownerCount(table, a)).toBe(1);
+		expect(await ownerCount(table, b)).toBe(1);
+	});
+
+	test("the same insert with ON CONFLICT DO UPDATE changes nothing of B's, whatever it sets", async () => {
+		const {
+			rows: [theirs],
+		} = await owner.query(`SELECT * FROM app.${table} WHERE user_id = $1`, [b]);
+		const mine = { ...PRIVATE_ROWS[table](a), id: theirs.id };
+		const columns = Object.keys(mine);
+		const state = await sqlState(
+			as(runtime, a, (client) =>
+				client.query(
+					`INSERT INTO app.${table} (${columns.join(", ")})
+					 VALUES (${columns.map((_, i) => `$${i + 1}`).join(", ")})
+					 ON CONFLICT (id) DO UPDATE SET updated_at = now() RETURNING id`,
+					Object.values(mine),
+				),
+			),
+		);
+		// RLS refuses the update of a row A cannot see: an error, never a quiet change.
+		expect(state).toBe(INSUFFICIENT_PRIVILEGE);
+		const {
+			rows: [after],
+		} = await owner.query(`SELECT * FROM app.${table} WHERE id = $1`, [
+			theirs.id,
+		]);
+		expect(after).toEqual(theirs);
+	});
+
 	test("user A cannot hand its own row to another user", async () => {
 		const state = await sqlState(
 			as(runtime, a, (client) =>

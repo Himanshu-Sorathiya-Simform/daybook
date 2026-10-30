@@ -40,6 +40,7 @@ export function TextInput({
 	className,
 	...rest
 }: Readonly<TextInputProps>) {
+	const placeholderProps = placeholder ? { placeholder } : {};
 	return (
 		<AriaTextField
 			{...rest}
@@ -60,11 +61,11 @@ export function TextInput({
 					{multiline ?
 						<AriaTextArea
 							rows={rows}
-							{...(placeholder ? { placeholder } : {})}
+							{...placeholderProps}
 							className="text-body text-ink placeholder:text-ink-3 disabled:text-ink-3 min-w-0 flex-1 resize-y bg-transparent outline-none disabled:cursor-not-allowed pointer-coarse:text-base"
 						/>
 					:	<AriaInput
-							{...(placeholder ? { placeholder } : {})}
+							{...placeholderProps}
 							className="text-body text-ink placeholder:text-ink-3 disabled:text-ink-3 min-w-0 flex-1 self-stretch bg-transparent outline-none disabled:cursor-not-allowed pointer-coarse:text-base"
 						/>
 					}

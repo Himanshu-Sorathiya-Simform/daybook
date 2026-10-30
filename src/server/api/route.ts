@@ -15,13 +15,14 @@ import {
 	checkOrigin,
 	isJsonMediaType,
 	isMutation,
-	isUuidV7,
 	parseIfMatch,
 	queuePending,
 	readBody,
 	requestIdOf,
+	tooDeep,
 } from "./checks";
 import { ApiError, describeError, fromZodError, toApiError } from "./errors";
+import { isUuidV7 } from "@/lib/ids";
 import {
 	claimKey,
 	findAnswer,
@@ -73,12 +74,16 @@ type NextRouteContext = {
 
 type Parsed = { ok: true; value: unknown } | { ok: false };
 
+/** The body as JSON. Malformed JSON, or JSON nested too deep to hash or check safely, cannot be
+ * read (step 13, D-491). */
 function parseJson(text: string): Parsed {
+	let value: unknown;
 	try {
-		return { ok: true, value: JSON.parse(text) };
+		value = JSON.parse(text);
 	} catch {
 		return { ok: false };
 	}
+	return tooDeep(value) ? { ok: false } : { ok: true, value };
 }
 
 /** What a mutation's headers and body give before the session is checked. */
@@ -227,7 +232,8 @@ async function answerInTransaction<S extends z.ZodType | undefined>(
  * 10. one `withUser` transaction, read or write; a stored idempotent answer returns here
  *    (BR-P2-18);
  * 11. the profile, unless the route opts out (403 `profile_required`);
- * 13. the body against its schema (400 for malformed JSON, 422 for invalid fields);
+ * 13. the body against its schema (400 for malformed JSON or JSON nested over 32 levels, 422
+ *    for invalid fields);
  * 14. the idempotency record is claimed; a key already stored answers from it;
  * 15. the handler, whose answer is stored with the record and sent as `{ "data": ... }`.
  *

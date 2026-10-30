@@ -7,8 +7,9 @@ export class EnvError extends Error {
 	readonly problems: readonly string[];
 
 	constructor(problems: readonly string[]) {
+		const bullet = (problem: string) => `  - ${problem}`;
 		super(
-			`Environment variables are missing or invalid:\n${problems.map((problem) => `  - ${problem}`).join("\n")}`,
+			`Environment variables are missing or invalid:\n${problems.map(bullet).join("\n")}`,
 		);
 		this.name = "EnvError";
 		this.problems = problems;

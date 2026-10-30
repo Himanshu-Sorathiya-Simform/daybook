@@ -18,6 +18,13 @@ export type MoneyProps = {
 	className?: string;
 };
 
+/** The text colour for an amount's tone: false when the surrounding colour stays. */
+function toneClass(tone: MoneyProps["tone"], minor: number, sign: SignDisplay) {
+	if (tone === "neutral") return "";
+	if (tone === "signed") return minor > 0 && sign === "always" && "text-pos";
+	return minor < 0 && "text-neg";
+}
+
 /**
  * Every amount is shown with this component, never formatted by hand. Digits are tabular and the
  * minus is U+2212. Colour is only ever a second signal: the sign is always written.
@@ -32,10 +39,7 @@ export function Money({
 	className,
 }: Readonly<MoneyProps>) {
 	const parts = moneyParts(minor, currency, numberLocale, { signDisplay: sign });
-	const color =
-		tone === "neutral" ? ""
-		: tone === "signed" ? minor > 0 && sign === "always" && "text-pos"
-		: minor < 0 && "text-neg";
+	const color = toneClass(tone, minor, sign);
 
 	if (variant === "inline") {
 		return (

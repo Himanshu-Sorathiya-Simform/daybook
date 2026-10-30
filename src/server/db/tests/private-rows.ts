@@ -44,6 +44,34 @@ export const PRIVATE_ROWS: { [K in PrivateTable]: (userId: string) => Row } = {
 		key: randomUUID(),
 		request_hash: "a".repeat(64),
 	}),
+	// golden #24: Swiggy, 640.00 food, 22:15 on 19 October.
+	transactions: (userId) => ({
+		id: randomUUID(),
+		user_id: userId,
+		created_at: GOLDEN_NOW,
+		updated_at: GOLDEN_NOW,
+		type: "expense",
+		amount_minor: 64000,
+		occurred_at: "2026-10-19T16:45:00Z",
+		occurred_on: "2026-10-19",
+		category: "food",
+		payee: "Swiggy",
+		source: "manual",
+		version: 1,
+	}),
+	// F03 section 15's illustrated view.
+	transaction_views: (userId) => ({
+		id: randomUUID(),
+		user_id: userId,
+		created_at: GOLDEN_NOW,
+		updated_at: GOLDEN_NOW,
+		name: "Food last month",
+		filter: JSON.stringify({ range: "last_month", cat: ["food"] }),
+		sort: "date",
+		dir: "desc",
+		group_by: "day",
+		version: 1,
+	}),
 };
 
 /** Inserts one row into `app.<table>`. Table and column names come from this file only. */

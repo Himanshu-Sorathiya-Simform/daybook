@@ -44,6 +44,52 @@ describe("canonicalJson", () => {
 	});
 });
 
+// T1 (B4, D-491): the wrapper refuses a body nested over 32 levels before it hashes one, so the
+// hash only ever sees what the wrapper lets through.
+describe("canonicalJson on the deepest body the wrapper allows", () => {
+	/** `depth` arrays inside one another around `leaf`, parsed as a request would be. */
+	const nested = (depth: number, leaf = "1") =>
+		JSON.parse("[".repeat(depth) + leaf + "]".repeat(depth)) as unknown;
+
+	test("writes 32 levels without overflowing", () => {
+		const text = canonicalJson(nested(32));
+		expect(text).toBe("[".repeat(32) + "1" + "]".repeat(32));
+	});
+
+	test("sorts the keys at the 32nd level", () => {
+		let value: unknown = { b: 1, a: 2 };
+		for (let level = 1; level < 32; level++) value = { z: value };
+		const text = canonicalJson(value);
+		expect(text.endsWith('{"a":2,"b":1}' + "}".repeat(31))).toBe(true);
+	});
+
+	test("gives one hash for one meaning at that depth", () => {
+		const url = new URL("http://localhost:3000/api/transactions");
+		const one = JSON.parse('{"a":{"b":{"d":4,"c":3}},"e":5}');
+		const two = JSON.parse('{"e":5,"a":{"b":{"c":3,"d":4}}}');
+		expect(requestHash("POST", url, one)).toBe(requestHash("POST", url, two));
+	});
+
+	test("sorts keys the same whatever the order they were written in, upper case and lower", () => {
+		const keys = ["b", "B", "a", "A", "_", "1", "é", "e"];
+		const forward = Object.fromEntries(keys.map((key) => [key, 1]));
+		const backward = Object.fromEntries(
+			[...keys].reverse().map((key) => [key, 1]),
+		);
+		expect(canonicalJson(forward)).toBe(canonicalJson(backward));
+	});
+
+	test("tells apart bodies that differ only in what is nested", () => {
+		const url = new URL("http://localhost:3000/api/transactions");
+		expect(requestHash("POST", url, nested(32, "1"))).not.toBe(
+			requestHash("POST", url, nested(32, "2")),
+		);
+		expect(requestHash("POST", url, nested(31))).not.toBe(
+			requestHash("POST", url, nested(32)),
+		);
+	});
+});
+
 describe("requestHash", () => {
 	const url = new URL("http://localhost:3000/api/transactions?dryRun=1");
 

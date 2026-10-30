@@ -32,10 +32,10 @@ The frozen clock is 2026-11-02T12:00:00+05:30, which is 2026-11-02T06:30:00Z. To
 
 ## 3. Load the data
 
-- The spec names a fixture module, `seed/golden.ts`, that encodes the dataset row for row, and integration tests use it (F15, BR-F15-26). Find where it lives in the repo. Never retype the rows.
-- Row 27 is not in the fixture: the first request on 2 November creates it through catch-up, as the dataset says. The pending item P1 appears only in write-queue tests.
-- Isolation: the fixture is built once into a template database. A test file that changes golden data runs in its own copy, made with `CREATE DATABASE ... TEMPLATE`, and first clears the catch-up note (`resetCatchUpNote()`, BR-P2-14).
-- If the fixture does not exist yet, it belongs to the demo-data work (F15). Until then, a pure-function test may use inline values copied from the dataset rows. Label them "copied from the golden dataset" and name the rows.
+- The fixture module `seed/golden.ts` encodes the dataset row for row (F15, BR-F15-26). Never retype the rows; use `goldenRow(n)` and its constants.
+- Integration tests load it with `loadGolden(owner, userId)` from `seed/load-golden.ts` (D-471), for a user from `createUser`. Each load gets its own ids, so map them with the result's `id(n)` and `golden(id)`. At M1 it loads 22 rows: #1 to #27 without the Goal rows, #27 included. A test that writes rows uses a user of its own, or rolls back.
+- Row 27 is not in `GOLDEN_TRANSACTIONS`: the first request on 2 November creates it through catch-up, as the dataset says. Until F05 brings catch-up, the loader loads it. The pending item P1 appears only in write-queue tests.
+- Isolation: for now, per test user, as above. Once concurrency tests need it, the fixture is built once into a template database (D-245); a test file that changes golden data then runs in its own copy, made with `CREATE DATABASE ... TEMPLATE`, and first clears the catch-up note (`resetCatchUpNote()`, BR-P2-14).
 
 ## 4. What the test asserts
 
@@ -63,4 +63,4 @@ Never use the real clock, never mock our own modules or the database, never skip
 
 ## Keep this skill current
 
-When the fixture module is written, replace the "if it does not exist yet" note in step 3 with its real location and how tests load it.
+When the loader changes how tests load the dataset (the template database of D-245, or #27 leaving it with F05), update step 3.

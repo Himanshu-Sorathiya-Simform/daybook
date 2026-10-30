@@ -4,12 +4,12 @@
 
 Every private read and write reaches Postgres through one path. A route-handler wrapper checks the request and opens one database transaction. Inside it, the data access layer sets the user's identity, and row-level security makes the database refuse anything that belongs to someone else. The same path makes every change safe to retry and detects edits made on another device. This spec defines that path, the database roles behind it, the security headers in front of it, and the tests that prove it.
 
-| Item       | Value                                                                                                                                                                                                                        |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Milestone  | M0                                                                                                                                                                                                                           |
-| Plan       | Free and Premium                                                                                                                                                                                                             |
-| Depends on | [01-root-spec.md](../01-root-spec.md) sections 7 to 9                                                                                                                                                                        |
-| Decisions  | D-06, D-07, D-12 to D-19, D-39, D-137, D-153, D-165, D-172, D-173, D-180, D-192 to D-197, D-199, D-201 to D-207, D-242 to D-244, D-292, D-300, D-325, D-343, D-362, D-367, D-368, D-370, D-382, D-383, D-386, D-409 to D-444 |
+| Item       | Value                                                                                                                                                                                                                                             |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M0                                                                                                                                                                                                                                                |
+| Plan       | Free and Premium                                                                                                                                                                                                                                  |
+| Depends on | [01-root-spec.md](../01-root-spec.md) sections 7 to 9                                                                                                                                                                                             |
+| Decisions  | D-06, D-07, D-12 to D-19, D-39, D-137, D-153, D-165, D-172, D-173, D-180, D-192 to D-197, D-199, D-201 to D-207, D-242 to D-244, D-292, D-300, D-325, D-343, D-362, D-367, D-368, D-370, D-382, D-383, D-386, D-409 to D-444, D-491, D-492, D-499 |
 
 ## 1. User stories
 
@@ -195,30 +195,30 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
     - `POST /api/account/reset`, guarded by its confirmation text and an empty queue.
 - **BR-P2-17** Steps by mode, in order; the first failure stops the request:
 
-    | #   | Step                                                                                                                           | `user` read | `user` mutation | `webhook` | Failure                                                                                            |
-    | --- | ------------------------------------------------------------------------------------------------------------------------------ | ----------- | --------------- | --------- | -------------------------------------------------------------------------------------------------- |
-    | 1   | Request id                                                                                                                     | Yes         | Yes             | Yes       | none                                                                                               |
-    | 2   | Media type is `application/json` (parameters such as `charset` ignored)                                                        |             | Yes             |           | 415 `unsupported_media_type`                                                                       |
-    | 3   | Body at most 64 KB                                                                                                             |             | Yes             | Yes       | 413 `payload_too_large`                                                                            |
-    | 4   | `Origin` equals `APP_ORIGIN`; a missing `Origin` fails                                                                         |             | Yes             |           | 403 `cross_origin`                                                                                 |
-    | 5   | `Idempotency-Key` present, a UUIDv7; and a `Daybook-Build` header, when sent (the write queue sends it, P1), equals `BUILD_ID` |             | Unless exempt   |           | 400 `bad_request`; 409 `build_mismatch` with `details.buildId`, before any lookup or write (D-383) |
-    | 6   | `If-Match` present when versioned                                                                                              |             | Yes             |           | 400 `bad_request`                                                                                  |
-    | 7   | Provider signature over the raw body                                                                                           |             |                 | Yes       | 400 `bad_request`                                                                                  |
-    | 8   | Session                                                                                                                        | Yes         | Yes             |           | 401 `unauthenticated`                                                                              |
-    | 9   | Daily pass when due (BR-P2-27), then the catch-up check when `catchUp` (BR-P2-14)                                              | Yes         | Yes             |           | Logged only                                                                                        |
-    | 10  | Open `withUser` (read or write)                                                                                                | Yes         | Yes             |           |                                                                                                    |
-    | 11  | Profile, unless the route opts out                                                                                             | Yes         | Yes             |           | 403 `profile_required`                                                                             |
-    | 12  | Capability, if declared                                                                                                        | Yes         | Yes             |           | 403 `premium_required` or `feature_off`                                                            |
-    | 13  | Body against its Zod schema                                                                                                    |             | Yes             | Yes       | 422 `validation_failed`                                                                            |
-    | 14  | Idempotency (BR-P2-18): the record is inserted here; a stored answer was already returned right after step 10                  |             | Unless exempt   |           | Stored response, or 422 `idempotency_key_reused`                                                   |
-    | 15  | Handler                                                                                                                        | Yes         | Yes             | Yes       | Mapped per BR-P2-24                                                                                |
+    | #   | Step                                                                                                                           | `user` read | `user` mutation | `webhook` | Failure                                                                                                  |
+    | --- | ------------------------------------------------------------------------------------------------------------------------------ | ----------- | --------------- | --------- | -------------------------------------------------------------------------------------------------------- |
+    | 1   | Request id                                                                                                                     | Yes         | Yes             | Yes       | none                                                                                                     |
+    | 2   | Media type is `application/json` (parameters such as `charset` ignored)                                                        |             | Yes             |           | 415 `unsupported_media_type`                                                                             |
+    | 3   | Body at most 64 KB                                                                                                             |             | Yes             | Yes       | 413 `payload_too_large`                                                                                  |
+    | 4   | `Origin` equals `APP_ORIGIN`; a missing `Origin` fails                                                                         |             | Yes             |           | 403 `cross_origin`                                                                                       |
+    | 5   | `Idempotency-Key` present, a UUIDv7; and a `Daybook-Build` header, when sent (the write queue sends it, P1), equals `BUILD_ID` |             | Unless exempt   |           | 400 `bad_request`; 409 `build_mismatch` with `details.buildId`, before any lookup or write (D-383)       |
+    | 6   | `If-Match` present when versioned                                                                                              |             | Yes             |           | 400 `bad_request`                                                                                        |
+    | 7   | Provider signature over the raw body                                                                                           |             |                 | Yes       | 400 `bad_request`                                                                                        |
+    | 8   | Session                                                                                                                        | Yes         | Yes             |           | 401 `unauthenticated`                                                                                    |
+    | 9   | Daily pass when due (BR-P2-27), then the catch-up check when `catchUp` (BR-P2-14)                                              | Yes         | Yes             |           | Logged only                                                                                              |
+    | 10  | Open `withUser` (read or write)                                                                                                | Yes         | Yes             |           |                                                                                                          |
+    | 11  | Profile, unless the route opts out                                                                                             | Yes         | Yes             |           | 403 `profile_required`                                                                                   |
+    | 12  | Capability, if declared                                                                                                        | Yes         | Yes             |           | 403 `premium_required` or `feature_off`                                                                  |
+    | 13  | Body against its Zod schema                                                                                                    |             | Yes             | Yes       | 400 `bad_request` for malformed JSON or JSON nested more than 32 levels (D-491); 422 `validation_failed` |
+    | 14  | Idempotency (BR-P2-18): the record is inserted here; a stored answer was already returned right after step 10                  |             | Unless exempt   |           | Stored response, or 422 `idempotency_key_reused`                                                         |
+    | 15  | Handler                                                                                                                        | Yes         | Yes             | Yes       | Mapped per BR-P2-24                                                                                      |
 
     Profile and capabilities are read inside the step 10 transaction. `webhook` handlers run through the system module and never call `withUser`. A mutation with no payload, such as a DELETE, sends `{}` with the JSON media type; its request hash covers `{}` (API-2).
 
 **Idempotency (D-197)**
 
 - **BR-P2-18** **The early lookup** (D-362). Right after opening the transaction (step 10), before the profile, capability and body checks, the wrapper selects any stored record for the key.
-    - **The hash:** computed once, before step 10, from the method, the path with its query string and the raw body's canonical JSON, and reused at step 14 (D-432). A body that is not valid JSON skips the early lookup and fails at step 13.
+    - **The hash:** computed once, before step 10, from the method, the path with its query string and the raw body's canonical JSON, and reused at step 14 (D-432). A body that is not valid JSON, or nests more than 32 levels deep (D-491), skips the early lookup and fails at step 13.
     - **Same hash:** its stored response is returned at once. A replay of a request that committed therefore gets its answer, even if a flag or capability would now refuse it. A replay from an older build is refused at step 5 with `build_mismatch` first, and gets its answer once the client has updated (D-383).
     - **Different hash:** 422 `idempotency_key_reused`.
     - **Otherwise:** the steps continue.
@@ -256,7 +256,7 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
 
     | Source                                                     | Response                                                                                                                                                  |
     | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-    | Zod failure                                                | 422 `validation_failed`, one message per field                                                                                                            |
+    | Zod failure                                                | 422 `validation_failed`, one message per field; an unknown field at its own path with "Remove this field." (D-492)                                        |
     | Unique violation on a business constraint                  | 422 `validation_failed` on the constrained field                                                                                                          |
     | Check-constraint violation                                 | 422 `validation_failed`                                                                                                                                   |
     | Foreign-key violation on insert or update (missing parent) | 422 `parent_missing`                                                                                                                                      |
@@ -430,28 +430,31 @@ None. Error codes reach the user through each feature's states. The messages in 
 
 ## 8. Validation and messages
 
-| Code                     | Default message                                                                                    |
-| ------------------------ | -------------------------------------------------------------------------------------------------- |
-| `bad_request`            | The request could not be read.                                                                     |
-| `unauthenticated`        | Your session has expired. Log in again.                                                            |
-| `cross_origin`           | This request came from another site and was blocked.                                               |
-| `profile_required`       | Finish setting up your profile first.                                                              |
-| `premium_required`       | This is part of Daybook Premium.                                                                   |
-| `feature_off`            | This feature is switched off right now.                                                            |
-| `not_found`              | We could not find that. It may have been deleted.                                                  |
-| `version_conflict`       | This was changed on another device.                                                                |
-| `build_mismatch`         | Daybook was updated. Reload to keep saving changes. (The queue pauses rather than showing it, P1.) |
-| `id_conflict`            | This could not be created. Try again.                                                              |
-| `has_dependents`         | This still has linked items. Remove them first.                                                    |
-| `payload_too_large`      | That is too much data for one request.                                                             |
-| `unsupported_media_type` | This request format is not supported.                                                              |
-| `validation_failed`      | Some fields need attention. (Each field gets its own message from its spec.)                       |
-| `parent_missing`         | The item this belongs to no longer exists.                                                         |
-| `idempotency_key_reused` | This change conflicts with an earlier one. Discard it and try again.                               |
-| `currency_mismatch`      | Not saved: your currency changed after this was made.                                              |
-| `rate_limited`           | Too many attempts. Wait a few seconds and try again.                                               |
-| `timeout`                | This took too long. We will try again.                                                             |
-| `internal`               | Something went wrong on our side. Your change was not saved. (Reads: "This could not be loaded.")  |
+| Code                     | Default message                                                                                                                                     |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bad_request`            | The request could not be read.                                                                                                                      |
+| `unauthenticated`        | Your session has expired. Log in again.                                                                                                             |
+| `cross_origin`           | This request came from another site and was blocked.                                                                                                |
+| `profile_required`       | Finish setting up your profile first.                                                                                                               |
+| `premium_required`       | This is part of Daybook Premium.                                                                                                                    |
+| `feature_off`            | This feature is switched off right now.                                                                                                             |
+| `not_found`              | We could not find that. It may have been deleted.                                                                                                   |
+| `version_conflict`       | This was changed on another device.                                                                                                                 |
+| `build_mismatch`         | Daybook was updated. Reload to keep saving changes. (The queue pauses rather than showing it, P1.)                                                  |
+| `id_conflict`            | This could not be created. Try again.                                                                                                               |
+| `has_dependents`         | This still has linked items. Remove them first.                                                                                                     |
+| `payload_too_large`      | That is too much data for one request.                                                                                                              |
+| `unsupported_media_type` | This request format is not supported.                                                                                                               |
+| `validation_failed`      | Some fields need attention. (Each field gets its own message from its spec.)                                                                        |
+| `date_out_of_window`     | Choose today or one of the 10 days before. (An edit of a Transaction says "Choose a date in this Transaction's entry window." instead, F03, D-499.) |
+| `parent_missing`         | The item this belongs to no longer exists.                                                                                                          |
+| `idempotency_key_reused` | This change conflicts with an earlier one. Discard it and try again.                                                                                |
+| `currency_mismatch`      | Not saved: your currency changed after this was made.                                                                                               |
+| `rate_limited`           | Too many attempts. Wait a few seconds and try again.                                                                                                |
+| `timeout`                | This took too long. We will try again.                                                                                                              |
+| `internal`               | Something went wrong on our side. Your change was not saved. (Reads: "This could not be loaded.")                                                   |
+
+A body field that no schema knows gets `validation_failed` at its own path, such as `filter.month`, with "Remove this field." (D-492).
 
 ## 9. Plan gating
 

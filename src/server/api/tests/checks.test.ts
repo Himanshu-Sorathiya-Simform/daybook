@@ -5,13 +5,15 @@ import {
 	checkOrigin,
 	isJsonMediaType,
 	isMutation,
-	isUuidV7,
+	MAX_JSON_DEPTH,
 	parseIfMatch,
 	queuePending,
 	readBody,
 	requestIdOf,
+	tooDeep,
 } from "../checks";
 import { ApiError } from "../errors";
+import { isUuidV7 } from "@/lib/ids";
 
 const V7 = "0192f0c4-8a1b-7c2d-9e3f-0123456789ab";
 
@@ -161,24 +163,6 @@ describe("checkOrigin", () => {
 	});
 });
 
-describe("isUuidV7", () => {
-	test("accepts a UUIDv7, in either case", () => {
-		expect(isUuidV7(V7)).toBe(true);
-		expect(isUuidV7(V7.toUpperCase())).toBe(true);
-	});
-
-	test.each([
-		["a UUIDv4", "0192f0c4-8a1b-4c2d-9e3f-0123456789ab"],
-		["a bad variant", "0192f0c4-8a1b-7c2d-7e3f-0123456789ab"],
-		["no dashes", "0192f0c48a1b7c2d9e3f0123456789ab"],
-		["extra text", `${V7}x`],
-		["empty", ""],
-		["null", null],
-	])("refuses %s", (_name, value) => {
-		expect(isUuidV7(value)).toBe(false);
-	});
-});
-
 describe("requestIdOf", () => {
 	test("keeps the proxy's UUIDv7, lower-cased", () => {
 		expect(requestIdOf(new Headers({ "x-request-id": V7.toUpperCase() }))).toBe(
@@ -243,5 +227,57 @@ describe("queuePending", () => {
 		["another cookie value", { cookie: "daybook_queue=done" }],
 	])("is false with %s", (_name, headers) => {
 		expect(queuePending(new Headers(headers))).toBe(false);
+	});
+});
+
+describe("tooDeep (BR-P2-17 step 13, D-491)", () => {
+	/** `depth` arrays, one inside the next, as JSON.parse reads them. */
+	const arrays = (depth: number) =>
+		JSON.parse("[".repeat(depth) + "]".repeat(depth)) as unknown;
+	/** `depth` objects, each holding the next under `a`. */
+	const objects = (depth: number) =>
+		JSON.parse(
+			'{"a":'.repeat(depth - 1) + "{}" + "}".repeat(depth - 1),
+		) as unknown;
+
+	test("the limit is 32 levels", () => {
+		expect(MAX_JSON_DEPTH).toBe(32);
+	});
+
+	test.each([
+		["a number", 5],
+		["a string", "text"],
+		["null", null],
+		["an empty object", {}],
+		[
+			"a view body, three levels deep",
+			{ filter: { cat: ["food"] }, name: "Food" },
+		],
+		["32 arrays", arrays(32)],
+		["32 objects", objects(32)],
+	])("accepts %s", (_label, value) => {
+		expect(tooDeep(value)).toBe(false);
+	});
+
+	test.each([
+		["33 arrays", arrays(33)],
+		["33 objects", objects(33)],
+		[
+			"arrays and objects alternating, 33 levels",
+			JSON.parse('[{"a":'.repeat(16) + "[]" + "}]".repeat(16) + ""),
+		],
+	])("refuses %s", (_label, value) => {
+		expect(tooDeep(value)).toBe(true);
+	});
+
+	test("refuses a deep branch beside shallow ones", () => {
+		expect(tooDeep({ a: 1, b: [2, 3], c: arrays(32) })).toBe(true);
+	});
+
+	// B4: 30,000 levels fit in the 64 KB limit and overflowed the canonical hash's recursion.
+	test("reads 30,000 levels without overflowing the stack", () => {
+		const deep = arrays(30_000);
+		expect(() => tooDeep(deep)).not.toThrow();
+		expect(tooDeep(deep)).toBe(true);
 	});
 });

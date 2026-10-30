@@ -1,5 +1,7 @@
 import "server-only";
+import type { CurrencyCode } from "@/lib/currency";
 import { todayIn } from "@/lib/time";
+import { ApiError } from "../api/errors";
 import { getAuth } from "../auth/auth";
 import { profile as profileTable } from "../db/schema";
 import type { Tx } from "./with-user";
@@ -22,7 +24,8 @@ export type RequestContext = {
 
 export type Profile = {
 	country: string;
-	currency: string;
+	/** A key of `app.currencies`, which the column's foreign key guarantees (MON-2). */
+	currency: CurrencyCode;
 	timezone: string;
 	weekStart: "monday" | "sunday" | "saturday";
 	lastCatchUpOn: string;
@@ -62,7 +65,13 @@ export async function readProfile(tx: Tx): Promise<Profile | null> {
 		})
 		.from(profileTable)
 		.limit(1);
-	return row ? { ...row, weekStart: row.weekStart as Profile["weekStart"] } : null;
+	return row ?
+			{
+				...row,
+				currency: row.currency as CurrencyCode,
+				weekStart: row.weekStart as Profile["weekStart"],
+			}
+		:	null;
 }
 
 /** `ctx` with its profile, and `today` from the profile's zone (TIME-5). */
@@ -75,4 +84,15 @@ export function withProfile(
 		profile,
 		today: profile ? todayIn(profile.timezone, ctx.now) : null,
 	};
+}
+
+/** A request context with a profile, which every finance read and write needs (BR-P2-13). */
+export type ProfiledContext = RequestContext & { profile: Profile; today: string };
+
+/** `ctx` with its profile, or 403 `profile_required`. A route that needs a profile has already
+ * refused without one; this keeps a query function from running without it. */
+export function requireProfile(ctx: RequestContext): ProfiledContext {
+	const { profile, today } = ctx;
+	if (!profile || today === null) throw new ApiError("profile_required");
+	return { ...ctx, profile, today };
 }

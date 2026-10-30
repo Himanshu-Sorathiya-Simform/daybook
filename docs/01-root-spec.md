@@ -251,12 +251,12 @@ A write made offline is applied to the screen as pending and stored in the write
 ### 6.3 Dates and times
 
 - **TIME-1** Instants are UTC, stored as `timestamptz` and sent as ISO 8601 with `Z`: `occurred_at`, `created_at`, `updated_at`.
-- **TIME-2** `occurred_on` is the calendar date of `occurred_at` in the profile timezone at the moment of writing. The client sets it; the server checks it. A later timezone change never moves it; editing the time recomputes it with the current profile timezone.
+- **TIME-2** `occurred_on` is the calendar date of `occurred_at` in the profile timezone at the moment of writing. The client sets it; the server checks it. A later timezone change never moves it. An edit that changes only the time keeps it, and an edit that changes the date sets it to the date chosen (BR-F03-11, D-238).
 - **TIME-3** All bucketing uses `occurred_on`: months, days, Budgets, reports, heat maps, insights. Ordering uses `occurred_on`, then `occurred_at`, then `id`, so day groups never interleave after a timezone change (D-218).
 - **TIME-4** Instants are displayed in the profile timezone. When the device's current UTC offset differs from the profile zone's, the header shows a dismissible notice: "Times are shown in Kolkata time (GMT+05:30). Your device is on GMT+04:00." (F02, D-215).
 - **TIME-5** Today is the current date in the profile timezone. The server derives it from its UTC clock and the profile timezone, never from the device.
 - **TIME-6** Subscription charges get `occurred_on` = due date and `occurred_at` = 00:00 of that date in the profile timezone. The interface shows "Auto" instead of a time.
-- **TIME-7** A user-entered `occurred_on` must fall between the recording date minus 10 days and the recording date, inclusive. Edits use the same window, anchored to the original recording date. System rows (charges, demo, seed) are exempt. The server also rejects a `created_at` later than the request clock (`ctx.now`, P2) plus 5 minutes. Refusal: 422 `date_out_of_window` (D-77).
+- **TIME-7** A user-entered `occurred_on` must fall between the recording date minus 10 days and the recording date, inclusive. Edits use the same window, anchored to the original recording date. System rows (charges, demo, seed) are exempt. The server also rejects a `created_at` later than the request clock (`ctx.now`, P2) plus 5 minutes. It sets no lower bound on `created_at`, so a write replayed from the offline queue days later keeps the window of its own recording date. Refusal: 422 `date_out_of_window` (D-77).
 - **TIME-8** Months, quarters (January to March, and so on) and years (January to December) are calendar periods. The week starts on the profile's week start: Monday, Sunday or Saturday, defaulting from the region (D-76).
 - **TIME-9** Subscription schedules anchor to the start date's day of month and clamp to each month's length: 31 January, 28 or 29 February, 31 March. Weekly adds 7 days. Quarterly adds 3 anchored months. Yearly adds 12 anchored months, so 29 February becomes 28 February in other years.
 - **TIME-10** Date math uses date-fns 4 with `@date-fns/tz`. Business dates never use `Date` local getters.
@@ -299,7 +299,7 @@ A write made offline is applied to the screen as pending and stored in the write
 
 ### 6.7 Input limits
 
-Text is trimmed and normalized to Unicode NFC, and control characters are rejected; a note keeps line feeds (D-176). Lengths count Unicode code points (D-230).
+Text is trimmed and normalized to Unicode NFC, and control characters are rejected; a note keeps line feeds (D-176). A lone surrogate is rejected everywhere, and so are U+2028 and U+2029 in a single-line field. Text of only whitespace and invisible characters, such as the zero-width space, counts as empty (D-498). Lengths count Unicode code points (D-230).
 
 | Field               | Rule                                                     |
 | ------------------- | -------------------------------------------------------- |
@@ -327,22 +327,23 @@ Text is trimmed and normalized to Unicode NFC, and control characters are reject
 
 One filter object drives the list, its totals, Analytics and drill-downs. One server function turns it into SQL, so they cannot disagree (D-88).
 
-| Field        | URL parameter | Values                                               | Used by                      |
-| ------------ | ------------- | ---------------------------------------------------- | ---------------------------- |
-| Date range   | `from`, `to`  | `YYYY-MM-DD`                                         | Transactions, Analytics      |
-| Month        | `month`       | `YYYY-MM`                                            | Dashboard, Budgets, Insights |
-| Types        | `type`        | Comma list of TXN-1 types                            | Transactions                 |
-| Categories   | `cat`         | Comma list of keys                                   | Transactions, Analytics      |
-| Text         | `q`           | FIL-3                                                | Transactions                 |
-| Amount range | `min`, `max`  | Major units, for example `1500.00`                   | Transactions                 |
-| Source       | `src`         | `manual`, `subscription`                             | Transactions                 |
-| Goal         | `goal`        | Goal id                                              | Transactions                 |
-| Subscription | `sub`         | Subscription id: that Subscription's charges (D-255) | Transactions                 |
-| Sort         | `sort`, `dir` | `date` or `amount`; `desc` or `asc`                  | Transactions                 |
+| Field        | URL parameter | Values                                                                          | Used by                      |
+| ------------ | ------------- | ------------------------------------------------------------------------------- | ---------------------------- |
+| Date range   | `from`, `to`  | `YYYY-MM-DD`                                                                    | Transactions, Analytics      |
+| Month        | `month`       | `YYYY-MM`                                                                       | Dashboard, Budgets, Insights |
+| Types        | `type`        | Comma list of TXN-1 types                                                       | Transactions                 |
+| Categories   | `cat`         | Comma list of keys                                                              | Transactions, Analytics      |
+| Text         | `q`           | FIL-3                                                                           | Transactions                 |
+| Amount range | `min`, `max`  | Major units, for example `1500.00`                                              | Transactions                 |
+| Source       | `src`         | `manual`, `subscription`                                                        | Transactions                 |
+| Goal         | `goal`        | Goal id                                                                         | Transactions                 |
+| Subscription | `sub`         | Subscription id: that Subscription's charges (D-255)                            | Transactions                 |
+| Sort         | `sort`, `dir` | `date` or `amount`; `desc` or `asc`                                             | Transactions                 |
+| Group        | `group`       | `day`, `category`, `payee` or `none`; sets the list's grouping, selects no rows | Transactions                 |
 
 - **FIL-1** Fields combine with AND; values inside one list combine with OR.
 - **FIL-2** The list, its header totals, Analytics and chart drill-downs all use the same filter-to-SQL function.
-- **FIL-3** Text matches payee, description and note, case-insensitively, as a substring, using a trigram index. A numeric query also matches the exact amount, converted to minor units.
+- **FIL-3** Text matches payee, description and note, case-insensitively as Postgres's `lower()` folds case (D-497), as a substring, over the user's own rows. No text index serves it: under row-level security, Postgres uses an index only for leakproof conditions, and `ILIKE` is not one (D-48). A numeric query also matches the exact amount, converted to minor units.
 - **FIL-4** Committed filters live in the URL. A text box keeps its own draft and commits after 300 ms without typing.
 - **FIL-5** An invalid parameter is dropped with a notice, never an error page.
 - **FIL-6** A category filter excludes Goal rows, which have no category.
@@ -408,20 +409,20 @@ The browser never touches the database. Every private read and write passes the 
 
 ### 7.3 Data per screen
 
-| Screen            | Rendering                           | Data                                         | Persisted for offline                                              | Writes offline                               |
-| ----------------- | ----------------------------------- | -------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------- |
-| Dashboard         | Server prefetch, client widgets     | Dashboard and insights queries for the month | Current and last viewed month                                      | n/a                                          |
-| Transactions      | Server prefetch, client list        | Infinite list and summary for the filter     | First 2 pages and summary of the default filter; payee suggestions | Yes                                          |
-| Budgets           | Client                              | Budgets for the month                        | Current month                                                      | Yes                                          |
-| Subscriptions     | Client                              | Subscriptions, upcoming renewals             | Yes                                                                | Yes                                          |
-| Goals             | Client                              | Goals list, viewed Goal details              | Yes                                                                | Yes, including contributions and withdrawals |
-| Investments       | Client                              | Portfolio summary, series and holdings       | Last viewed range, and the holdings                                | Read-only                                    |
-| Analytics         | Client                              | Chart rollups for the filter                 | Last viewed range                                                  | n/a                                          |
-| Insights          | Client                              | Insights for the month                       | Current and last viewed month                                      | Dismiss is online only                       |
-| Reports           | Client form, file download          | Report endpoint                              | No                                                                 | Online only                                  |
-| Search            | Palette                             | Search endpoint                              | No                                                                 | Online only                                  |
-| Learn             | Server components                   | Sanity                                       | Read posts, by the service worker                                  | n/a                                          |
-| Settings, billing | Server components with client forms | Profile, auth, billing endpoints             | Profile through `/api/me`                                          | Online only, except dashboard layout         |
+| Screen            | Rendering                           | Data                                                  | Persisted for offline                                                           | Writes offline                               |
+| ----------------- | ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------- |
+| Dashboard         | Server prefetch, client widgets     | Dashboard and insights queries for the month          | Current and last viewed month                                                   | n/a                                          |
+| Transactions      | Server prefetch, client list        | Infinite list and summary for the filter; saved views | First 2 pages and summary of the default filter; payee suggestions; saved views | Yes; saved views online only                 |
+| Budgets           | Client                              | Budgets for the month                                 | Current month                                                                   | Yes                                          |
+| Subscriptions     | Client                              | Subscriptions, upcoming renewals                      | Yes                                                                             | Yes                                          |
+| Goals             | Client                              | Goals list, viewed Goal details                       | Yes                                                                             | Yes, including contributions and withdrawals |
+| Investments       | Client                              | Portfolio summary, series and holdings                | Last viewed range, and the holdings                                             | Read-only                                    |
+| Analytics         | Client                              | Chart rollups for the filter                          | Last viewed range                                                               | n/a                                          |
+| Insights          | Client                              | Insights for the month                                | Current and last viewed month                                                   | Dismiss is online only                       |
+| Reports           | Client form, file download          | Report endpoint                                       | No                                                                              | Online only                                  |
+| Search            | Palette                             | Search endpoint                                       | No                                                                              | Online only                                  |
+| Learn             | Server components                   | Sanity                                                | Read posts, by the service worker                                               | n/a                                          |
+| Settings, billing | Server components with client forms | Profile, auth, billing endpoints                      | Profile through `/api/me`                                                       | Online only, except dashboard layout         |
 
 ### 7.4 State ownership
 
@@ -509,7 +510,7 @@ The browser never touches the database. Every private read and write passes the 
 - **API-7** Lists use cursors:
     - Request: `?limit=` (default 50, maximum 100) and `?cursor=`.
     - Response: `data` holds `{ "items": [...], "nextCursor": "...", "prevCursor": "..." }` (API-11).
-    - Cursors are opaque, encode the sort key and id, and stay stable when rows are inserted.
+    - Cursors are opaque, encode the sort key and id, and stay stable when rows are inserted. One exception: a list ordered by group totals, such as F03's category and payee grouping, ends its cursors when a write reorders the groups (D-446).
 - **API-8** Every response carries `x-request-id` and `Server-Timing`.
 
 **Errors (API-9).** Every error uses one envelope:
@@ -564,8 +565,10 @@ Default messages for every code are in P2, section 8. A feature spec may add its
 | `/api/layout`                                                                        | GET, PUT                                                        | F08          |
 | `/api/transactions`, `/api/transactions/[id]`                                        | GET, POST, PATCH, DELETE                                        | F03          |
 | `/api/transactions/summary`                                                          | GET                                                             | F03          |
-| `/api/payees`                                                                        | GET (suggestions)                                               | F03          |
+| `/api/transactions/facets`, `/api/transactions/amount-histogram`                     | GET                                                             | F03          |
+| `/api/payees`, `/api/payees/history`                                                 | GET (suggestions and search; one payee's recent rows)           | F03          |
 | `/api/transactions/bulk-delete`                                                      | POST (Stretch)                                                  | F03          |
+| `/api/transaction-views`, `/api/transaction-views/[id]`                              | GET, POST, PATCH, DELETE (saved views)                          | F03          |
 | `/api/budgets`, `/api/budgets/[id]`                                                  | GET, POST, PATCH, DELETE                                        | F04          |
 | `/api/subscriptions`, `/api/subscriptions/[id]`                                      | GET, POST, PATCH, DELETE                                        | F05          |
 | `/api/goals`, `/api/goals/[id]`                                                      | GET, POST, PATCH, DELETE                                        | F06          |

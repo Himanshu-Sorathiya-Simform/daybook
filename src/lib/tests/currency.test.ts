@@ -4,6 +4,7 @@ import {
 	CURRENCY_EXPONENTS,
 	currencyExponent,
 	currencySymbol,
+	maxMinor,
 	type CurrencyCode,
 } from "@/lib/currency";
 
@@ -100,5 +101,28 @@ describe("currencySymbol", () => {
 
 	test("refuses a locale that does not exist", () => {
 		expect(() => currencySymbol("INR", "not a locale")).toThrow(RangeError);
+	});
+});
+
+describe("maxMinor (MON-5)", () => {
+	// F03, BR-F03-03: 999,999,999 major units plus a full fraction.
+	test.each([
+		["INR", 99_999_999_999],
+		["USD", 99_999_999_999],
+		["EUR", 99_999_999_999],
+		["GBP", 99_999_999_999],
+		["JPY", 999_999_999],
+		["KWD", 999_999_999_999],
+	] as [CurrencyCode, number][])(
+		"%s allows at most %i minor units",
+		(currency, max) => {
+			expect(maxMinor(currency)).toBe(max);
+		},
+	);
+
+	test("every maximum is a safe integer, so JSON numbers carry it exactly", () => {
+		for (const currency of CODES) {
+			expect(Number.isSafeInteger(maxMinor(currency))).toBe(true);
+		}
 	});
 });

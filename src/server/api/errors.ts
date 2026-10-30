@@ -62,6 +62,16 @@ export const ERRORS = {
 		status: 422,
 		message: "Not saved: your currency changed after this was made.",
 	},
+	// TIME-7: a user-entered date outside its entry window (F03, BR-F03-08).
+	date_out_of_window: {
+		status: 422,
+		message: "Choose today or one of the 10 days before.",
+	},
+	// F03: a 21st saved Transactions view (BR-F03-63).
+	limit_reached: {
+		status: 422,
+		message: "You have 20 views. Delete one to save another.",
+	},
 	rate_limited: {
 		status: 429,
 		message: "Too many attempts. Wait a few seconds and try again.",
@@ -137,11 +147,22 @@ export function envelope(
 	};
 }
 
+/** The message for a body field no schema knows (P2 section 8, D-492). */
+export const UNKNOWN_FIELD_MESSAGE = "Remove this field.";
+
 /** Turns a Zod failure into `validation_failed` with one message per field (BR-P2-24). The
- * first message wins for a field; a problem with the body as a whole goes under `_body`. */
+ * first message wins for a field; a problem with the body as a whole goes under `_body`. An
+ * unknown field is named at its own path, such as `filter.month`, rather than on its parent
+ * (D-492). */
 export function fromZodError(error: z.ZodError): ApiError {
 	const fields: Record<string, string> = {};
 	for (const issue of error.issues) {
+		if (issue.code === "unrecognized_keys") {
+			for (const key of issue.keys) {
+				fields[[...issue.path, key].join(".")] ??= UNKNOWN_FIELD_MESSAGE;
+			}
+			continue;
+		}
 		const field = issue.path.length > 0 ? issue.path.join(".") : "_body";
 		fields[field] ??= issue.message;
 	}

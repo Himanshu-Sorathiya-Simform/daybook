@@ -39,6 +39,25 @@ const restrict = (...doors) => ({
 
 const EXEMPT = ["**/tests/**", "scripts/**", "vitest.*"];
 
+// The amount parser turns text into minor units by joining digit strings, never through a float
+// (MON-1, AC-F03-14, D-460). Each construct that could bring a float in is refused in that file.
+const FLOAT_MESSAGE =
+	"Amounts are integers built from digit strings; no float arithmetic here (MON-1, D-460).";
+const FLOAT_BANS = [
+	"CallExpression[callee.name='parseFloat']",
+	"CallExpression[callee.object.name='Number'][callee.property.name='parseFloat']",
+	"CallExpression[callee.name='Number']",
+	"UnaryExpression[operator='+']",
+	"BinaryExpression[operator='/']",
+	"BinaryExpression[operator='*']",
+	"BinaryExpression[operator='**']",
+	"AssignmentExpression[operator='/=']",
+	"AssignmentExpression[operator='*=']",
+	"AssignmentExpression[operator='**=']",
+	"CallExpression[callee.property.name='toFixed']",
+	"MemberExpression[object.name='Math']",
+].map((selector) => ({ selector, message: FLOAT_MESSAGE }));
+
 const eslintConfig = defineConfig([
 	...nextVitals,
 	...nextTs,
@@ -75,6 +94,11 @@ const eslintConfig = defineConfig([
 		files: ["src/server/auth/**"],
 		ignores: EXEMPT,
 		rules: restrict("withUser", "runtimePool", "systemPool"),
+	},
+	{
+		// The amount parser (D-460) and the histogram edges (BR-F03-60, D-477).
+		files: ["src/lib/amount.ts", "src/server/dal/transactions/histogram.ts"],
+		rules: { "no-restricted-syntax": ["error", ...FLOAT_BANS] },
 	},
 ]);
 

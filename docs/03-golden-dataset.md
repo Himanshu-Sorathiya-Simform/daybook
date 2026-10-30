@@ -51,7 +51,7 @@ It is built to catch the mistakes that matter:
 
 ## Transactions
 
-Local time is Asia/Kolkata. "Auto" marks a Subscription charge, stored at 00:00 local (TIME-6). Rows marked ⚑ fall on a different date in UTC than locally.
+Local time is Asia/Kolkata. "Auto" marks a Subscription charge, stored at 00:00 local (TIME-6). Rows marked ⚑ fall in a different month in UTC than locally; every charge also falls on the day before in UTC, at 18:30.
 
 | #    | `occurred_on` | Local time | `occurred_at` (UTC)  | Type              | Category or Goal | Payee              | Description       | Amount    | Source                                          |
 | ---- | ------------- | ---------- | -------------------- | ----------------- | ---------------- | ------------------ | ----------------- | --------- | ----------------------------------------------- |

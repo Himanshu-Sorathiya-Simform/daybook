@@ -9,7 +9,7 @@ People create a Daybook account with an email and password, log in and out on an
 | Milestone  | M0 (auth core), M1 (account settings)                                                                                                                                                                         |
 | Plan       | Free and Premium; export of all Transactions is Stretch (`account.export`)                                                                                                                                    |
 | Depends on | [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F02 (onboarding and display name), F12 (Stripe Customer), F14 (posts on the landing page), P1 (cache and queue wipes) |
-| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385, D-433                                                                                                     |
+| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385, D-433, D-452                                                                                              |
 
 ## 1. User stories
 
@@ -125,7 +125,7 @@ People create a Daybook account with an email and password, log in and out on an
 
 **Reset my data (D-191)**
 
-- **BR-F01-20** Reset deletes every Transaction, Budget, Subscription (with its tombstones), Goal and dismissed insight, in one write transaction. That transaction first locks the profile row with `SELECT ... FOR UPDATE` (SRV-7, D-213), so no catch-up run or demo load can interleave. It keeps:
+- **BR-F01-20** Reset deletes every Transaction, saved Transactions view (F03, D-452), Budget, Subscription (with its tombstones), Goal and dismissed insight, in one write transaction. That transaction first locks the profile row with `SELECT ... FOR UPDATE` (SRV-7, D-213), so no catch-up run or demo load can interleave. It keeps:
     - the account and profile;
     - the dashboard layout;
     - the portfolio;
@@ -350,7 +350,7 @@ Daybook's own endpoints:
 - **AC-F01-10** (integration) "Sign out all other devices" leaves only the current session. A password change with the option checked revokes the others and keeps the current one.
 - **AC-F01-11** (integration) `/update-user` with `image` or any field other than `name` is refused; a 51-character name is refused.
 - **AC-F01-12** (integration) Given the golden dataset, when reset runs, then:
-    - Transactions, Budgets, Subscriptions, tombstones, Goals and dismissed insights are empty;
+    - Transactions, saved views, Budgets, Subscriptions, tombstones, Goals and dismissed insights are empty;
     - profile, layout, holdings and entitlements are unchanged;
     - the currency can be changed.
 - **AC-F01-13** (integration) Given a Premium user, when deletion succeeds, then the Stripe Customer no longer exists in test mode and no row with that user id remains in any `app` or `auth` table.

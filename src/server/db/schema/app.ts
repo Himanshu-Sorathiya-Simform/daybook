@@ -1,8 +1,11 @@
 import "server-only";
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import {
+	bigint,
+	boolean,
 	check,
 	date,
+	foreignKey,
 	index,
 	integer,
 	jsonb,
@@ -11,7 +14,9 @@ import {
 	text,
 	timestamp,
 	unique,
+	uniqueIndex,
 	uuid,
+	type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { user } from "./auth";
 
@@ -63,6 +68,8 @@ export const categories = appSchema.table(
 		position: smallint("position").notNull().unique(),
 	},
 	(t) => [
+		// The target of a Transaction's composite key (category, category_kind) (D-466).
+		unique("categories_key_kind_key").on(t.key, t.kind),
 		check("categories_key_format", sql`${t.key} ~ '^[a-z_]+$'`),
 		check("categories_kind_values", sql`${t.kind} IN ('expense', 'income')`),
 		check("categories_position_positive", sql`${t.position} >= 1`),
@@ -126,6 +133,144 @@ export const idempotencyRecords = appSchema.table(
 			"idempotency_records_status_code_range",
 			sql`${t.statusCode} BETWEEN 100 AND 599`,
 		),
+	],
+);
+
+/** A text column's backstop (BR-F03-12, D-467): 1 to `max` code points, in NFC, with no
+ * control character. `multiline` allows the line feed, for a note. Empty text is stored as
+ * null, so a present value is never empty. */
+function textCheck(
+	name: string,
+	column: SQL.Aliased | AnyPgColumn,
+	max: number,
+	multiline = false,
+) {
+	const control =
+		multiline ?
+			String.raw`[\x01-\x09\x0b-\x1f\x7f-\x9f]`
+		:	String.raw`[\x01-\x1f\x7f-\x9f]`;
+	return check(
+		name,
+		sql`char_length(${column}) BETWEEN 1 AND ${sql.raw(String(max))}
+			AND ${column} !~ ${sql.raw(`'${control}'`)}
+			AND ${column} IS NFC NORMALIZED`,
+	);
+}
+
+/**
+ * One user's ledger (F03 section 3). At M1 it holds income, expenses and refunds; `goal_id`,
+ * the Goal types and the charge link (`subscription_id`, `due_on`, `edited`) arrive with F06's
+ * and F05's migrations in M2 (D-465). The checks are backstops for the shared schemas'
+ * rules (D-467). Both indexes lead with `user_id` and hold only leakproof comparisons, the
+ * only kind Postgres uses as an index condition under RLS; text search scans the user's
+ * rows instead (D-48, D-468).
+ */
+export const transactions = appSchema.table(
+	"transactions",
+	{
+		...privateColumns(),
+		type: text("type").notNull(),
+		amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+		occurredAt: instant("occurred_at").notNull(),
+		occurredOn: date("occurred_on", { mode: "string" }).notNull(),
+		category: text("category").notNull(),
+		// Lets a foreign key check that the category suits the type (TXN-3, D-466).
+		categoryKind: text("category_kind").generatedAlwaysAs(
+			sql`CASE "type" WHEN 'income' THEN 'income' ELSE 'expense' END`,
+		),
+		payee: text("payee").notNull(),
+		description: text("description"),
+		note: text("note"),
+		source: text("source").notNull(),
+		demo: boolean("demo").notNull().default(false),
+		version: integer("version").notNull().default(1),
+	},
+	(t) => [
+		foreignKey({
+			name: "transactions_category_kind_fk",
+			columns: [t.category, t.categoryKind],
+			foreignColumns: [categories.key, categories.kind],
+		}),
+		index("transactions_date_order_idx").on(
+			t.userId,
+			t.occurredOn,
+			t.occurredAt,
+			t.id,
+		),
+		index("transactions_amount_order_idx").on(
+			t.userId,
+			t.amountMinor,
+			t.occurredOn,
+			t.occurredAt,
+			t.id,
+		),
+		check(
+			"transactions_type_values",
+			sql`${t.type} IN ('income', 'expense', 'refund')`,
+		),
+		check(
+			"transactions_amount_range",
+			sql`${t.amountMinor} BETWEEN 1 AND 999999999999`,
+		),
+		check(
+			"transactions_occurred_at_minute",
+			sql`date_trunc('minute', ${t.occurredAt}) = ${t.occurredAt}`,
+		),
+		check(
+			"transactions_occurred_on_fits",
+			sql`${t.occurredOn} BETWEEN ((${t.occurredAt} AT TIME ZONE 'UTC') - interval '12 hours')::date
+				AND ((${t.occurredAt} AT TIME ZONE 'UTC') + interval '14 hours')::date`,
+		),
+		textCheck("transactions_payee_text", t.payee, 80),
+		textCheck("transactions_description_text", t.description, 120),
+		textCheck("transactions_note_text", t.note, 500, true),
+		check(
+			"transactions_source_values",
+			sql`${t.source} IN ('manual', 'subscription')`,
+		),
+		check("transactions_version_positive", sql`${t.version} >= 1`),
+	],
+);
+
+/**
+ * Saved Transactions views (F03 section 3, BR-F03-63 to BR-F03-69). The filter is a JSON
+ * object whose keys and values the shared schema checks (BR-F03-64); `group` is a reserved
+ * word, so the column is `group_by`. Names are unique per user by `lower()`. The limit of 20
+ * has no backstop here: the create handler serializes creates per user (D-469).
+ */
+export const transactionViews = appSchema.table(
+	"transaction_views",
+	{
+		...privateColumns(),
+		name: text("name").notNull(),
+		filter: jsonb("filter").notNull(),
+		sort: text("sort").notNull(),
+		dir: text("dir").notNull(),
+		groupBy: text("group_by").notNull(),
+		version: integer("version").notNull().default(1),
+	},
+	(t) => [
+		uniqueIndex("transaction_views_user_id_name_key").on(
+			t.userId,
+			sql`lower(${t.name})`,
+		),
+		index("transaction_views_order_idx").on(t.userId, t.createdAt, t.id),
+		textCheck("transaction_views_name_text", t.name, 40),
+		check(
+			"transaction_views_filter_object",
+			sql`jsonb_typeof(${t.filter}) = 'object'`,
+		),
+		check("transaction_views_sort_values", sql`${t.sort} IN ('date', 'amount')`),
+		check("transaction_views_dir_values", sql`${t.dir} IN ('desc', 'asc')`),
+		check(
+			"transaction_views_group_by_values",
+			sql`${t.groupBy} IN ('day', 'category', 'payee', 'none')`,
+		),
+		check(
+			"transaction_views_day_needs_date_sort",
+			sql`NOT (${t.sort} = 'amount' AND ${t.groupBy} = 'day')`,
+		),
+		check("transaction_views_version_positive", sql`${t.version} >= 1`),
 	],
 );
 

@@ -18,6 +18,8 @@ export const TABLE_CLASSES = {
 	categories: "reference",
 	profile: "private",
 	idempotency_records: "private",
+	transactions: "private",
+	transaction_views: "private",
 	daily_pass_markers: "system",
 } as const satisfies Record<string, TableClass>;
 

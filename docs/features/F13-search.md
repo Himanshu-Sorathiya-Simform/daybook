@@ -83,8 +83,8 @@ Scope chips and typed prefixes narrow the search. Results come from the server, 
 
     Results are in list order, newest first (TIME-3), so the palette's first results are the first rows of the list that "See all" opens: `/transactions?q=<query>`.
 
-- **BR-F13-08** **Subscriptions** (D-372): the predicate is `name ILIKE '%q%'`, with `%`, `_` and `\` escaped, through a trigram index on `name` (`gin_trgm_ops`). A numeric query also matches the amount exactly. Order: not ended first, by name, then ended ones with an "Ended" badge. Opening an ended one shows its dialog, with Resume (F05).
-- **BR-F13-09** **Goals:** `name ILIKE '%q%'`, escaped as above, through a trigram index on `name` (`gin_trgm_ops`). Order: active, then completed, then archived, each by name.
+- **BR-F13-08** **Subscriptions** (D-372): the predicate is `name ILIKE '%q%'`, with `%`, `_` and `\` escaped, over the user's own Subscriptions (FIL-3, D-48). A numeric query also matches the amount exactly. Order: not ended first, by name, then ended ones with an "Ended" badge. Opening an ended one shows its dialog, with Resume (F05).
+- **BR-F13-09** **Goals:** `name ILIKE '%q%'`, escaped as above, over the user's own Goals. Order: active, then completed, then archived, each by name.
 - **BR-F13-10** **Learn (from M7):** public post titles through F14's `searchLearn`, only for queries of 3 or more characters. It runs after the database groups' transaction has committed, through P2's `afterCommit` option (BR-P2-15), so no connection waits on Sanity. A Sanity failure returns the group empty with `error: true`, shown as "Learn search failed." Until M7 the Learn chip, the `l:` prefix and "Go to Learn" are absent, and no Learn group is returned.
 - **BR-F13-11** **Limits.** In All, each group returns up to 5 items and a `more` flag. In a scoped search, up to 20. "See all in Transactions" appears under the Transactions group whenever `more` is true, and "See all in Learn" (to `/learn?q=<query>`, from M7) likewise. Subscriptions and Goals have no See all; their lists are short, and a scoped search shows 20.
 - **BR-F13-12** **Confirmed only.** The server searches confirmed rows. When the device's queue holds items, the palette adds "Changes waiting to sync appear here after they're saved." (P1).
@@ -176,7 +176,7 @@ BR-F13-15: actions and navigation only. The palette saves nothing, and the searc
 | `/api/search` | GET    | `q` (section 3's rules), `scope` (`all`, `transactions`, `subscriptions`, `goals`, `learn`; default `all`) | `{ q, scope, groups: [{ kind, items, more, error }], currency }` | 400 (`q` too short or invalid, unknown scope), 401, 403 `profile_required` | Read        |
 
 - **Statements:** one read transaction, with one statement per searched database group (at most 3), and from M7 one call to F14's search for Learn.
-- **Indexes:** each group uses its trigram index (`pg_trgm`, D-48). A migration creates the extension and the `gin_trgm_ops` indexes on Subscription and Goal `name`, which `ILIKE` uses. F03 owns the Transactions index.
+- **Indexes:** none for text. Under row-level security, Postgres uses an index only for leakproof conditions, and `ILIKE` is not one, so each group scans the user's own rows, found through its table's `user_id` index (D-48).
 - **Learn's time:** the Learn call runs after the commit, so it is reported as `Server-Timing` `after;dur`, outside the 300 ms budget, which applies to `app;dur` (P2, BR-P2-15; D-386). F14's Sanity time limit bounds it, at about 4 seconds at most (BR-F14-01).
 - **Budget:** p95 within NFR-1's 300 ms on the stress account (P3).
 

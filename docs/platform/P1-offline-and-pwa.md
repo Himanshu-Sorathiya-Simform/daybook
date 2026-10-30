@@ -16,7 +16,7 @@ This spec owns the mechanisms: the service worker, the saved query cache, the wr
 | Milestone  | M5. Learn caching takes effect with F14 (M7). Push notifications and the app badge are Stretch (M8)                                                                                                                                                                                                                                                                                                                                                   |
 | Plan       | Free and Premium; flags `offline.writes` and `sync.background` (P4)                                                                                                                                                                                                                                                                                                                                                                                   |
 | Depends on | [P2](P2-data-access-and-security.md) (idempotency, versions, error codes, the catch-up skip, the session-expired route), [P4](P4-capabilities.md) (`/api/me`, flags, `buildId`), [F01](../features/F01-auth-and-account.md) (logout, session expiry, user switch); the finance specs [F03](../features/F03-transactions.md) to [F06](../features/F06-goals.md) queue their writes; [F05](../features/F05-subscriptions.md) supplies the boot endpoint |
-| Decisions  | D-37, D-38, D-40 to D-46, D-137 to D-145, D-179, D-181, D-228, D-239, D-244, D-265 to D-267, D-269, D-318 to D-330, D-361 to D-367, D-374 to D-377, D-382 to D-384                                                                                                                                                                                                                                                                                    |
+| Decisions  | D-37, D-38, D-40 to D-46, D-137 to D-145, D-179, D-181, D-228, D-239, D-244, D-265 to D-267, D-269, D-318 to D-330, D-361 to D-367, D-374 to D-377, D-382 to D-384, D-452                                                                                                                                                                                                                                                                             |
 
 ## 1. User stories
 
@@ -163,6 +163,7 @@ This spec owns the mechanisms: the service worker, the saved query cache, the wr
     | Insights (from M6)                                    | The current month and the last viewed month, matching the dashboard (root 7.3)   | F10     |
     | Transactions                                          | The first 2 pages and the summary of the default filter (all time, newest first) | F03     |
     | Payees                                                | Always                                                                           | F03     |
+    | Saved Transactions views                              | Always                                                                           | F03     |
     | Budgets                                               | The current month                                                                | F04     |
     | Subscriptions and upcoming renewals                   | Always                                                                           | F05     |
     | Goals list                                            | Always                                                                           | F06     |
@@ -187,7 +188,7 @@ This spec owns the mechanisms: the service worker, the saved query cache, the wr
     - **Offline:** it waits.
     - **The screen:** shows the change as pending either way (BR-P1-22).
 
-    Online-only writes never queue: the profile, billing, demo data, Reset my data, account changes and insight dismissals (from M6). Neither does the layout (OFF-8).
+    Online-only writes never queue: the profile, billing, demo data, Reset my data, account changes, saved Transactions views (F03, D-452) and insight dismissals (from M6). Neither does the layout (OFF-8).
 
 - **BR-P1-14** **Creating an item.** `enqueue` writes the item to IndexedDB in one readwrite transaction, with:
     - the next `seq`, `status: pending`, `attempts: 0` and `sentAt: null`;

@@ -55,10 +55,9 @@ export function moneyParts(
 			.filter((part) => types.includes(part.type))
 			.map((part) => part.value)
 			.join("");
-	const sign =
-		minor < 0 ? MINUS
-		: minor > 0 && signDisplay === "always" ? "+"
-		: "";
+	let sign = "";
+	if (minor < 0) sign = MINUS;
+	else if (minor > 0 && signDisplay === "always") sign = "+";
 	return {
 		sign,
 		symbol: join("currency"),
