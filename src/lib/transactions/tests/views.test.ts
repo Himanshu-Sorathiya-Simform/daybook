@@ -102,6 +102,8 @@ describe("the create body (BR-F03-63, BR-F03-64)", () => {
 				"All Transactions",
 				"ALL TRANSACTIONS",
 				" all transactions ",
+				// B9, D-497: Postgres's `lower()` turns the dotted İ into i.
+				"ALL TRANSACTİONS",
 			]) {
 				expect(createErrors({ name })).toEqual({
 					name: "You already have a view with this name.",
@@ -157,6 +159,10 @@ describe("the create body (BR-F03-63, BR-F03-64)", () => {
 			[{ q: "ab" }, "filter.q", "Type at least 3 characters, or an amount."],
 			[{ q: "a".repeat(101) }, "filter.q", "Use 100 characters or fewer."],
 			[{ q: "ab\tc" }, "filter.q", "Remove unsupported characters."],
+			// B3, Q3, D-498: neither may reach `jsonb` or split a line.
+			[{ q: "cafe\ud800 bar" }, "filter.q", "Remove unsupported characters."],
+			[{ q: "cafe\udc00 bar" }, "filter.q", "Remove unsupported characters."],
+			[{ q: "cafe\u2028bar" }, "filter.q", "Remove unsupported characters."],
 			[{ month: "2026-10" }, "filter", 'Unrecognized key: "month"'],
 			[{ min: "500.00" }, "filter", 'Unrecognized key: "min"'],
 		] as [Record<string, unknown>, string, string][])(
@@ -578,6 +584,19 @@ describe("viewName (BR-F03-67)", () => {
 
 	test("takes the first free number", () => {
 		expect(viewName(["Food"], ["Food", "Food 2", "Food 4"])).toBe("Food 3");
+	});
+
+	// B9, D-497: the unique index compares `lower(name)` in Postgres, so İ and i collide there.
+	test("compares names as Postgres does: İstanbul and istanbul are one name", () => {
+		expect(viewName(["İstanbul"], ["istanbul"])).toBe("İstanbul 2");
+		expect(viewName(["istanbul"], ["İSTANBUL"])).toBe("istanbul 2");
+		expect(viewName(["ΟΔΟΣ"], ["οδοσ"])).toBe("ΟΔΟΣ 2");
+	});
+
+	test("compares the numbered names the same way", () => {
+		expect(viewName(["İstanbul"], ["istanbul", "istanbul 2"])).toBe(
+			"İstanbul 3",
+		);
 	});
 
 	test("is My view with no chip", () => {

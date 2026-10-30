@@ -394,6 +394,10 @@ describe("names (BR-F03-63, AC-F03-47)", () => {
 		["", "Enter a name."],
 		["   ", "Enter a name."],
 		["Food\u0007", "Remove unsupported characters."],
+		// B3, Q3, D-498
+		["Food\ud800", "Remove unsupported characters."],
+		["Food\u2028view", "Remove unsupported characters."],
+		["\u200b\u200b", "Enter a name."],
 	])("%j gets 422 on name", async (name, message) => {
 		expect(await refusal(create(viewBody({ name })))).toEqual(
 			invalid({ name: message }),
@@ -458,6 +462,23 @@ describe("filters and the list fields", () => {
 				position: "Remove this field.",
 			}),
 		);
+	});
+
+	// B3, D-498: a lone surrogate in the search reached `jsonb`, which Postgres refuses with
+	// 22P02, so the create answered 500 instead of naming the field.
+	test.each(["cafe\ud800 bar", "cafe\udc00 bar"])(
+		"a lone surrogate in q, %j, gets 422 on filter.q",
+		async (q) => {
+			expect(await refusal(create(viewBody({ filter: { q } })))).toEqual(
+				invalid({ "filter.q": "Remove unsupported characters." }),
+			);
+		},
+	);
+
+	// Q3, D-498: a search of zero-width spaces is blank, so it is stored as absent.
+	test("a search of zero-width spaces is stored as no search", async () => {
+		const { result } = await create(viewBody({ filter: { q: "\u200b\u200b" } }));
+		expect(result.view.filter).toEqual({});
 	});
 
 	// AC-F03-48

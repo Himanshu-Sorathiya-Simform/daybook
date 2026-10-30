@@ -71,6 +71,9 @@ describe("normalizing a filter URL (BR-F03-33, BR-F03-34)", () => {
 		["q=Cafe%CC%81", "q=Caf%C3%A9"],
 		["q=1,240.50", "q=1%2C240.50"],
 		["q=%20%20%20", ""],
+		// Q3, D-498: text of invisible characters only is empty, so it is no search.
+		["q=%E2%80%8B", ""],
+		["q=%E2%80%8B%20%E2%81%A0", ""],
 		["from=&to=&min=&max=&src=&goal=&sort=&dir=&group=", ""],
 		["cat=", ""],
 		["type=,", ""],
@@ -120,7 +123,6 @@ describe("normalizing a filter URL (BR-F03-33, BR-F03-34)", () => {
 		["src=bank", ["src"], "an unknown source"],
 		["q=a", ["q"], "one character of text"],
 		["q=ab%09cd", ["q"], "a control character"],
-		["q=%E2%80%8B", ["q"], "one invisible character"],
 		[`q=${"a".repeat(101)}`, ["q"], "101 characters"],
 		[`q=${"1".repeat(101)}`, ["q"], "101 digits"],
 		["sort=price", ["sort"], "an unknown sort"],
@@ -398,6 +400,22 @@ describe("checkQuery (BR-F03-34)", () => {
 	test("treats a missing or blank search as absent", () => {
 		expect(checkQuery(undefined, "INR")).toEqual({ ok: true, q: undefined });
 		expect(checkQuery("   ", "INR")).toEqual({ ok: true, q: undefined });
+	});
+
+	// Q3, D-498: a search of invisible characters only is blank too.
+	test("treats a search of zero-width spaces as absent", () => {
+		expect(checkQuery("\u200b\u200b", "INR")).toEqual({
+			ok: true,
+			q: undefined,
+		});
+	});
+
+	// B3, D-498: it would reach `jsonb` in a saved view, which Postgres refuses.
+	test("refuses a lone surrogate as a character problem", () => {
+		expect(checkQuery("cafe\ud800 bar", "INR")).toEqual({
+			ok: false,
+			reason: "characters",
+		});
 	});
 
 	test.each([

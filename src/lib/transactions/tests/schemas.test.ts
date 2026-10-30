@@ -457,6 +457,31 @@ describe("the edit body (BR-F03-23)", () => {
 		});
 	});
 
+	// B3, Q3, D-498: text rules reach the edit's text fields as they do the create's.
+	test("refuses a lone surrogate in the payee and a line separator in the description", () => {
+		expect(editErrors({ payee: "Sw\ud800" })).toEqual({
+			payee: "Remove unsupported characters.",
+		});
+		expect(editErrors({ description: "Dinner\u2028out" })).toEqual({
+			description: "Remove unsupported characters.",
+		});
+	});
+
+	test("clears a description or note of zero-width spaces, as a blank one", () => {
+		expect(
+			transactionEditSchema.parse({ description: "\u200b", note: "\u200b\n" }),
+		).toEqual({ description: null, note: null });
+	});
+
+	test("refuses a note with a lone surrogate but keeps a line separator inside it", () => {
+		expect(editErrors({ note: "a\ud83d" })).toEqual({
+			note: "Remove unsupported characters.",
+		});
+		expect(transactionEditSchema.parse({ note: "a\u2028b" })).toEqual({
+			note: "a\u2028b",
+		});
+	});
+
 	test("refuses a body with no change", () => {
 		expect(editErrors({})).toEqual({ _body: "Send at least one change." });
 	});

@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 
 import {
 	codePointLength,
+	lowercase,
 	normalizeText,
 	optionalTextSchema,
 	textSchema,
@@ -74,6 +75,90 @@ describe("normalizeText (root 6.7, BR-F03-12)", () => {
 				ok: true,
 				value: `a${character}b`,
 			});
+		});
+	});
+
+	// B3, D-498: a lone surrogate is not text. In a text column the driver would turn it into
+	// U+FFFD, and in jsonb Postgres refuses it, so it is refused before either.
+	describe("lone surrogates", () => {
+		test.each([
+			["a high surrogate alone", "a\ud800b"],
+			["a low surrogate alone", "a\udc00b"],
+			["a low surrogate before a high one", "\udc00\ud800"],
+			["a high surrogate at the end", "Swiggy\ud83d"],
+			["a low surrogate at the start", "\ude00Swiggy"],
+			["two high surrogates", "\ud83d\ud83d"],
+		])("refuses %s", (_name, text) => {
+			expect(normalizeText(text)).toEqual({ ok: false });
+			expect(normalizeText(text, { multiline: true })).toEqual({ ok: false });
+		});
+
+		test("accepts a surrogate pair, which is one character", () => {
+			expect(normalizeText("👍")).toEqual({ ok: true, value: "👍" });
+			expect(normalizeText("𝄞 𐐀")).toEqual({ ok: true, value: "𝄞 𐐀" });
+		});
+	});
+
+	// Q3, D-498: a line must stay one line.
+	describe("line and paragraph separators in single-line text", () => {
+		test.each([
+			["U+2028 (line separator)", "\u2028"],
+			["U+2029 (paragraph separator)", "\u2029"],
+		])("refuses %s inside text", (_name, character) => {
+			expect(normalizeText(`a${character}b`)).toEqual({ ok: false });
+		});
+
+		test("trims them at the ends like any whitespace", () => {
+			expect(normalizeText("\u2028Swiggy\u2029")).toEqual({
+				ok: true,
+				value: "Swiggy",
+			});
+		});
+
+		test("a note keeps them inside, since it holds many lines", () => {
+			expect(normalizeText("a\u2028b", { multiline: true })).toEqual({
+				ok: true,
+				value: "a\u2028b",
+			});
+		});
+	});
+
+	// Q3, D-498: text with nothing to see is empty, so a payee can't be made of zero-width spaces.
+	describe("text of invisible characters only", () => {
+		test.each([
+			["a zero-width space", "\u200b"],
+			["zero-width spaces", "\u200b\u200b\u200b"],
+			["a zero-width joiner", "\u200d"],
+			["a zero-width non-joiner", "\u200c"],
+			["a left-to-right mark", "\u200e"],
+			["a word joiner", "\u2060"],
+			["a soft hyphen", "\u00ad"],
+			["a variation selector", "\ufe0f"],
+			["a combining grapheme joiner", "\u034f"],
+			["a Hangul filler", "\u3164"],
+			["a tag character", "\u{e0041}"],
+			["invisible characters between spaces", " \u200b \u200b "],
+			["an invisible character between no-break spaces", "\u00a0\u200b\u00a0"],
+		])("turns %s into an empty string", (_name, text) => {
+			expect(normalizeText(text)).toEqual({ ok: true, value: "" });
+		});
+
+		test("turns them into an empty string in a note too, line feeds included", () => {
+			expect(normalizeText("\n\u200b\n", { multiline: true })).toEqual({
+				ok: true,
+				value: "",
+			});
+		});
+
+		test.each([
+			["a zero-width space before a letter", "\u200ba"],
+			["a zero-width space between letters", "a\u200bb"],
+			["a zero-width joiner inside an emoji", "👨\u200d👩\u200d👧"],
+			["a variation selector after a heart", "❤\ufe0f"],
+			["a skin tone emoji", "👍🏽"],
+			["a Braille blank, which is a visible cell", "\u2800"],
+		])("keeps %s", (_name, text) => {
+			expect(normalizeText(text)).toEqual({ ok: true, value: text });
 		});
 	});
 
@@ -244,5 +329,81 @@ describe("optionalTextSchema, for a description or note", () => {
 
 	test("refuses a value that is not text", () => {
 		expect(description.safeParse(5).success).toBe(false);
+	});
+});
+
+describe("the schemas apply the new text rules (D-498)", () => {
+	const payee = textSchema(PAYEE);
+	const description = optionalTextSchema({ max: 120 });
+
+	test("a required text of invisible characters gets the field's own message", () => {
+		expect(payee.safeParse("\u200b\u200b").error?.issues[0]?.message).toBe(
+			"Enter who you paid, or who paid you.",
+		);
+	});
+
+	test("an optional text of invisible characters is null", () => {
+		expect(description.parse("\u200b")).toBeNull();
+	});
+
+	test("a lone surrogate gets the shared characters message", () => {
+		expect(payee.safeParse("Sw\ud800").error?.issues[0]?.message).toBe(
+			"Remove unsupported characters.",
+		);
+		expect(description.safeParse("a\udc00").error?.issues[0]?.message).toBe(
+			"Remove unsupported characters.",
+		);
+	});
+
+	test("a line separator gets the shared characters message", () => {
+		expect(payee.safeParse("Swi\u2028ggy").error?.issues[0]?.message).toBe(
+			"Remove unsupported characters.",
+		);
+	});
+});
+
+// B9, D-497: Postgres's built-in C.UTF-8 `lower()` maps one code point to one, with no context.
+// JavaScript's `toLowerCase` has full mappings and the final-sigma rule, so it can't stand in.
+describe("lowercase (D-497)", () => {
+	test.each([
+		["Swiggy", "swiggy"],
+		["BIG BAZAAR", "big bazaar"],
+		["", ""],
+		["café ÉCOLE", "café école"],
+		["१२३ चाय", "१२३ चाय"],
+		["𐐀", "𐐨"],
+		["ǅ", "ǆ"],
+		["ẞ", "ß"],
+	])("%j is %j", (text, lowered) => {
+		expect(lowercase(text)).toBe(lowered);
+	});
+
+	test("İ, the dotted capital I, becomes a plain i, as Postgres does", () => {
+		expect(lowercase("İstanbul Kebab")).toBe("istanbul kebab");
+		// JavaScript gives "i" and a combining dot, which no search for "ist" would match.
+		expect("İstanbul".toLowerCase()).toBe("i\u0307stanbul");
+	});
+
+	test("a capital sigma becomes σ at the end of a word too, as Postgres does", () => {
+		expect(lowercase("ΟΔΟΣ")).toBe("οδοσ");
+		expect(lowercase("Σ")).toBe("σ");
+		// JavaScript gives the final form ς here.
+		expect("ΟΔΟΣ".toLowerCase()).toBe("οδος");
+	});
+
+	test("leaves characters that Postgres 18's Unicode tables don't lowercase", () => {
+		// Latin letters from Unicode 17 and Beria Erfe: Node lowercases them, Postgres 18 doesn't.
+		expect(lowercase("\ua7ce\ua7d2\ua7d4")).toBe("\ua7ce\ua7d2\ua7d4");
+		expect(lowercase("\u{16ea0}\u{16eb8}")).toBe("\u{16ea0}\u{16eb8}");
+	});
+
+	test("keeps a lone surrogate as it is", () => {
+		expect(lowercase("A\ud800B")).toBe("a\ud800b");
+	});
+
+	test("is idempotent", () => {
+		for (const text of ["İSTANBUL", "ΟΔΟΣ", "ǅ", "ẞ", "Swiggy"]) {
+			expect(lowercase(lowercase(text))).toBe(lowercase(text));
+		}
 	});
 });

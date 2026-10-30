@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { CURRENCY_EXPONENTS, maxMinor, type CurrencyCode } from "@/lib/currency";
 import { isUuid, isUuidV7 } from "@/lib/ids";
-import { textSchema } from "@/lib/text";
+import { lowercase, textSchema } from "@/lib/text";
 import { isIsoDate } from "@/lib/time";
 
 import {
@@ -215,7 +215,7 @@ export function viewFilterSchema(currency: CurrencyCode) {
 const name = textSchema({
 	max: NAME_MAX,
 	messages: { required: V.nameRequired },
-}).refine((value) => typeof value !== "string" || value.toLowerCase() !== BUILT_IN, {
+}).refine((value) => typeof value !== "string" || lowercase(value) !== BUILT_IN, {
 	error: V.nameTaken,
 });
 const sort = z.enum(SORTS, { error: V.sort });
@@ -367,16 +367,13 @@ export function viewName(
 	chipLabels: readonly string[],
 	takenNames: readonly string[],
 ): string {
-	const taken = new Set([
-		BUILT_IN,
-		...takenNames.map((taken) => taken.toLowerCase()),
-	]);
+	const taken = new Set([BUILT_IN, ...takenNames.map(lowercase)]);
 	const base = chipLabels.join(", ") || "My view";
 	const plain = cut(base, NAME_MAX);
-	if (!taken.has(plain.toLowerCase())) return plain;
+	if (!taken.has(lowercase(plain))) return plain;
 	for (let n = 2; ; n++) {
 		const suffix = ` ${n}`;
 		const candidate = `${cut(base, NAME_MAX - suffix.length)}${suffix}`;
-		if (!taken.has(candidate.toLowerCase())) return candidate;
+		if (!taken.has(lowercase(candidate))) return candidate;
 	}
 }

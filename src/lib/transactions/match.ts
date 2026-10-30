@@ -1,7 +1,7 @@
 import { parseNumericQuery } from "@/lib/amount";
 import type { CategoryKey } from "@/lib/categories";
 import type { CurrencyCode } from "@/lib/currency";
-import { codePointLength } from "@/lib/text";
+import { codePointLength, lowercase } from "@/lib/text";
 
 import type { Source, TxnType } from "./model";
 import type { TransactionFilter } from "./url";
@@ -51,10 +51,9 @@ function matchesQuery(
 ): boolean {
 	const { amountMinor, text } = searchTerms(q, currency);
 	if (amountMinor !== null && row.amountMinor === amountMinor) return true;
-	// A substring test takes %, _ and \ literally, as the SQL escapes them.
-	return (
-		text !== null && searchText(row).toLowerCase().includes(text.toLowerCase())
-	);
+	// A substring test takes %, _ and \ literally, as the SQL escapes them. Both sides are
+	// lowered as Postgres lowers them, so it finds what `ILIKE` finds (D-497).
+	return text !== null && lowercase(searchText(row)).includes(lowercase(text));
 }
 
 /**

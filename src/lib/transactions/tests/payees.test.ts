@@ -28,6 +28,11 @@ describe("payeeMatches (BR-F03-45, BR-F03-61, D-481)", () => {
 		["Big  Basket", "basket", true, "any space starts a word"],
 		["Big-Basket", "basket", false, "a hyphen does not start a word"],
 		["Zeta", "zetas", false, "a longer query never matches"],
+		// B9, D-497: Postgres's `lower()`, not JavaScript's, so both sides agree.
+		["İstanbul Kebab", "ist", true, "İ lowers to a plain i"],
+		["Big İstanbul", "ist", true, "İ lowers to a plain i in a later word"],
+		["ΟΔΟΣ", "οδοσ", true, "a capital sigma lowers to σ at the end of a word"],
+		["οδος", "οδοσ", false, "the final sigma ς is another letter"],
 	])("%j and %j: %s, %s", (payee, q, expected) => {
 		expect(payeeMatches(payee, q)).toBe(expected);
 	});

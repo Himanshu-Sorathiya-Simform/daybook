@@ -68,6 +68,11 @@ const EDGES: EdgeRow[] = [
 		description: "Crème brûlée",
 		amountMinor: 250000,
 	}),
+	// B9, D-497: payees where JavaScript's `toLowerCase` and Postgres's `lower()` differ.
+	edge("İstanbul Kebab", { payee: "İstanbul Kebab", category: "food" }),
+	edge("ΟΔΟΣ", { payee: "ΟΔΟΣ", description: "ΟΔΟΣ ΑΘΗΝΩΝ", category: "food" }),
+	edge("οδος", { payee: "οδος", category: "food" }),
+	edge("Unicode 17", { payee: "\u{16ea0}", category: "food" }),
 	edge("note", {
 		type: "refund",
 		payee: "Notes",
@@ -389,6 +394,10 @@ const QUERIES = [
 	"zzz",
 	"a",
 	"Deal shop",
+	"ist",
+	"İST",
+	"οδοσ",
+	"ΟΔΟΣ",
 ];
 
 function drawFilters(count: number): TransactionFilter[] {
@@ -411,6 +420,30 @@ function drawFilters(count: number): TransactionFilter[] {
 		return filter;
 	});
 }
+
+// B9, D-497, BR-F03-43: the browser lowers text as Postgres does, so a search finds the same
+// rows on both sides, letter for letter.
+describe("case folding agrees between SQL and the browser", () => {
+	test.each([
+		["ist", ["İstanbul Kebab"]],
+		["İST", ["İstanbul Kebab"]],
+		["istanbul k", ["İstanbul Kebab"]],
+		["οδοσ", ["ΟΔΟΣ"]],
+		["ΟΔΟΣ", ["ΟΔΟΣ"]],
+		["οδος", ["οδος"]],
+		["ΑΘΗΝ", ["ΟΔΟΣ"]],
+		["\u{16ea0}", ["Unicode 17"]],
+		["\u{16ebb}", []],
+	])(
+		"a search for %j finds %j in SQL, as matchesFilter does",
+		async (q, labels) => {
+			const filter: TransactionFilter = { q };
+			expect(await mirrorLabels(filter)).toEqual(labels);
+			const edges = EDGES.filter((row) => matchesFilter(row, filter, "INR"));
+			expect(edges.map((row) => row.label).sort()).toEqual([...labels].sort());
+		},
+	);
+});
 
 // AC-F03-17
 describe("SQL and matchesFilter agree", () => {

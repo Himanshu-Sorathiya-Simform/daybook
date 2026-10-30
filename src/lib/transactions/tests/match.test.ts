@@ -124,6 +124,31 @@ describe("text search (BR-F03-35)", () => {
 		expect(matches({ payee: "Café Coffee Day" }, { q: "CAFÉ" })).toBe(true);
 	});
 
+	// B9, D-497, BR-F03-43: the browser must find what SQL's `ILIKE` finds, letter for letter.
+	describe("case folding the way Postgres does it", () => {
+		test('"İstanbul Kebab" is found by "ist" and by "İST"', () => {
+			expect(matches({ payee: "İstanbul Kebab" }, { q: "ist" })).toBe(true);
+			expect(matches({ payee: "İstanbul Kebab" }, { q: "İST" })).toBe(true);
+		});
+
+		test('"ΟΔΟΣ" is found by "οδοσ", whatever the position of the sigma', () => {
+			expect(matches({ payee: "ΟΔΟΣ" }, { q: "οδοσ" })).toBe(true);
+			expect(matches({ payee: "οδοσ" }, { q: "ΟΔΟΣ" })).toBe(true);
+			expect(matches({ description: "ΟΔΟΣ ΑΘΗΝΩΝ" }, { q: "οδοσ α" })).toBe(
+				true,
+			);
+		});
+
+		test('the final sigma "ς" is a different letter, as in Postgres', () => {
+			expect(matches({ payee: "οδος" }, { q: "οδοσ" })).toBe(false);
+		});
+
+		test("a Unicode 17 letter that Postgres 18 leaves alone matches only itself", () => {
+			expect(matches({ payee: "\u{16ea0}" }, { q: "\u{16ebb}" })).toBe(false);
+			expect(matches({ payee: "\u{16ea0}" }, { q: "\u{16ea0}" })).toBe(true);
+		});
+	});
+
 	// AC-F03-31
 	test("never matches across two fields", () => {
 		expect(

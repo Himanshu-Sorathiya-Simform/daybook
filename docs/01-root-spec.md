@@ -299,7 +299,7 @@ A write made offline is applied to the screen as pending and stored in the write
 
 ### 6.7 Input limits
 
-Text is trimmed and normalized to Unicode NFC, and control characters are rejected; a note keeps line feeds (D-176). Lengths count Unicode code points (D-230).
+Text is trimmed and normalized to Unicode NFC, and control characters are rejected; a note keeps line feeds (D-176). A lone surrogate is rejected everywhere, and so are U+2028 and U+2029 in a single-line field. Text of only whitespace and invisible characters, such as the zero-width space, counts as empty (D-498). Lengths count Unicode code points (D-230).
 
 | Field               | Rule                                                     |
 | ------------------- | -------------------------------------------------------- |
@@ -343,7 +343,7 @@ One filter object drives the list, its totals, Analytics and drill-downs. One se
 
 - **FIL-1** Fields combine with AND; values inside one list combine with OR.
 - **FIL-2** The list, its header totals, Analytics and chart drill-downs all use the same filter-to-SQL function.
-- **FIL-3** Text matches payee, description and note, case-insensitively, as a substring, over the user's own rows. No text index serves it: under row-level security, Postgres uses an index only for leakproof conditions, and `ILIKE` is not one (D-48). A numeric query also matches the exact amount, converted to minor units.
+- **FIL-3** Text matches payee, description and note, case-insensitively as Postgres's `lower()` folds case (D-497), as a substring, over the user's own rows. No text index serves it: under row-level security, Postgres uses an index only for leakproof conditions, and `ILIKE` is not one (D-48). A numeric query also matches the exact amount, converted to minor units.
 - **FIL-4** Committed filters live in the URL. A text box keeps its own draft and commits after 300 ms without typing.
 - **FIL-5** An invalid parameter is dropped with a notice, never an error page.
 - **FIL-6** A category filter excludes Goal rows, which have no category.

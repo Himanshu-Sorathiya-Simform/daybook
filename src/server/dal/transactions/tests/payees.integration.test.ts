@@ -325,6 +325,11 @@ describe("the search (BR-F03-61)", () => {
 			"% Club",
 			"back\\slash",
 			"Zeta",
+			// B9, D-497: where JavaScript's `toLowerCase` and Postgres's `lower()` differ.
+			"İstanbul Kebab",
+			"Big İstanbul",
+			"ΟΔΟΣ",
+			"οδος",
 		];
 		const queries = [
 			"s",
@@ -349,6 +354,11 @@ describe("the search (BR-F03-61)", () => {
 			"zetas",
 			"big b",
 			"x",
+			"ist",
+			"İST",
+			"οδοσ",
+			"ΟΔΟΣ",
+			"οδος",
 		];
 		const { result } = await asUser(empty, async (tx) => {
 			for (const payee of payees) {

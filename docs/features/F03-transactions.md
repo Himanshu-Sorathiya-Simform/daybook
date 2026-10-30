@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-495                                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-498                                      |
 
 ## 1. User stories
 
@@ -157,7 +157,7 @@ A view's `filter` holds the filter object's fields with these differences from t
 **Dates and times**
 
 - **BR-F03-06** The form has a date and a time (hours and minutes) in the profile time zone.
-    - **`occurredAt`:** that local date and time converted to UTC with `@date-fns/tz`, seconds set to zero.
+    - **`occurredAt`:** that local date and time converted to UTC from the zone's offsets (`tzOffset` from `@date-fns/tz`), never from the machine's own zone, seconds set to zero (D-496).
     - **`occurredOn`:** the chosen date.
     - **Daylight saving (D-221):** a local time that does not exist (in a spring-forward gap) moves forward by the gap, so 02:30 becomes 03:30. A local time that occurs twice takes the earlier instant.
 - **BR-F03-07** A new Transaction defaults to type expense, today's date, the current time rounded down to the minute, and no category (D-89).
@@ -182,7 +182,8 @@ A view's `filter` holds the filter object's fields with these differences from t
 
 - **BR-F03-12** Payee, description and note follow root 6.7 (D-230):
     - trimmed and normalized to NFC;
-    - control characters (U+0000 to U+001F and U+007F to U+009F) are refused, except that the note keeps line feeds, with CRLF normalized to LF;
+    - control characters (U+0000 to U+001F and U+007F to U+009F) are refused, except that the note keeps line feeds, with CRLF normalized to LF; U+2028 and U+2029 are refused in the payee and description, and a note keeps them;
+    - a lone surrogate is refused, and text of only whitespace and invisible characters, such as the zero-width space, counts as empty (D-498);
     - lengths count Unicode code points (`[...text].length` in the browser, `char_length` in Postgres);
     - an empty description or note is stored as null;
     - the payee keeps the case typed.
@@ -326,7 +327,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     A well-formed Goal or Subscription id that is not the user's simply matches no rows. An empty value, such as `cat=`, counts as absent and gives no notice, and names other than the filter and list parameters are ignored (D-458).
 
 - **BR-F03-35** Text search (FIL-3):
-    - **Text:** `q` matches the expression `coalesce(payee, '') || U+001F || coalesce(description, '') || U+001F || coalesce(note, '')`, case-insensitively, as a substring, over the user's own rows (FIL-3, D-48). Stored text never holds U+001F (BR-F03-12), and `q` may not contain control characters, so a match never spans two fields. `%`, `_` and `\` in `q` match literally.
+    - **Text:** `q` matches the expression `coalesce(payee, '') || U+001F || coalesce(description, '') || U+001F || coalesce(note, '')`, case-insensitively as Postgres's `lower()` folds case (D-497), as a substring, over the user's own rows (FIL-3, D-48). Stored text never holds U+001F (BR-F03-12), and `q` may not contain control characters, so a match never spans two fields. `%`, `_` and `\` in `q` match literally.
     - **Numbers:** a numeric `q` also matches `amountMinor` exactly. A numeric `q` is one that the amount field would accept (BR-F03-04): digits, commas only in a valid thousands or Indian grouping, one `.`, and no more decimals than the currency allows.
     - **Short numbers:** a numeric `q` under 3 characters matches amounts only.
 
@@ -348,7 +349,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **The figures:** "+300.00 pending" or "−300.00 pending" for money, "+1 pending" for the count.
     - **The deltas:** a pending create adds its row; a pending edit adds the difference between old and new; a pending delete subtracts its row.
     - **Lifetime:** the annotation stays until the summary refetches after the sync (OFF-6).
-- **BR-F03-43** Matching pending rows to the filter uses one shared module, `matchesFilter(row, filter)`. It mirrors the SQL predicate rule for rule and builds the same search string as BR-F03-35. The golden list checks run against both. It is used only for pending rows, never for confirmed figures.
+- **BR-F03-43** Matching pending rows to the filter uses one shared module, `matchesFilter(row, filter)`. It mirrors the SQL predicate rule for rule, folds case as Postgres does (D-497) and builds the same search string as BR-F03-35. The golden list checks run against both. It is used only for pending rows, never for confirmed figures.
 - **BR-F03-58** The summary also gives a date span and, on request, breakdowns (D-447).
     - **The date span:** `firstOn` and `lastOn`, the earliest and latest `occurredOn` of the filter's confirmed rows, or null when there are none. These come from `rollup`'s `bounds`.
     - **Breakdowns:** `by` takes a comma list of `category` and `payee`, and the answer gains `byCategory`, `byPayee` or both. An empty `by`, an unknown value or a repeated value gets 400 `bad_request`.
@@ -385,7 +386,7 @@ A view's `filter` holds the filter object's fields with these differences from t
 
     The answer is persisted for offline use (STATE-3).
 
-- **BR-F03-45** The payee field filters that list on the device (D-225). From the first character it suggests up to 8 payees that start with the typed text, or that have a word starting with it, case-insensitively. Choosing one fills the payee only.
+- **BR-F03-45** The payee field filters that list on the device (D-225). From the first character it suggests up to 8 payees that start with the typed text, or that have a word starting with it, case-insensitively as Postgres folds case (D-497). Choosing one fills the payee only.
     - **The category chip:** when that payee's last category is valid for the current type, a chip "Last time: Food" appears. Tapping it sets the category.
     - **Never automatic:** the category is never filled in on its own (D-89).
 - **BR-F03-61** `GET /api/payees?q=` searches the same 365 days on the server, for payees beyond the 200 on the device (D-451).
@@ -467,7 +468,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **Nothing edited:** "Save as view" is disabled, with the hint "Change a filter, then save it as a view."
 - **BR-F03-67** "Save as view" creates a view from the URL and selects it, with "Saved as a new view." (D-453).
     - **Dates:** dates equal to a preset's dates for today in the profile zone are saved as that preset's `range`; other dates as `from` and `to`; all time as neither.
-    - **The name:** the active filter chips' labels joined by ", ", such as "Food, Last month", or "My view" with no chip. If that name is taken, " 2", " 3" and so on are added, taking the first free one. The base is cut so the whole name fits 40 characters. If the server still answers 422 on `name`, because the list on the device was stale, the next suffix is tried.
+    - **The name:** the active filter chips' labels joined by ", ", such as "Food, Last month", or "My view" with no chip. If that name is taken, compared as Postgres's `lower()` compares it, which is how the unique index does (D-497), " 2", " 3" and so on are added, taking the first free one. The base is cut so the whole name fits 40 characters. If the server still answers 422 on `name`, because the list on the device was stale, the next suffix is tried.
     - **At 20 views:** the button is disabled with "You have 20 views. Delete one to save another."
 - **BR-F03-68** "Update view" saves the URL's filter, `sort`, `dir` and `group` into the selected view with BR-F03-67's date rule, through `PATCH` with `If-Match`, then shows "View updated." A `PATCH` must carry all four of these together or none of them; a partial set, or a body with neither `name` nor the four, gets 422 `validation_failed`.
 - **BR-F03-69** A selected saved view has a menu with Rename and Delete (D-452).
