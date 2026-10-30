@@ -2,10 +2,15 @@ import { randomUUID } from "node:crypto";
 import { inspect } from "node:util";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { GET, POST } from "../../../../app/api/auth/[...all]/route";
+import { authPool } from "../../db/pools";
+import { account, session, user, verification } from "../../db/schema/auth";
 import { parseOwnerEnv, serverEnv } from "../../env";
+import { network } from "../../tests/network";
 import { AUTH_PATHS } from "../allow-list";
-import { getAuth } from "../auth";
+import { createAuth, getAuth, handleAuthRequest } from "../auth";
+import { breachedRange, failingRange, hangingRange } from "./pwned";
 
 const ORIGIN = serverEnv().APP_ORIGIN;
 const DOMAIN = "auth.integration.test";
@@ -308,24 +313,38 @@ async function captureConsole(
 
 describe("database errors", () => {
 	test("one Better Auth catches answers its own error and logs only what failed", async () => {
+		// The hook refuses a name Postgres would refuse (a NUL), so a temporary check makes the
+		// user insert fail instead.
+		const BLOCK = "auth_integration_test_name";
+		await owner.query(
+			`ALTER TABLE auth."user" ADD CONSTRAINT ${BLOCK} CHECK (name <> 'Secret Name') NOT VALID`,
+		);
 		const email = newEmail();
 		let response: Response | undefined;
-		const { written, errors } = await captureConsole(async () => {
-			// Postgres refuses a NUL byte in text, so the user insert fails.
-			response = await POST(
-				request("POST", "/sign-up/email", {
-					body: { email, password: PASSWORD, name: "Secret\u0000Name" },
+		try {
+			const { written, errors } = await captureConsole(async () => {
+				response = await POST(
+					request("POST", "/sign-up/email", {
+						body: { email, password: PASSWORD, name: "Secret Name" },
+					}),
+				);
+			});
+			expect(response!.status).toBe(422);
+			expect(written).not.toContain(email);
+			expect(written).not.toContain("Secret");
+			expect(written).not.toContain("Failed query");
+			expect(errors).toContainEqual([
+				"[auth] Failed to create user",
+				expect.objectContaining({
+					name: "DatabaseError",
+					sqlstate: "23514",
 				}),
+			]);
+		} finally {
+			await owner.query(
+				`ALTER TABLE auth."user" DROP CONSTRAINT IF EXISTS ${BLOCK}`,
 			);
-		});
-		expect(response!.status).toBe(422);
-		expect(written).not.toContain(email);
-		expect(written).not.toContain("Secret");
-		expect(written).not.toContain("Failed query");
-		expect(errors).toContainEqual([
-			"[auth] Failed to create user",
-			expect.objectContaining({ name: "DatabaseError", sqlstate: "22021" }),
-		]);
+		}
 	});
 
 	describe("when the account insert fails after the user row is written", () => {
@@ -368,5 +387,281 @@ describe("database errors", () => {
 				},
 			]);
 		});
+	});
+});
+
+/** The stored user for `email`, or `undefined`. */
+async function storedUser(email: string) {
+	const { rows } = await owner.query<{ email: string; name: string }>(
+		`SELECT email, name FROM auth."user" WHERE email = $1`,
+		[email],
+	);
+	return rows[0];
+}
+
+function signIn(
+	email: string,
+	password = PASSWORD,
+	headers: Record<string, string> = {},
+) {
+	return POST(
+		request("POST", "/sign-in/email", { body: { email, password }, headers }),
+	);
+}
+
+/** A new address whose local part is in mixed case, so lowercasing shows. */
+const mixedCaseEmail = () =>
+	`Asha.${randomUUID().slice(0, 8)}@Auth.Integration.Test`;
+
+describe("F01's rules through the route (BR-F01-01)", () => {
+	test("stores the email trimmed and lowercased", async () => {
+		const typed = mixedCaseEmail();
+		const response = await signUp(`  ${typed}\t`);
+		expect(response.status).toBe(200);
+		expect(await storedUser(typed.toLowerCase())).toMatchObject({
+			email: typed.toLowerCase(),
+		});
+		expect(await storedUser(typed)).toBeUndefined();
+	});
+
+	test("signs in with the email in any case and with spaces around it", async () => {
+		const typed = mixedCaseEmail();
+		await signUp(typed);
+		for (const email of [
+			typed.toLowerCase(),
+			typed.toUpperCase(),
+			` ${typed} `,
+		]) {
+			expect((await signIn(email)).status).toBe(200);
+		}
+	});
+
+	// AC-F01-02
+	test("refuses a sign-up whose email differs from an account's only in case", async () => {
+		const typed = mixedCaseEmail();
+		expect((await signUp(typed.toLowerCase())).status).toBe(200);
+		const again = await signUp(typed.toUpperCase());
+		expect(again.status).toBe(422);
+		expect(await again.json()).toMatchObject({
+			code: "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL",
+		});
+		const { rows } = await owner.query(
+			`SELECT 1 FROM auth."user" WHERE lower(email) = $1`,
+			[typed.toLowerCase()],
+		);
+		expect(rows).toHaveLength(1);
+	});
+
+	test("stores the name trimmed and in NFC", async () => {
+		const email = newEmail();
+		const response = await POST(
+			request("POST", "/sign-up/email", {
+				body: { email, password: PASSWORD, name: "  René Rao " },
+			}),
+		);
+		expect(response.status).toBe(200);
+		expect((await storedUser(email))?.name).toBe("René Rao");
+	});
+
+	test.each([
+		["empty", ""],
+		["51 characters", "a".repeat(51)],
+		["a line break inside", "As\nha"],
+		["invisible characters only", "​‍"],
+	])(
+		"refuses a name that is %s with 400 INVALID_NAME and creates nothing",
+		async (_, name) => {
+			const email = newEmail();
+			const response = await POST(
+				request("POST", "/sign-up/email", {
+					body: { email, password: PASSWORD, name },
+				}),
+			);
+			expect(response.status).toBe(400);
+			expect(await response.json()).toEqual({
+				code: "INVALID_NAME",
+				message: "Enter a name of up to 50 characters.",
+			});
+			expect(await storedUser(email)).toBeUndefined();
+		},
+	);
+
+	test("refuses an email over 254 characters with 400 INVALID_EMAIL and creates nothing", async () => {
+		const email = `${"a".repeat(255 - DOMAIN.length - 1)}@${DOMAIN}`;
+		expect(email).toHaveLength(255);
+		const response = await signUp(email);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ code: "INVALID_EMAIL" });
+		expect(await storedUser(email)).toBeUndefined();
+	});
+
+	test("accepts an email of exactly 254 characters", async () => {
+		const email = `${"b".repeat(254 - DOMAIN.length - 1)}@${DOMAIN}`;
+		expect(email).toHaveLength(254);
+		expect((await signUp(email)).status).toBe(200);
+	});
+});
+
+describe("the breached-password check through the route (BR-F01-03)", () => {
+	// AC-F01-03
+	test("refuses a breached password at sign-up with 400 PASSWORD_BREACHED and creates nothing", async () => {
+		network.use(breachedRange(PASSWORD));
+		const email = newEmail();
+		const response = await signUp(email);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			code: "PASSWORD_BREACHED",
+			message:
+				"This password has appeared in a data breach. Choose a different one.",
+		});
+		expect(await storedUser(email)).toBeUndefined();
+	});
+
+	// AC-F01-03
+	test("refuses a breached new password at change-password and keeps the old one", async () => {
+		const email = newEmail();
+		const cookie = sessionCookie(await signUp(email));
+		const breached = "a breached new password";
+		network.use(breachedRange(breached));
+		const response = await POST(
+			request("POST", "/change-password", {
+				body: { currentPassword: PASSWORD, newPassword: breached },
+				headers: { cookie },
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ code: "PASSWORD_BREACHED" });
+		expect((await signIn(email)).status).toBe(200);
+		expect((await signIn(email, breached)).status).toBe(401);
+	});
+
+	test("lets a clean new password through at change-password", async () => {
+		const email = newEmail();
+		const cookie = sessionCookie(await signUp(email));
+		const fresh = "a fresh and clean password";
+		const response = await POST(
+			request("POST", "/change-password", {
+				body: { currentPassword: PASSWORD, newPassword: fresh },
+				headers: { cookie },
+			}),
+		);
+		expect(response.status).toBe(200);
+		expect((await signIn(email, fresh)).status).toBe(200);
+	});
+
+	// AC-F01-03
+	test("lets sign-up through when the service does not answer in 3 seconds, and warns", async () => {
+		network.use(hangingRange);
+		const email = newEmail();
+		let response: Response | undefined;
+		const started = Date.now();
+		const { written } = await captureConsole(async () => {
+			response = await signUp(email);
+		});
+		expect(Date.now() - started).toBeGreaterThanOrEqual(3000);
+		expect(response!.status).toBe(200);
+		expect(await storedUser(email)).toBeDefined();
+		expect(written).toContain("[auth] Breached-password check unavailable");
+		expect(written).toContain("timeout");
+		expect(written).not.toContain(email);
+		expect(written).not.toContain(PASSWORD);
+	});
+
+	test("lets sign-up through when the service fails, and warns", async () => {
+		network.use(failingRange);
+		const email = newEmail();
+		let response: Response | undefined;
+		const { written } = await captureConsole(async () => {
+			response = await signUp(email);
+		});
+		expect(response!.status).toBe(200);
+		expect(written).toContain("network");
+	});
+
+	test("never checks the password at sign-in", async () => {
+		const email = newEmail();
+		await signUp(email);
+		network.use(breachedRange(PASSWORD));
+		expect((await signIn(email)).status).toBe(200);
+	});
+});
+
+describe("update-user (BR-F01-01, BR-F01-02)", () => {
+	function updateUser(cookie: string, body: unknown) {
+		return POST(request("POST", "/update-user", { body, headers: { cookie } }));
+	}
+
+	test("changes the name, trimmed and in NFC", async () => {
+		const email = newEmail();
+		const cookie = sessionCookie(await signUp(email));
+		expect((await updateUser(cookie, { name: "  René " })).status).toBe(200);
+		expect((await storedUser(email))?.name).toBe("René");
+	});
+
+	test.each([
+		{ image: "https://example.com/a.png" },
+		{ name: "Asha", image: null },
+	])("refuses %j with 400 FIELD_NOT_ALLOWED and changes nothing", async (body) => {
+		const email = newEmail();
+		const cookie = sessionCookie(await signUp(email));
+		const response = await updateUser(cookie, body);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ code: "FIELD_NOT_ALLOWED" });
+		const { rows } = await owner.query(
+			`SELECT name, image FROM auth."user" WHERE email = $1`,
+			[email],
+		);
+		expect(rows[0]).toEqual({ name: "Asha", image: null });
+	});
+
+	test("refuses an invalid name with 400 INVALID_NAME and keeps the old one", async () => {
+		const email = newEmail();
+		const cookie = sessionCookie(await signUp(email));
+		const response = await updateUser(cookie, { name: "   " });
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ code: "INVALID_NAME" });
+		expect((await storedUser(email))?.name).toBe("Asha");
+	});
+});
+
+describe("sign-in refusals", () => {
+	// AC-F01-04
+	test("a wrong password and an unknown email answer exactly the same", async () => {
+		const email = newEmail();
+		await signUp(email);
+		const wrongPassword = await signIn(email, "not the right password");
+		const unknownEmail = await signIn(newEmail());
+		expect(wrongPassword.status).toBe(401);
+		expect(unknownEmail.status).toBe(wrongPassword.status);
+		expect(await unknownEmail.json()).toEqual(await wrongPassword.json());
+		expect(unknownEmail.headers.getSetCookie()).toEqual(
+			wrongPassword.headers.getSetCookie(),
+		);
+	});
+
+	// AC-F01-05
+	test("with the limiter on, the fourth sign-in from one address in 10 seconds gets 429", async () => {
+		const limited = createAuth(
+			serverEnv(),
+			drizzle({
+				client: authPool(),
+				schema: { user, session, account, verification },
+			}),
+			{ rateLimit: true },
+		);
+		const attempt = (address: string) =>
+			handleAuthRequest(
+				request("POST", "/sign-in/email", {
+					body: { email: newEmail(), password: PASSWORD },
+					headers: { "x-forwarded-for": address },
+				}),
+				limited,
+			);
+		const statuses = [];
+		for (let i = 0; i < 4; i += 1)
+			statuses.push((await attempt("203.0.113.7")).status);
+		expect(statuses).toEqual([401, 401, 401, 429]);
+		// Another address has its own count.
+		expect((await attempt("203.0.113.8")).status).toBe(401);
 	});
 });

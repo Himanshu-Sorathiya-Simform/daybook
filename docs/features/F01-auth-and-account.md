@@ -266,28 +266,29 @@ None.
 
 ## 8. Validation and messages
 
-| Field or action  | Rule                                              | Message shown                                                              |
-| ---------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
-| Email            | Required                                          | Enter your email.                                                          |
-| Email            | Valid address                                     | Enter a valid email address, like name@example.com.                        |
-| Password         | Required                                          | Enter a password.                                                          |
-| Password         | At least 12 characters                            | Use at least 12 characters.                                                |
-| Password         | At most 128 characters                            | Use 128 characters or fewer.                                               |
-| Password         | `PASSWORD_BREACHED`                               | This password has appeared in a data breach. Choose a different one.       |
-| Display name     | `INVALID_NAME`                                    | Enter a name of up to 50 characters.                                       |
-| Sign-up          | Email exists                                      | An account with this email already exists. Log in instead.                 |
-| Login            | Wrong email or password                           | Email or password is incorrect.                                            |
-| Login            | Rate limited                                      | Too many attempts. Wait a few seconds and try again.                       |
-| New password     | Same as current                                   | Choose a password you have not used for this account.                      |
-| Current password | Wrong                                             | Your current password is incorrect.                                        |
-| Reset            | Text is not `RESET`                               | Type RESET to confirm.                                                     |
-| Delete           | Text is not `DELETE`                              | Type DELETE to confirm.                                                    |
-| Delete           | Wrong password                                    | Your password is incorrect.                                                |
-| Delete           | `PASSWORD_REQUIRED`                               | Enter your password to delete your account.                                |
-| Delete           | `BILLING_UNAVAILABLE`                             | We could not reach the billing service, so nothing was deleted. Try again. |
-| Any auth screen  | Offline                                           | You are offline. Connect to log in.                                        |
-| Login, Sign-up   | The logout marker exists and sign-out still fails | We couldn't finish logging out the last session. Try again in a moment.    |
-| Session expired  | 401 banner                                        | Your session has expired. Log in to keep saving changes.                   |
+| Field or action  | Rule                                                                       | Message shown                                                              |
+| ---------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Email            | Required                                                                   | Enter your email.                                                          |
+| Email            | Valid address                                                              | Enter a valid email address, like name@example.com.                        |
+| Password         | Required                                                                   | Enter a password.                                                          |
+| Password         | At least 12 characters                                                     | Use at least 12 characters.                                                |
+| Password         | At most 128 characters                                                     | Use 128 characters or fewer.                                               |
+| Password         | `PASSWORD_BREACHED`                                                        | This password has appeared in a data breach. Choose a different one.       |
+| Display name     | `INVALID_NAME`                                                             | Enter a name of up to 50 characters.                                       |
+| Update user      | Any field but `name` (`FIELD_NOT_ALLOWED`, BR-F01-02); no screen sends one | Only the name can be changed.                                              |
+| Sign-up          | Email exists                                                               | An account with this email already exists. Log in instead.                 |
+| Login            | Wrong email or password                                                    | Email or password is incorrect.                                            |
+| Login            | Rate limited                                                               | Too many attempts. Wait a few seconds and try again.                       |
+| New password     | Same as current                                                            | Choose a password you have not used for this account.                      |
+| Current password | Wrong                                                                      | Your current password is incorrect.                                        |
+| Reset            | Text is not `RESET`                                                        | Type RESET to confirm.                                                     |
+| Delete           | Text is not `DELETE`                                                       | Type DELETE to confirm.                                                    |
+| Delete           | Wrong password                                                             | Your password is incorrect.                                                |
+| Delete           | `PASSWORD_REQUIRED`                                                        | Enter your password to delete your account.                                |
+| Delete           | `BILLING_UNAVAILABLE`                                                      | We could not reach the billing service, so nothing was deleted. Try again. |
+| Any auth screen  | Offline                                                                    | You are offline. Connect to log in.                                        |
+| Login, Sign-up   | The logout marker exists and sign-out still fails                          | We couldn't finish logging out the last session. Try again in a moment.    |
+| Session expired  | 401 banner                                                                 | Your session has expired. Log in to keep saving changes.                   |
 
 ## 9. Plan gating
 

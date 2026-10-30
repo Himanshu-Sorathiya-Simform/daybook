@@ -5,6 +5,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { afterAll, describe, expect, test, vi } from "vitest";
 import { type AuthDatabase, createAuth, handleAuthRequest } from "../auth";
+import { beforeHook } from "../hooks";
 
 const SECRET = "unit-test-secret-that-is-long-enough-0123456789";
 
@@ -78,8 +79,44 @@ describe("settings", async () => {
 		expect(context.rateLimit.max).toBe(100);
 	});
 
+	test("leaves the rate limiter off outside production, as Better Auth does", () => {
+		expect(context.rateLimit.enabled).toBe(false);
+	});
+
+	test("runs F01's before hook", () => {
+		expect(options.hooks?.before).toBe(beforeHook);
+	});
+
 	test("sends no telemetry", () => {
 		expect(options.telemetry?.enabled).toBe(false);
+	});
+});
+
+describe("the rateLimit option, for the test of the limiter (AC-F01-05)", async () => {
+	const context = await createAuth(
+		{ APP_ORIGIN: "http://localhost:3000", BETTER_AUTH_SECRET: SECRET },
+		db,
+		{ rateLimit: true },
+	).$context;
+
+	test("turns the limiter on", () => {
+		expect(context.rateLimit.enabled).toBe(true);
+	});
+
+	test("keeps the default window and limit, so the special sign-in rule applies", () => {
+		expect(context.rateLimit.window).toBe(10);
+		expect(context.rateLimit.max).toBe(100);
+		expect(context.rateLimit.storage).toBe("memory");
+	});
+
+	test("false is the same as leaving it out", async () => {
+		const off = await createAuth(
+			{ APP_ORIGIN: "http://localhost:3000", BETTER_AUTH_SECRET: SECRET },
+			db,
+			{ rateLimit: false },
+		).$context;
+		expect(off.options.rateLimit).toBeUndefined();
+		expect(off.rateLimit.enabled).toBe(false);
 	});
 });
 

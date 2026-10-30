@@ -32,6 +32,8 @@ export default defineConfig({
 	test: {
 		environment: "node",
 		globalSetup: ["./vitest.integration.setup.ts"],
+		// The fake network: no test reaches an outside service (testing rule).
+		setupFiles: ["./vitest.integration.network.ts"],
 		// Each query crosses to the database's region and back; Neon may also be waking up.
 		testTimeout: 30_000,
 		hookTimeout: 60_000,
