@@ -238,6 +238,18 @@ describe("filters", () => {
 		});
 	});
 
+	// AC-F03-48, D-492: the unknown key itself, in the answer the client reads.
+	test("an unknown key such as month gets 422 on filter.month", async () => {
+		const { status, body } = await post(
+			shared,
+			viewBody({ filter: { month: "2026-10" } }),
+		);
+		expect(status).toBe(422);
+		expect(errorOf(body).fields).toEqual({
+			"filter.month": "Remove this field.",
+		});
+	});
+
 	test("minMinor with currency USD for an INR profile gets 422 currency_mismatch", async () => {
 		const me = shared;
 		const { status, body } = await post(

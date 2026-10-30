@@ -9,7 +9,7 @@ import {
 } from "@/lib/transactions/schemas";
 import { ApiError } from "../../api/errors";
 import type { ProfiledContext } from "../context";
-import { lockCurrency, requireCurrency } from "../currency";
+import { lockCurrency, requireCurrency, type WithCurrency } from "../currency";
 import type { Tx } from "../with-user";
 import { versionMismatch } from "./conflict";
 import { entryWindow, inWindow, pastSlack } from "./dates";
@@ -138,7 +138,8 @@ function setClause(ctx: ProfiledContext, body: TransactionEditBody): SQL {
  * checks (step 2); the profile lock, with the currency when one is sent (3); the dates (4);
  * then the versioned update (7). M1 has no Goal rows, so step 5 has nothing to check. When the
  * update matches nothing, the re-read gives 409 `version_conflict` with the current row and
- * currency in `details.current`, as `GET` answers it (D-485), or 404.
+ * currency in `details.current`, as `GET` answers it (D-485), or 404. Answers carry the locked
+ * currency (D-493).
  */
 export async function editTransaction(
 	tx: Tx,
@@ -146,12 +147,14 @@ export async function editTransaction(
 	id: string,
 	version: number,
 	body: TransactionEditBody,
-): Promise<Transaction> {
+): Promise<WithCurrency<Transaction>> {
 	const stored = await getTransaction(tx, id);
 	if (!stored) throw new ApiError("not_found");
 	checkEditFields(stored, body);
-	if (body.currency !== undefined) await requireCurrency(tx, body.currency);
-	else await lockCurrency(tx);
+	const currency =
+		body.currency !== undefined ?
+			await requireCurrency(tx, body.currency)
+		:	await lockCurrency(tx);
 	checkEditDates(ctx, stored, body);
 
 	const { rows } = await tx.execute<{ row: RowJson }>(
@@ -160,6 +163,6 @@ export async function editTransaction(
 		RETURNING ${ROW_JSON} AS row`,
 	);
 	const [updated] = rows;
-	if (updated) return readRow(updated.row);
-	throw await versionMismatch(tx, ctx, id);
+	if (updated) return { ...readRow(updated.row), currency };
+	throw await versionMismatch(tx, currency, id);
 }

@@ -56,6 +56,25 @@ function create(
 	});
 }
 
+/** Resolves once a connection waits for the advisory lock on `key`, so a test can release it
+ * knowing the create has reached it. */
+async function waitForLockWaiter(key: string): Promise<void> {
+	for (let attempt = 0; attempt < 100; attempt++) {
+		const { rows } = await owner.query<{ waiting: boolean }>(
+			`SELECT EXISTS (
+			   SELECT 1 FROM pg_locks,
+			     LATERAL (SELECT hashtextextended($1, 0) AS lock_key) AS k
+			   WHERE locktype = 'advisory' AND NOT granted AND objsubid = 1
+			     AND classid = ((lock_key >> 32) & 4294967295)::oid
+			     AND objid = (lock_key & 4294967295)::oid) AS waiting`,
+			[key],
+		);
+		if (rows[0]?.waiting) return;
+		await new Promise((resolve) => setTimeout(resolve, 100));
+	}
+	throw new Error("No create waited for the limit lock.");
+}
+
 /** The ApiError a create throws, as code, fields and details. */
 async function refusal(promise: Promise<unknown>) {
 	try {
@@ -91,10 +110,58 @@ describe("a create", () => {
 				version: 1,
 				createdAt: GOLDEN_NOW,
 				updatedAt: GOLDEN_NOW,
+				currency: "INR",
 			},
 		});
 		// The id lookup, the limit lock, the count, the insert.
 		expect(statements).toBe(4);
+	});
+
+	// D-493: with a sent currency the profile is locked, and the answer carries what it read.
+	test("a sent currency answers the currency it locked, even when the request read another", async () => {
+		const ctx = goldenContext(userId, { currency: "USD" });
+		const { result } = await asUser(userId, (tx) =>
+			createView(tx, ctx, viewBody({ currency: "INR" })),
+		);
+		expect(result.view.currency).toBe("INR");
+	});
+
+	// B5, BR-P2-20: a create's id carries its time, at most 5 minutes past the request clock.
+	test("an id whose time is past the request clock plus 5 minutes gets 422 on id", async () => {
+		const ahead = (minutes: number) =>
+			uuidV7At(new Date(Date.parse(GOLDEN_NOW) + minutes * 60_000));
+		expect(await refusal(create(viewBody({ id: ahead(6) })))).toEqual(
+			invalid({
+				id: "This item's time is in the future. Check your device's clock.",
+			}),
+		);
+		expect(
+			await refusal(
+				create(viewBody({ id: "ffffffff-ffff-7fff-bfff-ffffffffffff" })),
+			),
+		).toMatchObject({
+			code: "validation_failed",
+			fields: {
+				id: "This item's time is in the future. Check your device's clock.",
+			},
+		});
+		expect((await create(viewBody({ id: ahead(5) }))).result.created).toBe(true);
+	});
+
+	test("a future id is checked after the currency, before the limit", async () => {
+		const ahead = uuidV7At(new Date(Date.parse(GOLDEN_NOW) + 10 * 60_000));
+		expect(
+			(await refusal(create(viewBody({ id: ahead, currency: "USD" })))).code,
+		).toBe("currency_mismatch");
+		expect(
+			(
+				await refusal(
+					create(viewBody({ id: ahead }), (tx) =>
+						addViews(tx, userId, 20),
+					),
+				)
+			).code,
+		).toBe("validation_failed");
 	});
 
 	// AC-F03-48: lists are stored sorted and deduplicated.
@@ -197,6 +264,50 @@ describe("an id the user already has", () => {
 		await owner.query("DELETE FROM app.transaction_views WHERE id = $1", [
 			input["id"],
 		]);
+	});
+
+	// B7, AC-F03-46: a request holding the limit lock creates this id; the create waits on the
+	// lock, then counts 20 with that view among them. It is this create, done: 200, not 422.
+	test("at 19 views, the same id committed by the lock's holder answers that view", async () => {
+		const input = viewBody({ name: "Mine" });
+		const key = `${userId}:transactions.views`;
+		const holder = new Client({
+			connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
+		});
+		await holder.connect();
+		try {
+			await holder.query("BEGIN");
+			await holder.query(
+				"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+				[key],
+			);
+			await holder.query(
+				`INSERT INTO app.transaction_views (id, user_id, created_at, updated_at, name,
+				   filter, sort, dir, group_by, version)
+				 VALUES ($1, $2, $3, $3, 'Theirs first', '{}', 'date', 'desc', 'day', 1)`,
+				[input["id"], userId, GOLDEN_NOW],
+			);
+			const ctx = goldenContext(userId);
+			const pending = asUser(userId, async (tx) => {
+				await addViews(tx, userId, 19);
+				return createView(tx, ctx, input);
+			});
+			await waitForLockWaiter(key);
+			await holder.query("COMMIT");
+			const { result, statements } = await pending;
+			expect(result).toMatchObject({
+				created: false,
+				view: { id: input["id"], name: "Theirs first", currency: "INR" },
+			});
+			// The test's insert; the lookup, the lock, the count of 20 and the re-read.
+			expect(statements).toBe(5);
+		} finally {
+			await holder.query("ROLLBACK").catch(() => {});
+			await holder.end();
+			await owner.query("DELETE FROM app.transaction_views WHERE id = $1", [
+				input["id"],
+			]);
+		}
 	});
 
 	test("finds the view by an uppercase id too", async () => {
@@ -325,13 +436,28 @@ describe("filters and the list fields", () => {
 			{ filter: { minMinor: 2000, maxMinor: 1000 }, currency: "INR" },
 			"filter.minMinor",
 		],
-		[{ filter: { month: "2026-10" } }, "filter"],
+		// D-492: an unknown key is named itself.
+		[{ filter: { month: "2026-10" } }, "filter.month"],
 		[{ sort: "amount", group: "day" }, "group"],
 		[{ filter: { minMinor: 1000 } }, "currency"],
 	])("%j gets 422 on %s", async (change, path) => {
 		const answer = await refusal(create(viewBody(change)));
 		expect(answer.code).toBe("validation_failed");
 		expect(Object.keys(answer.fields)).toEqual([path]);
+	});
+
+	// D-492
+	test('an unknown key gets "Remove this field." at its own path', async () => {
+		expect(
+			await refusal(
+				create(viewBody({ filter: { month: "2026-10" }, position: 2 })),
+			),
+		).toEqual(
+			invalid({
+				"filter.month": "Remove this field.",
+				position: "Remove this field.",
+			}),
+		);
 	});
 
 	// AC-F03-48

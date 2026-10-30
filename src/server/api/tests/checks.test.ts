@@ -5,10 +5,12 @@ import {
 	checkOrigin,
 	isJsonMediaType,
 	isMutation,
+	MAX_JSON_DEPTH,
 	parseIfMatch,
 	queuePending,
 	readBody,
 	requestIdOf,
+	tooDeep,
 } from "../checks";
 import { ApiError } from "../errors";
 import { isUuidV7 } from "@/lib/ids";
@@ -225,5 +227,57 @@ describe("queuePending", () => {
 		["another cookie value", { cookie: "daybook_queue=done" }],
 	])("is false with %s", (_name, headers) => {
 		expect(queuePending(new Headers(headers))).toBe(false);
+	});
+});
+
+describe("tooDeep (BR-P2-17 step 13, D-491)", () => {
+	/** `depth` arrays, one inside the next, as JSON.parse reads them. */
+	const arrays = (depth: number) =>
+		JSON.parse("[".repeat(depth) + "]".repeat(depth)) as unknown;
+	/** `depth` objects, each holding the next under `a`. */
+	const objects = (depth: number) =>
+		JSON.parse(
+			'{"a":'.repeat(depth - 1) + "{}" + "}".repeat(depth - 1),
+		) as unknown;
+
+	test("the limit is 32 levels", () => {
+		expect(MAX_JSON_DEPTH).toBe(32);
+	});
+
+	test.each([
+		["a number", 5],
+		["a string", "text"],
+		["null", null],
+		["an empty object", {}],
+		[
+			"a view body, three levels deep",
+			{ filter: { cat: ["food"] }, name: "Food" },
+		],
+		["32 arrays", arrays(32)],
+		["32 objects", objects(32)],
+	])("accepts %s", (_label, value) => {
+		expect(tooDeep(value)).toBe(false);
+	});
+
+	test.each([
+		["33 arrays", arrays(33)],
+		["33 objects", objects(33)],
+		[
+			"arrays and objects alternating, 33 levels",
+			JSON.parse('[{"a":'.repeat(16) + "[]" + "}]".repeat(16) + ""),
+		],
+	])("refuses %s", (_label, value) => {
+		expect(tooDeep(value)).toBe(true);
+	});
+
+	test("refuses a deep branch beside shallow ones", () => {
+		expect(tooDeep({ a: 1, b: [2, 3], c: arrays(32) })).toBe(true);
+	});
+
+	// B4: 30,000 levels fit in the 64 KB limit and overflowed the canonical hash's recursion.
+	test("reads 30,000 levels without overflowing the stack", () => {
+		const deep = arrays(30_000);
+		expect(() => tooDeep(deep)).not.toThrow();
+		expect(tooDeep(deep)).toBe(true);
 	});
 });

@@ -2,6 +2,7 @@
 import { describe, expect, test } from "vitest";
 
 import { ApiError } from "../../../api/errors";
+import { type Cursor, encodeCursor } from "../cursor";
 import {
 	badParams,
 	HISTOGRAM_IGNORES,
@@ -15,6 +16,25 @@ import {
 } from "../query";
 
 const read = (query: string) => readListQuery(new URLSearchParams(query), "INR");
+
+// golden #13: Acme Corp, 85,000.00 on 1 October at 10:05 IST, newest first by day.
+const BY_DAY: Cursor = {
+	v: 1,
+	sort: "date",
+	dir: "desc",
+	group: "day",
+	travel: "next",
+	on: "2026-10-01",
+	at: "2026-10-01T04:35:00.000Z",
+	id: "0199a000-0000-7000-8000-000000000013",
+};
+const BY_CATEGORY = encodeCursor({
+	...BY_DAY,
+	dir: "asc",
+	group: "category",
+	groupKey: "salary",
+	order: "0123456789abcdef",
+});
 
 /** The parameters a 400 names, or null when the query reads. */
 function refused(
@@ -45,13 +65,13 @@ describe("readListQuery", () => {
 	test("reads the filter, the list parameters, the limit and the cursor", () => {
 		expect(
 			read(
-				"from=2026-10-01&to=2026-10-31&cat=food&dir=asc&group=category&limit=20&cursor=abc",
+				`from=2026-10-01&to=2026-10-31&cat=food&dir=asc&group=category&limit=20&cursor=${BY_CATEGORY}`,
 			),
 		).toEqual({
 			filter: { from: "2026-10-01", to: "2026-10-31", cat: ["food"] },
 			list: { sort: "date", dir: "asc", group: "category" },
 			limit: 20,
-			cursor: "abc",
+			cursor: BY_CATEGORY,
 		});
 	});
 
@@ -96,6 +116,49 @@ describe("readListQuery", () => {
 		expect(
 			refused("cursor=a&cursor=b&limit=0&sort=price&cat=pizza&type=gift"),
 		).toEqual(["type", "cat", "sort", "limit", "cursor"]);
+	});
+
+	// D-478, D-490: the cursor is read with the query, so one 400 names it beside the rest.
+	test("names a cursor that does not decode beside the other invalid parameters", () => {
+		expect(refused("cat=pizza&cursor=junk&limit=0")).toEqual([
+			"cat",
+			"limit",
+			"cursor",
+		]);
+	});
+
+	// AC-F03-38, before any statement runs.
+	test("names a cursor made under another grouping", () => {
+		expect(refused(`group=none&cursor=${encodeCursor(BY_DAY)}`)).toEqual([
+			"cursor",
+		]);
+	});
+
+	// D-490: Postgres has no year 0, so this cursor would fail its cast as a 500.
+	test("names a cursor whose instant lies in the year 0000", () => {
+		const forged = Buffer.from(
+			JSON.stringify({ ...BY_DAY, at: "0000-12-31T23:59:00.000Z" }),
+		).toString("base64url");
+		expect(refused(`cursor=${forged}`)).toEqual(["cursor"]);
+	});
+
+	// D-490: with no valid sort, direction or group to compare with, only the contents count.
+	test.each([
+		["sort=price", ["sort"]],
+		["dir=up", ["dir"]],
+		["group=week", ["group"]],
+		["sort=amount&group=day", ["group"]],
+	])("with %s, a well-formed cursor is not named", (query, params) => {
+		expect(refused(`${query}&cursor=${encodeCursor(BY_DAY)}`)).toEqual(params);
+	});
+
+	test("with an invalid sort, a cursor that does not decode is still named", () => {
+		expect(refused("sort=price&cursor=junk")).toEqual(["sort", "cursor"]);
+	});
+
+	// D-490: Postgres has no year 0.
+	test("refuses dates in the year 0000", () => {
+		expect(refused("from=0000-01-01&to=2026-10-31")).toEqual(["from", "to"]);
 	});
 
 	test("ignores names that are not its own, such as txn, view and page", () => {

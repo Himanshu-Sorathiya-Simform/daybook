@@ -14,10 +14,6 @@ export const GET = route({}, async (ctx, tx) => {
  * earlier create of the same id made (API-5). The body is checked in `createView`, against
  * the profile currency's schema and after the id lookup (BR-F03-63, D-488). */
 export const POST = route({}, async (ctx, tx, { body }) => {
-	const profiled = requireProfile(ctx);
-	const { view, created } = await createView(tx, profiled, body);
-	return reply(
-		{ ...view, currency: profiled.profile.currency },
-		{ status: created ? 201 : 200 },
-	);
+	const { view, created } = await createView(tx, requireProfile(ctx), body);
+	return reply(view, { status: created ? 201 : 200 });
 });

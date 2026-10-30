@@ -17,8 +17,7 @@ export const PATCH = route(
 		// The wrapper refuses a versioned route's request without `If-Match` (400).
 		if (typeof id !== "string" || version === null)
 			throw new ApiError("not_found");
-		const view = await editView(tx, profiled, id, version, body);
-		return { ...view, currency: profiled.profile.currency };
+		return editView(tx, profiled, id, version, body);
 	},
 );
 

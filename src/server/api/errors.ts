@@ -147,11 +147,22 @@ export function envelope(
 	};
 }
 
+/** The message for a body field no schema knows (P2 section 8, D-492). */
+export const UNKNOWN_FIELD_MESSAGE = "Remove this field.";
+
 /** Turns a Zod failure into `validation_failed` with one message per field (BR-P2-24). The
- * first message wins for a field; a problem with the body as a whole goes under `_body`. */
+ * first message wins for a field; a problem with the body as a whole goes under `_body`. An
+ * unknown field is named at its own path, such as `filter.month`, rather than on its parent
+ * (D-492). */
 export function fromZodError(error: z.ZodError): ApiError {
 	const fields: Record<string, string> = {};
 	for (const issue of error.issues) {
+		if (issue.code === "unrecognized_keys") {
+			for (const key of issue.keys) {
+				fields[[...issue.path, key].join(".")] ??= UNKNOWN_FIELD_MESSAGE;
+			}
+			continue;
+		}
 		const field = issue.path.length > 0 ? issue.path.join(".") : "_body";
 		fields[field] ??= issue.message;
 	}

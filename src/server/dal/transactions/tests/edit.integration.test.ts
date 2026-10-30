@@ -119,9 +119,37 @@ describe("an edit", () => {
 			version: 2,
 			createdAt: "2026-10-19T16:45:00.000Z",
 			updatedAt: NOW,
+			currency: "INR",
 		});
 		// The read, the profile lock, the update.
 		expect(statements).toBe(3);
+	});
+
+	// D-493: the answer carries the currency read under the lock, not the request's earlier read.
+	test("answers the currency it locked, even when the request read another", async () => {
+		const { result } = await edit(
+			golden.id(24),
+			{ note: "Locked" },
+			{ profile: { currency: "USD" } },
+		);
+		expect(result.currency).toBe("INR");
+	});
+
+	// D-486: a client may send the whole form, nulls included.
+	test("accepts the whole form, with the stored null goalId and the stored values", async () => {
+		const { result } = await edit(golden.id(24), {
+			type: "expense",
+			amountMinor: 64000,
+			currency: "INR",
+			occurredAt: "2026-10-19T16:45:00Z",
+			occurredOn: "2026-10-19",
+			category: "food",
+			goalId: null,
+			payee: "Swiggy",
+			description: null,
+			note: "Dinner",
+		});
+		expect(result).toMatchObject({ goalId: null, note: "Dinner", version: 2 });
 	});
 
 	// golden #8: BigBasket, "Monthly groceries". BR-F03-12: null and blank clear a text.
@@ -196,6 +224,12 @@ describe("the type (AC-F03-09, BR-F03-02)", () => {
 
 	test("a category of the other kind is refused on the merged row", async () => {
 		expect(await refusal(edit(golden.id(24), { category: "salary" }))).toEqual(
+			invalid({ category: "Choose a category." }),
+		);
+	});
+
+	test("a null category on an expense is refused on the merged row", async () => {
+		expect(await refusal(edit(golden.id(24), { category: null }))).toEqual(
 			invalid({ category: "Choose a category." }),
 		);
 	});
@@ -508,6 +542,18 @@ describe("versions and missing rows (BR-P2-21, D-485)", () => {
 		});
 		// The test's read; then the edit's read, lock, update that matched nothing and re-read.
 		expect(statements).toBe(5);
+	});
+
+	// D-493
+	test("a 409 carries the currency it locked, even when the request read another", async () => {
+		const ctx = goldenContext(golden.userId, { currency: "USD" });
+		const { result } = await asUser(golden.userId, (tx) =>
+			refusal(editTransaction(tx, ctx, golden.id(24), 2, { payee: "Mine" })),
+		);
+		expect(result).toMatchObject({
+			code: "version_conflict",
+			details: { current: { id: golden.id(24), currency: "INR" } },
+		});
 	});
 
 	test("another user's row, an unknown id and a non-UUID get 404", async () => {

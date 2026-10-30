@@ -21,5 +21,5 @@ export async function deleteView(
 		sql`DELETE FROM app.transaction_views WHERE id = ${id}::uuid AND version = ${version}
 		RETURNING id`,
 	);
-	if (rows.length === 0) throw await viewMismatch(tx, ctx, id);
+	if (rows.length === 0) throw await viewMismatch(tx, ctx.profile.currency, id);
 }

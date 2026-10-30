@@ -68,12 +68,21 @@ export async function asUser<T>(
  * the update sees it (P2).
  */
 export function afterFirstStatement(tx: Tx, between: () => Promise<unknown>): Tx {
+	return afterStatement(tx, 1, between);
+}
+
+/** `tx`, but running `between` once its `count`th statement has answered. */
+export function afterStatement(
+	tx: Tx,
+	count: number,
+	between: () => Promise<unknown>,
+): Tx {
 	let sent = 0;
 	const spy = Object.create(tx) as Tx;
 	spy.execute = (async (query: Parameters<Tx["execute"]>[0]) => {
 		const answer = await tx.execute(query);
 		sent += 1;
-		if (sent === 1) await between();
+		if (sent === count) await between();
 		return answer;
 	}) as Tx["execute"];
 	return spy;

@@ -57,6 +57,23 @@ export async function readBody(
 	}
 }
 
+/** How many arrays and objects deep a JSON body may nest (step 13, D-491). Every body a route
+ * takes is at most three deep; the 64 KB limit alone lets one nest 65,000 deep. */
+export const MAX_JSON_DEPTH = 32;
+
+/** Whether parsed JSON nests arrays and objects more than `limit` levels deep. It walks with
+ * its own stack, so no depth can overflow the call stack, as recursion over the body can. */
+export function tooDeep(value: unknown, limit = MAX_JSON_DEPTH): boolean {
+	const stack: [unknown, number][] = [[value, 0]];
+	while (stack.length > 0) {
+		const [item, depth] = stack.pop() as [unknown, number];
+		if (item === null || typeof item !== "object") continue;
+		if (depth + 1 > limit) return true;
+		for (const child of Object.values(item)) stack.push([child, depth + 1]);
+	}
+	return false;
+}
+
 /** The request's `Origin` must be exactly `APP_ORIGIN`; a missing one fails (step 4). */
 export function checkOrigin(request: Request, origin: string): void {
 	if (request.headers.get("origin") !== origin) throw new ApiError("cross_origin");

@@ -2,7 +2,7 @@
 import { describe, expect, test } from "vitest";
 
 import { ApiError } from "../../../api/errors";
-import { type Cursor, decodeCursor, encodeCursor } from "../cursor";
+import { type Cursor, decodeCursor, encodeCursor, readCursor } from "../cursor";
 
 // golden #13: Acme Corp, 85,000.00 on 1 October at 10:05 IST.
 const DATE_DAY: Cursor = {
@@ -116,6 +116,9 @@ describe("decodeCursor refuses with 400 bad_request naming cursor", () => {
 		["an instant without milliseconds", { at: "2026-10-01T04:35:00Z" }],
 		["an instant with an offset", { at: "2026-10-01T10:05:00.000+05:30" }],
 		["an instant that does not exist", { at: "2026-13-01T04:35:00.000Z" }],
+		// D-490: Postgres has no year 0; casting either would fail as a 500.
+		["a date in the year 0000", { on: "0000-12-31" }],
+		["an instant in the year 0000", { at: "0000-12-31T23:59:00.000Z" }],
 		["an id that is not a UUID", { id: "13" }],
 		["an amount under the date sort", { amount: 100 }],
 		["a group key under day grouping", { groupKey: "food" }],
@@ -150,6 +153,10 @@ describe("decodeCursor refuses with 400 bad_request naming cursor", () => {
 		["no group key under category grouping", { groupKey: undefined }],
 		["an empty group key", { groupKey: "" }],
 		["a group key over 320 characters", { groupKey: "a".repeat(321) }],
+		// D-490: Postgres refuses a NUL in text (22021); no payee key holds a control character.
+		["a group key holding a NUL", { groupKey: "swiggy\u0000" }],
+		["a group key holding a C1 control", { groupKey: "swiggy\u0085" }],
+		["a group key with a lone surrogate", { groupKey: "caf\ud800" }],
 		["no fingerprint under category grouping", { order: undefined }],
 		["a fingerprint of 15 characters", { order: "0123456789abcde" }],
 		["a fingerprint in capitals", { order: "0123456789ABCDEF" }],
@@ -187,5 +194,30 @@ describe("decodeCursor refuses with 400 bad_request naming cursor", () => {
 	test("a hand-edited cursor whose JSON no longer parses", () => {
 		const text = encodeCursor(DATE_DAY);
 		expect(refusal(text.slice(0, -4))).toEqual(BAD_REQUEST);
+	});
+});
+
+describe("readCursor", () => {
+	test("answers the cursor when its contents pass and it matches the list", () => {
+		expect(readCursor(encodeCursor(DATE_DAY), listOf(DATE_DAY))).toEqual(
+			DATE_DAY,
+		);
+	});
+
+	test("answers null instead of throwing for contents that fail", () => {
+		expect(readCursor("junk!", listOf(DATE_DAY))).toBeNull();
+		expect(readCursor(forge({ ...DATE_DAY, on: "0000-12-31" }))).toBeNull();
+	});
+
+	test("answers null for a cursor made under other list parameters", () => {
+		expect(
+			readCursor(encodeCursor(DATE_DAY), { ...listOf(DATE_DAY), dir: "asc" }),
+		).toBeNull();
+	});
+
+	// D-490: when the request's own sort, direction or group is invalid, there is nothing to
+	// compare with, so only the contents count.
+	test("without list parameters, checks the contents only", () => {
+		expect(readCursor(encodeCursor(AMOUNT_CATEGORY))).toEqual(AMOUNT_CATEGORY);
 	});
 });

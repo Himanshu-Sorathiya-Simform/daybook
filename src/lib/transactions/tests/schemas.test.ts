@@ -433,6 +433,30 @@ describe("the edit body (BR-F03-23)", () => {
 		expect(transactionEditSchema.parse({ payee: "" })).toEqual({ payee: null });
 	});
 
+	// D-486: a client may send the whole form; a stored null is no change, and the merged
+	// row's type rules judge any null that is a change.
+	test("passes a null category or goalId on, for the merged row's rules to judge", () => {
+		expect(transactionEditSchema.parse({ goalId: null })).toEqual({
+			goalId: null,
+		});
+		expect(transactionEditSchema.parse({ category: null })).toEqual({
+			category: null,
+		});
+		expect(
+			transactionEditSchema.parse({
+				type: "expense",
+				category: "food",
+				goalId: null,
+				payee: "Swiggy",
+			}),
+		).toEqual({
+			type: "expense",
+			category: "food",
+			goalId: null,
+			payee: "Swiggy",
+		});
+	});
+
 	test("refuses a body with no change", () => {
 		expect(editErrors({})).toEqual({ _body: "Send at least one change." });
 	});

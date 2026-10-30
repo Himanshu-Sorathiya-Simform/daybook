@@ -116,6 +116,18 @@ describe("versions and missing rows (BR-P2-21, BR-F03-25)", () => {
 		expect(statements).toBe(5);
 	});
 
+	// D-493
+	test("a 409 carries the currency it locked, even when the request read another", async () => {
+		const ctx = goldenContext(golden.userId, { currency: "USD" });
+		const { result } = await asUser(golden.userId, (tx) =>
+			refusal(deleteTransaction(tx, ctx, golden.id(24), 2)),
+		);
+		expect(result).toMatchObject({
+			code: "version_conflict",
+			details: { current: { id: golden.id(24), currency: "INR" } },
+		});
+	});
+
 	test("another user's row and an unknown id get 404, and leave the other user's row", async () => {
 		const ctx = goldenContext(golden.userId);
 		for (const id of [other.id(24), uuidV7At(GOLDEN_NOW)]) {

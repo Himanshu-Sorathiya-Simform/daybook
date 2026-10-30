@@ -14,7 +14,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-489                                                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-495                                      |
 
 ## 1. User stories
 
@@ -165,7 +165,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **In the browser:** the recording date of a new Transaction is today, from the device clock in the profile zone, and the date picker offers only those 11 dates.
     - **On the server:** the recording date is `createdAt` in the profile zone. A date outside the window gets 422 `date_out_of_window`.
 - **BR-F03-09** `occurredAt` is never in the future (D-221).
-    - **On create:** `occurredAt` is at most `createdAt` plus 5 minutes.
+    - **On create:** `occurredAt` is at most `createdAt` plus 5 minutes, and at most `ctx.now` (the request clock, P2, BR-P2-43) plus 5 minutes (D-494).
     - **On edit:** `occurredAt` is at most `ctx.now` (the request clock, P2, BR-P2-43) plus 5 minutes.
     - **In the form:** on today's date, the time picker stops at the current time.
     - **Refusal:** 422 `validation_failed` on `occurredAt`.
@@ -220,7 +220,7 @@ A view's `filter` holds the filter object's fields with these differences from t
 
 **Creating**
 
-- **BR-F03-20** `POST /api/transactions` carries the client id and an `Idempotency-Key`, and returns 201 with the row. An id that already exists for this user returns 200 with the existing row (API-5).
+- **BR-F03-20** `POST /api/transactions` carries the client id and an `Idempotency-Key`, and returns 201 with the row. An id that already exists for this user returns 200 with the existing row (API-5). The id is looked up right after the profile lock, before the currency, date and Goal checks, so a retry still gets its row after any of them has changed (D-493).
 - **BR-F03-21** Save closes the dialog. "Save and add another" keeps the type, date and time, clears every other field, and focuses Amount.
 - **BR-F03-22** If the new row does not match the current filter, the toast says "Saved. It's hidden by your filters." with Show, which clears the filters.
 
@@ -446,7 +446,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **All Transactions:** built in and defined in code: all time, newest first, grouped by day. It always comes first, is never stored, and can't be renamed, updated or deleted.
     - **The limit:** a 21st create gets 422 `limit_reached`. A create takes a per-user transaction-level advisory lock before it counts, so two creates at once can never pass 20.
     - **Names:** BR-F03-12's text rules, 1 to 40 characters. Unique per user by `lower()`, backed by a unique index, and never "All Transactions" in any case. A taken name gets 422 `validation_failed` on `name`, also when two writes race for it.
-    - **Create check order:** first the existing id (API-5), so a retried create returns 200 with its view even at 20 views or with a name now taken; then the shape and the currency (BR-F03-64), the limit and the name.
+    - **Create check order:** first the existing id (API-5), so a retried create returns 200 with its view even at 20 views or with a name now taken; then the shape and the currency (BR-F03-64), the id's time (BR-P2-20), the limit and the name. At the limit the id is read again after the lock, since the request that held it may have created this view (D-495).
     - **Order:** All Transactions, then saved views by `createdAt`, then `id`. Views can't be reordered.
     - **Online only:** every write (create, update, rename, delete) needs a connection and never enters the write queue (P1). Offline, these controls are disabled with "You are offline. Connect to save."
 - **BR-F03-64** The server checks a view's `filter`, `sort`, `dir` and `group` by BR-F03-34's rules, but refuses instead of dropping: 422 `validation_failed`, with the field path, such as `filter.cat` (D-452).
@@ -769,11 +769,11 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
 | `/api/transaction-views/[id]`             | PATCH  | `{ name }`, `{ filter, sort, dir, group }`, or both; `currency` with amounts (BR-F03-64)                               | 200 with the view and `currency`                                                                                                                                    | 400, 401, 403, 404, 409 `version_conflict`, 422 `validation_failed`, `currency_mismatch`                                                 | `Idempotency-Key` and `If-Match` required |
 | `/api/transaction-views/[id]`             | DELETE | `{}`                                                                                                                   | 204                                                                                                                                                                 | 400, 401, 403, 404, 409 `version_conflict`                                                                                               | `Idempotency-Key` and `If-Match` required |
 
-**Reading the query** (D-478). The list, summary, filter counts and histogram read their filter through the URL reader of BR-F03-33, with the API's policy: every invalid parameter gets one 400 `bad_request`, naming them all in `details.params` in the URL's order, then `limit` and `cursor`. `limit` is digits from 1 to 100. An empty value counts as absent and a repeated name is invalid, as D-458 says; other names are ignored. The summary, filter counts and histogram ignore `sort`, `dir`, `group`, `limit` and `cursor`, valid or not, and the histogram also ignores `min` and `max`.
+**Reading the query** (D-478). The list, summary, filter counts and histogram read their filter through the URL reader of BR-F03-33, with the API's policy: every invalid parameter gets one 400 `bad_request`, naming them all in `details.params` in the URL's order, then `limit` and `cursor`. `limit` is digits from 1 to 100. An empty value counts as absent and a repeated name is invalid, as D-458 says; other names are ignored. The cursor is read with the other parameters: one that does not decode, holds an instant in the year 0000 or a group key with a control character, or was made under other list parameters is named last; when `sort`, `dir` or `group` is itself invalid, only its contents are checked (D-490). The summary, filter counts and histogram ignore `sort`, `dir`, `group`, `limit` and `cursor`, valid or not, and the histogram also ignores `min` and `max`.
 
-**Write refusals** (D-483 to D-487). `date_out_of_window` names its field: `occurredOn` with `details: { firstOn, lastOn }`, the row's own window, from which the client writes the edit message; or `createdAt` when the recording time is ahead of the request clock. A future `occurredAt` is `validation_failed` on `occurredAt`, and an id whose time is ahead is `validation_failed` on `id` (BR-P2-20). Until F06 adds Goals, a `goalId` gets `parent_missing`. On an edit, a field sent with its stored value is no change, and only a changed date or time is checked (D-486). A 409 `version_conflict` carries the current row, with `currency`, in `details.current`, as `GET /api/transactions/[id]` answers it. A delete's hint is checked for shape only until F05 adds the tombstone (D-487).
+**Write refusals** (D-483 to D-487). `date_out_of_window` names its field: `occurredOn` with `details: { firstOn, lastOn }`, the row's own window, from which the client writes the edit message; or `createdAt` when the recording time is ahead of the request clock. A future `occurredAt`, more than 5 minutes past `createdAt` or the request clock, is `validation_failed` on `occurredAt` (D-494), and an id whose time is ahead is `validation_failed` on `id` (BR-P2-20). A create's id lookup comes before every check that can change over time, and every answer and 409 carries the currency read under the profile lock (D-493). Until F06 adds Goals, a `goalId` gets `parent_missing`. On an edit, a field sent with its stored value is no change, and only a changed date or time is checked (D-486). A 409 `version_conflict` carries the current row, with `currency`, in `details.current`, as `GET /api/transactions/[id]` answers it. A delete's hint is checked for shape only until F05 adds the tombstone (D-487).
 
-**Saved-view writes** (D-488, D-489). The handler checks the body against the profile currency's schema, after a create's id lookup, so a retried create answers its view whatever has changed since (BR-F03-63). The limit lock is the per-user advisory lock `hashtextextended(user_id::text || ':transactions.views', 0)`, taken after any profile lock, and the count runs in its own statement after it. A name the unique index refuses, also in a race, gets 422 `validation_failed` on `name` with "You already have a view with this name." A `PATCH` or `DELETE` is one versioned statement with no first read, locking the profile only when a `PATCH` sends `currency`; a 409 carries the view with `currency` in `details.current`, and a `DELETE` body must be `{}`.
+**Saved-view writes** (D-488, D-489). The handler checks the body against the profile currency's schema, after a create's id lookup, so a retried create answers its view whatever has changed since (BR-F03-63). The limit lock is the per-user advisory lock `hashtextextended(user_id::text || ':transactions.views', 0)`, taken after any profile lock, and the count runs in its own statement after it. A name the unique index refuses, also in a race, gets 422 `validation_failed` on `name` with "You already have a view with this name." A create's id time is checked after the currency; at 20 views the id is read again after the lock (D-495). A `PATCH` or `DELETE` is one versioned statement with no first read, locking the profile only when a `PATCH` sends `currency`; a 409 carries the view with `currency` in `details.current`, and a `DELETE` body must be `{}`.
 
 **Error codes added by this spec**
 
@@ -802,7 +802,7 @@ None for the core. Goal Transactions are not capped; the Goals cap applies to Go
 
 1. Zod shape.
 2. Type rules.
-3. The profile lock, then the currency check (BR-F03-05).
+3. The profile lock; for a create, the id lookup, where an id the user already has answers 200 with its row (API-5, D-493); then the currency check (BR-F03-05).
 4. Dates: future, `occurredOn` fit, window.
 5. Goal lock, state and floor (BR-F03-13, BR-F03-14). A Goal that is missing when it is locked gives 422 `parent_missing`.
 6. For a linked charge's delete, the Subscription lock (BR-F03-17).

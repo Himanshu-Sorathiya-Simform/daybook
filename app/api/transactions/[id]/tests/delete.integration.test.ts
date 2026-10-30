@@ -176,11 +176,12 @@ describe("a charge (BR-F03-17; D-487)", () => {
 		expect((await read(id)).status).toBe(200);
 	});
 
-	test("any other field gets 422", async () => {
+	// D-492: the unknown field is named itself.
+	test("any other field gets 422 on that field", async () => {
 		const id = await fresh();
 		const { status, body } = await remove(id, { version: 1 });
 		expect(status).toBe(422);
-		expect(Object.keys(errorOf(body).fields)).toEqual(["_body"]);
+		expect(errorOf(body).fields).toEqual({ version: "Remove this field." });
 	});
 });
 

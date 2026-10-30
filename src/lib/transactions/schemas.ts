@@ -314,8 +314,10 @@ export const transactionEditSchema = z
 		currency: currency.optional(),
 		occurredAt: occurredAt.optional(),
 		occurredOn: date.optional(),
-		category: category.optional(),
-		goalId: goalId.optional(),
+		// `null` is a sent value: a stored null is no change, and the merged row's type rules
+		// judge any other (D-486).
+		category: category.nullable().optional(),
+		goalId: goalId.nullable().optional(),
 		payee: payee.optional(),
 		description: description.optional(),
 		note: note.optional(),

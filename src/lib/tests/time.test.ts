@@ -44,6 +44,7 @@ describe("isIsoDate", () => {
 		"2028-02-29",
 		"2000-02-29",
 		"0001-01-01",
+		"9999-12-31",
 	])("accepts %j", (text) => {
 		expect(isIsoDate(text)).toBe(true);
 	});
@@ -56,6 +57,9 @@ describe("isIsoDate", () => {
 		["2026-13-01", "month 13"],
 		["2026-00-10", "month 0"],
 		["2026-01-00", "day 0"],
+		// D-490: Postgres has no year 0 and refuses it with 22008, which would be a 500.
+		["0000-01-01", "the year 0000"],
+		["0000-12-31", "the last day of the year 0000"],
 		["2026-1-01", "a one-digit month"],
 		["26-01-01", "a two-digit year"],
 		["20261101", "no dashes"],

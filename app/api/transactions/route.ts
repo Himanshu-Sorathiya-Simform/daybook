@@ -24,11 +24,11 @@ export const GET = route({}, async (ctx, tx, { query }) => {
 export const POST = route(
 	{ body: transactionCreateSchema },
 	async (ctx, tx, { body }) => {
-		const profiled = requireProfile(ctx);
-		const { row, created } = await createTransaction(tx, profiled, body);
-		return reply(
-			{ ...row, currency: profiled.profile.currency },
-			{ status: created ? 201 : 200 },
+		const { row, created } = await createTransaction(
+			tx,
+			requireProfile(ctx),
+			body,
 		);
+		return reply(row, { status: created ? 201 : 200 });
 	},
 );

@@ -8,6 +8,7 @@ import {
 	type TransactionFilter,
 } from "@/lib/transactions/url";
 import { ApiError } from "../../api/errors";
+import { readCursor } from "./cursor";
 
 /** 400 `bad_request` naming every invalid parameter, in the URL's order (D-457, D-478). */
 export function badParams(params: readonly string[]): ApiError {
@@ -27,6 +28,14 @@ export function single(
 /** A page size: digits only, 1 to 100 (API-7). */
 const LIMIT = /^[1-9]\d{0,2}$/;
 
+/** The list parameters, which select no rows: the summary, the filter counts and the histogram
+ * ignore them, valid or not (F03 section 3, D-478). */
+export const LIST_PARAMS = [
+	"sort",
+	"dir",
+	"group",
+] as const satisfies readonly FilterParam[];
+
 export type ListQuery = {
 	filter: TransactionFilter;
 	list: ListParams;
@@ -37,8 +46,10 @@ export type ListQuery = {
 /**
  * The list endpoint's query (F03 section 11): the filter and list parameters through the
  * shared URL reader (BR-F03-33), `limit` (default 50) and `cursor`. Every invalid parameter,
- * a repeated `limit` or `cursor` included, gets one 400 naming them all (D-478). The cursor's
- * contents are checked when the list decodes it. Unknown names are ignored (D-458).
+ * a repeated `limit` or `cursor` included, gets one 400 naming them all (D-478). A cursor that
+ * does not decode, or was made under other list parameters, is named last; when a list
+ * parameter is itself invalid, only the cursor's contents are checked (D-490). Unknown names
+ * are ignored (D-458).
  */
 export function readListQuery(
 	query: URLSearchParams,
@@ -57,19 +68,18 @@ export function readListQuery(
 	}
 
 	const cursor = single(query, "cursor");
-	if (cursor === null) refused.push("cursor");
+	const listValid = !LIST_PARAMS.some((name) => invalid.includes(name));
+	if (
+		cursor === null
+		|| (cursor !== undefined
+			&& readCursor(cursor, listValid ? list : undefined) === null)
+	) {
+		refused.push("cursor");
+	}
 
 	if (refused.length > 0) throw badParams(refused);
 	return { filter, list, limit, cursor: cursor ?? undefined };
 }
-
-/** The list parameters, which select no rows: the summary, the filter counts and the histogram
- * ignore them, valid or not (F03 section 3, D-478). */
-export const LIST_PARAMS = [
-	"sort",
-	"dir",
-	"group",
-] as const satisfies readonly FilterParam[];
 
 /** The histogram also ignores the amount bounds, valid or not (F03 section 11, D-478). */
 export const HISTOGRAM_IGNORES = [...LIST_PARAMS, "min", "max"] as const;

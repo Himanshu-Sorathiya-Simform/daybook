@@ -21,7 +21,16 @@ export async function lockCurrency(tx: Tx): Promise<CurrencyCode> {
 }
 
 /** Locks the profile, then refuses a request whose `currency` differs from it with 422
- * `currency_mismatch` (API-6, BR-F03-05). */
-export async function requireCurrency(tx: Tx, sent: CurrencyCode): Promise<void> {
-	if ((await lockCurrency(tx)) !== sent) throw new ApiError("currency_mismatch");
+ * `currency_mismatch` (API-6, BR-F03-05). Returns the locked currency. */
+export async function requireCurrency(
+	tx: Tx,
+	sent: CurrencyCode,
+): Promise<CurrencyCode> {
+	const currency = await lockCurrency(tx);
+	if (currency !== sent) throw new ApiError("currency_mismatch");
+	return currency;
 }
+
+/** A write's answer: the row with the profile currency (API-6). A write that locked the profile
+ * answers the currency it read under the lock, not the request's earlier read (D-493). */
+export type WithCurrency<T> = T & { currency: CurrencyCode };

@@ -98,6 +98,7 @@ describe("a rename (BR-F03-69, AC-F03-47)", () => {
 			version: 2,
 			createdAt: GOLDEN_NOW,
 			updatedAt: LATER,
+			currency: "INR",
 		});
 		// The test's insert; then the update alone: no read first and no profile lock (D-489).
 		expect(statements).toBe(2);
@@ -205,6 +206,28 @@ describe("amounts and the currency (BR-F03-64)", () => {
 		expect(await refusal(edit(body))).toEqual(
 			invalid({ currency: "Send the currency with the amount." }),
 		);
+	});
+
+	// D-493: with a sent currency the profile is locked, and the answer carries what it read.
+	test("a sent currency answers the currency it locked, even when the request read another", async () => {
+		const ctx = goldenContext(userId, { currency: "USD" });
+		const { result } = await asUser(userId, async (tx) => {
+			const id = await addView(tx, userId);
+			return {
+				answer: await editView(tx, ctx, id, 1, {
+					name: "Mine",
+					currency: "INR",
+				}),
+				conflict: await refusal(
+					editView(tx, ctx, id, 1, { name: "Again", currency: "INR" }),
+				),
+			};
+		});
+		expect(result.answer.currency).toBe("INR");
+		expect(result.conflict).toMatchObject({
+			code: "version_conflict",
+			details: { current: { name: "Mine", currency: "INR" } },
+		});
 	});
 
 	test("a rename with a currency in another currency is refused too", async () => {

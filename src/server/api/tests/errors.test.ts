@@ -164,6 +164,61 @@ describe("fromZodError", () => {
 			"_body",
 		);
 	});
+
+	// D-492: AC-F03-48 asks for the field path, not Zod's English on the parent.
+	describe("an unknown field", () => {
+		const strict = z.strictObject({
+			name: z.string(),
+			filter: z.strictObject({ cat: z.array(z.string()).optional() }),
+		});
+
+		test("is named at its own path with Remove this field.", () => {
+			expect(
+				fromZodError(
+					strict.safeParse({ name: "Food", filter: { month: "2026-10" } })
+						.error!,
+				).fields,
+			).toEqual({ "filter.month": "Remove this field." });
+		});
+
+		test("at the top level is named by itself, not _body", () => {
+			expect(
+				fromZodError(
+					strict.safeParse({ name: "Food", filter: {}, position: 2 })
+						.error!,
+				).fields,
+			).toEqual({ position: "Remove this field." });
+		});
+
+		test("each of several gets its own entry, beside the other fields' messages", () => {
+			expect(
+				fromZodError(
+					strict.safeParse({
+						name: 5,
+						filter: { min: 1, max: 2 },
+						page: 1,
+					}).error!,
+				).fields,
+			).toEqual({
+				name: "Invalid input: expected string, received number",
+				"filter.min": "Remove this field.",
+				"filter.max": "Remove this field.",
+				page: "Remove this field.",
+			});
+		});
+
+		test("inside an array is named with its index", () => {
+			const list = z.strictObject({
+				items: z.array(z.strictObject({ id: z.string() })),
+			});
+			expect(
+				fromZodError(
+					list.safeParse({ items: [{ id: "a" }, { id: "b", x: 1 }] })
+						.error!,
+				).fields,
+			).toEqual({ "items.1.x": "Remove this field." });
+		});
+	});
 });
 
 describe("databaseErrorOf", () => {

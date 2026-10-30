@@ -4,7 +4,7 @@ import { isUuid } from "@/lib/ids";
 import { type SavedView, viewEditSchema } from "@/lib/transactions/views";
 import { ApiError, fromZodError } from "../../api/errors";
 import type { ProfiledContext } from "../context";
-import { requireCurrency } from "../currency";
+import { requireCurrency, type WithCurrency } from "../currency";
 import type { Tx } from "../with-user";
 import { viewMismatch } from "./conflict";
 import { VIEW_JSON, withUniqueName } from "./row";
@@ -41,6 +41,7 @@ function setClause(ctx: ProfiledContext, body: ViewEditBody): SQL {
  * 3. A sent `currency` locks the profile and must match it (BR-F03-05): `currency_mismatch`.
  * 4. The versioned update, with no first read: a view has no merged-row rules. A taken name
  *    gets 422 on `name`. When nothing matches, 409 with the current view, or 404.
+ * Answers carry the currency the profile lock read when one was sent, else the request's (D-493).
  */
 export async function editView(
 	tx: Tx,
@@ -48,12 +49,15 @@ export async function editView(
 	id: string,
 	version: number,
 	input: unknown,
-): Promise<SavedView> {
+): Promise<WithCurrency<SavedView>> {
 	if (!isUuid(id)) throw new ApiError("not_found");
 	const parsed = viewEditSchema(ctx.profile.currency).safeParse(input);
 	if (!parsed.success) throw fromZodError(parsed.error);
 	const body = parsed.data;
-	if (body.currency !== undefined) await requireCurrency(tx, body.currency);
+	const currency =
+		body.currency !== undefined ?
+			await requireCurrency(tx, body.currency)
+		:	ctx.profile.currency;
 
 	const { rows } = await withUniqueName(() =>
 		tx.execute<{ view: SavedView }>(
@@ -63,6 +67,6 @@ export async function editView(
 		),
 	);
 	const [updated] = rows;
-	if (updated) return updated.view;
-	throw await viewMismatch(tx, ctx, id);
+	if (updated) return { ...updated.view, currency };
+	throw await viewMismatch(tx, currency, id);
 }

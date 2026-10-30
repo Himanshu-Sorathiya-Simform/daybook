@@ -195,6 +195,40 @@ describe("refusals", () => {
 		expect(errorOf(body).details).toEqual({ params: ["cursor"] });
 	});
 
+	// D-478, D-490: the cursor is read with the rest, so one round trip names everything.
+	test("a cursor that does not decode is named beside the other invalid parameters", async () => {
+		const { status, body } = await list("cat=pizza&cursor=not-a-cursor&limit=0");
+		expect(status).toBe(400);
+		expect(errorOf(body).details).toEqual({
+			params: ["cat", "limit", "cursor"],
+		});
+	});
+
+	/** The first page's next cursor under `query`, with `change` written into its contents. */
+	async function forged(query: string, change: Record<string, unknown>) {
+		const { nextCursor } = pageOf((await list(`limit=1&${query}`)).body);
+		const contents = JSON.parse(
+			Buffer.from(nextCursor!, "base64url").toString("utf8"),
+		) as Record<string, unknown>;
+		return Buffer.from(JSON.stringify({ ...contents, ...change })).toString(
+			"base64url",
+		);
+	}
+
+	// D-490: each of these reached Postgres, whose refusal of the cast was a 500.
+	test.each([
+		["an instant in the year 0000", "", { at: "0000-12-31T23:59:00.000Z" }],
+		["a group key holding a NUL", "group=payee", { groupKey: "swiggy\u0000" }],
+	])("a cursor with %s gets 400 naming cursor", async (_label, query, change) => {
+		const cursor = await forged(query, change);
+		const { status, body } = await list(`${query}&cursor=${cursor}`);
+		expect(status).toBe(400);
+		expect(errorOf(body)).toMatchObject({
+			code: "bad_request",
+			details: { params: ["cursor"] },
+		});
+	});
+
 	test("no session gets 401", async () => {
 		const { status, body } = await call(GET, "/api/transactions");
 		expect(status).toBe(401);
