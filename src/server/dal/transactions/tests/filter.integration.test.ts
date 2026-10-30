@@ -644,19 +644,24 @@ describe("SQL and matchesFilter agree", () => {
 });
 
 describe("plans", () => {
-	async function plan(filter: TransactionFilter): Promise<string> {
+	async function plan(filter: TransactionFilter, order = sql``): Promise<string> {
 		return withUser(asUser(golden.userId), "read", async (tx) => {
 			// Golden's 22 rows are too few for the planner to prefer an index on its own.
 			await tx.execute(sql`SET LOCAL enable_seqscan = off`);
 			const result = await tx.execute<{ "QUERY PLAN": string }>(
-				sql`EXPLAIN SELECT id FROM app.transactions WHERE ${filterSql(filter, "INR")}`,
+				sql`EXPLAIN SELECT id FROM app.transactions WHERE ${filterSql(filter, "INR")} ${order}`,
 			);
 			return result.rows.map((row) => row["QUERY PLAN"]).join("\n");
 		});
 	}
 
 	test("a date filter is an index condition on the date order index", async () => {
-		const text = await plan({ from: "2026-10-01", to: "2026-10-31" });
+		// With the list's date order, only this index serves the order as well. Without it the
+		// amount order index ties on cost, and which one wins depends on the other tests' rows.
+		const text = await plan(
+			{ from: "2026-10-01", to: "2026-10-31" },
+			sql`ORDER BY occurred_on, occurred_at, id`,
+		);
 		expect(text).toContain("transactions_date_order_idx");
 		expect(text).toMatch(/Index Cond: .*occurred_on >= .*occurred_on <= /);
 	});
