@@ -8,7 +8,8 @@ import { LOGOUT_COOKIE, parseCookies } from "../auth/session-expired";
 import { buildCsp, newNonce, securityHeaders } from "./csp";
 
 /** Routes that need a session (root spec, section 4). `/` decides on its own (F01), and
- * `/print/*` uses a print token (BR-P2-42), so neither is listed. */
+ * `/print/*` uses a print token (BR-P2-42), so neither is listed. `/learn` is a logged-in
+ * placeholder until F14 makes it public (M7, D-514). */
 const LOGGED_IN = [
 	"/onboarding",
 	"/dashboard",
@@ -21,6 +22,7 @@ const LOGGED_IN = [
 	"/insights",
 	"/reports",
 	"/settings",
+	"/learn",
 ];
 
 const LOGGED_OUT = ["/login", "/signup"];

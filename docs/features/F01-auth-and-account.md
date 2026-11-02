@@ -9,7 +9,7 @@ People create a Daybook account with an email and password, log in and out on an
 | Milestone  | M0 (auth core), M1 (account settings)                                                                                                                                                                         |
 | Plan       | Free and Premium; export of all Transactions is Stretch (`account.export`)                                                                                                                                    |
 | Depends on | [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F02 (onboarding and display name), F12 (Stripe Customer), F14 (posts on the landing page), P1 (cache and queue wipes) |
-| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385, D-433, D-452, D-502, D-503, D-508, D-509, D-510                                                           |
+| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385, D-433, D-452, D-502, D-503, D-508, D-509, D-510, D-515                                                    |
 
 ## 1. User stories
 
@@ -31,7 +31,7 @@ People create a Daybook account with an email and password, log in and out on an
 
 **Milestones.** Two parts wait for the specs they rely on:
 
-- **Until P1 (M5):** logout calls sign-out, clears the in-memory query cache and opens `/login`. A sign-out that did not count as done writes only the marker's cookie and shows the login screen in the open tab; back online, the tab loads `/api/session/expired?reason=logout` (D-502). The marker's other copies, the sign-out at the next start (BR-F01-15), the unsaved-changes modal, the replay and BR-F01-11 arrive with P1.
+- **Until P1 (M5):** logout calls sign-out, clears the in-memory query cache and opens `/login`. A sign-out that did not count as done writes only the marker's cookie and shows the login screen in the open tab; back online, the tab loads `/api/session/expired?reason=logout` (D-502). The marker's other copies, the sign-out at the next start (BR-F01-15), the unsaved-changes modal, the replay and BR-F01-11 arrive with P1. The sign-out call times out after 20 seconds, and the offline login screen is the login page's form (D-515).
 - **Until F14 (M7):** the landing page has no posts section (D-503).
 
 ## 3. Concepts and fields

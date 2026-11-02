@@ -223,6 +223,9 @@ describe("redirects (BR-P2-29)", () => {
 		"/insights",
 		"/reports",
 		"/settings/profile",
+		// D-514: until M7
+		"/learn",
+		"/learn/budgeting",
 	])("no session cookie on %s goes to /login with next", (path) => {
 		const response = call(path);
 		expect(response.status).toBe(307);
@@ -239,8 +242,7 @@ describe("redirects (BR-P2-29)", () => {
 
 	test.each([
 		"/",
-		"/learn",
-		"/learn/budgeting",
+		"/learners",
 		"/offline",
 		"/print/reports/x",
 		"/login",

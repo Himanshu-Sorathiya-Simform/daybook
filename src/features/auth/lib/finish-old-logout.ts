@@ -1,9 +1,9 @@
-import { authClient } from "@/lib/auth-client";
 import {
 	clearLogoutMarker,
 	hasLogoutMarker,
 	signOutCountsAsDone,
 } from "@/lib/logout-marker";
+import { signOutStatus } from "@/lib/sign-out";
 
 /**
  * Before Log in or Create account (F01, BR-F01-15, D-384): if a logout never finished, sign the
@@ -12,14 +12,7 @@ import {
  */
 export async function finishOldLogout(): Promise<boolean> {
 	if (!hasLogoutMarker()) return true;
-	let status: number | null;
-	try {
-		const { error } = await authClient.signOut();
-		status = error ? error.status : 200;
-	} catch {
-		status = null;
-	}
-	if (!signOutCountsAsDone(status)) return false;
+	if (!signOutCountsAsDone(await signOutStatus())) return false;
 	clearLogoutMarker();
 	return true;
 }

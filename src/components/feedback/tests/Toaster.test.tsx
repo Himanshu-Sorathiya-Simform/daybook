@@ -1,6 +1,7 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import { ThemeProvider, useTheme } from "next-themes";
 import { toast } from "sonner";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { Toaster } from "@/components/feedback/Toaster";
 import { showToast } from "@/components/feedback/showToast";
@@ -9,6 +10,8 @@ afterEach(() => {
 	act(() => {
 		toast.dismiss();
 	});
+	localStorage.clear();
+	vi.restoreAllMocks();
 });
 
 describe("Toaster", () => {
@@ -80,5 +83,106 @@ describe("Toaster", () => {
 		});
 
 		expect(await screen.findByRole("button", { name: "Undo" })).toBeVisible();
+	});
+});
+
+/** The device's scheme for next-themes' `system`; jsdom has no `matchMedia`. */
+function device(dark: boolean) {
+	window.matchMedia = vi.fn((query: string) => ({
+		matches: query.includes("dark") && dark,
+		media: query,
+		onchange: null,
+		addListener: vi.fn(),
+		removeListener: vi.fn(),
+		addEventListener: vi.fn(),
+		removeEventListener: vi.fn(),
+		dispatchEvent: vi.fn(),
+	})) as unknown as typeof window.matchMedia;
+}
+
+/** Buttons that set the theme, as Settings will. */
+function ThemePicker() {
+	const { setTheme } = useTheme();
+	return (
+		<>
+			<button
+				type="button"
+				onClick={() => setTheme("dark")}
+			>
+				Dark
+			</button>
+			<button
+				type="button"
+				onClick={() => setTheme("light")}
+			>
+				Light
+			</button>
+		</>
+	);
+}
+
+async function toasterTheme() {
+	act(() => {
+		showToast("Saved.");
+	});
+	await screen.findByText("Saved.");
+	return document
+		.querySelector("[data-sonner-toaster]")
+		?.getAttribute("data-sonner-theme");
+}
+
+function renderThemed(defaultTheme: string) {
+	render(
+		<ThemeProvider
+			attribute="class"
+			defaultTheme={defaultTheme}
+			enableSystem
+		>
+			<ThemePicker />
+			<Toaster />
+		</ThemeProvider>,
+	);
+}
+
+// BR-F02-22: the toasts follow the theme the user chose, not only the device's.
+describe("Toaster theme", () => {
+	test("is light without a theme provider", async () => {
+		render(<Toaster />);
+		expect(await toasterTheme()).toBe("light");
+	});
+
+	test.each([
+		["light", false, "light"],
+		["dark", false, "dark"],
+		["light", true, "light"],
+		["dark", true, "dark"],
+		["system", false, "light"],
+		["system", true, "dark"],
+	])("theme %s on a device with dark=%s is %s", async (theme, dark, expected) => {
+		device(dark);
+		renderThemed(theme);
+		expect(await toasterTheme()).toBe(expected);
+	});
+
+	test("follows a change of theme while it is open", async () => {
+		device(false);
+		renderThemed("light");
+		expect(await toasterTheme()).toBe("light");
+		act(() => screen.getByRole("button", { name: "Dark" }).click());
+		await waitFor(() =>
+			expect(
+				document
+					.querySelector("[data-sonner-toaster]")
+					?.getAttribute("data-sonner-theme"),
+			).toBe("dark"),
+		);
+		act(() => screen.getByRole("button", { name: "Light" }).click());
+		await waitFor(() =>
+			expect(
+				document
+					.querySelector("[data-sonner-toaster]")
+					?.getAttribute("data-sonner-theme"),
+			).toBe("light"),
+		);
 	});
 });

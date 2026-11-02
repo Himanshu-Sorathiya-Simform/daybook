@@ -7,6 +7,14 @@ export function hasLogoutMarker(cookies: string = document.cookie): boolean {
 	return cookies.split(";").some((pair) => pair.trim() === `${LOGOUT_COOKIE}=1`);
 }
 
+/** How long the marker lasts: 8 days, longer than a session (F01 section 5, D-367). */
+export const LOGOUT_MAX_AGE = 691_200;
+
+/** Writes the marker after a logout whose sign-out did not count as done (BR-F01-15, D-502). */
+export function writeLogoutMarker(): void {
+	document.cookie = `${LOGOUT_COOKIE}=1; Max-Age=${LOGOUT_MAX_AGE}; Path=/; SameSite=Lax`;
+}
+
 export function clearLogoutMarker(): void {
 	document.cookie = `${LOGOUT_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax`;
 }

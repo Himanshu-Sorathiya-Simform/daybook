@@ -77,34 +77,34 @@ These names are fixed. "Subscription" always means a recurring bill the user tra
 
 ## 4. Routes and navigation
 
-| Route                      | Purpose                                                                                                                              | Access                                  | Offline                                    |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------- | ------------------------------------------ |
-| `/`                        | Logged in: redirect to `/dashboard`. Logged out: a small landing page with Log in, Sign up and the latest public Learn posts (D-182) | Public                                  | Yes                                        |
-| `/signup`, `/login`        | Email and password                                                                                                                   | Logged out                              | Shows offline state                        |
-| `/onboarding`              | Country, currency, timezone, week start                                                                                              | Logged in, no profile                   | Shows offline state                        |
-| `/dashboard?month=YYYY-MM` | Widgets for one month, insights panel                                                                                                | Logged in                               | Cached                                     |
-| `/transactions?...`        | Infinite list, filters, totals; entry and edit open in a dialog                                                                      | Logged in                               | Cached first pages; writes queued          |
-| `/budgets?month=YYYY-MM`   | Limits and utilization per category                                                                                                  | Logged in                               | Cached; writes queued                      |
-| `/subscriptions`           | List, monthly and annual cost, upcoming renewals                                                                                     | Logged in                               | Cached; writes queued                      |
-| `/goals`, `/goals/[id]`    | Progress, contributions, withdrawals                                                                                                 | Logged in                               | Cached; writes queued                      |
-| `/investments`             | Holdings, allocation, value over time                                                                                                | Logged in                               | Cached                                     |
-| `/analytics?...`           | Every chart with date range and category filters                                                                                     | Logged in; some charts Premium          | Last viewed range cached                   |
-| `/insights?month=YYYY-MM`  | All insights for a month                                                                                                             | Logged in                               | Cached                                     |
-| `/reports`                 | Choose type and period; download PDF or CSV                                                                                          | Logged in; quarterly and annual Premium | Offline state                              |
-| `/learn`, `/learn/[slug]`  | Articles, news, guides                                                                                                               | Public; gated tiers Stretch             | Read posts cached                          |
-| `/settings/profile`        | Display name, country (fixed), currency (until finance data exists), timezone, week start                                            | Logged in                               | Offline state                              |
-| `/settings/appearance`     | Theme (per device)                                                                                                                   | Logged in                               | Yes                                        |
-| `/settings/dashboard`      | Show, hide and reorder widgets                                                                                                       | Logged in                               | Writes queued                              |
-| `/settings/security`       | Change password, active sessions                                                                                                     | Logged in                               | Offline state                              |
-| `/settings/data`           | Load or remove demo data, reset data, export (Stretch), delete account                                                               | Logged in                               | Offline state                              |
-| `/settings/billing`        | Plan, upgrade with Stripe Elements, manage in Customer Portal                                                                        | Logged in                               | Cached page; actions online only (P1, F12) |
-| `/offline`                 | Service-worker fallback page                                                                                                         | Public                                  | Yes                                        |
-| `/print/reports/...`       | Headless render target for PDFs, token-protected                                                                                     | Internal                                | No                                         |
+| Route                      | Purpose                                                                                                                              | Access                                                  | Offline                                    |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------ |
+| `/`                        | Logged in: redirect to `/dashboard`. Logged out: a small landing page with Log in, Sign up and the latest public Learn posts (D-182) | Public                                                  | Yes                                        |
+| `/signup`, `/login`        | Email and password                                                                                                                   | Logged out                                              | Shows offline state                        |
+| `/onboarding`              | Country, currency, timezone, week start                                                                                              | Logged in, no profile                                   | Shows offline state                        |
+| `/dashboard?month=YYYY-MM` | Widgets for one month, insights panel                                                                                                | Logged in                                               | Cached                                     |
+| `/transactions?...`        | Infinite list, filters, totals; entry and edit open in a dialog                                                                      | Logged in                                               | Cached first pages; writes queued          |
+| `/budgets?month=YYYY-MM`   | Limits and utilization per category                                                                                                  | Logged in                                               | Cached; writes queued                      |
+| `/subscriptions`           | List, monthly and annual cost, upcoming renewals                                                                                     | Logged in                                               | Cached; writes queued                      |
+| `/goals`, `/goals/[id]`    | Progress, contributions, withdrawals                                                                                                 | Logged in                                               | Cached; writes queued                      |
+| `/investments`             | Holdings, allocation, value over time                                                                                                | Logged in                                               | Cached                                     |
+| `/analytics?...`           | Every chart with date range and category filters                                                                                     | Logged in; some charts Premium                          | Last viewed range cached                   |
+| `/insights?month=YYYY-MM`  | All insights for a month                                                                                                             | Logged in                                               | Cached                                     |
+| `/reports`                 | Choose type and period; download PDF or CSV                                                                                          | Logged in; quarterly and annual Premium                 | Offline state                              |
+| `/learn`, `/learn/[slug]`  | Articles, news, guides                                                                                                               | Public (logged in until M7, D-514); gated tiers Stretch | Read posts cached                          |
+| `/settings/profile`        | Display name, country (fixed), currency (until finance data exists), timezone, week start                                            | Logged in                                               | Offline state                              |
+| `/settings/appearance`     | Theme (per device)                                                                                                                   | Logged in                                               | Yes                                        |
+| `/settings/dashboard`      | Show, hide and reorder widgets                                                                                                       | Logged in                                               | Writes queued                              |
+| `/settings/security`       | Change password, active sessions                                                                                                     | Logged in                                               | Offline state                              |
+| `/settings/data`           | Load or remove demo data, reset data, export (Stretch), delete account                                                               | Logged in                                               | Offline state                              |
+| `/settings/billing`        | Plan, upgrade with Stripe Elements, manage in Customer Portal                                                                        | Logged in                                               | Cached page; actions online only (P1, F12) |
+| `/offline`                 | Service-worker fallback page                                                                                                         | Public                                                  | Yes                                        |
+| `/print/reports/...`       | Headless render target for PDFs, token-protected                                                                                     | Internal                                                | No                                         |
 
 **Navigation (layout by Claude Design; items and order are spec)**
 
-- Desktop sidebar: Dashboard, Transactions, Budgets, Subscriptions, Goals, Investments, Analytics, Insights, Reports, Learn, then Settings.
-- Phone bottom bar: Dashboard, Transactions, Add, Budgets, More. More holds the rest.
+- Desktop sidebar: Dashboard, Transactions, Budgets, Subscriptions, Goals, Investments, Analytics, Insights, Reports, Learn, then Settings. It collapses to an icon rail, remembered per device (D-513).
+- Phone bottom bar: Dashboard, Transactions, Add, Budgets, More. More holds the rest. It replaces the sidebar below 768px (D-512).
 - Header on every logged-in page:
     - A search button (opens the command palette; also Ctrl or Cmd+K).
     - An Add button that opens the entry dialog.
@@ -112,7 +112,7 @@ These names are fixed. "Subscription" always means a recurring bill the user tra
     - A Premium badge or an Upgrade link.
     - The user menu.
 - Global banners: offline (with "as of" time), update available, payment failed (past due), session expired, Premium lapse with Goals to choose.
-- Until its feature is built, a header control or the bottom bar's Add item is absent, and a navigation item opens a placeholder page; the user menu holds the name, the email and Log out until the settings pages exist (D-504).
+- Until its feature is built, a header control or the bottom bar's Add item is absent, and a navigation item opens a placeholder page; the user menu holds the name, the email and Log out until the settings pages exist (D-504). A placeholder page says "<Name> is coming soon." (D-514).
 
 ## 5. Global flows
 
@@ -429,17 +429,18 @@ The browser never touches the database. Every private read and write passes the 
 
 ### 7.4 State ownership
 
-| State                                                  | Owner                                                       |
-| ------------------------------------------------------ | ----------------------------------------------------------- |
-| Server data                                            | TanStack Query; allow-listed queries persisted to IndexedDB |
-| Profile, plan, capabilities                            | The `/api/me` query, persisted                              |
-| Form state                                             | TanStack Form with Zod schemas shared with the server       |
-| Committed filters and period                           | URL search params                                           |
-| Unsubmitted text (search drafts)                       | Component state                                             |
-| UI chrome: sidebar, palette, dialogs, layout edit mode | Zustand `ui` store                                          |
-| Sync status: counts, running, last error               | Zustand `sync` store, fed by the queue                      |
-| Theme                                                  | next-themes, local storage, per device                      |
-| Dashboard layout                                       | Server, per account, with a local-storage cache             |
+| State                                         | Owner                                                       |
+| --------------------------------------------- | ----------------------------------------------------------- |
+| Server data                                   | TanStack Query; allow-listed queries persisted to IndexedDB |
+| Profile, plan, capabilities                   | The `/api/me` query, persisted                              |
+| Form state                                    | TanStack Form with Zod schemas shared with the server       |
+| Committed filters and period                  | URL search params                                           |
+| Unsubmitted text (search drafts)              | Component state                                             |
+| UI chrome: palette, dialogs, layout edit mode | Zustand `ui` store                                          |
+| Sidebar width (full or icon rail)             | A cookie, per device (D-513)                                |
+| Sync status: counts, running, last error      | Zustand `sync` store, fed by the queue                      |
+| Theme                                         | next-themes, local storage, per device                      |
+| Dashboard layout                              | Server, per account, with a local-storage cache             |
 
 - **STATE-1** Zustand stores are created per request inside a provider and used only in client components. Server components never read them.
 - **STATE-2** Zustand never holds server data.
