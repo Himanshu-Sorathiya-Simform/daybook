@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { AuthCard } from "@/features/auth/components/AuthCard";
+import { FormPage } from "@/components/surfaces/FormPage";
 import { loginDestination } from "@/features/auth/lib/destination";
 import { LoginForm } from "@/features/auth/components/LoginForm";
 import { serverEnv } from "@/server/env";
@@ -12,11 +12,11 @@ export const metadata: Metadata = { title: "Log in" };
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 	const { next, expired } = await searchParams;
 	return (
-		<AuthCard title="Log in">
+		<FormPage title="Log in">
 			<LoginForm
 				destination={loginDestination(next, serverEnv().APP_ORIGIN)}
 				expired={expired === "1"}
 			/>
-		</AuthCard>
+		</FormPage>
 	);
 }

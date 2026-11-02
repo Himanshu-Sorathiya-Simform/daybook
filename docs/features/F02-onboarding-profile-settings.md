@@ -11,7 +11,7 @@ Later, the user changes their name, time zone and week start in Settings. They c
 | Milestone  | M1                                                                                                                                                                                                                                                                     |
 | Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                  |
 | Depends on | [F01](F01-auth-and-account.md) (sign-up, display name through `/update-user`), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md) (`/api/me`); F07 (portfolio seeding, from M3), F08 (dashboard settings page), F12 (billing page) |
-| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452, D-506, D-508                                                                                                                                                                 |
+| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452, D-506, D-508, D-511                                                                                                                                                          |
 
 ## 1. User stories
 
@@ -120,7 +120,7 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
     | AR      | `America/Argentina/Buenos_Aires` | `America/Argentina/Buenos_Aires` |
 
 - **BR-F02-06** The default week start comes from the country's week-start entry in the geo module.
-- **BR-F02-07** Changing the country re-derives currency, time zone and week start, except fields the user has already changed by hand. A hand-picked time zone that does not belong to the new country is replaced with the new default.
+- **BR-F02-07** Changing the country re-derives currency, time zone and week start, except fields the user has already changed by hand. A field counts as changed by hand once the user changes its value; choosing the value it already shows, or moving through the field, changes nothing. A hand-picked time zone that does not belong to the new country is replaced with the new default; one that belongs to it stays (D-511).
 - **BR-F02-08** Submitting calls `POST /api/profile`. The server checks four things:
     - the country is in the list;
     - the currency is in MON-2;
@@ -242,7 +242,7 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
 
 **Offset label:** the `timeZoneName` part of `Intl.DateTimeFormat('en', { timeZone, timeZoneName: 'longOffset' }).formatToParts(now)`. It gives `GMT+05:30`, `GMT-05:00` (with an ASCII hyphen) and, for UTC, `GMT+00:00` (Node 26, ICU 78).
 
-**Zone label:** the last part of the zone name with underscores as spaces, plus the zone file's comment when the country has several zones, plus the offset. Examples: "Kolkata (GMT+05:30)", "New York, Eastern (most areas) (GMT-05:00)".
+**Zone label:** the last part of the zone name with underscores as spaces, plus the zone file's comment when the country has several zones, plus the offset at the browser's current time (D-511). Examples: "Kolkata (GMT+05:30)", "New York, Eastern (most areas) (GMT-05:00)".
 
 **Golden checks**
 
@@ -253,12 +253,12 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
 
 **`/onboarding`.** Title "Set up Daybook"; line "Four quick choices. We filled in our best guesses."
 
-| Field          | Control                                                                                 | Helper text                                                                             |
-| -------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Country        | Searchable combobox, sorted by English name                                             | Sets your number format and the currency of Daybook Premium. It can't be changed later. |
-| Currency       | Select of the six currencies, labelled "Indian rupee (INR)" through `Intl.DisplayNames` | All your amounts use this currency. It's fixed once you add finance data.               |
-| Time zone      | Select of the country's zones; plain text when the country has one zone                 | Decides what "today" is and how times are shown. You can change it later.               |
-| Week starts on | Segmented control: Monday, Sunday, Saturday                                             | Used in weekly charts and calendars.                                                    |
+| Field          | Control                                                                                                                                                            | Helper text                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Country        | Searchable combobox, sorted by English name with `Intl.Collator('en')`; typing keeps the countries whose name contains the text, ignoring case and accents (D-511) | Sets your number format and the currency of Daybook Premium. It can't be changed later. |
+| Currency       | Select of the six currencies, labelled "Indian rupee (INR)" through `Intl.DisplayNames`                                                                            | All your amounts use this currency. It's fixed once you add finance data.               |
+| Time zone      | Select of the country's zones in `zone.tab` order; plain text when the country has one zone, its label with the offset, for example "Kolkata (GMT+05:30)" (D-511)  | Decides what "today" is and how times are shown. You can change it later.               |
+| Week starts on | Segmented control: Monday, Sunday, Saturday                                                                                                                        | Used in weekly charts and calendars.                                                    |
 
 Button: "Start using Daybook".
 
@@ -313,6 +313,7 @@ Button: "Start using Daybook".
 | Field or action | Rule                                   | Message shown                                                                                     |
 | --------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Country         | Required                               | Choose your country.                                                                              |
+| Country         | No country matches the typed text      | No countries match.                                                                               |
 | Country         | In the list                            | Choose a country from the list.                                                                   |
 | Currency        | One of the six                         | Choose one of the listed currencies.                                                              |
 | Time zone       | Onboarding: one of the country's zones | Choose a time zone in your country.                                                               |

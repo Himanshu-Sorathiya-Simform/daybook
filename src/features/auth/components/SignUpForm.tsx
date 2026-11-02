@@ -1,21 +1,20 @@
 "use client";
 
 import { revalidateLogic, useForm } from "@tanstack/react-form";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 
 import { Button } from "@/components/actions/Button";
+import { FormAlert } from "@/components/feedback/FormAlert";
+import { OfflineNote } from "@/components/feedback/OfflineNote";
 import { PasswordInput } from "@/components/forms/PasswordInput";
 import { TextInput } from "@/components/forms/TextInput";
 import { TextLink } from "@/components/navigation/TextLink";
-import { useAppSession } from "@/hooks/useAppSession";
+import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
 import { useOnline } from "@/hooks/useOnline";
 import { authClient } from "@/lib/auth-client";
-import { finishOldLogout } from "../lib/finish-old-logout";
-import { useFocusFirstInvalid } from "../hooks/useFocusFirstInvalid";
+import { useAuthSubmit } from "../hooks/useAuthSubmit";
 import { fieldError } from "../lib/field-error";
-import { FormAlert } from "./FormAlert";
-import { OfflineNote } from "./OfflineNote";
-import { AUTH_MESSAGES, type AuthFailure, authFailure } from "../lib/messages";
+import { AUTH_MESSAGES } from "../lib/messages";
 import { type SignUpValues, signUpSchema } from "../lib/schemas";
 import { StrengthMeter } from "./StrengthMeter";
 
@@ -28,53 +27,32 @@ const EMPTY: SignUpValues = { email: "", password: "", name: "" };
  * opens `/onboarding` with a full page load (BR-F01-06). Offline, the form is disabled.
  */
 export function SignUpForm() {
-	const { navigate } = useAppSession();
 	const online = useOnline();
 	const formRef = useRef<HTMLFormElement>(null);
 	const focusInvalid = useFocusFirstInvalid(formRef);
-	const [failure, setFailure] = useState<AuthFailure | null>(null);
-	const [leaving, setLeaving] = useState(false);
+	const { failure, formFailure, leaving, submit, changed } =
+		useAuthSubmit<SignUpValues>({
+			call: (value) =>
+				authClient.signUp.email({
+					email: value.email.trim(),
+					password: value.password,
+					name: value.name,
+				}),
+			destination: "/onboarding",
+			focusInvalid,
+			onRefused: (error) => {
+				if (error.code === "PASSWORD_BREACHED")
+					form.setFieldValue("password", "");
+			},
+		});
 
 	const form = useForm({
 		defaultValues: EMPTY,
 		validationLogic: revalidateLogic(),
 		validators: { onDynamic: signUpSchema },
 		onSubmitInvalid: focusInvalid,
-		onSubmit: async ({ value }) => {
-			setFailure(null);
-			if (!(await finishOldLogout())) {
-				setFailure({ form: AUTH_MESSAGES.oldSession });
-				return;
-			}
-			let error;
-			try {
-				({ error } = await authClient.signUp.email({
-					email: value.email.trim(),
-					password: value.password,
-					name: value.name,
-				}));
-			} catch {
-				setFailure({ form: AUTH_MESSAGES.failed });
-				return;
-			}
-			if (error) {
-				const refusal = authFailure(error);
-				if (error.code === "PASSWORD_BREACHED")
-					form.setFieldValue("password", "");
-				setFailure(refusal);
-				focusInvalid();
-				return;
-			}
-			setLeaving(true);
-			navigate("/onboarding");
-		},
+		onSubmit: ({ value }) => submit(value),
 	});
-
-	/** A field's server refusal goes once the user changes that field. */
-	const changed = (name: keyof SignUpValues) => {
-		if (failure && "field" in failure && failure.field === name)
-			setFailure(null);
-	};
 
 	return (
 		<form.Subscribe selector={(state) => state.isSubmitting}>
@@ -91,7 +69,9 @@ export function SignUpForm() {
 							if (!disabled) void form.handleSubmit();
 						}}
 					>
-						<OfflineNote online={online} />
+						{!online && (
+							<OfflineNote>{AUTH_MESSAGES.offline}</OfflineNote>
+						)}
 						<form.Field name="email">
 							{(field) => (
 								<div className="flex flex-col gap-1.5">
@@ -173,7 +153,7 @@ export function SignUpForm() {
 								/>
 							)}
 						</form.Field>
-						<FormAlert failure={failure} />
+						{formFailure && <FormAlert>{formFailure}</FormAlert>}
 						<Button
 							type="submit"
 							size="lg"

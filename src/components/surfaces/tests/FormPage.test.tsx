@@ -1,14 +1,14 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 
-import { AuthCard } from "../AuthCard";
+import { FormPage } from "../FormPage";
 
-describe("AuthCard", () => {
+describe("FormPage", () => {
 	test("is the page's main landmark with its title as the one h1", () => {
 		render(
-			<AuthCard title="Log in">
+			<FormPage title="Log in">
 				<p>form</p>
-			</AuthCard>,
+			</FormPage>,
 		);
 		expect(screen.getByRole("main")).toBeInTheDocument();
 		expect(
@@ -19,21 +19,40 @@ describe("AuthCard", () => {
 	});
 
 	test("the name links home", () => {
-		render(<AuthCard title="Log in">x</AuthCard>);
+		render(<FormPage title="Log in">x</FormPage>);
 		expect(screen.getByRole("link", { name: "Daybook" })).toHaveAttribute(
 			"href",
 			"/",
 		);
 	});
 
+	test("shows the intro line under the title", () => {
+		render(
+			<FormPage
+				title="Set up Daybook"
+				intro="Four quick choices. We filled in our best guesses."
+			>
+				x
+			</FormPage>,
+		);
+		expect(
+			screen.getByText("Four quick choices. We filled in our best guesses."),
+		).toBeInTheDocument();
+	});
+
+	test("without an intro, only the title", () => {
+		const { container } = render(<FormPage title="Log in">x</FormPage>);
+		expect(container.querySelectorAll("p")).toHaveLength(0);
+	});
+
 	test("adds the caller's classes to the column", () => {
 		render(
-			<AuthCard
+			<FormPage
 				title="Log in"
 				className="gap-8"
 			>
 				<p>form</p>
-			</AuthCard>,
+			</FormPage>,
 		);
 		expect(screen.getByText("form").parentElement).toHaveClass(
 			"gap-8",

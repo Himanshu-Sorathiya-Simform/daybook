@@ -159,3 +159,29 @@ describe("when zxcvbn-ts cannot be loaded", () => {
 		expect(screen.queryByText(/Password strength/)).not.toBeInTheDocument();
 	});
 });
+
+describe("a score that arrives late", () => {
+	test("is dropped when the password changed while zxcvbn-ts was loading", async () => {
+		// Fresh modules, so the dictionaries are not loaded yet and the first score arrives late.
+		vi.resetModules();
+		const fresh = await import("../StrengthMeter");
+		const { rerender } = render(
+			<fresh.StrengthMeter
+				password="password"
+				userInputs={[]}
+			/>,
+		);
+		rerender(
+			<fresh.StrengthMeter
+				password="correct horse battery staple"
+				userInputs={[]}
+			/>,
+		);
+		expect(
+			await screen.findByText("Password strength: Strong"),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByText("Password strength: Weak"),
+		).not.toBeInTheDocument();
+	});
+});

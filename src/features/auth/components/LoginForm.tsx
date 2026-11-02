@@ -4,18 +4,17 @@ import { revalidateLogic, useForm } from "@tanstack/react-form";
 import { useId, useRef, useState } from "react";
 
 import { Button } from "@/components/actions/Button";
+import { FormAlert } from "@/components/feedback/FormAlert";
+import { OfflineNote } from "@/components/feedback/OfflineNote";
 import { PasswordInput } from "@/components/forms/PasswordInput";
 import { TextInput } from "@/components/forms/TextInput";
 import { TextLink } from "@/components/navigation/TextLink";
-import { useAppSession } from "@/hooks/useAppSession";
+import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
 import { useOnline } from "@/hooks/useOnline";
 import { authClient } from "@/lib/auth-client";
-import { finishOldLogout } from "../lib/finish-old-logout";
-import { useFocusFirstInvalid } from "../hooks/useFocusFirstInvalid";
+import { useAuthSubmit } from "../hooks/useAuthSubmit";
 import { fieldError } from "../lib/field-error";
-import { FormAlert } from "./FormAlert";
-import { OfflineNote } from "./OfflineNote";
-import { AUTH_MESSAGES, type AuthFailure, authFailure } from "../lib/messages";
+import { AUTH_MESSAGES } from "../lib/messages";
 import { type LoginValues, loginSchema } from "../lib/schemas";
 
 const EMPTY: LoginValues = { email: "", password: "" };
@@ -37,50 +36,29 @@ export function LoginForm({
 	destination,
 	expired = false,
 }: Readonly<LoginFormProps>) {
-	const { navigate } = useAppSession();
 	const online = useOnline();
 	const formRef = useRef<HTMLFormElement>(null);
 	const focusInvalid = useFocusFirstInvalid(formRef);
 	const noteId = useId();
-	const [failure, setFailure] = useState<AuthFailure | null>(null);
-	const [leaving, setLeaving] = useState(false);
 	const [showForgot, setShowForgot] = useState(false);
+	const { failure, formFailure, leaving, submit, changed } =
+		useAuthSubmit<LoginValues>({
+			call: (value) =>
+				authClient.signIn.email({
+					email: value.email.trim(),
+					password: value.password,
+				}),
+			destination,
+			focusInvalid,
+		});
 
 	const form = useForm({
 		defaultValues: EMPTY,
 		validationLogic: revalidateLogic(),
 		validators: { onDynamic: loginSchema },
 		onSubmitInvalid: focusInvalid,
-		onSubmit: async ({ value }) => {
-			setFailure(null);
-			if (!(await finishOldLogout())) {
-				setFailure({ form: AUTH_MESSAGES.oldSession });
-				return;
-			}
-			let error;
-			try {
-				({ error } = await authClient.signIn.email({
-					email: value.email.trim(),
-					password: value.password,
-				}));
-			} catch {
-				setFailure({ form: AUTH_MESSAGES.failed });
-				return;
-			}
-			if (error) {
-				setFailure(authFailure(error));
-				focusInvalid();
-				return;
-			}
-			setLeaving(true);
-			navigate(destination);
-		},
+		onSubmit: ({ value }) => submit(value),
 	});
-
-	const changed = (name: keyof LoginValues) => {
-		if (failure && "field" in failure && failure.field === name)
-			setFailure(null);
-	};
 
 	return (
 		<form.Subscribe selector={(state) => state.isSubmitting}>
@@ -105,7 +83,9 @@ export function LoginForm({
 								{AUTH_MESSAGES.expired}
 							</p>
 						)}
-						<OfflineNote online={online} />
+						{!online && (
+							<OfflineNote>{AUTH_MESSAGES.offline}</OfflineNote>
+						)}
 						<form.Field name="email">
 							{(field) => (
 								<TextInput
@@ -160,7 +140,7 @@ export function LoginForm({
 								{AUTH_MESSAGES.forgotPassword}
 							</p>
 						</div>
-						<FormAlert failure={failure} />
+						{formFailure && <FormAlert>{formFailure}</FormAlert>}
 						<Button
 							type="submit"
 							size="lg"

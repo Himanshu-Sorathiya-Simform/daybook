@@ -429,3 +429,37 @@ describe("disabled", () => {
 		expect(segment("Pace")).toHaveClass("disabled:text-ink-3");
 	});
 });
+
+describe("aria-describedby", () => {
+	test("links the group to the text that describes it", () => {
+		render(
+			<>
+				<p id="week-hint">Used in weekly charts and calendars.</p>
+				<Segmented
+					label="Week starts on"
+					options={["Monday", "Sunday"]}
+					value="Monday"
+					onChange={() => undefined}
+					aria-describedby="week-hint"
+				/>
+			</>,
+		);
+		expect(
+			screen.getByRole("radiogroup", { name: "Week starts on" }),
+		).toHaveAccessibleDescription("Used in weekly charts and calendars.");
+	});
+
+	test("is left off without one", () => {
+		render(
+			<Segmented
+				label="Week starts on"
+				options={["Monday", "Sunday"]}
+				value="Monday"
+				onChange={() => undefined}
+			/>,
+		);
+		expect(screen.getByRole("radiogroup")).not.toHaveAttribute(
+			"aria-describedby",
+		);
+	});
+});

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { AuthCard } from "@/features/auth/components/AuthCard";
+import { FormPage } from "@/components/surfaces/FormPage";
 import { SignUpForm } from "@/features/auth/components/SignUpForm";
 
 export const metadata: Metadata = { title: "Create an account" };
@@ -9,8 +9,8 @@ export const metadata: Metadata = { title: "Create an account" };
  * `/dashboard` (BR-P2-29). */
 export default function SignUpPage() {
 	return (
-		<AuthCard title="Create an account">
+		<FormPage title="Create an account">
 			<SignUpForm />
-		</AuthCard>
+		</FormPage>
 	);
 }
