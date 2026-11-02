@@ -5,7 +5,6 @@ import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { GET, POST } from "../../../../app/api/auth/[...all]/route";
 import { authPool } from "../../db/pools";
-import { account, session, user, verification } from "../../db/schema/auth";
 import { parseOwnerEnv, serverEnv } from "../../env";
 import { network } from "../../tests/network";
 import { AUTH_PATHS } from "../allow-list";
@@ -638,30 +637,169 @@ describe("sign-in refusals", () => {
 			wrongPassword.headers.getSetCookie(),
 		);
 	});
+});
+
+describe("the rate limiter in the database (BR-F01-08, D-153)", () => {
+	// Documentation addresses (RFC 5737), one per test, so no two tests share a count. The
+	// table outlives a run, so the rows go before and after.
+	const ADDRESSES = Array.from({ length: 12 }, (_, i) => `203.0.113.${i + 1}`);
+	const SIGN_IN = "/sign-in/email";
+
+	const clearRows = () =>
+		owner.query(
+			`DELETE FROM auth.rate_limit WHERE split_part(key, '|', 1) = ANY($1)`,
+			[ADDRESSES],
+		);
+
+	beforeAll(clearRows);
+	afterAll(clearRows);
+
+	/** A Better Auth instance with the limiter on, over its own Drizzle instance, as another
+	 * server instance would have. */
+	const limitedAuth = () =>
+		createAuth(serverEnv(), drizzle({ client: authPool() }), {
+			rateLimit: true,
+		});
+
+	const attempt = (
+		auth: ReturnType<typeof limitedAuth>,
+		address: string,
+		path = SIGN_IN,
+	) =>
+		handleAuthRequest(
+			request("POST", path, {
+				body: { email: newEmail(), password: PASSWORD, name: "Asha" },
+				headers: { "x-forwarded-for": address },
+			}),
+			auth,
+		);
+
+	async function statuses(
+		auth: ReturnType<typeof limitedAuth>,
+		address: string,
+		times: number,
+	): Promise<number[]> {
+		const result = [];
+		for (let i = 0; i < times; i += 1)
+			result.push((await attempt(auth, address)).status);
+		return result;
+	}
+
+	async function row(address: string, path = SIGN_IN) {
+		const { rows } = await owner.query<{
+			id: string;
+			count: number;
+			last_request: string;
+		}>(`SELECT id, count, last_request FROM auth.rate_limit WHERE key = $1`, [
+			`${address}|${path}`,
+		]);
+		return rows[0];
+	}
+
+	/** Moves an address's last attempt back by `ms`, rather than waiting. */
+	const age = (address: string, ms: number) =>
+		owner.query(
+			`UPDATE auth.rate_limit SET last_request = last_request - $2 WHERE key = $1`,
+			[`${address}|${SIGN_IN}`, ms],
+		);
 
 	// AC-F01-05
-	test("with the limiter on, the fourth sign-in from one address in 10 seconds gets 429", async () => {
-		const limited = createAuth(
-			serverEnv(),
-			drizzle({
-				client: authPool(),
-				schema: { user, session, account, verification },
-			}),
-			{ rateLimit: true },
+	test("the fourth sign-in from one address in 10 seconds gets 429", async () => {
+		const auth = limitedAuth();
+		expect(await statuses(auth, ADDRESSES[0]!, 4)).toEqual([401, 401, 401, 429]);
+	});
+
+	test("a 429 says how many seconds to wait, at most the 10-second window", async () => {
+		const auth = limitedAuth();
+		await statuses(auth, ADDRESSES[1]!, 3);
+		const refused = await attempt(auth, ADDRESSES[1]!);
+		expect(refused.status).toBe(429);
+		const wait = Number(refused.headers.get("x-retry-after"));
+		expect(wait).toBeGreaterThanOrEqual(1);
+		expect(wait).toBeLessThanOrEqual(10);
+	});
+
+	test("keeps one row per address and path: a UUIDv7 id, the count and the last attempt in ms", async () => {
+		const before = Date.now();
+		await statuses(limitedAuth(), ADDRESSES[2]!, 2);
+		const after = Date.now();
+		const stored = await row(ADDRESSES[2]!);
+		expect(stored?.id).toMatch(UUID_V7);
+		expect(stored?.count).toBe(2);
+		expect(Number(stored?.last_request)).toBeGreaterThanOrEqual(before);
+		expect(Number(stored?.last_request)).toBeLessThanOrEqual(after);
+	});
+
+	test("a refused attempt is not counted", async () => {
+		const auth = limitedAuth();
+		await statuses(auth, ADDRESSES[3]!, 5);
+		expect((await row(ADDRESSES[3]!))?.count).toBe(3);
+	});
+
+	test("another address has its own count", async () => {
+		const auth = limitedAuth();
+		await statuses(auth, ADDRESSES[4]!, 4);
+		expect((await attempt(auth, ADDRESSES[5]!)).status).toBe(401);
+	});
+
+	test("two server instances share one count", async () => {
+		const first = limitedAuth();
+		const second = limitedAuth();
+		expect(await statuses(first, ADDRESSES[6]!, 3)).toEqual([401, 401, 401]);
+		expect((await attempt(second, ADDRESSES[6]!)).status).toBe(429);
+	});
+
+	test("sign-up keeps its own count, apart from sign-in's", async () => {
+		const auth = limitedAuth();
+		await statuses(auth, ADDRESSES[7]!, 4);
+		const response = await attempt(auth, ADDRESSES[7]!, "/sign-up/email");
+		expect(response.status).toBe(200);
+		expect((await row(ADDRESSES[7]!, "/sign-up/email"))?.count).toBe(1);
+	});
+
+	test("the count starts again once 10 seconds have passed since the last attempt", async () => {
+		const auth = limitedAuth();
+		await statuses(auth, ADDRESSES[8]!, 4);
+		await age(ADDRESSES[8]!, 10_000);
+		expect((await attempt(auth, ADDRESSES[8]!)).status).toBe(401);
+		expect((await row(ADDRESSES[8]!))?.count).toBe(1);
+	});
+
+	// Each attempt takes real time against the database, so this stays well inside the window.
+	test("5 seconds after the last attempt, the count still holds", async () => {
+		const auth = limitedAuth();
+		await statuses(auth, ADDRESSES[9]!, 3);
+		await age(ADDRESSES[9]!, 5_000);
+		expect((await attempt(auth, ADDRESSES[9]!)).status).toBe(429);
+	});
+
+	test("a restarted count deletes rows older than a minute, Better Auth's longest window", async () => {
+		const [stale, recent, trigger] = [
+			ADDRESSES[10]!,
+			ADDRESSES[11]!,
+			ADDRESSES[0]!,
+		];
+		const auth = limitedAuth();
+		await clearRows();
+		for (const address of [stale, recent, trigger]) await attempt(auth, address);
+		await age(stale, 61_000);
+		await age(recent, 30_000);
+		await age(trigger, 11_000);
+		await attempt(auth, trigger);
+		expect(await row(stale)).toBeUndefined();
+		expect((await row(recent))?.count).toBe(1);
+		expect((await row(trigger))?.count).toBe(1);
+	});
+
+	test("lets exactly 3 through when 8 attempts from one address arrive together", async () => {
+		const auth = limitedAuth();
+		const address = ADDRESSES[2]!;
+		await clearRows();
+		const responses = await Promise.all(
+			Array.from({ length: 8 }, () => attempt(auth, address)),
 		);
-		const attempt = (address: string) =>
-			handleAuthRequest(
-				request("POST", "/sign-in/email", {
-					body: { email: newEmail(), password: PASSWORD },
-					headers: { "x-forwarded-for": address },
-				}),
-				limited,
-			);
-		const statuses = [];
-		for (let i = 0; i < 4; i += 1)
-			statuses.push((await attempt("203.0.113.7")).status);
-		expect(statuses).toEqual([401, 401, 401, 429]);
-		// Another address has its own count.
-		expect((await attempt("203.0.113.8")).status).toBe(401);
+		const codes = responses.map((response) => response.status).sort();
+		expect(codes).toEqual([401, 401, 401, 429, 429, 429, 429, 429]);
+		expect((await row(address))?.count).toBe(3);
 	});
 });

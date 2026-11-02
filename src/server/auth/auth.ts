@@ -5,12 +5,18 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { describeError } from "../api/errors";
 import { authPool } from "../db/pools";
-import { account, session, user, verification } from "../db/schema/auth";
+import {
+	account,
+	rateLimit as rateLimitTable,
+	session,
+	user,
+	verification,
+} from "../db/schema/auth";
 import { serverEnv, type ServerEnv } from "../env";
 import { beforeHook } from "./hooks";
 import { logAuth } from "./log";
 
-const tables = { user, session, account, verification };
+const tables = { user, session, account, verification, rateLimit: rateLimitTable };
 
 export type AuthDatabase = NodePgDatabase<typeof tables>;
 
@@ -28,9 +34,11 @@ const DAY = 60 * 60 * 24;
  * - **Origin and CSRF checks stay on in tests too.** Better Auth turns them off by default
  *   when `NODE_ENV` is `test`; tests must see what production does.
  * - **Passwords:** 12 to 128 characters (D-148). **Sessions:** 7 days, extended once a day
- *   while used (D-151). The rate limiter keeps its defaults (D-153): on in production only.
- *   `rateLimit` turns it on anywhere, for the test of it (AC-F01-05); Better Auth decides
- *   "production" when it is first imported, so a test cannot switch it through `NODE_ENV`.
+ *   while used (D-151).
+ * - **Rate limiter** (D-153): Better Auth's default limits, on in production only, counted in
+ *   `auth.rate_limit` so every server instance shares one count. `rateLimit` turns it on
+ *   anywhere, for the tests of it (AC-F01-05); Better Auth decides "production" when it is
+ *   first imported, so a test cannot switch it through `NODE_ENV`.
  * - **F01's rules** run in the `before` hook (`hooks.ts`).
  * - **Errors:** an unexpected one is thrown out of `handler` rather than logged by Better
  *   Auth, which would print it whole; `handleAuthRequest` logs only `describeError`. */
@@ -55,7 +63,7 @@ export function createAuth(
 			maxPasswordLength: 128,
 		},
 		session: { expiresIn: 7 * DAY, updateAge: DAY },
-		...(rateLimit ? { rateLimit: { enabled: true } } : {}),
+		rateLimit: { storage: "database", ...(rateLimit ? { enabled: true } : {}) },
 		advanced: {
 			cookiePrefix: "daybook",
 			disableOriginCheck: false,

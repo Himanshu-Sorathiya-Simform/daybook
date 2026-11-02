@@ -57,7 +57,7 @@ describe("settings", async () => {
 		expect(options.session?.cookieCache).toBeUndefined();
 	});
 
-	test.each(["user", "session", "account", "verification"] as const)(
+	test.each(["user", "session", "account", "verification", "rateLimit"] as const)(
 		"gives a new %s row a UUIDv7 id",
 		(model) => {
 			const ids = [
@@ -73,10 +73,17 @@ describe("settings", async () => {
 		},
 	);
 
-	test("keeps the rate limiter at its defaults", () => {
-		expect(options.rateLimit).toBeUndefined();
+	test("keeps the rate limiter's default limits", () => {
+		expect(options.rateLimit).toEqual({ storage: "database" });
 		expect(context.rateLimit.window).toBe(10);
 		expect(context.rateLimit.max).toBe(100);
+		expect(context.rateLimit.customRules).toBeUndefined();
+	});
+
+	test("counts rate limits in the database, so every server instance shares them (D-153)", () => {
+		expect(context.rateLimit.storage).toBe("database");
+		expect(options.rateLimit?.customStorage).toBeUndefined();
+		expect(options.secondaryStorage).toBeUndefined();
 	});
 
 	test("leaves the rate limiter off outside production, as Better Auth does", () => {
@@ -103,10 +110,10 @@ describe("the rateLimit option, for the test of the limiter (AC-F01-05)", async 
 		expect(context.rateLimit.enabled).toBe(true);
 	});
 
-	test("keeps the default window and limit, so the special sign-in rule applies", () => {
+	test("keeps the default window and limit, so the special sign-in rule applies, and the database storage", () => {
 		expect(context.rateLimit.window).toBe(10);
 		expect(context.rateLimit.max).toBe(100);
-		expect(context.rateLimit.storage).toBe("memory");
+		expect(context.rateLimit.storage).toBe("database");
 	});
 
 	test("false is the same as leaving it out", async () => {
@@ -115,7 +122,7 @@ describe("the rateLimit option, for the test of the limiter (AC-F01-05)", async 
 			db,
 			{ rateLimit: false },
 		).$context;
-		expect(off.options.rateLimit).toBeUndefined();
+		expect(off.options.rateLimit).toEqual({ storage: "database" });
 		expect(off.rateLimit.enabled).toBe(false);
 	});
 });

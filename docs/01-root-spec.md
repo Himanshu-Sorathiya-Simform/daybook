@@ -627,7 +627,7 @@ Default messages for every code are in P2, section 8. A feature spec may add its
 - **SEC-10** Passwords and sessions:
     - Passwords are 12 to 128 characters with no composition rules. A Better Auth hook checks them against Have I Been Pwned's range API, and a strength meter gives advice (F01).
     - Sessions last 7 days and extend while used. Users can list and revoke them.
-    - Better Auth's built-in rate limiting stays at its defaults (D-148, D-151, D-153).
+    - Better Auth's built-in rate limiting keeps its default limits, counted in the database (D-148, D-151, D-153).
 - **SEC-11** The PDF renderer opens the print route with a signed token: HMAC, valid 60 seconds, bound to one user, report and period. The print route renders only allow-listed report routes.
 - **SEC-12** Sentry receives the user id only, never the email. It scrubs amounts, payee, description, note and the `q` parameter from events, URLs and breadcrumbs.
 - **SEC-13** Seeded account passwords are public, through the repository. Those accounts hold demo data only.

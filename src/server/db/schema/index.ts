@@ -8,7 +8,7 @@ import {
 	transactionViews,
 	transactions,
 } from "./app";
-import { account, session, user, verification } from "./auth";
+import { account, rateLimit, session, user, verification } from "./auth";
 
 export * from "./app";
 export * from "./auth";
@@ -21,6 +21,7 @@ export const ALL_TABLES = [
 	session,
 	account,
 	verification,
+	rateLimit,
 	currencies,
 	categories,
 	profile,

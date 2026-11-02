@@ -38,11 +38,12 @@ People create a Daybook account with an email and password, log in and out on an
 
 **Better Auth records** (schema `auth`; read and written only through Better Auth or the auth pool)
 
-| Record  | Fields used by Daybook                                                                                                               |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| User    | `id`, `email` (unique), `name` (display name), `createdAt`                                                                           |
-| Session | `id`, `token` (the cookie value), `userId`, `expiresAt`, `createdAt`, `updatedAt` (moves at most once a day; BR-F01-17), `userAgent` |
-| Account | The credential: the password hash, by Better Auth's default algorithm                                                                |
+| Record     | Fields used by Daybook                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| User       | `id`, `email` (unique), `name` (display name), `createdAt`                                                                           |
+| Session    | `id`, `token` (the cookie value), `userId`, `expiresAt`, `createdAt`, `updatedAt` (moves at most once a day; BR-F01-17), `userAgent` |
+| Account    | The credential: the password hash, by Better Auth's default algorithm                                                                |
+| Rate limit | Better Auth's own count per client address and path (BR-F01-08); Daybook never reads it                                              |
 
 **Form fields**
 
@@ -80,7 +81,7 @@ People create a Daybook account with an email and password, log in and out on an
 **Login**
 
 - **BR-F01-07** A wrong email or a wrong password gives one message, "Email or password is incorrect.", whichever was wrong.
-- **BR-F01-08** Better Auth's rate limiter allows 3 email sign-in attempts per 10 seconds, then answers 429 (D-153).
+- **BR-F01-08** Better Auth's rate limiter allows 3 email sign-in attempts per 10 seconds from one client address, then answers 429 (D-153). The count lives in the database, so every server instance shares it.
 - **BR-F01-09** `next` is resolved with `new URL(next, APP_ORIGIN)`. It is used only if the result has the same origin as `APP_ORIGIN` and the raw value starts with `/` and contains no backslash. Otherwise it is ignored. After login, the user goes to `next`, else `/dashboard`, or `/onboarding` if they have no profile.
 - **BR-F01-10** A logged-in user who opens `/login` or `/signup` is sent to `/dashboard` (P2, BR-P2-29).
 - **BR-F01-11** When a persisted cache exists, the login form knows its owner's email from the persisted `/api/me`. If the typed email, trimmed and lowercased, differs from it, and that user's queue still holds items, the form warns before signing in: "Changes from another account are waiting on this device. Logging in as someone else deletes them." with Continue and Cancel.

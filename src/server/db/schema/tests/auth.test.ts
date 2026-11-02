@@ -2,12 +2,25 @@
 import { getAuthTables } from "better-auth/db";
 import { getTableConfig, type PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, test } from "vitest";
-import { account, session, user, verification } from "../auth";
+import { account, rateLimit, session, user, verification } from "../auth";
 
-// The options Daybook's Better Auth instance will use that change its tables (F01).
-const betterAuthTables = getAuthTables({ emailAndPassword: { enabled: true } });
+// The options Daybook's Better Auth instance will use that change its tables (F01, D-153).
+const betterAuthTables = getAuthTables({
+	emailAndPassword: { enabled: true },
+	rateLimit: { storage: "database" },
+});
 
-const ours: Record<string, PgTable> = { user, session, account, verification };
+const ours: Record<string, PgTable> = {
+	user,
+	session,
+	account,
+	verification,
+	rateLimit,
+};
+
+/** Better Auth's model name in snake_case, the table's name in Postgres. */
+const snakeCase = (name: string) =>
+	name.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 
 describe.each(Object.keys(betterAuthTables))("auth.%s", (model) => {
 	const expected = betterAuthTables[model]!;
@@ -16,9 +29,9 @@ describe.each(Object.keys(betterAuthTables))("auth.%s", (model) => {
 	const columnFor = (field: string) =>
 		config?.columns.find((column) => column === (table as never)[field]);
 
-	test("exists in schema auth under Better Auth's model name", () => {
+	test("exists in schema auth under Better Auth's model name in snake_case", () => {
 		expect(config?.schema).toBe("auth");
-		expect(config?.name).toBe(expected.modelName);
+		expect(config?.name).toBe(snakeCase(expected.modelName));
 	});
 
 	test("has exactly Better Auth's fields, plus the id", () => {
@@ -44,6 +57,7 @@ describe.each(Object.keys(betterAuthTables))("auth.%s", (model) => {
 				string: field === "userId" ? "uuid" : "text",
 				boolean: "boolean",
 				date: "timestamp with time zone",
+				number: definition.bigint ? "bigint" : "integer",
 			}[definition.type as string];
 			expect(sqlType).toBe(expectedType);
 		},

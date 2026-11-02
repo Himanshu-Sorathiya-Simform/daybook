@@ -1,16 +1,18 @@
 import "server-only";
 import {
+	bigint,
 	boolean,
 	index,
+	integer,
 	pgSchema,
 	text,
 	timestamp,
 	uuid,
 } from "drizzle-orm/pg-core";
 
-/** Better Auth's four tables, in schema `auth` (D-192), which only `daybook_auth` can reach
+/** Better Auth's five tables, in schema `auth` (D-192), which only `daybook_auth` can reach
  * (D-19). Each object key is Better Auth's field name, which its Drizzle adapter looks up;
- * the column names are snake_case. A test compares these tables with the installed Better
+ * the table and column names are snake_case. A test compares these tables with the installed Better
  * Auth's own definitions, so an upgrade that adds a field fails there first.
  *
  * Two differences from Better Auth's generated schema, both deliberate:
@@ -86,3 +88,17 @@ export const verification = authSchema.table(
 	},
 	(t) => [index("verification_identifier_idx").on(t.identifier)],
 );
+
+/** Better Auth's rate limiter counts here, so every server instance shares one count (D-153).
+ * `key` is the client address and path (`203.0.113.7|/sign-in/email`); `lastRequest` is
+ * Better Auth's own clock in epoch milliseconds, a number rather than a `timestamptz`,
+ * because the limiter compares it in its queries as one. Better Auth deletes rows older than
+ * its longest window itself. No index on `last_request`: every limited request rewrites it,
+ * and without an index Postgres can update the row in place; the table holds about a minute
+ * of rows. */
+export const rateLimit = authSchema.table("rate_limit", {
+	id: uuid("id").primaryKey(),
+	key: text("key").notNull().unique(),
+	count: integer("count").notNull(),
+	lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});

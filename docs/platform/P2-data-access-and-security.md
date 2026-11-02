@@ -356,7 +356,7 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
 - **BR-P2-40** Better Auth has four infrastructure settings:
     - It runs on its own Drizzle instance on the auth pool, with its tables in schema `auth`.
     - Its base URL and only trusted origin are `APP_ORIGIN`.
-    - Its rate limiter stays at its defaults (D-153).
+    - Its rate limiter keeps its default limits and counts in the database, in `auth.rate_limit`, so every server instance shares one count (D-153).
     - A Better Auth `before` hook returns 404 for every path not on this allow-list (D-202): `/sign-up/email`, `/sign-in/email`, `/sign-out`, `/get-session`, `/list-sessions`, `/revoke-session`, `/revoke-other-sessions`, `/change-password`, `/update-user`, `/delete-user`.
 
     F01 owns their behavior.
