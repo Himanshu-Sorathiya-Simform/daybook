@@ -1,6 +1,6 @@
 ---
 paths:
-    - "**/tests/**"
+    - "**/__tests__/**"
     - "**/*.test.{ts,tsx}"
     - "vitest.config.mts"
     - "vitest.setup.ts"
@@ -10,7 +10,7 @@ paths:
 
 ## Where tests live
 
-- A folder's tests live in a `tests/` folder inside it, with the same file name plus `.test` before the extension. `src/features/transactions/components/tests/List.test.tsx` covers `src/features/transactions/components/List.tsx`.
+- A folder's tests live in a `__tests__/` folder inside it, with the same file name plus `.test` before the extension. `src/features/transactions/components/__tests__/List.test.tsx` covers `src/features/transactions/components/List.tsx`.
 - Browser tests (Playwright) live in `e2e/` at the repo root. Vitest skips that folder.
 
 ## How to write them

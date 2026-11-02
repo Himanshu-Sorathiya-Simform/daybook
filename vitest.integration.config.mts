@@ -8,10 +8,10 @@ import { configDefaults, defineConfig } from "vitest/config";
  * - auth adds a temporary constraint to `auth.account`, which would fail other sign-ups;
  * - daily-pass writes the shared day markers and purges every user's old records. */
 const SERIAL = [
-	"scripts/db/tests/verify.integration.test.ts",
-	"scripts/db/tests/scripts.integration.test.ts",
-	"src/server/auth/tests/auth.integration.test.ts",
-	"src/server/system/tests/daily-pass.integration.test.ts",
+	"scripts/db/__tests__/verify.integration.test.ts",
+	"scripts/db/__tests__/scripts.integration.test.ts",
+	"src/server/auth/__tests__/auth.integration.test.ts",
+	"src/server/system/__tests__/daily-pass.integration.test.ts",
 ];
 
 /** The database tests (`pnpm test:integration`): `*.integration.test.ts` files, run in Node

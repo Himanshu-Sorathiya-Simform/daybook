@@ -35,7 +35,7 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 ## Layout
 
 - `app/` at the repo root: routes only, kept thin. `proxy.ts` sits beside it. Never create `src/app`; Next ignores it when a root `app/` exists.
-- `src/features/<name>`: one folder per spec feature, split like the top level: `components/` (its React UI), `hooks/` (its own hooks) and `lib/` (plain TypeScript: schemas, messages, helpers, API calls), each with its own `tests/`. A folder exists only when the feature has something for it. A feature never imports another feature's internals.
+- `src/features/<name>`: one folder per spec feature, split like the top level: `components/` (its React UI), `hooks/` (its own hooks) and `lib/` (plain TypeScript: schemas, messages, helpers, API calls), each with its own `__tests__/`. A folder exists only when the feature has something for it. A feature never imports another feature's internals.
 - `src/components`: shared UI. `src/hooks`: React hooks shared by features, one per file named after the hook (`useMe.ts`). `src/lib`: pure code safe in browser and server (money, time, Zod schemas). `src/server`: server-only code. `src/styles`: the design system's CSS (tokens, Tailwind theme, base styles); `app/globals.css` only imports it (D-387).
 - Repo root also keeps config plus `docs`, `e2e`, `scripts`, `seed` (the golden fixture and demo data, F15), `drizzle` (migrations), `public` and `.claude`.
 - `@/*` points at `src/*` (D-389), so code imports `@/components/...` and `@/lib/...`. Create a `src/` folder when the first file needs it.

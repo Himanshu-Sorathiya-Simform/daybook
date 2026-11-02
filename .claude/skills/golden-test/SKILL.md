@@ -57,7 +57,7 @@ The frozen clock is 2026-11-02T12:00:00+05:30, which is 2026-11-02T06:30:00Z. To
 
 ## 5. Write it
 
-Follow the testing rule: the test lives in the `tests/` folder beside the code, carries the criterion ID in a comment, and fakes only the network and outside services. Show it failing for the right reason before the code makes it pass.
+Follow the testing rule: the test lives in the `__tests__/` folder beside the code, carries the criterion ID in a comment, and fakes only the network and outside services. Show it failing for the right reason before the code makes it pass.
 
 Never use the real clock, never mock our own modules or the database, never skip a test, and never weaken an assertion.
 

@@ -33,7 +33,7 @@ export default defineConfig({
 				"src/lib/**",
 				"src/server/**",
 			],
-			exclude: ["**/tests/**"],
+			exclude: ["**/__tests__/**"],
 			reporter: ["text"],
 		},
 	},

@@ -18,7 +18,7 @@ Shared components live in `src/components`; a feature's own live in `src/feature
 
     A feature component never keeps a second component in its file: each part gets its own file in the same `components/` folder.
 
-- Tests go in the group's `tests/` folder (testing rule): `src/components/forms/tests/Select.test.tsx` covers `src/components/forms/Select.tsx`.
+- Tests go in the group's `__tests__/` folder (testing rule): `src/components/forms/__tests__/Select.test.tsx` covers `src/components/forms/Select.tsx`.
 - Pure logic (money formatting, category keys) belongs in `src/lib`, not in a component. A component imports it. A React hook shared by features lives in `src/hooks`, not here.
 - A feature never imports another feature's internals, so a component used by two features lives here.
 
