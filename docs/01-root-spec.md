@@ -243,7 +243,7 @@ A write made offline is applied to the screen as pending and stored in the write
     - `numberLocale` is the country's own format through `Intl`, with Latin digits, precomputed per country (for example `hi-IN-u-nu-latn`, so INR shows `1,00,000.00`, and `de-DE-u-nu-latn`, so EUR shows `1.240,50 €`);
     - `dateLocale` is `en-<country>`, for dates and times in English.
 
-    Before a profile exists, the browser locale is used for both.
+    Before a profile exists, the browser locale is used for both: the first of `navigator.languages`, with Latin digits for numbers (D-508).
 
 - **MON-5** An amount is at least one minor unit and at most 999,999,999 major units plus a full fraction (for INR: 99,999,999,999 minor units). Every limit is below `Number.MAX_SAFE_INTEGER`, so JSON numbers are safe.
 - **MON-6** SQL sums arrive from `pg` as strings (bigint and numeric). The data layer converts them with a parser that throws above `Number.MAX_SAFE_INTEGER`; plain `Number()` on them is never used.
@@ -447,6 +447,12 @@ The browser never touches the database. Every private read and write passes the 
     - An allow-list of queries; maxAge 7 days; gcTime at least maxAge; the buster is the build id.
     - The owner's user id is stored with it.
     - A different owner wipes it.
+- **STATE-4** Pages call the API through one client helper (D-507):
+    - A mutation sends JSON and an `Idempotency-Key` made for that user action; a retry of the same action reuses it. Only the write queue sends `Daybook-Build` (P1).
+    - A request with no answer after 20 seconds is a timeout.
+    - A query is retried at most twice, and only after a network failure, a timeout, 429 or 5xx. A mutation is never retried by itself.
+    - `/api/me` stays fresh for 60 seconds (BR-P4-12). An answer for a different user than the last one drops every other cached query (5.2, D-508).
+    - A 401 from any route outside `/api/auth/*` shows the session-expired banner (BR-F01-13). A 403 `profile_required` opens `/onboarding` (BR-F02-01). `premium_required` or `feature_off` refetches `/api/me` (BR-P4-12).
 
 ### 7.5 Caching and offline
 

@@ -7,9 +7,9 @@ paths:
 
 ## Where they live
 
-- `src/components/<group>/<Name>.tsx`, one component per file, grouped as `actions`, `forms`, `surfaces`, `feedback`, `data`, `navigation`. A named export, and an exported `NameProps` type.
+- `src/components/<group>/<Name>.tsx`, one component per file, grouped as `actions`, `forms`, `surfaces`, `feedback`, `data`, `navigation`, and `app` for the app-wide wiring every page shares (providers, the session check, banners that read app state). A named export, and an exported `NameProps` type.
 - Tests go in the group's `tests/` folder (testing rule): `src/components/forms/tests/Select.test.tsx` covers `src/components/forms/Select.tsx`.
-- Pure logic (money formatting, category keys) belongs in `src/lib`, not in a component. A component imports it.
+- Pure logic (money formatting, category keys) belongs in `src/lib`, not in a component. A component imports it. A React hook shared by features lives in `src/hooks`, not here.
 - A feature never imports another feature's internals, so a component used by two features lives here.
 
 ## Building them

@@ -11,7 +11,7 @@ Later, the user changes their name, time zone and week start in Settings. They c
 | Milestone  | M1                                                                                                                                                                                                                                                                     |
 | Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                  |
 | Depends on | [F01](F01-auth-and-account.md) (sign-up, display name through `/update-user`), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md) (`/api/me`); F07 (portfolio seeding, from M3), F08 (dashboard settings page), F12 (billing page) |
-| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452, D-506                                                                                                                                                                        |
+| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452, D-506, D-508                                                                                                                                                                 |
 
 ## 1. User stories
 
@@ -189,7 +189,7 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
 
     Plain `en-<country>` is not used for numbers: ICU's English regional data mixes conventions, so `en-DE` writes money as `€1,240.50` but a percentage as `63,3 %`.
 
-    Before a profile exists, the browser's locale is used for both. `/api/me` returns both locales, so every device and the PDF renderer format the same way.
+    Before a profile exists, the browser's locale is used for both (MON-4, D-508). `/api/me` returns both locales, so every device and the PDF renderer format the same way.
 
 - **BR-F02-19** Dates and times use `dateLocale`, the profile time zone (TIME-4) and fixed `Intl` option sets:
 
