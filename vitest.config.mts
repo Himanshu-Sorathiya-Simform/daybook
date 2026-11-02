@@ -28,6 +28,7 @@ export default defineConfig({
 			provider: "v8",
 			include: [
 				"src/components/**",
+				"src/features/**",
 				"src/hooks/**",
 				"src/lib/**",
 				"src/server/**",

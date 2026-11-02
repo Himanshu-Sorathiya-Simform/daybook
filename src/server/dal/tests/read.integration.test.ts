@@ -13,7 +13,7 @@ import { signedInUser } from "../../auth/tests/sessions";
 import { GOLDEN_NOW, insertRow, PRIVATE_ROWS } from "../../db/tests/private-rows";
 import { parseOwnerEnv } from "../../env";
 import { CATCH_UP_STEPS, type CatchUpRun, catchUpDone } from "../catch-up";
-import { prepareRead, readWith } from "../read";
+import { homeFor, prepareRead, readWith } from "../read";
 
 let owner: Client;
 const users: string[] = [];
@@ -122,5 +122,38 @@ describe("readWith", () => {
 				tx.execute("UPDATE app.profile SET country = 'US'"),
 			),
 		).rejects.toThrow();
+	});
+});
+
+// BR-F01-27, AC-F01-15
+describe("homeFor, where / sends a visitor", () => {
+	test("without a session: nowhere, so the landing page shows", async () => {
+		expect(await homeFor(await prepareRead(new Headers()))).toBeNull();
+	});
+
+	test("with a stale or forged cookie: nowhere, never to login", async () => {
+		const forged = new Headers({
+			cookie: "daybook.session_token=forged.signature",
+		});
+		expect(await homeFor(await prepareRead(forged))).toBeNull();
+	});
+
+	test("with a session and a profile: /dashboard", async () => {
+		const user = await newUser();
+		const base = await prepareRead(new Headers({ cookie: user.cookie }));
+		expect(await homeFor(base)).toBe("/dashboard");
+	});
+
+	test("with a session and no profile yet: /onboarding (BR-F02-01)", async () => {
+		const user = await newUser(false);
+		const base = await prepareRead(new Headers({ cookie: user.cookie }));
+		expect(await homeFor(base)).toBe("/onboarding");
+	});
+
+	test("reads only the visitor's own profile, under RLS", async () => {
+		await newUser();
+		const user = await newUser(false);
+		const base = await prepareRead(new Headers({ cookie: user.cookie }));
+		expect(await homeFor(base)).toBe("/onboarding");
 	});
 });

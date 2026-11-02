@@ -1,4 +1,7 @@
+"use client";
+
 import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 import {
 	Group as AriaGroup,
 	Input as AriaInput,
@@ -22,6 +25,8 @@ export type TextInputProps = Omit<
 		multiline?: boolean;
 		/** The starting height of a multi-line box, in lines. */
 		rows?: number;
+		/** Something at the end of a single-line box, such as a show-password button. */
+		trailing?: ReactNode;
 		/** Classes for the root element, which holds the label, the box and the message. */
 		className?: string;
 	};
@@ -37,6 +42,7 @@ export function TextInput({
 	icon: Icon,
 	multiline = false,
 	rows = 3,
+	trailing,
 	className,
 	...rest
 }: Readonly<TextInputProps>) {
@@ -69,6 +75,7 @@ export function TextInput({
 							className="text-body text-ink placeholder:text-ink-3 disabled:text-ink-3 min-w-0 flex-1 self-stretch bg-transparent outline-none disabled:cursor-not-allowed pointer-coarse:text-base"
 						/>
 					}
+					{!multiline && trailing}
 				</AriaGroup>
 			</Field>
 		</AriaTextField>

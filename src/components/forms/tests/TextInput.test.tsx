@@ -599,3 +599,43 @@ describe("className", () => {
 		);
 	});
 });
+
+describe("trailing", () => {
+	test("sits inside the box, after the text", () => {
+		render(
+			<TextInput
+				label="Password"
+				trailing={<button type="button">Show</button>}
+			/>,
+		);
+		const input = screen.getByRole("textbox", { name: "Password" });
+		const button = screen.getByRole("button", { name: "Show" });
+		expect(input.parentElement).toContainElement(button);
+		expect(
+			input.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+	});
+
+	test("is left out of a multi-line box", () => {
+		render(
+			<TextInput
+				label="Note"
+				multiline
+				trailing={<button type="button">Show</button>}
+			/>,
+		);
+		expect(
+			screen.queryByRole("button", { name: "Show" }),
+		).not.toBeInTheDocument();
+	});
+
+	test("does not take the label: the input keeps its own name", () => {
+		render(
+			<TextInput
+				label="Password"
+				trailing={<button type="button">Show</button>}
+			/>,
+		);
+		expect(screen.getByRole("textbox")).toHaveAccessibleName("Password");
+	});
+});

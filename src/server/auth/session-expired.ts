@@ -2,8 +2,9 @@ import "server-only";
 import { safeNextPath } from "@/lib/next-path";
 import { describeError } from "../api/errors";
 
-/** The offline-logout marker cookie (F01, D-367). Only Daybook's own script sets it. */
-export const LOGOUT_COOKIE = "daybook_logout";
+import { LOGOUT_COOKIE } from "@/lib/logout-marker";
+
+export { LOGOUT_COOKIE };
 
 const SESSION_PREFIXES = ["daybook.", "__Secure-daybook."];
 const SESSION_TOKENS = ["daybook.session_token", "__Secure-daybook.session_token"];

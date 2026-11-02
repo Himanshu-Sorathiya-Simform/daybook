@@ -10,7 +10,7 @@ paths:
 
 ## Where tests live
 
-- A folder's tests live in a `tests/` folder inside it, with the same file name plus `.test` before the extension. `src/features/transactions/tests/x.test.tsx` covers `src/features/transactions/x.tsx`.
+- A folder's tests live in a `tests/` folder inside it, with the same file name plus `.test` before the extension. `src/features/transactions/components/tests/List.test.tsx` covers `src/features/transactions/components/List.tsx`.
 - Browser tests (Playwright) live in `e2e/` at the repo root. Vitest skips that folder.
 
 ## How to write them
@@ -38,4 +38,4 @@ paths:
 
 - While working, run only the tests for the file you changed: `pnpm test:run <path>`. Before saying work is done, run the full `pnpm test:run`.
 - Never run `pnpm test`; it is watch mode and never exits.
-- `pnpm test:coverage` runs every test once and lists the lines and branches of `src/components`, `src/hooks`, `src/lib` and `src/server` that no test reaches. Use it to find what is untested; a covered line is not yet a tested behaviour, so test states and props, not only lines.
+- `pnpm test:coverage` runs every test once and lists the lines and branches of `src/components`, `src/features`, `src/hooks`, `src/lib` and `src/server` that no test reaches. Use it to find what is untested; a covered line is not yet a tested behaviour, so test states and props, not only lines.

@@ -16,7 +16,7 @@ const hankenGrotesk = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
-	title: "Daybook",
+	title: { default: "Daybook", template: "%s · Daybook" },
 	description: "Personal finance and investment dashboard",
 };
 

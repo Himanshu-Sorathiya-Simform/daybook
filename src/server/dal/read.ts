@@ -72,3 +72,21 @@ export async function readAsUser<T>(
 	if (!base) redirect(expiredPath(await headers()));
 	return readWith(base, fn);
 }
+
+/** Where `/` sends a visitor with the context `prepareRead` gave (F01, BR-F01-27): `/dashboard`,
+ * or `/onboarding` before a profile exists; `null` without a valid session, so the landing page
+ * shows. */
+export async function homeFor(
+	base: RequestContext | null,
+): Promise<"/dashboard" | "/onboarding" | null> {
+	if (!base) return null;
+	return readWith(base, async (ctx) =>
+		ctx.profile ? "/dashboard" : "/onboarding",
+	);
+}
+
+/** `homeFor` for the page being rendered. Unlike `readAsUser`, a stale cookie never sends the
+ * visitor to login: the landing page shows instead. */
+export async function signedInHome(): Promise<"/dashboard" | "/onboarding" | null> {
+	return homeFor(await prepareOnce());
+}

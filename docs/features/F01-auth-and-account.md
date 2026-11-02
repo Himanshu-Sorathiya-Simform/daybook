@@ -9,7 +9,7 @@ People create a Daybook account with an email and password, log in and out on an
 | Milestone  | M0 (auth core), M1 (account settings)                                                                                                                                                                         |
 | Plan       | Free and Premium; export of all Transactions is Stretch (`account.export`)                                                                                                                                    |
 | Depends on | [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F02 (onboarding and display name), F12 (Stripe Customer), F14 (posts on the landing page), P1 (cache and queue wipes) |
-| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385, D-433, D-452, D-502, D-503, D-508                                                                         |
+| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385, D-433, D-452, D-502, D-503, D-508, D-509, D-510                                                           |
 
 ## 1. User stories
 
@@ -74,7 +74,7 @@ People create a Daybook account with an email and password, log in and out on an
 
 **Sign-up**
 
-- **BR-F01-04** A strength meter (zxcvbn-ts) shows Weak, Fair, Good or Strong as the user types. It is advisory and never blocks submission (D-186).
+- **BR-F01-04** A strength meter (zxcvbn-ts) shows Weak, Fair, Good or Strong as the user types. It is advisory and never blocks submission (D-186). It loads with its common and English dictionaries when the first character is typed, counts the email and display name against the password, and shows nothing while the field is empty. Score 0 or 1 is Weak, 2 Fair, 3 Good and 4 Strong (D-509).
 - **BR-F01-05** An email that already has an account gets "An account with this email already exists. Log in instead." (D-187).
 - **BR-F01-06** A successful sign-up signs the user in and opens `/onboarding` (F02).
 
@@ -176,6 +176,15 @@ People create a Daybook account with an email and password, log in and out on an
 
 - **BR-F01-30** With `account.export` on, Settings → Data offers "Export all Transactions (CSV)". It downloads every confirmed Transaction in F11's transactions CSV format, named `daybook-transactions-YYYY-MM-DD.csv`.
 
+**Sign-up and login forms (D-510)**
+
+- **BR-F01-31** The sign-up and login forms behave alike:
+    - Fields are checked when the form is submitted, then again as each one changes. The messages are section 8's.
+    - Autocomplete: the email is `email`, the login password `current-password`, the sign-up password `new-password` and the display name `name`.
+    - The password's toggle reads "Show password" or "Hide password" and keeps what was typed.
+    - "Forgot your password?" shows BR-F01-29's note under the link.
+    - Success opens the destination with a full page load, so the app starts fresh for the user who signed in.
+
 ## 5. Calculations
 
 None.
@@ -271,6 +280,7 @@ None.
 | ---------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
 | Email            | Required                                                                   | Enter your email.                                                          |
 | Email            | Valid address                                                              | Enter a valid email address, like name@example.com.                        |
+| Email            | At most 254 characters                                                     | Use an email address of up to 254 characters.                              |
 | Password         | Required                                                                   | Enter a password.                                                          |
 | Password         | At least 12 characters                                                     | Use at least 12 characters.                                                |
 | Password         | At most 128 characters                                                     | Use 128 characters or fewer.                                               |
@@ -288,6 +298,7 @@ None.
 | Delete           | `PASSWORD_REQUIRED`                                                        | Enter your password to delete your account.                                |
 | Delete           | `BILLING_UNAVAILABLE`                                                      | We could not reach the billing service, so nothing was deleted. Try again. |
 | Any auth screen  | Offline                                                                    | You are offline. Connect to log in.                                        |
+| Login, Sign-up   | Any other failure (no answer, a server error, an unknown code)             | Something went wrong. Try again.                                           |
 | Login, Sign-up   | The logout marker exists and sign-out still fails                          | We couldn't finish logging out the last session. Try again in a moment.    |
 | Session expired  | 401 banner                                                                 | Your session has expired. Log in to keep saving changes.                   |
 

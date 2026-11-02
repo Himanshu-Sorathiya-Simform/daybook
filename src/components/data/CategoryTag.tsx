@@ -1,3 +1,5 @@
+"use client";
+
 import { CATEGORY_ICONS } from "@/components/data/categoryIcons";
 import { categoryColor, categoryLabel, type CategoryKey } from "@/lib/categories";
 import { cn } from "@/lib/cn";

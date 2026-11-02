@@ -1,3 +1,5 @@
+"use client";
+
 import {
 	RadioButton as AriaRadioButton,
 	RadioField as AriaRadioField,

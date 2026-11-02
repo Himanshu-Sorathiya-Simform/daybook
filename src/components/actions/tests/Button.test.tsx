@@ -3,7 +3,11 @@ import userEvent from "@testing-library/user-event";
 import { Plus } from "lucide-react";
 import { describe, expect, test, vi } from "vitest";
 
-import { Button, type ButtonProps } from "@/components/actions/Button";
+import {
+	Button,
+	buttonClasses,
+	type ButtonProps,
+} from "@/components/actions/Button";
 
 describe("default", () => {
 	test("is a primary, medium button that does not submit a form", async () => {
@@ -611,5 +615,69 @@ describe("pending", () => {
 		await user.click(screen.getByRole("button", { name: "Save" }));
 
 		expect(onPress).toHaveBeenCalledOnce();
+	});
+
+	test("shows a spinning icon in place of its own icon while pending", () => {
+		const { container, rerender } = render(
+			<Button
+				icon={Plus}
+				isPending
+			>
+				Save
+			</Button>,
+		);
+		const icons = () => [...container.querySelectorAll("svg")];
+		expect(icons()).toHaveLength(1);
+		expect(icons()[0]).toHaveClass("animate-spin", "motion-reduce:animate-none");
+		expect(icons()[0]).toHaveAttribute("aria-hidden", "true");
+
+		rerender(
+			<Button
+				icon={Plus}
+				isPending={false}
+			>
+				Save
+			</Button>,
+		);
+		expect(icons()).toHaveLength(1);
+		expect(icons()[0]).not.toHaveClass("animate-spin");
+	});
+
+	test("shows the spinner even without an icon of its own", () => {
+		const { container } = render(<Button isPending>Save</Button>);
+		expect(container.querySelector("svg.animate-spin")).not.toBeNull();
+	});
+
+	test("a pending submit button never submits its form", async () => {
+		const user = userEvent.setup();
+		const onSubmit = vi.fn((event: Event) => event.preventDefault());
+		render(
+			<form onSubmit={(event) => onSubmit(event.nativeEvent)}>
+				<Button
+					type="submit"
+					isPending
+				>
+					Save
+				</Button>
+			</form>,
+		);
+		await user.click(screen.getByRole("button", { name: /Save/ }));
+		expect(onSubmit).not.toHaveBeenCalled();
+	});
+});
+
+describe("buttonClasses", () => {
+	test("gives a link the same look as the button", () => {
+		const classes = buttonClasses({ variant: "secondary", size: "lg" });
+		render(
+			<Button
+				variant="secondary"
+				size="lg"
+			>
+				Save
+			</Button>,
+		);
+		const button = screen.getByRole("button", { name: "Save" });
+		for (const name of classes.split(" ")) expect(button).toHaveClass(name);
 	});
 });
