@@ -9,7 +9,7 @@ One system answers "may this user use this?" for every gated feature. The server
 | Milestone  | M0 (registry, flags, checks, `/api/me`), M4 (Stripe entitlements), M5 (per-user overrides and their script, D-505)                  |
 | Plan       | Free and Premium                                                                                                                    |
 | Depends on | [P2](P2-data-access-and-security.md), [01-root-spec.md](../01-root-spec.md) section 10; F12 writes the entitlements this spec reads |
-| Decisions  | D-18, D-28, D-29, D-119, D-131, D-167, D-198, D-200, D-205, D-505                                                                   |
+| Decisions  | D-18, D-28, D-29, D-119, D-131, D-167, D-198, D-200, D-205, D-505, D-506                                                            |
 
 ## 1. User stories
 
@@ -296,7 +296,7 @@ Illustrative `/api/me` response:
 }
 ```
 
-`profile` and `goals` are `null` before onboarding. `buildId` lets the client detect that the server runs a newer build (P1).
+`profile` and `goals` are `null` before onboarding. `resolvedAt` is the request clock (P2, BR-P2-43) in ISO 8601 UTC. `buildId` is the server's `BUILD_ID` (D-434, D-506); it lets the client detect that the server runs a newer build (P1).
 
 **Internal functions**
 

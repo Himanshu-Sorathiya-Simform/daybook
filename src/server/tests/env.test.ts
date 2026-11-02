@@ -38,6 +38,7 @@ describe("parseServerEnv", () => {
 		expect(parseServerEnv(validServer)).toEqual({
 			...validServer,
 			BUILD_ID: "dev",
+			flagSwitches: {},
 		});
 	});
 
@@ -328,6 +329,93 @@ describe("parseServerEnv", () => {
 		});
 	});
 
+	// BR-P4-07
+	describe("FLAG_ kill switches", () => {
+		test("reads on and off for flags, keyed by code", () => {
+			expect(
+				parseServerEnv({
+					...validServer,
+					FLAG_OFFLINE_WRITES: "off",
+					FLAG_INSIGHTS_DETECTOR_SAVINGS_RECOMMENDATION: "on",
+				}).flagSwitches,
+			).toEqual({
+				"offline.writes": "off",
+				"insights.detector.savingsRecommendation": "on",
+			});
+		});
+
+		test("ignores variables that do not start with FLAG_", () => {
+			expect(
+				parseServerEnv({
+					...validServer,
+					OFFLINE_WRITES: "maybe",
+					flag_x: "x",
+				}).flagSwitches,
+			).toEqual({});
+		});
+
+		// AC-P4-05
+		test.each([
+			["ON", "upper case"],
+			["true", "true"],
+			["1", "1"],
+			["", "empty"],
+			[" on", "padded"],
+		])("stops startup when a flag's value is %j (%s)", (value) => {
+			expect(
+				problemsOf(() =>
+					parseServerEnv({ ...validServer, FLAG_SYNC_BACKGROUND: value }),
+				),
+			).toEqual(["FLAG_SYNC_BACKGROUND must be on or off"]);
+		});
+
+		// AC-P4-05
+		test("stops startup for a FLAG_ variable naming no registry code", () => {
+			expect(
+				problemsOf(() =>
+					parseServerEnv({ ...validServer, FLAG_LEARN_TIERS: "on" }),
+				),
+			).toEqual(["FLAG_LEARN_TIERS names no capability in the registry"]);
+		});
+
+		// AC-P4-05
+		test.each([
+			["FLAG_ANALYTICS_HEATMAP_VIEW", "analytics.heatmap.view", "premium"],
+			["FLAG_GOALS_ACTIVE_MAX", "goals.active.max", "limit"],
+		])("stops startup for %s, whose code is not a flag", (name, code, kind) => {
+			expect(
+				problemsOf(() => parseServerEnv({ ...validServer, [name]: "on" })),
+			).toEqual([`${name} must not be set: ${code} is a ${kind}, not a flag`]);
+		});
+
+		test("lists flag problems after the other variables' problems, flags in name order", () => {
+			expect(
+				problemsOf(() =>
+					parseServerEnv({
+						...validServer,
+						APP_ORIGIN: "",
+						FLAG_SYNC_BACKGROUND: "yes",
+						FLAG_OFFLINE_WRITES: "no",
+					}),
+				),
+			).toEqual([
+				"APP_ORIGIN is required",
+				"FLAG_OFFLINE_WRITES must be on or off",
+				"FLAG_SYNC_BACKGROUND must be on or off",
+			]);
+		});
+
+		test("never puts a flag's value in the error", () => {
+			const problems = problemsOf(() =>
+				parseServerEnv({
+					...validServer,
+					FLAG_OFFLINE_WRITES: "do-not-print-me",
+				}),
+			);
+			expect(problems.join("\n")).not.toContain("do-not-print-me");
+		});
+	});
+
 	test("never puts a variable's value in the error", () => {
 		try {
 			parseServerEnv({
@@ -426,7 +514,11 @@ describe("serverEnv", () => {
 	test("reads and validates process.env", async () => {
 		stubServerEnv({ ...validServer, BUILD_ID: "" });
 		const { serverEnv } = await import("../env");
-		expect(serverEnv()).toEqual({ ...validServer, BUILD_ID: "dev" });
+		expect(serverEnv()).toEqual({
+			...validServer,
+			BUILD_ID: "dev",
+			flagSwitches: {},
+		});
 	});
 
 	test("reads process.env once and reuses the result", async () => {

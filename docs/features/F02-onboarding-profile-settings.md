@@ -11,7 +11,7 @@ Later, the user changes their name, time zone and week start in Settings. They c
 | Milestone  | M1                                                                                                                                                                                                                                                                     |
 | Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                  |
 | Depends on | [F01](F01-auth-and-account.md) (sign-up, display name through `/update-user`), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md) (`/api/me`); F07 (portfolio seeding, from M3), F08 (dashboard settings page), F12 (billing page) |
-| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452                                                                                                                                                                               |
+| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452, D-506                                                                                                                                                                        |
 
 ## 1. User stories
 
@@ -228,7 +228,7 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
 - **BR-F02-25** `/api/me` returns two blocks from this spec. P4, F06 and F12 own the rest. It works without a profile (P2, BR-P2-13) and is persisted for offline use (STATE-3).
     - **`user`:** `{ id, email, name }`.
     - **`profile`:** `{ country, currency, timezone, weekStart, numberLocale, dateLocale }`, or `null` before onboarding.
-- **BR-F02-26** `GET /api/profile` returns the full profile with `version` and `currencyEditable`. Before onboarding it returns 404 `not_found`. It is not persisted; offline, the Profile page shows the `/api/me` values read-only.
+- **BR-F02-26** `GET /api/profile` returns `{ profile, version, currencyEditable }`, where `profile` is the block `/api/me` returns. `POST` and `PATCH` answer the same shape (D-506). Before onboarding it returns 404 `not_found`. It is not persisted; offline, the Profile page shows the `/api/me` values read-only.
 
 ## 5. Calculations
 
@@ -340,8 +340,8 @@ None. The country decides the Premium price currency (F12), which gates nothing.
 | -------------- | ------ | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | `/api/me`      | GET    | none                                                     | `user`, `profile` (this spec); `plan` (F12); `goals` (F06; `null` before onboarding); `capabilities`, `resolvedAt`, `buildId` (P4) | 401                                                                                                           | n/a                                                            |
 | `/api/profile` | GET    | none                                                     | `{ profile, version, currencyEditable }`                                                                                           | 401, 404 `not_found`                                                                                          | n/a                                                            |
-| `/api/profile` | POST   | `{ country, currency, timezone, weekStart }`             | 201 with the profile; 200 with the existing profile (BR-F02-09)                                                                    | 401, 422 `validation_failed`                                                                                  | `Idempotency-Key` required; profile not required; catch-up off |
-| `/api/profile` | PATCH  | Any of `{ currency, timezone, weekStart }`, at least one | 200 with the profile                                                                                                               | 401, 404 `not_found` (no profile yet), 409 `version_conflict`, 409 `currency_locked`, 422 `validation_failed` | `Idempotency-Key` and `If-Match` required; online only         |
+| `/api/profile` | POST   | `{ country, currency, timezone, weekStart }`             | 201 with `{ profile, version, currencyEditable }`; 200 with the existing profile in the same shape (BR-F02-09, D-506)              | 401, 422 `validation_failed`                                                                                  | `Idempotency-Key` required; profile not required; catch-up off |
+| `/api/profile` | PATCH  | Any of `{ currency, timezone, weekStart }`, at least one | 200 with `{ profile, version, currencyEditable }` (D-506)                                                                          | 401, 404 `not_found` (no profile yet), 409 `version_conflict`, 409 `currency_locked`, 422 `validation_failed` | `Idempotency-Key` and `If-Match` required; online only         |
 
 **Error code added by this spec**
 
