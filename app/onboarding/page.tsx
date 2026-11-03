@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: ONBOARDING_TEXT.title };
 /** `/onboarding` (F02 section 6). A user who already has a profile goes to `/dashboard`
  * (BR-F02-01); without a session, the proxy and `readAsUser` send the visitor to login. */
 export default async function OnboardingPage() {
-	const hasProfile = await readAsUser(async (ctx) => ctx.profile !== null);
+	const hasProfile = await readAsUser((ctx) => ctx.profile !== null);
 	if (hasProfile) redirect("/dashboard");
 	return (
 		<>

@@ -70,7 +70,7 @@ async function loginAs(connectionString: string): Promise<string> {
 export type SlotResult = { slot: Slot; problems: string[] };
 
 /** Runs every check for the three slots, logging in once per role. */
-export async function checkConnections(
+export function checkConnections(
 	env: ServerEnv,
 	source: Readonly<Record<string, string | undefined>>,
 ): Promise<SlotResult[]> {

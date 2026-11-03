@@ -37,10 +37,10 @@ export async function prepareRead(
 }
 
 /** Runs `fn` in one read transaction as `base.user`, with the profile read inside it
- * (BR-P2-10). */
-export async function readWith<T>(
+ * (BR-P2-10). `fn` may answer at once or with a promise. */
+export function readWith<T>(
 	base: RequestContext,
-	fn: (ctx: RequestContext, tx: Tx) => Promise<T>,
+	fn: (ctx: RequestContext, tx: Tx) => T | Promise<T>,
 ): Promise<T> {
 	return withUser(base, "read", async (tx) => {
 		const profile = await readProfile(tx);
@@ -66,7 +66,7 @@ const prepareOnce = cache(async () => prepareRead(await headers()));
  * request. With no valid session, it redirects through `/api/session/expired`. A profile is
  * not required here: the page decides what to show without one. */
 export async function readAsUser<T>(
-	fn: (ctx: RequestContext, tx: Tx) => Promise<T>,
+	fn: (ctx: RequestContext, tx: Tx) => T | Promise<T>,
 ): Promise<T> {
 	const base = await prepareOnce();
 	if (!base) redirect(expiredPath(await headers()));
@@ -80,7 +80,7 @@ export async function homeFor(
 	base: RequestContext | null,
 ): Promise<"/dashboard" | "/onboarding" | null> {
 	if (!base) return null;
-	return readWith(base, async (ctx) =>
+	return await readWith(base, (ctx) =>
 		ctx.profile ? "/dashboard" : "/onboarding",
 	);
 }

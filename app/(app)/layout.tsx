@@ -11,7 +11,7 @@ import { readAsUser } from "@/server/dal/read";
  * `readAsUser` sends the visitor to login; without a profile, the page is onboarding
  * (BR-F02-01). */
 export default async function AppLayout({ children }: LayoutProps<"/">) {
-	const user = await readAsUser(async (ctx) =>
+	const user = await readAsUser((ctx) =>
 		ctx.profile ? { name: ctx.user.name, email: ctx.user.email } : null,
 	);
 	if (!user) redirect("/onboarding");
