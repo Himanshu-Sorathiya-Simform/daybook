@@ -15,6 +15,7 @@ import {
 import { serverEnv, type ServerEnv } from "../env";
 import { beforeHook } from "./hooks";
 import { logAuth } from "./log";
+import { hashPassword, verifyPassword } from "./password";
 
 const tables = { user, session, account, verification, rateLimit: rateLimitTable };
 
@@ -61,6 +62,8 @@ export function createAuth(
 			enabled: true,
 			minPasswordLength: 12,
 			maxPasswordLength: 128,
+			// Argon2id instead of Better Auth's scrypt (D-519).
+			password: { hash: hashPassword, verify: verifyPassword },
 		},
 		session: { expiresIn: 7 * DAY, updateAge: DAY },
 		rateLimit: { storage: "database", ...(rateLimit ? { enabled: true } : {}) },

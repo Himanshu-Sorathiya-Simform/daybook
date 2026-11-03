@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { inspect } from "node:util";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { hashPassword as hashScrypt } from "better-auth/crypto";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { GET, POST } from "../../../../app/api/auth/[...all]/route";
 import { authPool } from "../../db/pools";
@@ -657,6 +658,55 @@ describe("update-user (BR-F01-01, BR-F01-02)", () => {
 		expect(response.status).toBe(400);
 		expect(await response.json()).toMatchObject({ code: "INVALID_NAME" });
 		expect((await storedUser(email))?.name).toBe("Asha");
+	});
+});
+
+describe("password storage (D-519)", () => {
+	async function storedHash(email: string): Promise<string> {
+		const { rows } = await owner.query<{ password: string }>(
+			`SELECT a.password FROM auth.account a
+			JOIN auth."user" u ON u.id = a.user_id
+			WHERE u.email = $1 AND a.provider_id = 'credential'`,
+			[email],
+		);
+		return rows[0]!.password;
+	}
+
+	test("sign-up stores an Argon2id hash at RFC 9106's second setting, never the password", async () => {
+		const email = newEmail();
+		await signUp(email);
+		const hash = await storedHash(email);
+		expect(hash).toMatch(
+			/^\$argon2id\$v=19\$m=65536,t=3,p=4\$[A-Za-z0-9+/]{22}\$[A-Za-z0-9+/]{43}$/,
+		);
+		expect(hash).not.toContain(PASSWORD);
+	});
+
+	test("the stored hash logs in, and a wrong password is refused", async () => {
+		const email = newEmail();
+		await signUp(email);
+		expect((await signIn(email)).status).toBe(200);
+		expect((await signIn(email, `${PASSWORD}!`)).status).toBe(401);
+	});
+
+	// D-519: a stored hash in any other format is a damaged row: a plain 500 that is
+	// logged, never a login and never "wrong password".
+	test("an account whose stored hash is Better Auth's scrypt cannot log in, and it is logged", async () => {
+		const email = newEmail();
+		await signUp(email);
+		const older = "an older correct password";
+		await owner.query(
+			`UPDATE auth.account SET password = $1
+			WHERE user_id = (SELECT id FROM auth."user" WHERE email = $2)`,
+			[await hashScrypt(older), email],
+		);
+		let response: Response | undefined;
+		const { errors } = await captureConsole(async () => {
+			response = await signIn(email, older);
+		});
+		expect(response!.status).toBe(500);
+		expect(await response!.text()).toBe("");
+		expect(errors).toContainEqual(["[auth] Request failed", { name: "Error" }]);
 	});
 });
 

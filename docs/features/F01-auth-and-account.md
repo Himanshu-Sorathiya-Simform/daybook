@@ -9,7 +9,7 @@ People create a Daybook account with an email and password, log in and out on an
 | Milestone  | M0 (auth core), M1 (account settings)                                                                                                                                                                         |
 | Plan       | Free and Premium; export of all Transactions is Stretch (`account.export`)                                                                                                                                    |
 | Depends on | [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F02 (onboarding and display name), F12 (Stripe Customer), F14 (posts on the landing page), P1 (cache and queue wipes) |
-| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385, D-433, D-452, D-502, D-503, D-508, D-509, D-510, D-515, D-518                                             |
+| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385, D-433, D-452, D-502, D-503, D-508, D-509, D-510, D-515, D-518, D-519                                      |
 
 ## 1. User stories
 
@@ -42,7 +42,7 @@ People create a Daybook account with an email and password, log in and out on an
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | User       | `id`, `email` (unique), `name` (display name), `createdAt`                                                                           |
 | Session    | `id`, `token` (the cookie value), `userId`, `expiresAt`, `createdAt`, `updatedAt` (moves at most once a day; BR-F01-17), `userAgent` |
-| Account    | The credential: the password hash, by Better Auth's default algorithm                                                                |
+| Account    | The credential: an Argon2id hash (64 MiB, 3 passes, 4 lanes) in PHC format (D-519)                                                   |
 | Rate limit | Better Auth's own count per client address and path (BR-F01-08); Daybook never reads it                                              |
 
 **Form fields**
