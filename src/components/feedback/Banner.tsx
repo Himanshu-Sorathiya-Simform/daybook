@@ -1,3 +1,5 @@
+"use client";
+
 import { CircleAlert, CloudOff, Info, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 

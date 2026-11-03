@@ -11,7 +11,7 @@ import { deleteView } from "@/server/dal/transaction-views/remove";
  * one, another user's, or an id that is not a UUID gets 404. */
 export const PATCH = route(
 	{ versioned: true },
-	async (ctx, tx, { body, params, version }) => {
+	(ctx, tx, { body, params, version }) => {
 		const profiled = requireProfile(ctx);
 		const id = params["id"];
 		// The wrapper refuses a versioned route's request without `If-Match` (400).

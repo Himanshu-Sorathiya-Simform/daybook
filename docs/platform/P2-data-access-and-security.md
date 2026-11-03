@@ -4,12 +4,12 @@
 
 Every private read and write reaches Postgres through one path. A route-handler wrapper checks the request and opens one database transaction. Inside it, the data access layer sets the user's identity, and row-level security makes the database refuse anything that belongs to someone else. The same path makes every change safe to retry and detects edits made on another device. This spec defines that path, the database roles behind it, the security headers in front of it, and the tests that prove it.
 
-| Item       | Value                                                                                                                                                                                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Milestone  | M0                                                                                                                                                                                                                                                |
-| Plan       | Free and Premium                                                                                                                                                                                                                                  |
-| Depends on | [01-root-spec.md](../01-root-spec.md) sections 7 to 9                                                                                                                                                                                             |
-| Decisions  | D-06, D-07, D-12 to D-19, D-39, D-137, D-153, D-165, D-172, D-173, D-180, D-192 to D-197, D-199, D-201 to D-207, D-242 to D-244, D-292, D-300, D-325, D-343, D-362, D-367, D-368, D-370, D-382, D-383, D-386, D-409 to D-444, D-491, D-492, D-499 |
+| Item       | Value                                                                                                                                                                                                                                                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M0                                                                                                                                                                                                                                                       |
+| Plan       | Free and Premium                                                                                                                                                                                                                                         |
+| Depends on | [01-root-spec.md](../01-root-spec.md) sections 7 to 9                                                                                                                                                                                                    |
+| Decisions  | D-06, D-07, D-12 to D-19, D-39, D-137, D-153, D-165, D-172, D-173, D-180, D-192 to D-197, D-199, D-201 to D-207, D-242 to D-244, D-292, D-300, D-325, D-343, D-362, D-367, D-368, D-370, D-382, D-383, D-386, D-409 to D-444, D-491, D-492, D-499, D-518 |
 
 ## 1. User stories
 
@@ -350,13 +350,13 @@ Better Auth's endpoints under `/api/auth/*` do not go through the wrapper. Bette
 - **BR-P2-39** The session cookie has the prefix `daybook`, is `httpOnly`, SameSite=Lax and path `/`, and is `Secure` when `APP_ORIGIN` is `https` (Better Auth then adds the `__Secure-` prefix). Session cookies are cleared in one place only (D-204):
     - **The clearing route:** `/api/session/expired` clears every cookie whose name starts with `daybook.` or `__Secure-daybook.`. Each expiry carries `Path=/` and, for `__Secure-` names, `Secure`, so browsers accept it. The route acts only when `Sec-Fetch-Site` is `same-origin` or `none`; any other request is redirected to `/login` without clearing, so another site cannot log the user out.
     - **Pages:** a server component that finds an invalid session redirects to `/api/session/expired?next=<path>`. The route clears the cookies and redirects to `/login?next=<path>&expired=1`, so a revoked session never loops between `/login` and `/dashboard`.
-    - **Offline logout** (`reason=logout`): when the request carries `daybook_logout=1`, the `Sec-Fetch-Site` check is skipped, since only Daybook's own script can set that cookie. A navigation that began on another site therefore still revokes the session. The route revokes the session through Better Auth when a session cookie is present, always clears `daybook_logout` and the session cookies, and redirects to `/login?expired=1`.
+    - **Offline logout** (`reason=logout`): when the request carries `daybook_logout=1`, the `Sec-Fetch-Site` check is skipped, since only Daybook's own script can set that cookie. A navigation that began on another site therefore still revokes the session. The route revokes the session through Better Auth when a session cookie is present, always clears `daybook_logout` and the session cookies, and redirects to `/login`, with no expired note, since the user chose to log out (D-518).
     - **Refusals:** any request the route refuses is redirected to `/login?expired=1`, which the proxy always lets through, never to plain `/login`. So no redirect can loop between `/login` and `/dashboard` (D-367).
-    - **API responses:** they never clear cookies, so a late 401 from a request sent with an old cookie cannot wipe the cookie of a login that just finished. After an API 401, the client sends the user to `/login?expired=1`, which the proxy always lets through (BR-P2-29).
+    - **API responses:** they never clear cookies, so a late 401 from a request sent with an old cookie cannot wipe the cookie of a login that just finished. After an API 401, the client shows F01's session-expired banner (BR-F01-13), whose Log in opens `/login?next=<current path>&expired=1`, which the proxy always lets through (BR-P2-29).
 - **BR-P2-40** Better Auth has four infrastructure settings:
     - It runs on its own Drizzle instance on the auth pool, with its tables in schema `auth`.
     - Its base URL and only trusted origin are `APP_ORIGIN`.
-    - Its rate limiter stays at its defaults (D-153).
+    - Its rate limiter keeps its default limits and counts in the database, in `auth.rate_limit`, so every server instance shares one count (D-153).
     - A Better Auth `before` hook returns 404 for every path not on this allow-list (D-202): `/sign-up/email`, `/sign-in/email`, `/sign-out`, `/get-session`, `/list-sessions`, `/revoke-session`, `/revoke-other-sessions`, `/change-password`, `/update-user`, `/delete-user`.
 
     F01 owns their behavior.
@@ -473,9 +473,9 @@ Requests from the service worker carry `Origin` and pass the same checks.
 
 ## 11. Server surface
 
-| Endpoint               | Method | Purpose                                                                                                                                                                                                                                                                               |
-| ---------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/api/session/expired` | GET    | Clears the session cookies, then redirects to `/login?next=...&expired=1` (BR-P2-39). With `reason=deleted` it redirects to `/?deleted=1` instead (F01). With `reason=logout` it first revokes the session and clears `daybook_logout` (P1). `next` is validated as in F01, BR-F01-09 |
+| Endpoint               | Method | Purpose                                                                                                                                                                                                                                                                                                                  |
+| ---------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/api/session/expired` | GET    | Clears the session cookies, then redirects to `/login?next=...&expired=1` (BR-P2-39). With `reason=deleted` it redirects to `/?deleted=1` instead (F01). With `reason=logout` it first revokes the session and clears `daybook_logout`, then redirects to `/login` (P1, D-518). `next` is validated as in F01, BR-F01-09 |
 
 **Internal modules**
 

@@ -1,3 +1,5 @@
+"use client";
+
 import { PiggyBank } from "lucide-react";
 
 import { CATEGORY_ICONS } from "@/components/data/categoryIcons";

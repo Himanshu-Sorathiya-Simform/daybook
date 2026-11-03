@@ -9,7 +9,7 @@ People create a Daybook account with an email and password, log in and out on an
 | Milestone  | M0 (auth core), M1 (account settings)                                                                                                                                                                         |
 | Plan       | Free and Premium; export of all Transactions is Stretch (`account.export`)                                                                                                                                    |
 | Depends on | [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F02 (onboarding and display name), F12 (Stripe Customer), F14 (posts on the landing page), P1 (cache and queue wipes) |
-| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385, D-433, D-452                                                                                              |
+| Decisions  | D-10, D-11, D-140, D-147 to D-153, D-182, D-184, D-186 to D-191, D-202, D-367, D-378, D-384, D-385, D-433, D-452, D-502, D-503, D-508, D-509, D-510, D-515, D-518, D-519                                      |
 
 ## 1. User stories
 
@@ -29,15 +29,21 @@ People create a Daybook account with an email and password, log in and out on an
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Landing page `/`; sign-up; login with `next`; logout online and offline (logout-pending marker); session expiry handling; active sessions list and revoke; change password; display-name updates for F02; reset my data; delete account; developer password-reset script; offline states for every auth screen | Export of all Transactions as CSV (`account.export`) | Email verification; password reset by email; two-factor; passkeys; social login; changing email (D-189); a "remember me" choice (sessions always last 7 days) |
 
+**Milestones.** Two parts wait for the specs they rely on:
+
+- **Until P1 (M5):** logout calls sign-out, clears the in-memory query cache and opens `/login`. A sign-out that did not count as done writes only the marker's cookie and shows the login screen in the open tab; back online, the tab loads `/api/session/expired?reason=logout` (D-502). The marker's other copies, the sign-out at the next start (BR-F01-15), the unsaved-changes modal, the replay and BR-F01-11 arrive with P1. The sign-out call times out after 20 seconds, and the offline login screen is the login page's form (D-515).
+- **Until F14 (M7):** the landing page has no posts section (D-503).
+
 ## 3. Concepts and fields
 
 **Better Auth records** (schema `auth`; read and written only through Better Auth or the auth pool)
 
-| Record  | Fields used by Daybook                                                                                                               |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| User    | `id`, `email` (unique), `name` (display name), `createdAt`                                                                           |
-| Session | `id`, `token` (the cookie value), `userId`, `expiresAt`, `createdAt`, `updatedAt` (moves at most once a day; BR-F01-17), `userAgent` |
-| Account | The credential: the password hash, by Better Auth's default algorithm                                                                |
+| Record     | Fields used by Daybook                                                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| User       | `id`, `email` (unique), `name` (display name), `createdAt`                                                                           |
+| Session    | `id`, `token` (the cookie value), `userId`, `expiresAt`, `createdAt`, `updatedAt` (moves at most once a day; BR-F01-17), `userAgent` |
+| Account    | The credential: an Argon2id hash (64 MiB, 3 passes, 4 lanes) in PHC format (D-519)                                                   |
+| Rate limit | Better Auth's own count per client address and path (BR-F01-08); Daybook never reads it                                              |
 
 **Form fields**
 
@@ -68,14 +74,14 @@ People create a Daybook account with an email and password, log in and out on an
 
 **Sign-up**
 
-- **BR-F01-04** A strength meter (zxcvbn-ts) shows Weak, Fair, Good or Strong as the user types. It is advisory and never blocks submission (D-186).
+- **BR-F01-04** A strength meter (zxcvbn-ts) shows Weak, Fair, Good or Strong as the user types. It is advisory and never blocks submission (D-186). It loads with its common and English dictionaries when the first character is typed, counts the email and display name against the password, and shows nothing while the field is empty. Score 0 or 1 is Weak, 2 Fair, 3 Good and 4 Strong (D-509).
 - **BR-F01-05** An email that already has an account gets "An account with this email already exists. Log in instead." (D-187).
 - **BR-F01-06** A successful sign-up signs the user in and opens `/onboarding` (F02).
 
 **Login**
 
 - **BR-F01-07** A wrong email or a wrong password gives one message, "Email or password is incorrect.", whichever was wrong.
-- **BR-F01-08** Better Auth's rate limiter allows 3 email sign-in attempts per 10 seconds, then answers 429 (D-153).
+- **BR-F01-08** Better Auth's rate limiter allows 3 email sign-in attempts per 10 seconds from one client address, then answers 429 (D-153). The count lives in the database, so every server instance shares it.
 - **BR-F01-09** `next` is resolved with `new URL(next, APP_ORIGIN)`. It is used only if the result has the same origin as `APP_ORIGIN` and the raw value starts with `/` and contains no backslash. Otherwise it is ignored. After login, the user goes to `next`, else `/dashboard`, or `/onboarding` if they have no profile.
 - **BR-F01-10** A logged-in user who opens `/login` or `/signup` is sent to `/dashboard` (P2, BR-P2-29).
 - **BR-F01-11** When a persisted cache exists, the login form knows its owner's email from the persisted `/api/me`. If the typed email, trimmed and lowercased, differs from it, and that user's queue still holds items, the form warns before signing in: "Changes from another account are waiting on this device. Logging in as someone else deletes them." with Continue and Cancel.
@@ -85,8 +91,8 @@ People create a Daybook account with an email and password, log in and out on an
 
 **Sessions**
 
-- **BR-F01-12** Sessions last 7 days and extend by use once a day (D-151). Cookies follow P2, BR-P2-39. The extension happens in the app's session check, `GET /api/auth/get-session` at start and when the app regains focus, because only that response renews the cookie; the route wrapper and `readAsUser` read the session without extending it (P2, D-433).
-- **BR-F01-13** A 401 from any Daybook API (P2 wrapper) does five things:
+- **BR-F01-12** Sessions last 7 days and extend by use once a day (D-151). Cookies follow P2, BR-P2-39. The extension happens in the app's session check, `GET /api/auth/get-session` at start and when the app regains focus, because only that response renews the cookie; the route wrapper and `readAsUser` read the session without extending it (P2, D-433). Until P1 (M5), the check is Better Auth's client session store: at the first render of a logged-in page, on focus (at most once per 5 seconds), when the connection returns and when another tab changes the session (D-508).
+- **BR-F01-13** A 401 from any Daybook API (P2 wrapper), or a session check that finds no session (D-508), does five things:
     - pauses the queue;
     - keeps cached data readable;
     - shows the banner "Your session has expired. Log in to keep saving changes." with Log in, which opens `/login?next=<current path>&expired=1` (the proxy always lets `expired=1` through);
@@ -169,6 +175,15 @@ People create a Daybook account with an email and password, log in and out on an
 **Export (Stretch)**
 
 - **BR-F01-30** With `account.export` on, Settings → Data offers "Export all Transactions (CSV)". It downloads every confirmed Transaction in F11's transactions CSV format, named `daybook-transactions-YYYY-MM-DD.csv`.
+
+**Sign-up and login forms (D-510)**
+
+- **BR-F01-31** The sign-up and login forms behave alike:
+    - Fields are checked when the form is submitted, then again as each one changes. The messages are section 8's.
+    - Autocomplete: the email is `email`, the login password `current-password`, the sign-up password `new-password` and the display name `name`.
+    - The password's toggle reads "Show password" or "Hide password" and keeps what was typed.
+    - "Forgot your password?" shows BR-F01-29's note under the link.
+    - Success opens the destination with a full page load, so the app starts fresh for the user who signed in.
 
 ## 5. Calculations
 
@@ -261,28 +276,31 @@ None.
 
 ## 8. Validation and messages
 
-| Field or action  | Rule                                              | Message shown                                                              |
-| ---------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
-| Email            | Required                                          | Enter your email.                                                          |
-| Email            | Valid address                                     | Enter a valid email address, like name@example.com.                        |
-| Password         | Required                                          | Enter a password.                                                          |
-| Password         | At least 12 characters                            | Use at least 12 characters.                                                |
-| Password         | At most 128 characters                            | Use 128 characters or fewer.                                               |
-| Password         | `PASSWORD_BREACHED`                               | This password has appeared in a data breach. Choose a different one.       |
-| Display name     | `INVALID_NAME`                                    | Enter a name of up to 50 characters.                                       |
-| Sign-up          | Email exists                                      | An account with this email already exists. Log in instead.                 |
-| Login            | Wrong email or password                           | Email or password is incorrect.                                            |
-| Login            | Rate limited                                      | Too many attempts. Wait a few seconds and try again.                       |
-| New password     | Same as current                                   | Choose a password you have not used for this account.                      |
-| Current password | Wrong                                             | Your current password is incorrect.                                        |
-| Reset            | Text is not `RESET`                               | Type RESET to confirm.                                                     |
-| Delete           | Text is not `DELETE`                              | Type DELETE to confirm.                                                    |
-| Delete           | Wrong password                                    | Your password is incorrect.                                                |
-| Delete           | `PASSWORD_REQUIRED`                               | Enter your password to delete your account.                                |
-| Delete           | `BILLING_UNAVAILABLE`                             | We could not reach the billing service, so nothing was deleted. Try again. |
-| Any auth screen  | Offline                                           | You are offline. Connect to log in.                                        |
-| Login, Sign-up   | The logout marker exists and sign-out still fails | We couldn't finish logging out the last session. Try again in a moment.    |
-| Session expired  | 401 banner                                        | Your session has expired. Log in to keep saving changes.                   |
+| Field or action  | Rule                                                                       | Message shown                                                              |
+| ---------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Email            | Required                                                                   | Enter your email.                                                          |
+| Email            | Valid address                                                              | Enter a valid email address, like name@example.com.                        |
+| Email            | At most 254 characters                                                     | Use an email address of up to 254 characters.                              |
+| Password         | Required                                                                   | Enter a password.                                                          |
+| Password         | At least 12 characters                                                     | Use at least 12 characters.                                                |
+| Password         | At most 128 characters                                                     | Use 128 characters or fewer.                                               |
+| Password         | `PASSWORD_BREACHED`                                                        | This password has appeared in a data breach. Choose a different one.       |
+| Display name     | `INVALID_NAME`                                                             | Enter a name of up to 50 characters.                                       |
+| Update user      | Any field but `name` (`FIELD_NOT_ALLOWED`, BR-F01-02); no screen sends one | Only the name can be changed.                                              |
+| Sign-up          | Email exists                                                               | An account with this email already exists. Log in instead.                 |
+| Login            | Wrong email or password                                                    | Email or password is incorrect.                                            |
+| Login            | Rate limited                                                               | Too many attempts. Wait a few seconds and try again.                       |
+| New password     | Same as current                                                            | Choose a password you have not used for this account.                      |
+| Current password | Wrong                                                                      | Your current password is incorrect.                                        |
+| Reset            | Text is not `RESET`                                                        | Type RESET to confirm.                                                     |
+| Delete           | Text is not `DELETE`                                                       | Type DELETE to confirm.                                                    |
+| Delete           | Wrong password                                                             | Your password is incorrect.                                                |
+| Delete           | `PASSWORD_REQUIRED`                                                        | Enter your password to delete your account.                                |
+| Delete           | `BILLING_UNAVAILABLE`                                                      | We could not reach the billing service, so nothing was deleted. Try again. |
+| Any auth screen  | Offline                                                                    | You are offline. Connect to log in.                                        |
+| Login, Sign-up   | Any other failure (no answer, a server error, an unknown code)             | Something went wrong. Try again.                                           |
+| Login, Sign-up   | The logout marker exists and sign-out still fails                          | We couldn't finish logging out the last session. Try again in a moment.    |
+| Session expired  | 401 banner                                                                 | Your session has expired. Log in to keep saving changes.                   |
 
 ## 9. Plan gating
 
@@ -344,9 +362,9 @@ Daybook's own endpoints:
 - **AC-F01-04** (integration) A wrong password and an unknown email produce identical responses and messages.
 - **AC-F01-05** (integration) With the rate limiter enabled in the test config and a fixed `x-forwarded-for` client address, the fourth sign-in attempt within 10 seconds returns 429.
 - **AC-F01-06** (unit) `next` values `//evil.example`, `/\evil.example`, `https://evil.example` and `javascript:alert(1)` are ignored; `/transactions?cat=food` is honored.
-- **AC-F01-07** (E2E) Given 2 queued items offline, when the user logs out and confirms, then the queue and caches are empty and the marker exists. When the app next starts with a connection, then a request with the old cookie gets 401 and the marker is gone.
-- **AC-F01-08** (E2E) Given an expired session with 1 queued item, when the same user logs in again, then the item syncs.
-- **AC-F01-09** (E2E) Given user A's cache with 1 waiting item, when B's email is typed and Cancel is chosen, then no sign-in happens and A's item remains.
+- **AC-F01-07** (E2E, M5) Given 2 queued items offline, when the user logs out and confirms, then the queue and caches are empty and the marker exists. When the app next starts with a connection, then a request with the old cookie gets 401 and the marker is gone.
+- **AC-F01-08** (E2E, M5) Given an expired session with 1 queued item, when the same user logs in again, then the item syncs.
+- **AC-F01-09** (E2E, M5) Given user A's cache with 1 waiting item, when B's email is typed and Cancel is chosen, then no sign-in happens and A's item remains.
 - **AC-F01-10** (integration) "Sign out all other devices" leaves only the current session. A password change with the option checked revokes the others and keeps the current one.
 - **AC-F01-11** (integration) `/update-user` with `image` or any field other than `name` is refused; a 51-character name is refused.
 - **AC-F01-12** (integration) Given the golden dataset, when reset runs, then:

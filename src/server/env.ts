@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { type FlagSwitches, parseFlagSwitches } from "./capabilities/switches";
 
 /** Thrown when environment variables are missing or malformed. The message lists each
  * variable and its problem, never a value, so a secret cannot reach a log (BR-P2-38). */
@@ -125,20 +126,36 @@ export const ownerEnvSchema = z.object({
 	DB_PASSWORD_SYSTEM: password("DB_PASSWORD_SYSTEM"),
 });
 
-export type ServerEnv = z.infer<typeof serverEnvSchema>;
+/** The server environment, with the `FLAG_` kill switches it sets (BR-P4-07). */
+export type ServerEnv = z.infer<typeof serverEnvSchema> & {
+	flagSwitches: FlagSwitches;
+};
 export type OwnerEnv = z.infer<typeof ownerEnvSchema>;
 
 type Source = Readonly<Record<string, string | undefined>>;
 
-function parseWith<T>(schema: z.ZodType<T>, source: Source): T {
+function parseWith<T>(
+	schema: z.ZodType<T>,
+	source: Source,
+	more: readonly string[] = [],
+): T {
 	const result = schema.safeParse(source);
-	if (result.success) return result.data;
 	// One line per variable; Zod's messages here are ours and carry no input value.
-	throw new EnvError(result.error.issues.map((issue) => issue.message));
+	const problems = [
+		...(result.success ? [] : result.error.issues.map((issue) => issue.message)),
+		...more,
+	];
+	if (problems.length > 0 || !result.success) throw new EnvError(problems);
+	return result.data;
 }
 
+/** The app's variables and its kill switches, every problem from both listed together. */
 export function parseServerEnv(source: Source): ServerEnv {
-	return parseWith(serverEnvSchema, source);
+	const { switches, problems } = parseFlagSwitches(source);
+	return {
+		...parseWith(serverEnvSchema, source, problems),
+		flagSwitches: switches,
+	};
 }
 
 export function parseOwnerEnv(source: Source): OwnerEnv {

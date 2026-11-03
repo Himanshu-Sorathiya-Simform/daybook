@@ -64,6 +64,7 @@ export async function facetCounts(
 		const { from, to } = presetRange(preset, ctx.today);
 		return sql`${preset}::text, (count(*) FILTER (WHERE occurred_on BETWEEN ${from}::date AND ${to}::date))::text`;
 	});
+	const presetPairs = sql.join(presets, sql`, `);
 	const { rows } = await tx.execute<{
 		type: Record<string, string>;
 		category: Record<string, string>;
@@ -72,7 +73,7 @@ export async function facetCounts(
 	}>(sql`SELECT
 		${countsBy("type", filterSql(withoutFields(filter, "type"), currency))} AS type,
 		${countsBy("category", filterSql(withoutFields(filter, "cat"), currency))} AS category,
-		(SELECT json_build_object('all', count(*)::text, ${sql.join(presets, sql`, `)})
+		(SELECT json_build_object('all', count(*)::text, ${presetPairs})
 			FROM app.transactions WHERE ${dateWhere}) AS date,
 		${countsBy("source", filterSql(withoutFields(filter, "src"), currency))} AS source`);
 	// A SELECT without FROM returns exactly one row.

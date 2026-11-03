@@ -1,3 +1,5 @@
+"use client";
+
 import { Button } from "@/components/actions/Button";
 import { cn } from "@/lib/cn";
 

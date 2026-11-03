@@ -6,10 +6,10 @@ One system answers "may this user use this?" for every gated feature. The server
 
 | Item       | Value                                                                                                                               |
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Milestone  | M0 (registry, flags, checks, `/api/me`), M4 (Stripe entitlements)                                                                   |
+| Milestone  | M0 (registry, flags, checks, `/api/me`), M4 (Stripe entitlements), M5 (per-user overrides and their script, D-505)                  |
 | Plan       | Free and Premium                                                                                                                    |
 | Depends on | [P2](P2-data-access-and-security.md), [01-root-spec.md](../01-root-spec.md) section 10; F12 writes the entitlements this spec reads |
-| Decisions  | D-18, D-28, D-29, D-119, D-131, D-167, D-198, D-200, D-205                                                                          |
+| Decisions  | D-18, D-28, D-29, D-119, D-131, D-167, D-198, D-200, D-205, D-505, D-506                                                            |
 
 ## 1. User stories
 
@@ -24,6 +24,8 @@ One system answers "may this user use this?" for every gated feature. The server
 | In                                                                                                                                                                                                                                                                                   | Stretch (M8)                                             | Out                                                                                                         |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | The registry; code naming; the three kinds (premium, flag, limit); resolution order; server checks and refusals; race-safe limit checks; the capabilities block of `/api/me`; client `useCan` and `<Gate>`; the locked card; the per-user override script; Stripe lookup-key mapping | Codes for Stretch features, added when M8 starts (D-200) | Roles; an admin page; a hosted flag service; A/B experiments and analytics; flags that change on a schedule |
+
+**Milestones (D-505).** Until F12 writes entitlements in M4, premium codes resolve `premium_required` and limits their Free value. Until P1 in M5, there is no override table or script (BR-P4-14), so flags resolve from the default, the rollout and the kill switch. `/api/me` answers F12's no-plan-record block for `plan`, and `{ "lockedCount": 0, "needsChoice": false }` for `goals` after onboarding until F06.
 
 ## 3. Concepts and fields
 
@@ -294,7 +296,7 @@ Illustrative `/api/me` response:
 }
 ```
 
-`profile` and `goals` are `null` before onboarding. `buildId` lets the client detect that the server runs a newer build (P1).
+`profile` and `goals` are `null` before onboarding. `resolvedAt` is the request clock (P2, BR-P2-43) in ISO 8601 UTC. `buildId` is the server's `BUILD_ID` (D-434, D-506); it lets the client detect that the server runs a newer build (P1).
 
 **Internal functions**
 

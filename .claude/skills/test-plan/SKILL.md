@@ -40,7 +40,7 @@ Follow `.claude/rules/testing.md`: fake only the network and outside services, n
 
 ## 4. Compare with what exists
 
-Search the tests (`**/tests/**`) with Grep for each acceptance criterion ID. For each case, mark one of:
+Search the tests (`**/__tests__/**`) with Grep for each acceptance criterion ID. For each case, mark one of:
 
 - **Covered:** a test carries the ID, with its file and line, and it asserts what the criterion says.
 - **Weak:** a test carries the ID but asserts less, is skipped, or only checks the happy path.

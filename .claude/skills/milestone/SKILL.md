@@ -38,7 +38,7 @@ Then ask me where to start.
 
 1. **Scope.** Use steps 1 and 2 of Start to get the specs and parts.
 2. **Acceptance criteria.** For each spec part, list the criteria that belong to this milestone. Leave out any that depend on a later milestone, and say so.
-3. **Coverage.** Search the tests (`**/tests/**`) for each criterion ID and mark it Covered, Weak or Missing. Read the test when you cannot tell. For depth on one spec, tell me to run `spec-review` on it.
+3. **Coverage.** Search the tests (`**/__tests__/**`) for each criterion ID and mark it Covered, Weak or Missing. Read the test when you cannot tell. For depth on one spec, tell me to run `spec-review` on it.
 4. **Checks.** Run the `ci-check` skill in full, then `pnpm docs:check`. Never say the milestone is ready if a check failed or did not run.
 5. **Success criteria.** For each criterion this milestone is responsible for, say whether it can be demonstrated now, and how: a passing test, or manual steps for me. Don't claim it without evidence.
 6. **Open items.** Run `grep -n "| Assumed" docs/02-decisions.md` and list the decisions still waiting for my confirmation. List the stand-ins that a later milestone must replace, and any spec changes made during the milestone.

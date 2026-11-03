@@ -1,3 +1,5 @@
+"use client";
+
 import {
 	RadioButton as AriaRadioButton,
 	RadioField as AriaRadioField,
@@ -18,6 +20,8 @@ export type SegmentedProps = {
 	isDisabled?: boolean;
 	/** Submits the chosen value with a form under this name. */
 	name?: string;
+	/** The id of text that describes the choice, such as a hint shown beside it. */
+	"aria-describedby"?: string;
 	className?: string;
 };
 
@@ -39,11 +43,13 @@ export function Segmented({
 	size = "md",
 	isDisabled = false,
 	name,
+	"aria-describedby": describedBy,
 	className,
 }: Readonly<SegmentedProps>) {
 	return (
 		<AriaRadioGroup
 			aria-label={label}
+			{...(describedBy ? { "aria-describedby": describedBy } : {})}
 			orientation="horizontal"
 			value={value}
 			onChange={onChange}

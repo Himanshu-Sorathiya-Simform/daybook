@@ -37,7 +37,7 @@ const restrict = (...doors) => ({
 	],
 });
 
-const EXEMPT = ["**/tests/**", "scripts/**", "vitest.*"];
+const EXEMPT = ["**/__tests__/**", "scripts/**", "vitest.*"];
 
 // The amount parser turns text into minor units by joining digit strings, never through a float
 // (MON-1, AC-F03-14, D-460). Each construct that could bring a float in is refused in that file.

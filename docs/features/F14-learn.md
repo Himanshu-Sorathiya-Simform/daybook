@@ -14,7 +14,7 @@ Learn is Daybook's library of short articles, news and guides about money. Conte
 | Milestone  | M7. Access tiers (members and Premium posts) are Stretch (M8)                                                                                                                                                                                                                         |
 | Plan       | Free and Premium; all core posts are public. Stretch: `learn.tiers` flag, `learn.premium.read` Premium code                                                                                                                                                                           |
 | Depends on | [P2](../platform/P2-data-access-and-security.md) (CSP for Sanity, dynamic pages, the request clock), [P1](../platform/P1-offline-and-pwa.md) (page and image caching), [F01](F01-auth-and-account.md) (landing page), [F08](F08-dashboard.md) (widget), [F13](F13-search.md) (search) |
-| Decisions  | D-57, D-157 to D-160, D-165, D-173, D-348 to D-353, D-378, D-382, D-385                                                                                                                                                                                                               |
+| Decisions  | D-57, D-157 to D-160, D-165, D-173, D-348 to D-353, D-378, D-382, D-385, D-514                                                                                                                                                                                                        |
 
 ## 1. User stories
 
@@ -116,7 +116,7 @@ The Sanity Studio lives in `studio/` in the repository, with this schema and its
 - **BR-F14-10** **Shells** (D-382). Learn pages render in the app shell for a signed-in user, and in the public shell (the landing page's header with Log in and Sign up) otherwise.
     - **Where:** `app/learn/layout.tsx` sits outside the `(app)` and `(public)` groups. It validates the session and renders the same shell component that `app/(app)/layout.tsx` or `app/(public)/layout.tsx` renders.
     - **The worker:** both shells mount `client/sw-bridge` (P1, BR-P1-03), so Learn pages register the service worker and warm their documents for visitors too.
-    - **The proxy:** Learn is not a logged-in route, so the proxy's session redirects leave it alone. Only its offline-logout redirect applies (P2, BR-P2-29).
+    - **The proxy:** Learn is not a logged-in route, so the proxy's session redirects leave it alone. Until M7 it is a logged-in placeholder (D-514). Only its offline-logout redirect applies (P2, BR-P2-29).
 
 **Lists elsewhere (D-351)**
 

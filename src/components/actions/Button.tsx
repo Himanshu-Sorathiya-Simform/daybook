@@ -1,4 +1,6 @@
-import type { LucideIcon } from "lucide-react";
+"use client";
+
+import { LoaderCircle, type LucideIcon } from "lucide-react";
 import { useId, type ReactNode } from "react";
 import {
 	Button as AriaButton,
@@ -40,10 +42,24 @@ const sizes = {
 	lg: "h-11 px-4.5 text-body",
 };
 
+/** A button's look, shared with `ButtonLink`, so a link that acts as a button looks like one. */
+export function buttonClasses({
+	variant,
+	size,
+}: Required<Pick<ButtonProps, "variant" | "size">>): string {
+	return cn(
+		"rounded-control inline-flex cursor-pointer items-center gap-2 border font-semibold whitespace-nowrap",
+		"transition-colors duration-(--dur-fast) ease-out max-md:min-h-11",
+		variants[variant],
+		sizes[size],
+	);
+}
+
 /**
  * Daybook's button. A disabled button stays focusable (`aria-disabled`, not the native
  * attribute) so a keyboard or screen reader user reaches it and hears the `description`. While
- * disabled it ignores presses and never submits a form.
+ * disabled it ignores presses and never submits a form. While `isPending`, a spinner replaces
+ * the icon, presses are ignored and React Aria announces the wait; the button keeps focus.
  */
 export function Button({
 	variant = "primary",
@@ -90,16 +106,18 @@ export function Button({
 			{...ariaProps}
 			type={isDisabled ? "button" : type}
 			className={cn(
-				"rounded-control inline-flex cursor-pointer items-center gap-2 border font-semibold whitespace-nowrap",
-				"transition-colors duration-(--dur-fast) ease-out max-md:min-h-11",
-				variants[variant],
-				sizes[size],
+				buttonClasses({ variant, size }),
 				shortcut && "pr-2",
 				"aria-disabled:border-edge aria-disabled:text-ink-3 aria-disabled:cursor-not-allowed aria-disabled:border-[1.5px] aria-disabled:border-dashed aria-disabled:bg-transparent",
 				description ? undefined : className,
 			)}
 		>
-			{Icon && <Icon className="size-3.75 shrink-0" />}
+			{rest.isPending ?
+				<LoaderCircle
+					aria-hidden="true"
+					className="size-3.75 shrink-0 animate-spin motion-reduce:animate-none"
+				/>
+			:	Icon && <Icon className="size-3.75 shrink-0" />}
 			{children}
 			{shortcut && (
 				<kbd className="rounded-kbd text-small border border-current px-1.25 font-sans opacity-85">

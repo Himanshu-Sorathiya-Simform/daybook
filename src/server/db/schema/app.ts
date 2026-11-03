@@ -149,10 +149,11 @@ function textCheck(
 		multiline ?
 			String.raw`[\x01-\x09\x0b-\x1f\x7f-\x9f]`
 		:	String.raw`[\x01-\x1f\x7f-\x9f]`;
+	const controlPattern = sql.raw(`'${control}'`);
 	return check(
 		name,
 		sql`char_length(${column}) BETWEEN 1 AND ${sql.raw(String(max))}
-			AND ${column} !~ ${sql.raw(`'${control}'`)}
+			AND ${column} !~ ${controlPattern}
 			AND ${column} IS NFC NORMALIZED`,
 	);
 }

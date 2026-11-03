@@ -21,7 +21,7 @@ async function sentView(tx: Tx, input: unknown): Promise<SavedView | null> {
 		typeof input === "object" && input !== null ?
 			(input as Record<string, unknown>)["id"]
 		:	undefined;
-	return typeof id === "string" && isUuidV7(id) ? getView(tx, id) : null;
+	return typeof id === "string" && isUuidV7(id) ? await getView(tx, id) : null;
 }
 
 /**

@@ -1,5 +1,6 @@
 import "server-only";
 import type { CurrencyCode } from "@/lib/currency";
+import type { WeekStart } from "@/lib/geo";
 import { todayIn } from "@/lib/time";
 import { ApiError } from "../api/errors";
 import { getAuth } from "../auth/auth";
@@ -27,7 +28,7 @@ export type Profile = {
 	/** A key of `app.currencies`, which the column's foreign key guarantees (MON-2). */
 	currency: CurrencyCode;
 	timezone: string;
-	weekStart: "monday" | "sunday" | "saturday";
+	weekStart: WeekStart;
 	lastCatchUpOn: string;
 };
 

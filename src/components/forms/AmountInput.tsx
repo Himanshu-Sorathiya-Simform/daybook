@@ -1,3 +1,5 @@
+"use client";
+
 import {
 	Group as AriaGroup,
 	Input as AriaInput,

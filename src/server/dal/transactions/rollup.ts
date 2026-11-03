@@ -113,8 +113,9 @@ export async function rollup<const R extends readonly RollupRequest[]>(
 		(request, index) =>
 			sql`${requestSql(request, ctx)} AS ${sql.identifier(alias(index))}`,
 	);
+	const select = sql.join(columns, sql`, `);
 	const { rows } = await tx.execute<Record<string, unknown>>(
-		sql`SELECT ${sql.join(columns, sql`, `)}`,
+		sql`SELECT ${select}`,
 	);
 	// A SELECT without FROM returns exactly one row.
 	const row = rows[0] as Record<string, unknown>;

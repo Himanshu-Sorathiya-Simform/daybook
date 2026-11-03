@@ -1,5 +1,6 @@
 import { parseNumericQuery, parseUrlAmount, writeUrlAmount } from "@/lib/amount";
 import type { CategoryKey } from "@/lib/categories";
+import { compareCodeUnits } from "@/lib/compare";
 import type { CurrencyCode } from "@/lib/currency";
 import { codePointLength, normalizeText } from "@/lib/text";
 import { isUuid } from "@/lib/ids";
@@ -59,10 +60,7 @@ function oneOf<T extends string>(allowed: readonly T[], value: string): value is
 /** A comma list sorted by UTF-16 code unit, which is what `sort()` does and never varies with
  * the locale, and deduplicated, so equivalent lists compare equal. */
 export function sortedUnique<T extends string>(items: readonly T[]): T[] {
-	return [...new Set(items)].sort((a, b) => {
-		if (a < b) return -1;
-		return a > b ? 1 : 0;
-	});
+	return [...new Set(items)].sort(compareCodeUnits);
 }
 
 type Reader = ReturnType<typeof createReader>;
