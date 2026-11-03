@@ -113,18 +113,17 @@ export function weekStartFor(
 	return "monday";
 }
 
+/** The 21 euro-area members. */
+const EURO_AREA =
+	"AT BE BG CY DE EE ES FI FR GR HR IE IT LT LU LV MT NL PT SI SK".split(" ");
+/** Other territories that use the euro. */
+const EURO_TERRITORIES = "AD AX BL GF GP MC ME MF MQ PM RE SM VA YT".split(" ");
+
 /** The default currency per country (BR-F02-04, D-210). Every other country gets USD. */
 export const CURRENCY_BY_COUNTRY: Readonly<Partial<Record<string, CurrencyCode>>> = {
 	IN: "INR",
 	...Object.fromEntries(
-		[
-			// The 21 euro-area members.
-			...["AT", "BE", "BG", "CY", "DE", "EE", "ES", "FI", "FR", "GR", "HR"],
-			...["IE", "IT", "LT", "LU", "LV", "MT", "NL", "PT", "SI", "SK"],
-			// Other territories that use the euro.
-			...["AD", "AX", "BL", "GF", "GP", "MC", "ME", "MF", "MQ", "PM", "RE"],
-			...["SM", "VA", "YT"],
-		].map((code) => [code, "EUR"]),
+		[...EURO_AREA, ...EURO_TERRITORIES].map((code) => [code, "EUR"]),
 	),
 	...Object.fromEntries(["GB", "GG", "IM", "JE"].map((code) => [code, "GBP"])),
 	JP: "JPY",

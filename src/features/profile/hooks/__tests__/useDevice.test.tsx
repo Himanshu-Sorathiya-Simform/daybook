@@ -55,7 +55,7 @@ describe("useDevice (BR-F02-03)", () => {
 		const calls = read.mock.calls.length;
 		rerender(<Show />);
 		render(<Show />);
-		expect(read.mock.calls.length).toBe(calls);
+		expect(read.mock.calls).toHaveLength(calls);
 	});
 
 	test("is null while the server renders", async () => {

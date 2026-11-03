@@ -236,9 +236,11 @@ test.describe("session expiry (BR-F01-12, BR-F01-13)", () => {
 		page,
 		context,
 	}) => {
+		// Better Auth checks on focus at most once per 5 seconds, by `Date.now()`: the page's
+		// clock jumps past that, so the test does not sit through it.
+		await page.clock.install();
 		await onboardedUser(page);
-		// Better Auth checks on focus at most once per 5 seconds.
-		await page.waitForTimeout(5500);
+		await page.clock.fastForward(5500);
 		const other = await context.newPage();
 		await other.request.post("/api/auth/sign-out", {
 			headers: {

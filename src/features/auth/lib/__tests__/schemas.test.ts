@@ -131,7 +131,7 @@ describe("signUpSchema (F01 section 3 and 8)", () => {
 			// An address with an emoji local part: 121 emoji are 242 units, plus 12 is 254.
 			const at254 = `${"🙂".repeat(121)}@example.com`;
 			const at256 = `${"🙂".repeat(122)}@example.com`;
-			expect(at254.length).toBe(254);
+			expect(at254).toHaveLength(254);
 			expect(messages(signUpSchema, { ...VALID, email: at256 })).toEqual({
 				email: AUTH_MESSAGES.emailTooLong,
 			});
