@@ -127,7 +127,7 @@ export function typeChangeAllowed(from: TxnType, to: TxnType): boolean {
 
 export type TypeRuleFields = {
 	type: TxnType;
-	category: CategoryKey | string | null;
+	category: string | null;
 	goalId: string | null;
 	payee: string | null;
 	description: string | null;
