@@ -44,7 +44,9 @@ describe("UserMenu trigger", () => {
 		["A", "A"],
 	])("%j shows %j", (name, letters) => {
 		const { trigger } = renderMenu({ name });
-		expect(trigger).toHaveTextContent(letters);
+		expect(trigger.querySelector('span[aria-hidden="true"]')?.textContent).toBe(
+			letters,
+		);
 		expect(trigger.querySelector("svg")).toBeNull();
 	});
 
@@ -52,13 +54,24 @@ describe("UserMenu trigger", () => {
 		"a name with no letters or digits (%j) shows a person icon instead",
 		(name) => {
 			const { trigger } = renderMenu({ name });
-			expect(trigger).toHaveTextContent("");
+			expect(trigger.querySelector('span[aria-hidden="true"]')).toBeNull();
 			expect(trigger.querySelector("svg")).toHaveAttribute(
 				"aria-hidden",
 				"true",
 			);
 		},
 	);
+
+	// WCAG 2.5.3: the initials are a picture of the user, so they are not part of the name.
+	test("the initials are hidden from assistive technology", () => {
+		const { trigger } = renderMenu();
+		const letters = trigger.querySelector('[aria-hidden="true"]');
+		expect(letters).toHaveTextContent("AR");
+		expect(trigger).toHaveAccessibleName("Account menu");
+		// No aria-label that differs from what the button shows.
+		expect(trigger).not.toHaveAttribute("aria-label");
+		expect(trigger.querySelector(".sr-only")).toHaveTextContent("Account menu");
+	});
 
 	test("its name stays Account menu, whatever the initials", () => {
 		const { trigger } = renderMenu({ name: "Zed Q" });

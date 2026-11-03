@@ -2,7 +2,14 @@ import "server-only";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { AUTH_PATHS } from "./allow-list";
 import { checkBreach } from "./breach";
-import { MAX_EMAIL, isBody, normalizeEmail, normalizeName, refuse } from "./rules";
+import {
+	EMAIL_TOO_LONG,
+	MAX_EMAIL,
+	isBody,
+	normalizeEmail,
+	normalizeName,
+	refuse,
+} from "./rules";
 
 type Body = Record<string, unknown>;
 
@@ -39,6 +46,13 @@ function withEmail(body: Body): Body {
 		:	body;
 }
 
+/** `body` with any `rememberMe` set to true: sessions always last 7 days and there is no
+ * "remember me" (BR-F01-12, F01 section 2). The field is overwritten, not removed, since
+ * Better Auth merges the hook's body with the one it received. */
+function alwaysRemembered(body: Body): Body {
+	return "rememberMe" in body ? { ...body, rememberMe: true } : body;
+}
+
 /** `body` with its name normalized, or `INVALID_NAME` (BR-F01-01). */
 function withName(body: Body): Body {
 	const name = normalizeName(body["name"]);
@@ -50,16 +64,16 @@ function withName(body: Body): Body {
  * calls out to the network, last. Each returns the body Better Auth then sees. */
 const RULES: Partial<Record<string, (body: Body) => Promise<Body> | Body>> = {
 	"/sign-up/email": async (body) => {
-		const normalized = withEmail(body);
+		const normalized = alwaysRemembered(withEmail(body));
 		const email = normalized["email"];
 		if (typeof email === "string" && email.length > MAX_EMAIL) {
-			throw refuse("INVALID_EMAIL");
+			throw refuse("INVALID_EMAIL", EMAIL_TOO_LONG);
 		}
 		const next = withName(normalized);
 		await refuseBreached(next["password"]);
 		return next;
 	},
-	"/sign-in/email": withEmail,
+	"/sign-in/email": (body) => alwaysRemembered(withEmail(body)),
 	"/change-password": async (body) => {
 		await refuseBreached(body["newPassword"]);
 		return body;

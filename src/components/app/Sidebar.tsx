@@ -84,14 +84,15 @@ export function Sidebar({
 				active={isCurrent(pathname, SETTINGS_ITEM.href)}
 				collapsed={rail}
 			/>
-			{rail ?
-				<Tooltip
-					text={toggleLabel}
-					placement="right"
-				>
-					{toggle}
-				</Tooltip>
-			:	toggle}
+			{/* Always wrapped, and only switched off at full width: unwrapping would replace the
+			    button, and the keyboard focus on it would be lost. */}
+			<Tooltip
+				text={toggleLabel}
+				placement="right"
+				isDisabled={!rail}
+			>
+				{toggle}
+			</Tooltip>
 		</nav>
 	);
 }

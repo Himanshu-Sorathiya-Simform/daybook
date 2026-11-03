@@ -10,7 +10,8 @@ export const MAX_NAME = 50;
 /** The refusals F01's hook adds, in Better Auth's error shape (`{ code, message }`). The
  * browser shows its own text for each code (F01, section 8); these messages say the same for
  * anyone calling the API directly. `INVALID_EMAIL` is Better Auth's own code, reused for an
- * email over 254 characters so the browser handles one code. */
+ * email over 254 characters so the browser handles one code; that refusal carries
+ * `EMAIL_TOO_LONG`'s words. */
 export const AUTH_REFUSALS = {
 	INVALID_EMAIL: "Enter a valid email address, like name@example.com.",
 	INVALID_NAME: "Enter a name of up to 50 characters.",
@@ -21,9 +22,15 @@ export const AUTH_REFUSALS = {
 
 export type AuthRefusal = keyof typeof AUTH_REFUSALS;
 
+/** F01 section 8's words for an email over 254 characters (D-510). */
+export const EMAIL_TOO_LONG = "Use an email address of up to 254 characters.";
+
 /** A 400 with one of F01's codes, which Better Auth answers as `{ code, message }`. */
-export function refuse(code: AuthRefusal): APIError {
-	return APIError.from("BAD_REQUEST", { code, message: AUTH_REFUSALS[code] });
+export function refuse(
+	code: AuthRefusal,
+	message: string = AUTH_REFUSALS[code],
+): APIError {
+	return APIError.from("BAD_REQUEST", { code, message });
 }
 
 /** The email as the account stores it (BR-F01-01): trimmed and lowercased, so

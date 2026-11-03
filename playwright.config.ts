@@ -11,6 +11,11 @@ export default defineConfig({
 	fullyParallel: true,
 	forbidOnly: true,
 	reporter: "list",
+	// A sign-up waits on the breached-password check (up to 3 s) and Neon round trips, with
+	// every worker signing up at once; Playwright's 5 s default is too tight for that.
+	expect: { timeout: 20_000 },
+	// Some tests sign up and log in several times, each a few seconds against Neon.
+	timeout: 90_000,
 	use: { baseURL: ORIGIN },
 	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 	webServer: {

@@ -132,9 +132,8 @@ describe("sign-up (BR-F01-01, BR-F01-03)", () => {
 		const body = await bodyAfter("/sign-up/email", {
 			...SIGN_UP,
 			callbackURL: "/x",
-			rememberMe: false,
 		});
-		expect(body).toMatchObject({ callbackURL: "/x", rememberMe: false });
+		expect(body).toMatchObject({ callbackURL: "/x" });
 	});
 
 	test("does not change the object it was given", async () => {
@@ -151,12 +150,17 @@ describe("sign-up (BR-F01-01, BR-F01-03)", () => {
 		).toBe(email);
 	});
 
-	test("refuses an email of 255 characters with INVALID_EMAIL", async () => {
+	// F01 section 8, D-510: the length has its own words, under the browser's one code.
+	test("refuses an email of 255 characters with INVALID_EMAIL and the length message", async () => {
 		const email = `${"a".repeat(255 - "@example.com".length)}@example.com`;
-		await expectRefusal(
+		const error = await refusal(
 			applyRules("/sign-up/email", { ...SIGN_UP, email }),
-			"INVALID_EMAIL",
 		);
+		expect(error.statusCode).toBe(400);
+		expect(error.body).toEqual({
+			code: "INVALID_EMAIL",
+			message: "Use an email address of up to 254 characters.",
+		});
 	});
 
 	test("measures the email after trimming", async () => {
@@ -190,10 +194,13 @@ describe("sign-up (BR-F01-01, BR-F01-03)", () => {
 
 	test("checks the email before the name", async () => {
 		const email = `${"a".repeat(300)}@example.com`;
-		await expectRefusal(
+		const error = await refusal(
 			applyRules("/sign-up/email", { ...SIGN_UP, email, name: "" }),
-			"INVALID_EMAIL",
 		);
+		expect(error.body).toEqual({
+			code: "INVALID_EMAIL",
+			message: "Use an email address of up to 254 characters.",
+		});
 	});
 
 	test("checks the fields before calling the breach service", async () => {
@@ -302,6 +309,22 @@ describe("sign-in (BR-F01-01)", () => {
 		expect(await bodyAfter("/sign-in/email", { password: PASSWORD })).toEqual({
 			password: PASSWORD,
 		});
+	});
+});
+
+// BR-F01-12 and F01 section 2: sessions always last 7 days; there is no "remember me".
+describe.each(["/sign-in/email", "/sign-up/email"])("rememberMe on %s", (path) => {
+	test.each([false, true, "no", 0, null])(
+		"%j becomes true",
+		async (rememberMe) => {
+			const body = await bodyAfter(path, { ...SIGN_UP, rememberMe });
+			expect(body?.["rememberMe"]).toBe(true);
+		},
+	);
+
+	test("is not added when absent", async () => {
+		const body = await bodyAfter(path, SIGN_UP);
+		expect(body).not.toHaveProperty("rememberMe");
 	});
 });
 

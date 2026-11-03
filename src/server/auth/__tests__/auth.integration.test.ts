@@ -121,6 +121,22 @@ describe("sign-up", () => {
 		expect(days).toBeCloseTo(7, 3);
 	});
 
+	// BR-F01-12: no "remember me"; a request for a short session still gets 7 days.
+	test("rememberMe false still starts a 7-day session with a lasting cookie", async () => {
+		const email = newEmail();
+		const response = await POST(
+			request("POST", "/sign-up/email", {
+				body: { email, password: PASSWORD, name: "Asha", rememberMe: false },
+			}),
+		);
+		expect(response.status).toBe(200);
+		const [row] = await rowsFor(email);
+		const days =
+			(row!.expires_at.getTime() - row!.created_at.getTime()) / 86_400_000;
+		expect(days).toBeCloseTo(7, 3);
+		expect(response.headers.get("set-cookie")).toMatch(/Max-Age=604800/i);
+	});
+
 	test("sets the session cookie with prefix daybook, HttpOnly, SameSite=Lax and path /", async () => {
 		const response = await signUp();
 		const set = response.headers
@@ -597,6 +613,7 @@ describe("update-user (BR-F01-01, BR-F01-02)", () => {
 		expect((await storedUser(email))?.name).toBe("René");
 	});
 
+	// AC-F01-11
 	test.each([
 		{ image: "https://example.com/a.png" },
 		{ name: "Asha", image: null },
@@ -611,6 +628,26 @@ describe("update-user (BR-F01-01, BR-F01-02)", () => {
 			[email],
 		);
 		expect(rows[0]).toEqual({ name: "Asha", image: null });
+	});
+
+	// AC-F01-11
+	test("refuses a 51-character name with 400 INVALID_NAME and keeps the old one", async () => {
+		const email = newEmail();
+		const cookie = sessionCookie(await signUp(email));
+		const response = await updateUser(cookie, { name: "a".repeat(51) });
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ code: "INVALID_NAME" });
+		expect((await storedUser(email))?.name).toBe("Asha");
+	});
+
+	// AC-F01-11
+	test("accepts a 50-character name", async () => {
+		const email = newEmail();
+		const cookie = sessionCookie(await signUp(email));
+		expect((await updateUser(cookie, { name: "a".repeat(50) })).status).toBe(
+			200,
+		);
+		expect((await storedUser(email))?.name).toBe("a".repeat(50));
 	});
 
 	test("refuses an invalid name with 400 INVALID_NAME and keeps the old one", async () => {

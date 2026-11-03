@@ -48,6 +48,25 @@ describe("ignores", () => {
 		expect(safeNextPath("//localhost:4000/dashboard", ORIGIN)).toBeNull();
 	});
 
+	// BR-F01-09: a same-origin value whose resolved path starts with `//` would send the
+	// browser to another site once used as a location.
+	test.each([
+		["a dot segment before the double slash", "/.//evil.example"],
+		["an encoded dot segment", "/%2e//evil.example"],
+		["an encoded dot segment in capitals", "/%2E//evil.example"],
+		["a parent segment", "/a/..//evil.example"],
+		["a parent segment at the root", "/..//evil.example"],
+		["two dot segments", "/././/evil.example"],
+		["a dot segment, with a path after", "/.//evil.example/login?x=1"],
+		["three slashes after a dot segment", "/.///evil.example"],
+	])("%s: %s", (_name, next) => {
+		expect(safeNextPath(next, ORIGIN)).toBeNull();
+	});
+
+	test("a double slash later in the path is a same-origin path, kept as is", () => {
+		expect(safeNextPath("/goals//x", ORIGIN)).toBe("/goals//x");
+	});
+
 	test("a value that is not a valid URL against the origin", () => {
 		expect(safeNextPath("/x", "not an origin")).toBeNull();
 	});

@@ -236,7 +236,7 @@ describe("an offline logout (reason=logout)", () => {
 			"daybook.session_token",
 			LOGOUT_COOKIE,
 		]);
-		expect(location).toBe(`${ORIGIN}/login?expired=1`);
+		expect(location).toBe(`${ORIGIN}/login`);
 	});
 
 	test("from the same origin, without the marker, revokes and clears too", async () => {
@@ -273,7 +273,7 @@ describe("an offline logout (reason=logout)", () => {
 			query: "?reason=logout&next=%2Fdashboard",
 			cookie,
 		});
-		expect(location).toBe(`${ORIGIN}/login?expired=1`);
+		expect(location).toBe(`${ORIGIN}/login`);
 	});
 
 	test("still clears the cookies when revoking fails, and logs only what failed", async () => {
@@ -292,7 +292,7 @@ describe("an offline logout (reason=logout)", () => {
 				"daybook.session_token",
 				LOGOUT_COOKIE,
 			]);
-			expect(location).toBe(`${ORIGIN}/login?expired=1`);
+			expect(location).toBe(`${ORIGIN}/login`);
 			expect(error.mock.calls).toEqual([
 				["[auth] Revoking a session failed", { name: "TypeError" }],
 			]);

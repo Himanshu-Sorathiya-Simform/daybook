@@ -46,7 +46,7 @@ export type SessionExpiredDeps = {
  * 1. **Offline logout** (`reason=logout`): acts when the request carries `daybook_logout=1`,
  *    whichever site it came from, since only Daybook's script sets that cookie, or when it is
  *    same-origin. It revokes the session when a session cookie is present, clears
- *    `daybook_logout` and the session cookies, and goes to `/login?expired=1`.
+ *    `daybook_logout` and the session cookies, and goes to `/login` (D-518).
  * 2. **Another site:** anything not `same-origin` or `none` (a missing `Sec-Fetch-Site`
  *    included) clears nothing and goes to `/login?expired=1`, so another site cannot log the
  *    user out.
@@ -92,7 +92,8 @@ export async function sessionExpired(
 				);
 			}
 		}
-		return redirect("/login?expired=1", [...sessionCookies, LOGOUT_COOKIE]);
+		// A logout the user chose is no expiry, so login shows no expired note (D-518).
+		return redirect("/login", [...sessionCookies, LOGOUT_COOKIE]);
 	}
 	if (!sameSite) return redirect("/login?expired=1");
 	if (reason === "deleted") return redirect("/?deleted=1", sessionCookies);

@@ -80,7 +80,7 @@ test("a cross-site reason=logout with daybook_logout=1 revokes the session and c
 		cookie: `${cookie}; daybook_logout=1`,
 		"sec-fetch-site": "cross-site",
 	});
-	expect(response.headers.get("location")).toBe(`${ORIGIN}/login?expired=1`);
+	expect(response.headers.get("location")).toBe(`${ORIGIN}/login`);
 	expect(clearedNames(response).sort()).toEqual([
 		"daybook.session_token",
 		"daybook_logout",

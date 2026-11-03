@@ -11,7 +11,7 @@ Later, the user changes their name, time zone and week start in Settings. They c
 | Milestone  | M1                                                                                                                                                                                                                                                                     |
 | Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                  |
 | Depends on | [F01](F01-auth-and-account.md) (sign-up, display name through `/update-user`), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md) (`/api/me`); F07 (portfolio seeding, from M3), F08 (dashboard settings page), F12 (billing page) |
-| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452, D-506, D-508, D-511                                                                                                                                                          |
+| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452, D-506, D-508, D-511, D-517                                                                                                                                                   |
 
 ## 1. User stories
 
@@ -33,6 +33,7 @@ Later, the user changes their name, time zone and week start in Settings. They c
 
 - **Until M3 builds the dashboard (F08):** onboarding opens `/transactions`, and `/dashboard` redirects there.
 - **Portfolio seeding** (BR-F02-08) arrives with F07 in M3.
+- **The device-time-zone notice** (BR-F02-20) arrives with the settings pages, since its action opens Settings → Profile (D-517).
 
 ## 3. Concepts and fields
 

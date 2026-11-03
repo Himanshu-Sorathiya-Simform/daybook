@@ -2,8 +2,10 @@
  * The path to return to after login, from an untrusted `next` value (F01, BR-F01-09), or
  * `null` when it must be ignored. The raw value must start with `/` and hold no backslash,
  * and it must resolve against `origin` to that same origin, so `//evil.example` and
- * `/\evil.example`, which browsers read as other sites, are both refused. The result is the
- * resolved path, query and fragment, never a full URL.
+ * `/\evil.example`, which browsers read as other sites, are both refused. The resolved path
+ * must not start with `//` either: dot segments such as `/.//evil.example` resolve in this
+ * origin to the path `//evil.example`, which a browser again reads as another site. The
+ * result is the resolved path, query and fragment, never a full URL.
  */
 export function safeNextPath(
 	next: string | null | undefined,
@@ -17,5 +19,6 @@ export function safeNextPath(
 		return null;
 	}
 	if (url.origin !== new URL(origin).origin) return null;
+	if (url.pathname.startsWith("//")) return null;
 	return `${url.pathname}${url.search}${url.hash}`;
 }

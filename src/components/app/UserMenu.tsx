@@ -40,18 +40,22 @@ export function UserMenu({
 	return (
 		<AriaMenuTrigger>
 			<AriaButton
-				aria-label="Account menu"
 				className={cn(
 					"bg-soft text-small text-ink inline-flex size-8.5 shrink-0 cursor-pointer items-center justify-center rounded-full font-bold max-md:size-11",
 					className,
 				)}
 			>
-				{letters || (
-					<UserRound
+				{/* The initials are a picture of the user, like an avatar, so they stay out of the
+				    button's name, and the name comes from hidden text rather than an aria-label
+				    that would differ from what the button shows (WCAG 2.5.3). */}
+				{letters ?
+					<span aria-hidden="true">{letters}</span>
+				:	<UserRound
 						aria-hidden="true"
 						className="size-4"
 					/>
-				)}
+				}
+				<span className="sr-only">Account menu</span>
 			</AriaButton>
 			<AriaPopover
 				placement="bottom end"

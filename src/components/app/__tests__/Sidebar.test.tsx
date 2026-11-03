@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { RouterProvider as AriaRouterProvider } from "react-aria-components";
 import { describe, expect, test, vi } from "vitest";
 
@@ -218,5 +219,52 @@ describe("Sidebar width (D-513)", () => {
 		// Longer than the tooltip's 500 ms delay.
 		await new Promise((resolve) => setTimeout(resolve, 700));
 		expect(screen.queryByRole("tooltip")).toBeNull();
+	});
+});
+
+/** The sidebar with its width kept in state, as the shell keeps it. */
+function Stateful({ rail: start = false }: { rail?: boolean }) {
+	const [rail, setRail] = useState(start);
+	return (
+		<Sidebar
+			pathname="/transactions"
+			rail={rail}
+			onRailChange={setRail}
+		/>
+	);
+}
+
+test("at full width the toggle shows its label as text, with no tooltip", async () => {
+	const user = userEvent.setup();
+	renderSidebar();
+	const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
+	toggle.focus();
+	await user.hover(toggle);
+	// Longer than the tooltip's 500 ms delay.
+	await new Promise((resolve) => setTimeout(resolve, 700));
+	expect(screen.queryByRole("tooltip")).toBeNull();
+});
+
+describe("the width toggle keeps keyboard focus", () => {
+	test.each([
+		[false, "Collapse sidebar", "Expand sidebar"],
+		[true, "Expand sidebar", "Collapse sidebar"],
+	])(
+		"from rail=%s, pressing %s leaves focus on %s",
+		async (rail, before, after) => {
+			const user = userEvent.setup();
+			render(<Stateful rail={rail} />);
+			screen.getByRole("button", { name: before }).focus();
+			await user.keyboard("{Enter}");
+			expect(screen.getByRole("button", { name: after })).toHaveFocus();
+		},
+	);
+
+	test("the toggle is the same element in both widths", async () => {
+		const user = userEvent.setup();
+		render(<Stateful />);
+		const toggle = screen.getByRole("button", { name: "Collapse sidebar" });
+		await user.click(toggle);
+		expect(screen.getByRole("button", { name: "Expand sidebar" })).toBe(toggle);
 	});
 });
