@@ -49,10 +49,15 @@ export const GOLDEN_BLOCK: NonNullable<Me["profile"]> = {
 };
 
 /** Renders `ui` inside the app's providers with a fresh query client that never retries, so a
- * test sees each answer once. Answers the client, and the `navigate` spy. */
+ * test sees each answer once; its other defaults stay the app's, since `setDefaultOptions`
+ * replaces them all. Answers the client, and the `navigate` spy. */
 export function renderInApp(ui: ReactNode) {
 	const queryClient = createQueryClient();
-	queryClient.setDefaultOptions({ queries: { retry: false } });
+	const defaults = queryClient.getDefaultOptions();
+	queryClient.setDefaultOptions({
+		...defaults,
+		queries: { ...defaults.queries, retry: false },
+	});
 	const navigate = vi.fn();
 	const view = render(
 		<AppProviders

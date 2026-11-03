@@ -4,7 +4,7 @@ import { type QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 import { AppSessionContext } from "@/hooks/useAppSession";
-import { isMeKey, ME_KEY, type Me } from "@/hooks/useMe";
+import { isMeKey, ME_KEY, type Me } from "@/lib/api/me";
 import { onApiEvent } from "@/lib/api/events";
 import { createQueryClient } from "@/lib/api/query-client";
 
