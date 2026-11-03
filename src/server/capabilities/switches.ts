@@ -1,4 +1,5 @@
 import "server-only";
+import { compareCodeUnits } from "@/lib/compare";
 import {
 	CAPABILITY_CODES,
 	type CapabilityCode,
@@ -39,7 +40,7 @@ export function parseFlagSwitches(
 	const problems: string[] = [];
 	const names = Object.keys(source)
 		.filter((name) => name.startsWith("FLAG_") && source[name] !== undefined)
-		.sort();
+		.sort(compareCodeUnits);
 	for (const name of names) {
 		const code = CODE_BY_NAME.get(name);
 		if (!code) {

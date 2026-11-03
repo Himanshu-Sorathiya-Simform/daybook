@@ -1,3 +1,4 @@
+import { compareCodeUnits } from "../compare";
 import type { CurrencyCode } from "../currency";
 import { GEO_DATA } from "./data";
 import type { GeoCountry, GeoZone, WeekStart } from "./types";
@@ -19,7 +20,7 @@ const COUNTRY_OF_ZONE: ReadonlyMap<string, string> = new Map(
 
 /** Every country code, sorted. */
 export function countryCodes(): string[] {
-	return Object.keys(GEO_DATA.countries).sort();
+	return Object.keys(GEO_DATA.countries).sort(compareCodeUnits);
 }
 
 export function isCountry(code: unknown): code is string {

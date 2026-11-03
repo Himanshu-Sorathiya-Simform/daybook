@@ -1,3 +1,4 @@
+import { compareCodeUnits } from "../../src/lib/compare";
 import type { CurrencyCode } from "../../src/lib/currency";
 import type {
 	GeoCountry,
@@ -83,7 +84,7 @@ export function buildAliases(
 	zoneNames: ReadonlySet<string>,
 ): Record<string, string> {
 	const aliases: Record<string, string> = {};
-	for (const name of [...links.keys()].sort()) {
+	for (const name of [...links.keys()].sort(compareCodeUnits)) {
 		if (zoneNames.has(name) || ABBREVIATIONS.has(name)) continue;
 		let target = links.get(name);
 		const visited = new Set([name]);
@@ -310,13 +311,12 @@ export function buildGeo(sources: GeoSources): GeoData {
 		}
 	}
 	if (problems.length > 0) {
-		throw new Error(
-			`The geo tables are wrong:\n${problems.map((p) => `  - ${p}`).join("\n")}`,
-		);
+		const list = problems.map((p) => `  - ${p}`).join("\n");
+		throw new Error(`The geo tables are wrong:\n${list}`);
 	}
 
 	const countries: Record<string, GeoCountry> = {};
-	for (const country of [...zonesByCountry.keys()].sort()) {
+	for (const country of [...zonesByCountry.keys()].sort(compareCodeUnits)) {
 		const zones = zonesByCountry.get(country)!;
 		countries[country] = {
 			zones,
