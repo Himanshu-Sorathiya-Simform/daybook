@@ -57,7 +57,9 @@ export function TransactionsPage({
 			<FilterBar
 				filter={url.filter}
 				list={url.list}
-				onFilterChange={(filter) => url.setFilter(filter)}
+				onFilterChange={(filter, mode) =>
+					url.setFilter(filter, url.list, mode)
+				}
 				onListChange={url.setList}
 				locale={locale}
 				firstDayOfWeek={weekStart}

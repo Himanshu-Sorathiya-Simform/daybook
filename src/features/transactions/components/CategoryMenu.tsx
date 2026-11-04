@@ -18,13 +18,16 @@ export type CategoryMenuProps = {
 	onChange: (value: CategoryKey[] | undefined) => void;
 	/** Each category's count under every other filter (BR-F03-59), once loaded. */
 	counts?: Record<CategoryKey, number> | undefined;
+	/** Whether the counts are on their way, so each holds its place. */
+	countsPending?: boolean;
 	onOpenChange?: (isOpen: boolean) => void;
 	className?: string;
 };
 
 /**
  * The Category control (BR-F03-39): a trigger reading "Category Any", a category's name or how
- * many are chosen, opening the expense categories, then the income categories under "Income",
+ * many are chosen, opening the expense categories under "Expense", then the income categories
+ * under "Income",
  * each a checkbox with its count. A line says category filters hide Goal Transactions
  * (BR-F03-37). Each press commits, and the popover stays open.
  */
@@ -32,6 +35,7 @@ export function CategoryMenu({
 	value,
 	onChange,
 	counts,
+	countsPending = false,
 	onOpenChange,
 	className,
 }: Readonly<CategoryMenuProps>) {
@@ -56,6 +60,7 @@ export function CategoryMenu({
 					isSelected={chosen.includes(category)}
 					onChange={(on) => toggle(category, on)}
 					{...(counts ? { count: counts[category] } : {})}
+					countPending={countsPending}
 				/>
 			))}
 		</div>
@@ -69,6 +74,12 @@ export function CategoryMenu({
 			{...(onOpenChange ? { onOpenChange } : {})}
 			{...(className ? { className } : {})}
 		>
+			<p
+				aria-hidden="true"
+				className="text-caption text-ink-2 px-1 font-semibold"
+			>
+				Expense
+			</p>
 			{list("Expense categories", EXPENSE_CATEGORIES)}
 			<p
 				aria-hidden="true"

@@ -12,6 +12,8 @@ export type MoreMenuProps = {
 	onChange: (value: Source | undefined) => void;
 	/** Each source's count under every other filter (BR-F03-59), once loaded. */
 	counts?: Record<Source, number> | undefined;
+	/** Whether the counts are on their way, so each holds its place. */
+	countsPending?: boolean;
 	onOpenChange?: (isOpen: boolean) => void;
 	className?: string;
 };
@@ -25,6 +27,7 @@ export function MoreMenu({
 	value,
 	onChange,
 	counts,
+	countsPending = false,
 	onOpenChange,
 	className,
 }: Readonly<MoreMenuProps>) {
@@ -54,6 +57,7 @@ export function MoreMenu({
 					value: source,
 					label: SOURCE_LABELS[source],
 					...count(source),
+					countPending: countsPending,
 				}))}
 				onChange={(next) =>
 					onChange(next === "any" ? undefined : (next as Source))

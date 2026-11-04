@@ -15,7 +15,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-544                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-547                      |
 
 ## 1. User stories
 
@@ -277,7 +277,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     - a visible Load more button after the last row does the same for keyboard and assistive-technology users (NFR-5), and hides when there is no next page; when a press on it brings the last page, focus moves to that page's first row, so it is not lost with the button (D-535);
     - each load announces "Loaded 50 more Transactions" in a polite live region, with the page's own count for a shorter last page ("Loaded 1 more Transaction") (D-530).
 - **BR-F03-76** The page renders on the server with its first-screen reads prefetched for the URL's filter and hydrated (root 7.3, STATE-5): the first page of the list, the summary with `by=category,payee` (BR-F03-71), and the saved views.
-    - **Filter counts and the histogram** load when their control first opens (D-523), then follow the filter.
+    - **Filter counts and the histogram** load when their control opens (D-523), and only while it is open, kept fresh for 30 seconds (D-546).
     - **Payee suggestions** load once a logged-in page has rendered, so the first entry dialog has them at once.
 - **BR-F03-31** Day grouping (BR-F03-55) shows sticky day headers by `occurredOn` (D-522): "Today"; "Yesterday · " followed by that day in the F02 day format ("Yesterday · Sun, 1 Nov"); or the F02 day format ("Sat, 31 Oct"; "Fri, 31 Oct, 2025" outside the current year). Every other grouping shows the day on each row instead, before the time: "Today · 11:40 am", or "Sat, 31 Oct · 11:50 pm" in the F02 day format (so yesterday reads "Sun, 1 Nov · 12:30 am"). A charge shows its day alone.
 - **BR-F03-32** A row shows five things (D-528):
@@ -342,19 +342,19 @@ A view's `filter` holds the filter object's fields with these differences from t
 - **BR-F03-37** A category filter excludes Goal rows (FIL-6), and the filter control says so: "Category filters hide Goal Transactions." A Goal filter shows only that Goal's rows. A Subscription filter (`sub`, D-255) shows only that Subscription's charges; F05's View charges opens it, and its chip reads "Netflix charges".
 - **BR-F03-38** The text box commits its draft 300 ms after typing stops (FIL-4). Enter, or clearing the box, commits at once.
 - **BR-F03-39** Where filters appear (D-523):
-    - **Desktop (768 px and wider):** the search box, then menus for Date, Type, Category, Amount and More, and the Group · Sort menu. Each change commits.
-        - **Date:** the presets with their counts (BR-F03-59). Custom adds From and To date fields that commit 300 ms after typing stops, a two-month range calendar with future days disabled that moves a month at a time and sets the range once both ends are chosen (D-538, D-543), "<n> days · <m> Transactions" with the header's count, and Done.
+    - **Desktop (768 px and wider):** the search box, then menus for Date, Type, Category, Amount and More, and the Group · Sort menu. Each change commits at once; no menu has a Done or Apply, and Escape, a press outside or the trigger closes it. A visit to a menu, or typing in the search box until it loses focus, is one history entry: the first change adds it and later ones replace it (D-547).
+        - **Date:** the presets with their counts (BR-F03-59). Custom adds From and To date fields that commit 300 ms after typing stops, a two-month range calendar with future days disabled that moves a month at a time and sets the range once both ends are chosen (D-538, D-543), "<n> days · <m> Transactions" with the header's count.
         - **Type:** each type with its count.
         - **Category:** the expense categories, then the income categories under "Income", each with its count, and the line "Category filters hide Goal Transactions." (BR-F03-37).
-        - **Amount:** "<n> Transactions" with the header's count; the histogram's bars (BR-F03-60), those inside the chosen range highlighted; a slider with two thumbs that stop on the histogram's edges and commits when a thumb is released, the lower thumb writing its edge as `min` (none at the first edge) and the upper thumb 1 minor unit below its edge as `max` (none at the last edge), the two thumbs staying at least one edge apart and a release that leaves the range as it was committing nothing (D-539); Min and Max fields in the user's format (BR-F03-04) that commit 300 ms after typing stops; the quick ranges (BR-F03-74); Clear and Done.
+        - **Amount:** "<n> Transactions" with the header's count; the histogram's bars (BR-F03-60), those inside the chosen range highlighted; a slider with two thumbs that stop on the histogram's edges and commits when a thumb is released, the lower thumb writing its edge as `min` (none at the first edge) and the upper thumb 1 minor unit below its edge as `max` (none at the last edge), the two thumbs staying at least one edge apart and a release that leaves the range as it was committing nothing (D-539); Min and Max fields in the user's format (BR-F03-04) that commit 300 ms after typing stops; the quick ranges (BR-F03-74); and Clear.
         - **More:** Source: "Any source", "Added by you" and "Subscription charges", each with its count.
         - **Group · Sort:** labeled with both, such as "Day · Newest first". It lists Day ("with day totals"), Category, Payee and "No grouping", then the four sorts (BR-F03-40), and stays open after each choice (D-529):
             - Newest first is `sort=date&dir=desc`, Oldest first `sort=date&dir=asc`, Largest first `sort=amount&dir=desc`, Smallest first `sort=amount&dir=asc`.
             - A sort change keeps a chosen grouping, except Day under an amount sort, which becomes no grouping; a grouping left at its sort's default follows the new sort's default (BR-F03-55), so "Day · Newest first" to Largest first reads "No grouping · Largest first", and back.
             - Choosing Day under an amount sort switches to the date sort in the same direction: Largest first becomes Newest first, Smallest first Oldest first.
-    - **Phones:** "Filters" with the number of active chips, such as "Filters (2)", opens a sheet: chips for the date presets (no Custom), Type, Category and Source, and the amount block.
-        - Changes stay a draft until "Show <n> Transactions" applies them, with one URL change. `n` comes from the summary of the draft, 300 ms after its last change; at zero the button reads "No matches", and until the summary answers, or offline, "Show Transactions".
-        - "Clear all" clears the draft's dates, types, categories, amount and source; the search, a Goal and a Subscription stay (D-544). A custom range from a link still shows as a chip.
+    - **Phones:** "Filters" with the number of active chips, such as "Filters (2)", opens a sheet: chips for the date presets and Custom range, Type, Category and Source, and the amount block. Custom range shows From and To over a one-month range calendar, which set the draft's dates (D-523).
+        - Changes stay a draft until "Show <n> Transactions" applies them, with one URL change. `n` comes from the summary of the draft, and the amount block's histogram from the draft, both 300 ms after its last change; at zero the button reads "No matches". Until the summary answers it reads "Show Transactions" with a spinner and waits; offline it reads "Show Transactions" and applies at once (D-545).
+        - "Clear all" clears the draft's dates, types, categories, amount and source; the search, a Goal and a Subscription stay (D-544). A custom range from a link opens on Custom range.
         - The Group · Sort menu stays beside the search box.
     - **Everywhere:** active filters show as removable chips, each named "Remove <label>" for assistive technology, with Clear all. A chip's label is:
         - a date preset's name, or "5 Oct to 20 Oct" for a custom range (F02 short date);
@@ -1119,7 +1119,7 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
     - choosing Last month and Food reads "Show 4 Transactions" once the draft's summary answers, and the URL stays as it was;
     - pressing it writes check B's URL as one history entry;
     - a draft with no rows reads "No matches";
-    - the sheet offers no Custom range.
+    - Custom range shows From and To over one month; choosing 1 Nov then 2 Nov on the calendar and pressing Show writes `from=2026-11-01&to=2026-11-02`.
 - **AC-F03-62** (client integration) The dialog on golden data:
     - Expense shows the tiles Food, Entertainment, Housing, Shopping, Transportation and Health, then Utilities, the first unused expense category in CAT order, then "+ 8 more"; Income shows all 5 income categories and no "+ N more";
     - on 2026-11-02 the date button reads "Today, 2 Nov", and its calendar enables 23 Oct to 2 Nov only;
@@ -1133,6 +1133,7 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
 - **AC-F03-66** (unit) The Amount slider over the edges `[0, 100, 500, 1000, 5000, 10000, 100000]` rupees at thumbs 0 and 5: End on the lower thumb stops at 4; a thumb moved and moved back commits once; each thumb reads its edge as money, such as "₹5,000" (D-539).
 - **AC-F03-67** (unit) Time fields in the profile's hour cycle: 23:50 reads "11:50 pm" in `en-IN` and "23:50" in `de-DE` (D-537).
 - **AC-F03-68** (unit) Filters on the golden clock: typing 12 into Custom's From day commits one range 300 ms after the last key, not one per digit; From after To reads "Choose a From date on or before To." and commits nothing; Min 900 with Max 799.99 reads "Choose a Min at or below Max." and commits nothing; the search box commits "swiggy" 300 ms after typing stops, at once on Enter or clear, and never commits "sw" (D-543, BR-F03-38).
+- **AC-F03-69** (client integration) History on golden data: in one visit to the Type menu, ticking Expense then Refund adds one history entry and replaces it, so Back returns to the page before the visit; a second visit adds a second entry; removing a chip adds its own; typing "swiggy", pausing and typing " monthly" in one focus of the search box adds one entry (D-547).
 
 ## 15. Illustrations
 

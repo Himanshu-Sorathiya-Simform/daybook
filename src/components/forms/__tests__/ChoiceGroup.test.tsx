@@ -374,6 +374,36 @@ describe("count and description", () => {
 		expect(screen.getByText("12")).toHaveClass("figures");
 	});
 
+	test("holds a count's place while it loads, and shows the count once known", () => {
+		const { container, rerender } = render(
+			<Controlled
+				options={[{ value: "a", label: "Last month", countPending: true }]}
+			/>,
+		);
+
+		expect(container.querySelector(".bg-track.w-4")).toHaveAttribute(
+			"aria-hidden",
+			"true",
+		);
+		expect(radio(/Last month/)).toHaveAccessibleName("Last month");
+
+		rerender(
+			<Controlled
+				options={[
+					{
+						value: "a",
+						label: "Last month",
+						count: 4,
+						countPending: true,
+					},
+				]}
+			/>,
+		);
+
+		expect(container.querySelector(".bg-track.w-4")).toBeNull();
+		expect(radio(/Last month/)).toHaveAccessibleName("Last month 4");
+	});
+
 	test("shows a count of zero", () => {
 		render(
 			<Controlled options={[{ value: "a", label: "Empty one", count: 0 }]} />,

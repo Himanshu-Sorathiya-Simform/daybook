@@ -90,6 +90,22 @@ describe("the choices", () => {
 		expect(box("Income").closest("label")).toHaveTextContent("Income 0");
 	});
 
+	test("holds each count's place while the counts load", async () => {
+		const { user } = renderMenu({ countsPending: true });
+
+		const dialog = await open(user);
+
+		expect(dialog.querySelectorAll("label .bg-track")).toHaveLength(3);
+	});
+
+	test("shows the counts, not placeholders, once they arrive", async () => {
+		const { user } = renderMenu({ countsPending: true, counts: COUNTS });
+
+		const dialog = await open(user);
+
+		expect(dialog.querySelectorAll("label .bg-track")).toHaveLength(0);
+	});
+
 	test("shows no counts before they arrive", async () => {
 		const { user } = renderMenu();
 

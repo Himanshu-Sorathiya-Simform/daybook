@@ -41,6 +41,22 @@ export type AmountBlockProps = {
 
 type Field = { text: string; error: string | undefined };
 
+/** The placeholder's bars while the histogram loads: uneven, so it reads as a histogram. */
+const BAR_HEIGHTS = [
+	"h-5",
+	"h-9",
+	"h-4",
+	"h-12",
+	"h-7",
+	"h-3",
+	"h-10",
+	"h-6",
+	"h-11",
+	"h-8",
+	"h-4",
+	"h-6",
+];
+
 const fieldOf = (minor: number | undefined, locale: FilterLocale): Field => ({
 	text: minor === undefined ? "" : formatAmountInput(minor, locale),
 	error: undefined,
@@ -113,7 +129,10 @@ export function AmountBlock({
 
 	const edges = histogram?.edges ?? [];
 	const ranges = histogram ? quickRanges(histogram) : [];
-	const thumbs = edges.length >= 2 ? (preview ?? thumbsOf(edges, bounds)) : null;
+	// The slider holds its own position while dragging; it gets the committed one, and the
+	// preview only colours the bars, so a release always differs from what it was given.
+	const thumbs = edges.length >= 2 ? thumbsOf(edges, bounds) : null;
+	const shown = preview ?? thumbs;
 	const tallest = Math.max(1, ...(histogram?.counts ?? []));
 	const money = (minor: number) =>
 		formatMoneyShort(minor, locale.currency, locale.numberLocale);
@@ -130,7 +149,28 @@ export function AmountBlock({
 					</span>
 				)}
 			</div>
-			{isLoading && <Skeleton className="h-13 w-full" />}
+			{isLoading && (
+				<div
+					data-testid="amountLoading"
+					className="flex flex-col"
+				>
+					<div className="flex h-13 items-end gap-0.5">
+						{BAR_HEIGHTS.map((height, i) => (
+							<Skeleton
+								key={i}
+								className={cn("flex-1 rounded-b-none", height)}
+							/>
+						))}
+					</div>
+					<div className="flex h-7 items-center">
+						<Skeleton className="h-1" />
+					</div>
+					<div className="flex justify-between">
+						<Skeleton className="h-2.75 w-9" />
+						<Skeleton className="h-2.75 w-11" />
+					</div>
+				</div>
+			)}
 			{thumbs && histogram && (
 				<>
 					<div
@@ -143,7 +183,7 @@ export function AmountBlock({
 								key={edges[i]}
 								className={cn(
 									"rounded-t-bar min-h-0.5 flex-1",
-									i >= thumbs[0] && i < thumbs[1] ?
+									i >= shown![0] && i < shown![1] ?
 										"bg-accent"
 									:	"bg-track",
 								)}
@@ -197,6 +237,13 @@ export function AmountBlock({
 					}}
 				/>
 			</div>
+			{isLoading && (
+				<div className="flex gap-1.5">
+					<Skeleton className="h-10 w-24 rounded-full" />
+					<Skeleton className="h-10 w-28 rounded-full" />
+					<Skeleton className="h-10 w-24 rounded-full" />
+				</div>
+			)}
 			{ranges.length > 0 && (
 				<ToggleChips
 					label="Quick ranges"

@@ -95,6 +95,12 @@ describe("the choices", () => {
 				.map((each) => each.closest("label")!.textContent),
 		).toEqual(INCOME_CATEGORIES.map(categoryLabel));
 		expect(within(dialog).getByText("Income")).toBeInTheDocument();
+		const expenseHeading = within(dialog).getByText("Expense");
+		expect(expenseHeading).toHaveAttribute("aria-hidden", "true");
+		expect(
+			expenseHeading.compareDocumentPosition(expense)
+				& Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
 		expect(
 			expense.compareDocumentPosition(income)
 				& Node.DOCUMENT_POSITION_FOLLOWING,
@@ -120,6 +126,16 @@ describe("the choices", () => {
 		expect(box("Food").closest("label")).toHaveTextContent("Food 4");
 		expect(box("Salary").closest("label")).toHaveTextContent("Salary 1");
 		expect(box("Health").closest("label")).toHaveTextContent("Health 0");
+	});
+
+	test("holds each count's place while the counts load", async () => {
+		const { user } = renderMenu({ countsPending: true });
+
+		const dialog = await open(user);
+
+		expect(dialog.querySelectorAll("label .bg-track")).toHaveLength(
+			EXPENSE_CATEGORIES.length + INCOME_CATEGORIES.length,
+		);
 	});
 
 	test("shows no counts before they arrive", async () => {

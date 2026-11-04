@@ -168,6 +168,21 @@ describe("the months", () => {
 		},
 	);
 
+	test("with one month shows only the month holding the range's end", () => {
+		renderRange({ months: 1 });
+
+		expect(grids()).toHaveLength(1);
+		expect(captions()).toEqual(["November 2026"]);
+	});
+
+	test("with one month the arrows still move a month at a time", async () => {
+		const { user } = renderRange({ months: 1 });
+
+		await user.click(screen.getByRole("button", { name: "Previous month" }));
+
+		expect(captions()).toEqual(["October 2026"]);
+	});
+
 	test("names the months in the locale", () => {
 		renderRange({ locale: "de-DE" });
 

@@ -28,12 +28,14 @@ export type RangeCalendarProps = {
 	maxValue?: string;
 	/** The profile's week start, the first column of each month. */
 	firstDayOfWeek?: WeekStart;
+	/** Two months side by side, or one for a phone sheet. */
+	months?: 1 | 2;
 	className?: string;
 };
 
 /**
- * Two months side by side, the later one holding the chosen range's end, or `today` before a
- * range is chosen. A range set from outside, such as typed From and To dates, brings its end
+ * Two months side by side, or one, the later holding the chosen range's end, or `today` before
+ * a range is chosen. A range set from outside, such as typed From and To dates, brings its end
  * into view. The months stack when there is no room for both. A press on one day starts a range
  * and on a second day ends it, in either order. From the keyboard, Enter starts a range and
  * moves focus on a day, the arrow keys extend it and Enter ends it; Escape drops a range not
@@ -47,6 +49,7 @@ export function RangeCalendar({
 	minValue,
 	maxValue,
 	firstDayOfWeek,
+	months = 2,
 	className,
 }: Readonly<RangeCalendarProps>) {
 	const end = value?.end ?? null;
@@ -73,7 +76,7 @@ export function RangeCalendar({
 					end: range.end.toString(),
 				})
 			}
-			visibleDuration={{ months: 2 }}
+			visibleDuration={{ months }}
 			pageBehavior="single"
 			focusedValue={focused}
 			onFocusChange={setFocused}
@@ -92,12 +95,14 @@ export function RangeCalendar({
 					showMonthName
 					compact
 				/>
-				<CalendarMonth
-					today={today}
-					offset={{ months: 1 }}
-					showMonthName
-					compact
-				/>
+				{months === 2 && (
+					<CalendarMonth
+						today={today}
+						offset={{ months: 1 }}
+						showMonthName
+						compact
+					/>
+				)}
 			</div>
 		</AriaRangeCalendar>
 	);

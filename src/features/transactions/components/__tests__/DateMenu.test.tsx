@@ -134,6 +134,22 @@ describe("the presets", () => {
 		);
 	});
 
+	test("holds each count's place while the counts load", async () => {
+		const { user } = renderMenu({ countsPending: true });
+
+		const dialog = await open(user);
+
+		expect(dialog.querySelectorAll("label .bg-track")).toHaveLength(6);
+	});
+
+	test("shows the counts, not placeholders, once they arrive", async () => {
+		const { user } = renderMenu({ countsPending: true, counts: COUNTS });
+
+		const dialog = await open(user);
+
+		expect(dialog.querySelectorAll("label .bg-track")).toHaveLength(0);
+	});
+
 	test("checks the preset the dates match", async () => {
 		const { user } = renderMenu({
 			filter: { from: "2026-01-01", to: "2026-11-02" },
@@ -199,7 +215,8 @@ describe("Custom range (BR-F03-39, D-538)", () => {
 			/^Custom range/,
 		);
 		expect(dialog.closest(".w-130")).not.toBeNull();
-		expect(screen.getByRole("button", { name: "Done" })).toBeInTheDocument();
+		// D-547: no Done; a range applies as soon as it is chosen.
+		expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
 	});
 
 	test("without a range the fields are empty and no days line shows", async () => {
@@ -410,14 +427,21 @@ describe("Custom range (BR-F03-39, D-538)", () => {
 		});
 	});
 
-	test("Done closes the popover", async () => {
-		const { user } = renderMenu();
+	test("a press outside closes it, keeping the range already applied", async () => {
+		const { user, onChange } = renderMenu();
 
 		await open(user);
 		await user.click(radio("Custom range"));
-		await user.click(screen.getByRole("button", { name: "Done" }));
+		await user.click(day("5 October 2026"));
+		await user.click(day("6 October 2026"));
+		await user.click(document.body);
 
 		await closed();
+		expect(onChange).toHaveBeenCalledExactlyOnceWith({
+			from: "2026-10-05",
+			to: "2026-10-06",
+		});
+		expect(trigger("Date 5 Oct to 6 Oct")).toBeInTheDocument();
 	});
 
 	test("closing without a range goes back to the presets next time", async () => {
@@ -431,7 +455,6 @@ describe("Custom range (BR-F03-39, D-538)", () => {
 
 		expect(radio("All time")).toBeChecked();
 		expect(screen.queryByRole("group", { name: "From" })).toBeNull();
-		expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
 	});
 
 	test("a preset chosen after Custom range commits and closes", async () => {

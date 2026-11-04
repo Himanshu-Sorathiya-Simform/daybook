@@ -279,6 +279,35 @@ describe.each(TYPES)("a %s", (type) => {
 
 			expect(control(type)).toHaveAccessibleName("Food");
 		});
+
+		test("holds the count's place while it loads, hidden from screen readers", () => {
+			const { container } = render(
+				<Choice
+					type={type}
+					label="Food"
+					countPending
+				/>,
+			);
+
+			const placeholder = container.querySelector(".bg-track.w-4");
+			expect(placeholder).toHaveAttribute("aria-hidden", "true");
+			expect(placeholder).toHaveClass("h-3", "w-4");
+			expect(control(type)).toHaveAccessibleName("Food");
+		});
+
+		test("shows the count, not the placeholder, once it is known", () => {
+			const { container } = render(
+				<Choice
+					type={type}
+					label="Food"
+					count={4}
+					countPending
+				/>,
+			);
+
+			expect(container.querySelector(".bg-track.w-4")).toBeNull();
+			expect(screen.getByRole(type, { name: "Food 4" })).toBeInTheDocument();
+		});
 	});
 
 	describe("description", () => {

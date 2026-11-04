@@ -127,11 +127,24 @@ describe("the popover", () => {
 		expect(onChange).not.toHaveBeenCalled();
 	});
 
-	test("Done closes it", async () => {
+	// D-547
+	test("has no Done; Escape closes it with the change already applied", async () => {
+		const { user, onChange } = renderMenu();
+
+		await open(user);
+		expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
+		await user.click(screen.getByRole("radio", { name: "Under ₹400" }));
+		await user.keyboard("{Escape}");
+
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(onChange).toHaveBeenCalledExactlyOnceWith({ maxMinor: 39999 });
+	});
+
+	test("a press on the trigger closes it", async () => {
 		const { user } = renderMenu();
 
 		await open(user);
-		await user.click(screen.getByRole("button", { name: "Done" }));
+		await user.click(trigger());
 
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 	});

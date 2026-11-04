@@ -25,9 +25,9 @@ import {
 } from "@/lib/transactions/model";
 import { presetRange } from "@/lib/transactions/presets";
 import type { TransactionFilter } from "@/lib/transactions/url";
+import type { WeekStart } from "@/lib/geo";
 import { useHistogram } from "../hooks/useHistogram";
 import {
-	dateLabel,
 	FILTER_TYPES,
 	type FilterLocale,
 	omitFields,
@@ -41,6 +41,7 @@ import { FILTER_TEXT } from "../lib/messages";
 import { transactionSummaryOptions } from "../lib/queries";
 import { PAGE_BREAKDOWNS } from "../lib/types";
 import { AmountBlock } from "./AmountBlock";
+import { CustomRange } from "./CustomRange";
 
 /** The draft's count is asked for this long after its last change (BR-F03-39). */
 export const DRAFT_COUNT_MS = 300;
@@ -53,6 +54,8 @@ export type FilterSheetProps = {
 	/** How many chips the committed filter shows, for "Filters (2)". */
 	activeCount: number;
 	locale: FilterLocale;
+	/** The profile's week start, the custom calendar's first column. */
+	firstDayOfWeek: WeekStart;
 	className?: string;
 };
 
@@ -78,20 +81,25 @@ function withList<K extends "type" | "cat">(
 
 /**
  * Filters on phones (BR-F03-39, D-523): "Filters", or "Filters (2)" with active chips, opens a
- * sheet of chips for the date presets (no Custom), Type, Category and Source, and the amount
- * block. Changes stay a draft until "Show 4 Transactions" applies them as one URL change; the
- * count is the draft's summary, asked 300 ms after its last change. With none it reads "No
- * matches", and until the summary answers, or offline, "Show Transactions". A custom range from
- * a link shows as a chip of its own. Clear all clears the draft's fields; closing drops it.
+ * sheet of chips for the date presets and Custom range, Type, Category and Source, and the
+ * amount block. Custom range shows From and To over a one-month range calendar, which set the
+ * draft's dates (D-523). Changes stay a draft until "Show 4 Transactions" applies them as one URL change; the
+ * count is the draft's summary, and the amount block's histogram is the draft's, both asked
+ * 300 ms after its last change. With none it reads "No matches". Until the summary answers it
+ * reads "Show Transactions" with a spinner and waits; offline it reads "Show Transactions"
+ * and applies at once (D-545). A custom range from a link opens on Custom range. Clear all
+ * clears the draft's fields; closing drops it.
  */
 export function FilterSheet({
 	filter,
 	onApply,
 	activeCount,
 	locale,
+	firstDayOfWeek,
 	className,
 }: Readonly<FilterSheetProps>) {
 	const [isOpen, setOpen] = useState(false);
+	const [custom, setCustom] = useState(false);
 	const [draft, setDraft] = useState(filter);
 	const online = useOnline();
 	const [settled] = useDebouncedValue(draft, { wait: DRAFT_COUNT_MS });
@@ -104,7 +112,7 @@ export function FilterSheet({
 		enabled: isOpen,
 	});
 	const histogram = useHistogram({
-		filter: draft,
+		filter: settled,
 		currency: locale.currency,
 		enabled: isOpen,
 	});
@@ -112,17 +120,18 @@ export function FilterSheet({
 	const set = (next: TransactionFilter) => setDraft(next);
 	const preset = presetOfFilter(draft, locale.today);
 	const counted = online && settled === draft ? summary.data?.count : undefined;
+	// While online, the count is on its way until the draft settles and its summary answers.
+	const counting = online && counted === undefined;
 	const showLabel =
 		counted === undefined ? "Show Transactions"
 		: counted === 0 ? FILTER_TEXT.noMatches
 		: `Show ${transactionCount(counted)}`;
 
+	const showCustom = custom || preset === "custom";
 	const dateOptions = [
 		{ value: "all", label: PRESET_LABELS.all },
 		...RANGE_PRESETS.map((key) => ({ value: key, label: PRESET_LABELS[key] })),
-		...(preset === "custom" ?
-			[{ value: "custom", label: dateLabel(draft, locale) }]
-		:	[]),
+		{ value: "custom", label: PRESET_LABELS.custom },
 	];
 	const categories = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES];
 
@@ -132,6 +141,7 @@ export function FilterSheet({
 				variant="secondary"
 				onPress={() => {
 					setDraft(filter);
+					setCustom(false);
 					setOpen(true);
 				}}
 				className={cn(
@@ -163,6 +173,7 @@ export function FilterSheet({
 						</Button>
 						<Button
 							size="lg"
+							isPending={counting}
 							onPress={() => {
 								onApply(draft);
 								setOpen(false);
@@ -185,9 +196,12 @@ export function FilterSheet({
 						label="Date"
 						selectionMode="single"
 						options={dateOptions}
-						value={[preset]}
+						value={[showCustom ? "custom" : preset]}
 						onChange={([key]) => {
-							// A custom range is only ever the chosen chip, which reports no press.
+							// Custom range shows its fields and keeps the draft's dates until a
+							// range is chosen.
+							setCustom(key === "custom");
+							if (key === "custom") return;
 							const rest = omitFields(draft, "from", "to");
 							set(
 								key === "all" ? rest : (
@@ -202,6 +216,27 @@ export function FilterSheet({
 							);
 						}}
 					/>
+					{showCustom && (
+						<CustomRange
+							value={
+								draft.from === undefined ?
+									null
+								:	{ start: draft.from, end: draft.to! }
+							}
+							onChange={({ start, end }) =>
+								set({
+									...omitFields(draft, "from", "to"),
+									from: start,
+									to: end,
+								})
+							}
+							today={locale.today}
+							firstDayOfWeek={firstDayOfWeek}
+							count={counted}
+							months={1}
+							className="mt-1"
+						/>
+					)}
 				</div>
 				<div className="flex flex-col gap-2">
 					<p

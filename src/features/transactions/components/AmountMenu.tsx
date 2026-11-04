@@ -22,7 +22,8 @@ export type AmountMenuProps = {
 
 /**
  * The Amount control (BR-F03-39): a trigger reading "Amount Any", or the amount chip's label,
- * opening the amount block with Clear and Done. Clear drops both bounds at once.
+ * opening the amount block with Clear, which drops both bounds at once. Like every menu it has
+ * no Done: each change applies, and Escape, a press outside or the trigger closes it (D-547).
  */
 export function AmountMenu({
 	bounds,
@@ -46,7 +47,6 @@ export function AmountMenu({
 			isActive={label !== null}
 			align="end"
 			width="lg"
-			showDone
 			footer={
 				<Button
 					variant="ghost"

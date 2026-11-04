@@ -97,10 +97,15 @@ export function useTransactionsUrl(currency: CurrencyCode) {
 		notice,
 		dismissNotice: () => setNotice(false),
 		/** A new committed filter, and list parameters when given. The view, the selected row
-		 * and the dialog stay (BR-F03-66, BR-F03-73). */
-		setFilter: (filter: TransactionFilter, list: ListParams = current.list) => {
+		 * and the dialog stay (BR-F03-66, BR-F03-73). It adds a history entry, or replaces the
+		 * current one for a later change in the same visit to a control (D-547). */
+		setFilter: (
+			filter: TransactionFilter,
+			list: ListParams = current.list,
+			mode: "push" | "replace" = "push",
+		) => {
 			setNotice(false);
-			go("push", { ...current, filter, list });
+			go(mode, { ...current, filter, list });
 		},
 		setList: (list: ListParams) => go("push", { ...current, list }),
 		/** Applies a view: its filter and list replace the URL's, with `view=<id>`, or none for

@@ -137,7 +137,23 @@ describe("the histogram (BR-F03-60)", () => {
 		expect(axis).toHaveTextContent("₹315₹3,150");
 	});
 
-	test("while it loads shows a placeholder and no slider", () => {
+	test("while it loads shows a placeholder shaped like the bars, track, edges and quick ranges", () => {
+		renderBlock({ histogram: undefined, isLoading: true });
+
+		const loading = screen.getByTestId("amountLoading");
+		const [bars, track, axis] = Array.from(loading.children);
+		expect(bars!.children).toHaveLength(12);
+		expect(bars).toHaveClass("h-13");
+		expect(track).toHaveClass("h-7");
+		expect(axis!.children).toHaveLength(2);
+		const chips = screen
+			.getByRole("textbox", { name: "Max" })
+			.closest(".grid")!.nextElementSibling!;
+		expect(chips.children).toHaveLength(3);
+		expect(chips.firstElementChild).toHaveClass("h-10", "rounded-full");
+	});
+
+	test("while it loads shows no slider", () => {
 		renderBlock({ histogram: undefined, isLoading: true });
 
 		expect(screen.queryByTestId("amountBars")).toBeNull();
@@ -162,7 +178,54 @@ describe("the histogram (BR-F03-60)", () => {
 	});
 });
 
+/** jsdom lays nothing out, so the track is given a 600px width for the pointer. */
+function sizeTrack() {
+	const track = low().closest("[data-rac]")!.parentElement as HTMLElement;
+	track.getBoundingClientRect = () =>
+		({
+			left: 0,
+			right: 600,
+			width: 600,
+			top: 0,
+			bottom: 28,
+			height: 28,
+		}) as DOMRect;
+}
+// React Aria measures a drag by the page position.
+const at = (x: number) => ({ clientX: x, pageX: x, clientY: 14, pageY: 14 });
+
 describe("the slider (BR-F03-39, D-539)", () => {
+	test("a thumb dragged with the mouse commits its edge when released", async () => {
+		const { user, onChange } = renderBlock();
+		sizeTrack();
+
+		await user.pointer([
+			{
+				keys: "[MouseLeft>]",
+				target: low().closest<HTMLElement>("[data-rac]")!,
+				coords: at(0),
+			},
+			{ coords: at(130) },
+			{ keys: "[/MouseLeft]" },
+		]);
+
+		expect(onChange).toHaveBeenCalledExactlyOnceWith({ minMinor: 50000 });
+		expect(screen.getByRole("textbox", { name: "Min" })).toHaveValue("500.00");
+	});
+
+	test("a press on the track moves the nearer thumb and commits", async () => {
+		const { user, onChange } = renderBlock();
+		sizeTrack();
+
+		await user.pointer({
+			keys: "[MouseLeft]",
+			target: low().closest("[data-rac]")!.parentElement!,
+			coords: at(545),
+		});
+
+		expect(onChange).toHaveBeenCalledExactlyOnceWith({ maxMinor: 249999 });
+	});
+
 	test("its thumbs sit on the edges of the bounds and read them as money", () => {
 		renderBlock({ bounds: { minMinor: 40000, maxMinor: 79999 } });
 

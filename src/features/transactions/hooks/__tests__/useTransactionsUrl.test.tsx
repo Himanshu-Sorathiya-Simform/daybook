@@ -255,6 +255,40 @@ describe("writing the URL", () => {
 		expect(calls.at(-1)?.href).toBe("/transactions");
 	});
 
+	// D-547
+	test("a later change in one visit replaces the history entry instead of adding one", async () => {
+		const { result, calls } = await renderUrl("?sort=amount");
+		act(() => result.current.setFilter({ type: ["expense"] }));
+		act(() =>
+			result.current.setFilter(
+				{ type: ["expense", "refund"] },
+				result.current.list,
+				"replace",
+			),
+		);
+		expect(calls).toEqual([
+			{ mode: "push", href: "/transactions?type=expense&sort=amount" },
+			{
+				mode: "replace",
+				href: "/transactions?type=expense,refund&sort=amount",
+			},
+		]);
+		expect(result.current.filter).toEqual({ type: ["expense", "refund"] });
+	});
+
+	test("a replacing change still clears the invalid-link notice", async () => {
+		const { result } = await renderUrl("?cat=nope");
+		expect(result.current.notice).toBe(true);
+		act(() =>
+			result.current.setFilter(
+				{ cat: ["food"] },
+				result.current.list,
+				"replace",
+			),
+		);
+		expect(result.current.notice).toBe(false);
+	});
+
 	test("Clear all is an empty filter, which writes the bare path", async () => {
 		const { result, calls } = await renderUrl("?cat=food&q=swiggy");
 		act(() => result.current.setFilter({}));

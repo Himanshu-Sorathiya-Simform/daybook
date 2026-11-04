@@ -3,6 +3,7 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { setupServer } from "msw/node";
 import { useState } from "react";
+import { I18nProvider } from "react-aria-components";
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { renderInApp } from "@/components/app/__tests__/helpers";
@@ -74,6 +75,7 @@ function renderSheet(props: Partial<FilterSheetProps> = {}) {
 			<FilterSheet
 				activeCount={0}
 				locale={IN}
+				firstDayOfWeek="monday"
 				{...props}
 				filter={filter}
 				onApply={(next) => {
@@ -83,7 +85,12 @@ function renderSheet(props: Partial<FilterSheetProps> = {}) {
 			/>
 		);
 	}
-	const view = renderInApp(<Harness />);
+	// The app shell gives React Aria the profile's date locale (D-537).
+	const view = renderInApp(
+		<I18nProvider locale="en-IN">
+			<Harness />
+		</I18nProvider>,
+	);
 	return { ...view, summaries, histograms, onApply, user: userEvent.setup() };
 }
 
@@ -103,6 +110,11 @@ const chip = (group: string, name: string) =>
 		name,
 	});
 const show = () => screen.getByRole("button", { name: /^(Show|No matches)/ });
+/** Presses Show once the draft's count has answered, as Show waits for it. */
+async function apply(user: ReturnType<typeof userEvent.setup>) {
+	await waitFor(() => expect(show()).not.toHaveAttribute("data-pending"));
+	await user.click(show());
+}
 const closed = () =>
 	waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
@@ -146,6 +158,7 @@ describe("the sheet", () => {
 			"Last 3 months",
 			"Year to date",
 			"Last 12 months",
+			"Custom range",
 		]);
 		expect(
 			within(within(sheet).getByRole("toolbar", { name: "Type" }))
@@ -166,12 +179,15 @@ describe("the sheet", () => {
 	});
 
 	// AC-F03-61
-	test("offers no Custom range", async () => {
+	test("offers Custom range after the presets, with no fields until chosen", async () => {
 		const { user } = renderSheet();
 
 		const sheet = await open(user);
 
-		expect(within(sheet).queryByRole("radio", { name: /Custom/ })).toBeNull();
+		expect(
+			within(sheet).getByRole("radio", { name: "Custom range" }),
+		).not.toBeChecked();
+		expect(within(sheet).queryByRole("group", { name: "From" })).toBeNull();
 	});
 
 	test("lists every category, the expense ones first", async () => {
@@ -204,14 +220,21 @@ describe("the sheet", () => {
 		expect(chip("Source", "Added by you")).toBeChecked();
 	});
 
-	test("a custom range from a link shows as a chip of its own, chosen", async () => {
+	test("a custom range from a link opens on Custom range, with its days in the fields", async () => {
 		const { user } = renderSheet({
 			filter: { from: "2026-10-05", to: "2026-10-20" },
 		});
 
 		await open(user);
 
-		expect(chip("Date", "5 Oct to 20 Oct")).toBeChecked();
+		expect(chip("Date", "Custom range")).toBeChecked();
+		expect(
+			screen.getByRole("spinbutton", { name: "day, From" }),
+		).toHaveAttribute("aria-valuenow", "5");
+		expect(screen.getByRole("spinbutton", { name: "day, To" })).toHaveAttribute(
+			"aria-valuenow",
+			"20",
+		);
 	});
 
 	test("asks for the histogram of the draft once open", async () => {
@@ -221,6 +244,92 @@ describe("the sheet", () => {
 
 		await waitFor(() => expect(histograms).toHaveLength(1));
 		expect(await screen.findAllByRole("slider")).toHaveLength(2);
+	});
+});
+
+describe("Custom range on the phone (BR-F03-39, D-523)", () => {
+	test("shows From, To and one month of the range calendar, keeping the draft's dates", async () => {
+		const { user } = renderSheet({
+			filter: { from: "2026-10-01", to: "2026-10-31" },
+		});
+
+		await open(user);
+		await user.click(chip("Date", "Custom range"));
+
+		expect(chip("Date", "Custom range")).toBeChecked();
+		expect(screen.getByRole("group", { name: "From" })).toBeInTheDocument();
+		expect(screen.getAllByRole("grid", { hidden: false })).toHaveLength(1);
+		expect(
+			screen.getByRole("spinbutton", { name: "day, From" }),
+		).toHaveAttribute("aria-valuenow", "1");
+	});
+
+	// AC-F03-61
+	test("a range chosen on the calendar sets the draft, which Show applies", async () => {
+		const { user, onApply } = renderSheet();
+
+		await open(user);
+		await user.click(chip("Date", "Custom range"));
+		await user.click(
+			screen.getByRole("button", { name: /(^|, )\w+, 2 November 2026\b/ }),
+		);
+		await user.click(
+			screen.getByRole("button", { name: /(^|, )\w+, 1 November 2026\b/ }),
+		);
+		expect(onApply).not.toHaveBeenCalled();
+		await apply(user);
+
+		expect(onApply).toHaveBeenCalledExactlyOnceWith({
+			from: "2026-11-01",
+			to: "2026-11-02",
+		});
+	});
+
+	test("From after To says so and leaves the draft's dates", async () => {
+		const { user, onApply } = renderSheet({
+			filter: { from: "2026-10-05", to: "2026-10-20" },
+		});
+
+		await open(user);
+		await user.click(screen.getByRole("spinbutton", { name: "day, From" }));
+		await user.keyboard("25");
+
+		expect(
+			await screen.findByText("Choose a From date on or before To."),
+		).toBeInTheDocument();
+		await apply(user);
+		expect(onApply).toHaveBeenCalledExactlyOnceWith({
+			from: "2026-10-05",
+			to: "2026-10-20",
+		});
+	});
+
+	test("a preset after Custom range hides the fields and sets its dates", async () => {
+		const { user, onApply } = renderSheet();
+
+		await open(user);
+		await user.click(chip("Date", "Custom range"));
+		await user.click(chip("Date", "This month"));
+
+		expect(screen.queryByRole("group", { name: "From" })).toBeNull();
+		await apply(user);
+		expect(onApply).toHaveBeenCalledExactlyOnceWith({
+			from: "2026-11-01",
+			to: "2026-11-30",
+		});
+	});
+
+	test("opening the sheet again starts on the presets", async () => {
+		const { user } = renderSheet();
+
+		await open(user);
+		await user.click(chip("Date", "Custom range"));
+		await user.click(screen.getByRole("button", { name: "Close" }));
+		await closed();
+		await open(user);
+
+		expect(chip("Date", "All time")).toBeChecked();
+		expect(screen.queryByRole("group", { name: "From" })).toBeNull();
 	});
 });
 
@@ -244,7 +353,7 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 		await open(user);
 		await user.click(chip("Date", "Last month"));
 		await user.click(chip("Category", "Food"));
-		await user.click(show());
+		await apply(user);
 
 		expect(onApply).toHaveBeenCalledExactlyOnceWith({
 			from: "2026-10-01",
@@ -316,6 +425,49 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 		expect(show()).toHaveTextContent(/^Show Transactions$/);
 	});
 
+	test("while the count is on its way, Show spins and ignores a press", async () => {
+		const { user, onApply } = renderSheet();
+
+		await open(user);
+		await user.click(chip("Type", "Expense"));
+		expect(show()).toHaveAttribute("data-pending", "true");
+		expect(show()).toHaveTextContent(/^Show Transactions$/);
+		await user.click(show());
+
+		expect(onApply).not.toHaveBeenCalled();
+		await waitFor(() => expect(show()).not.toHaveAttribute("data-pending"));
+	});
+
+	test("offline Show does not wait for a count and applies at once", async () => {
+		const { user, onApply } = renderSheet();
+		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+		act(() => {
+			window.dispatchEvent(new Event("offline"));
+			onlineManager.setOnline(false);
+		});
+
+		await open(user);
+		await user.click(chip("Type", "Expense"));
+		expect(show()).not.toHaveAttribute("data-pending");
+		await user.click(show());
+
+		expect(onApply).toHaveBeenCalledExactlyOnceWith({ type: ["expense"] });
+	});
+
+	test("the draft's histogram is asked once its changes settle, not per tap", async () => {
+		const { user, histograms } = renderSheet();
+
+		await open(user);
+		await waitFor(() => expect(histograms).toHaveLength(1));
+		await user.click(chip("Type", "Expense"));
+		await user.click(chip("Type", "Income"));
+		await user.click(chip("Category", "Food"));
+		await waitFor(() => expect(histograms).toHaveLength(2));
+		await new Promise((resolve) => setTimeout(resolve, 400));
+
+		expect(histograms).toHaveLength(2);
+	});
+
 	test("offline it shows no count it had before going offline", async () => {
 		const { user } = renderSheet();
 		await open(user);
@@ -344,7 +496,7 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 		await user.click(chip("Type", "Expense"));
 		await user.click(chip("Category", "Food"));
 		await user.click(chip("Category", "Food"));
-		await user.click(show());
+		await apply(user);
 
 		expect(onApply).toHaveBeenCalledExactlyOnceWith({ type: ["refund"] });
 	});
@@ -357,7 +509,7 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 		await open(user);
 		await user.click(chip("Date", "All time"));
 		await user.click(chip("Source", "Any source"));
-		await user.click(show());
+		await apply(user);
 
 		expect(onApply).toHaveBeenCalledExactlyOnceWith({});
 	});
@@ -368,7 +520,7 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 		await open(user);
 		await user.click(chip("Date", "This month"));
 		await user.click(chip("Source", "Added by you"));
-		await user.click(show());
+		await apply(user);
 
 		expect(onApply).toHaveBeenCalledExactlyOnceWith({
 			from: "2026-11-01",
@@ -382,7 +534,7 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 
 		await open(user);
 		await user.click(await screen.findByRole("radio", { name: "₹400 to ₹800" }));
-		await user.click(show());
+		await apply(user);
 
 		expect(onApply).toHaveBeenCalledExactlyOnceWith({
 			minMinor: 40000,
@@ -402,7 +554,7 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 
 			await open(user);
 			await user.click(await screen.findByRole("radio", { name }));
-			await user.click(show());
+			await apply(user);
 
 			expect(onApply).toHaveBeenCalledExactlyOnceWith(bounds);
 		},
@@ -425,7 +577,7 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 		await open(user);
 		await user.click(screen.getByRole("button", { name: "Clear all" }));
 		expect(onApply).not.toHaveBeenCalled();
-		await user.click(show());
+		await apply(user);
 
 		expect(onApply).toHaveBeenCalledExactlyOnceWith({ q: "swiggy" });
 	});

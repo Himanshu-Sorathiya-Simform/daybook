@@ -1553,6 +1553,88 @@ describe("filters (BR-F03-39, D-523)", () => {
 		);
 	});
 
+	test("closed controls never follow the filter; reopening asks for the new filter's counts", async () => {
+		const { user, facets, histograms } = renderFiltered(CHECK_B);
+		await grid();
+
+		await user.click(menu("Type"));
+		await screen.findByRole("checkbox", { name: "Expense 4" });
+		await user.keyboard("{Escape}");
+		await user.click(menu("Amount"));
+		await screen.findByRole("slider", { name: /^Minimum amount/ });
+		await user.keyboard("{Escape}");
+		await user.click(screen.getByRole("button", { name: "Remove Food" }));
+		await waitFor(() => expect(menu("Category Any")).toBeInTheDocument());
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		expect(facets).toHaveLength(1);
+		expect(histograms).toHaveLength(1);
+
+		await user.click(menu("Type"));
+
+		await waitFor(() => expect(facets).toHaveLength(2));
+		expect(requestOf(facets[1]!)).toBe(
+			"/api/transactions/facets?from=2026-10-01&to=2026-10-31",
+		);
+		expect(histograms).toHaveLength(1);
+	});
+
+	test("the Amount control asks for no counts, as it shows none", async () => {
+		const { user, facets, histograms } = renderFiltered("");
+		await grid();
+
+		await user.click(menu("Amount"));
+		await screen.findByRole("slider", { name: /^Minimum amount/ });
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		expect(histograms).toHaveLength(1);
+		expect(facets).toHaveLength(0);
+	});
+
+	test("an open control's counts follow a choice made in it", async () => {
+		const { user, facets } = renderFiltered("");
+		await grid();
+
+		await user.click(menu("Type"));
+		await screen.findByRole("checkbox", { name: "Expense 4" });
+		await user.click(screen.getByRole("checkbox", { name: "Refund 0" }));
+
+		await waitFor(() => expect(facets).toHaveLength(2));
+		expect(requestOf(facets[1]!)).toBe("/api/transactions/facets?type=refund");
+	});
+
+	test("while the counts load, each option holds a placeholder", async () => {
+		const { user } = renderPage("");
+		route(network, "get", "/api/transactions/facets", async () => {
+			await new Promise((resolve) => setTimeout(resolve, 300));
+			return ok(CHECK_B_FACETS);
+		});
+		await grid();
+
+		await user.click(menu("Type"));
+		const dialog = await screen.findByRole("dialog", { name: "Type" });
+
+		expect(dialog.querySelectorAll("label .bg-track")).toHaveLength(3);
+		expect(
+			await screen.findByRole("checkbox", { name: "Expense 4" }),
+		).toBeInTheDocument();
+		expect(dialog.querySelectorAll("label .bg-track")).toHaveLength(0);
+	});
+
+	test("offline no placeholders show, as the counts never come", async () => {
+		const { user } = renderFiltered("");
+		await grid();
+		goOffline();
+		act(() => onlineManager.setOnline(false));
+
+		await user.click(menu("Type"));
+		const dialog = await screen.findByRole("dialog", { name: "Type" });
+
+		expect(dialog.querySelectorAll("label .bg-track")).toHaveLength(0);
+		expect(
+			screen.getByRole("checkbox", { name: "Expense" }),
+		).toBeInTheDocument();
+	});
+
 	test.each([
 		["Type", "checkbox", /^Refund/, "/transactions?type=refund"],
 		["Category", "checkbox", /^Health/, "/transactions?cat=health"],
@@ -1739,8 +1821,149 @@ describe("the phone sheet (BR-F03-39)", () => {
 		await user.click(within(sheet).getByRole("radio", { name: "Last month" }));
 		await user.click(within(sheet).getByRole("button", { name: "Food" }));
 		expect(calls).toEqual([]);
-		await user.click(within(sheet).getByRole("button", { name: /^Show/ }));
+		const show = within(sheet).getByRole("button", { name: /^Show/ });
+		await waitFor(() => expect(show).not.toHaveAttribute("data-pending"));
+		await user.click(show);
 
 		expect(calls).toEqual([{ mode: "push", href: `/transactions${CHECK_B}` }]);
+	});
+});
+
+describe("history (D-547)", () => {
+	// AC-F03-69
+	test("one visit to a menu adds one entry, and its later changes replace it", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.click(menu("Type"));
+		await user.click(await screen.findByRole("checkbox", { name: /^Expense/ }));
+		await user.click(screen.getByRole("checkbox", { name: /^Refund/ }));
+
+		expect(calls).toEqual([
+			{ mode: "push", href: "/transactions?type=expense" },
+			{ mode: "replace", href: "/transactions?type=expense,refund" },
+		]);
+	});
+
+	// AC-F03-69
+	test("a second visit adds a second entry", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.click(menu("Type"));
+		await user.click(await screen.findByRole("checkbox", { name: /^Expense/ }));
+		await user.keyboard("{Escape}");
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		await user.click(menu("Category"));
+		await user.click(await screen.findByRole("checkbox", { name: /^Food/ }));
+
+		expect(calls.map((call) => call.mode)).toEqual(["push", "push"]);
+		expect(calls.at(-1)!.href).toBe("/transactions?type=expense&cat=food");
+	});
+
+	// AC-F03-69
+	test("removing a chip, and Clear all, each add their own entry", async () => {
+		const { user, calls } = renderFiltered(`${CHECK_B}&type=expense`);
+		await grid();
+
+		await user.click(screen.getByRole("button", { name: "Remove Food" }));
+		await user.click(screen.getByRole("button", { name: "Remove Expense" }));
+		await user.click(screen.getByRole("button", { name: "Clear all" }));
+
+		expect(calls.map((call) => call.mode)).toEqual(["push", "push", "push"]);
+	});
+
+	test("the Amount menu's quick range and typed Min in one visit are one entry", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.click(menu("Amount"));
+		await user.click(await screen.findByRole("radio", { name: "₹400 to ₹800" }));
+		await user.clear(screen.getByRole("textbox", { name: "Min" }));
+		await user.type(screen.getByRole("textbox", { name: "Min" }), "500");
+
+		await waitFor(() => expect(calls).toHaveLength(2));
+		expect(calls).toEqual([
+			{ mode: "push", href: "/transactions?min=400.00&max=799.99" },
+			{ mode: "replace", href: "/transactions?min=500.00&max=799.99" },
+		]);
+	});
+
+	// AC-F03-69
+	test("one focus of the search box is one entry, however many pauses it has", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.type(searchBox(), "swiggy");
+		await waitFor(() => expect(calls).toHaveLength(1));
+		await user.type(searchBox(), " monthly");
+		await waitFor(() => expect(calls).toHaveLength(2));
+
+		expect(calls).toEqual([
+			{ mode: "push", href: "/transactions?q=swiggy" },
+			{ mode: "replace", href: "/transactions?q=swiggy%20monthly" },
+		]);
+	});
+
+	test("Escape clearing the search is part of its visit", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.type(searchBox(), "uber{Enter}");
+		await user.keyboard("{Escape}");
+
+		expect(calls).toEqual([
+			{ mode: "push", href: "/transactions?q=uber" },
+			{ mode: "replace", href: "/transactions" },
+		]);
+	});
+
+	test("focusing the search box again starts a new entry", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.type(searchBox(), "uber{Enter}");
+		await user.click(menu("Type"));
+		await user.keyboard("{Escape}");
+		await user.clear(searchBox());
+
+		expect(calls.map((call) => call.mode)).toEqual(["push", "push"]);
+	});
+
+	test("leaving the search box and coming back starts a new entry", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.type(searchBox(), "uber{Enter}");
+		await user.click(screen.getByRole("heading", { name: "Transactions" }));
+		await user.clear(searchBox());
+
+		expect(calls.map((call) => call.mode)).toEqual(["push", "push"]);
+	});
+
+	test("a Date preset adds one entry and closes the menu", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.click(menu("Date"));
+		await user.click(await screen.findByRole("radio", { name: /^This month/ }));
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		await user.click(menu("Date"));
+		await user.click(await screen.findByRole("radio", { name: /^Last month/ }));
+
+		expect(calls.map((call) => call.mode)).toEqual(["push", "push"]);
+	});
+
+	test("no menu offers Done", async () => {
+		const { user } = renderFiltered("");
+		await grid();
+
+		for (const name of ["Date", "Type", "Category", "Amount", "More"]) {
+			await user.click(menu(name));
+			await screen.findByRole("dialog", { name });
+			expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		}
 	});
 });

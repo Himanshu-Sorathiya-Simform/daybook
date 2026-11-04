@@ -9,6 +9,7 @@ import {
 } from "react-aria-components";
 
 import { Field, type FieldProps } from "@/components/forms/Field";
+import { Skeleton } from "@/components/feedback/Skeleton";
 import { cn } from "@/lib/cn";
 
 export type ChoiceGroupOption = {
@@ -18,6 +19,8 @@ export type ChoiceGroupOption = {
 	description?: string;
 	/** A facet count at the end of the row. */
 	count?: number;
+	/** Holds the count's place with a placeholder while the counts load. */
+	countPending?: boolean;
 	isDisabled?: boolean;
 };
 
@@ -101,6 +104,10 @@ export function ChoiceGroup({
 												{option.count}
 											</span>
 										)}
+										{option.count === undefined
+											&& option.countPending && (
+												<Skeleton className="h-3 w-4" />
+											)}
 									</>
 								)}
 							</AriaRadioButton>

@@ -24,6 +24,8 @@ export type CustomRangeProps = {
 	firstDayOfWeek: WeekStart;
 	/** The header's count for the committed filter, once loaded. */
 	count: number | undefined;
+	/** The calendar's months: two in a desktop menu, one in the phone sheet. */
+	months?: 1 | 2;
 	className?: string;
 };
 
@@ -41,6 +43,7 @@ export function CustomRange({
 	today,
 	firstDayOfWeek,
 	count,
+	months = 2,
 	className,
 }: Readonly<CustomRangeProps>) {
 	const [from, setFrom] = useState(value?.start ?? null);
@@ -96,6 +99,7 @@ export function CustomRange({
 				today={today}
 				maxValue={today}
 				firstDayOfWeek={firstDayOfWeek}
+				months={months}
 			/>
 			{value && (
 				<p className="figures text-caption text-ink-2">

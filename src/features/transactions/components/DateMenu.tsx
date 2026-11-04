@@ -33,6 +33,8 @@ export type DateMenuProps = {
 	counts?: Record<Exclude<DatePreset, "custom">, number> | undefined;
 	/** The header's count for the committed filter, for Custom's line. */
 	count: number | undefined;
+	/** Whether the counts are on their way, so each holds its place. */
+	countsPending?: boolean;
 	onOpenChange?: (isOpen: boolean) => void;
 	className?: string;
 };
@@ -41,8 +43,9 @@ export type DateMenuProps = {
  * The Date control (BR-F03-39): a trigger reading "Date All time", a preset's name or "5 Oct
  * to 20 Oct", opening the presets with their counts. A preset commits its dates from today in
  * the profile zone (D-227) and closes the popover. Custom range keeps it open and widens it
- * for the From and To fields and the range calendar, with Done; a committed range that is no
- * preset today opens there.
+ * for the From and To fields and the range calendar; a committed range that is no preset
+ * today opens there. Like every menu it has no Done: each change applies, and Escape, a press
+ * outside or the trigger closes it (D-547).
  */
 export function DateMenu({
 	filter,
@@ -51,6 +54,7 @@ export function DateMenu({
 	firstDayOfWeek,
 	counts,
 	count,
+	countsPending = false,
 	onOpenChange,
 	className,
 }: Readonly<DateMenuProps>) {
@@ -66,7 +70,6 @@ export function DateMenu({
 			value={dateLabel(filter, locale)}
 			isActive={preset !== "all"}
 			width={showCustom ? "xl" : "sm"}
-			showDone={showCustom}
 			onOpenChange={(isOpen) => {
 				if (!isOpen) setCustom(false);
 				onOpenChange?.(isOpen);
@@ -84,6 +87,7 @@ export function DateMenu({
 							...(counts && key !== "custom" ?
 								{ count: counts[key] }
 							:	{}),
+							countPending: countsPending && key !== "custom",
 						}))}
 						onChange={(key) => {
 							if (key === "custom") {

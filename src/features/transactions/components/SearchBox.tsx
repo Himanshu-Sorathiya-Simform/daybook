@@ -21,6 +21,8 @@ export type SearchBoxProps = {
 	currency: CurrencyCode;
 	/** Offline the box is disabled: search needs the server (section 10). */
 	isOffline?: boolean;
+	/** Reports focus entering and leaving the box, a typing visit (D-547). */
+	onFocusChange?: (isFocused: boolean) => void;
 	className?: string;
 };
 
@@ -37,6 +39,7 @@ export function SearchBox({
 	onCommit,
 	currency,
 	isOffline = false,
+	onFocusChange,
 	className,
 }: Readonly<SearchBoxProps>) {
 	const input = useRef<HTMLInputElement>(null);
@@ -81,6 +84,7 @@ export function SearchBox({
 				value={draft}
 				maxLength={100}
 				isDisabled={isOffline}
+				{...(onFocusChange ? { onFocusChange } : {})}
 				{...(tooShort ? { "aria-describedby": hintId } : {})}
 				onChange={(text) => {
 					setDraft(text);

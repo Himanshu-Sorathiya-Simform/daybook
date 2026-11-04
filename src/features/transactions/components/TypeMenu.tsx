@@ -12,6 +12,8 @@ export type TypeMenuProps = {
 	onChange: (value: TxnType[] | undefined) => void;
 	/** Each type's count under every other filter (BR-F03-59), once loaded. */
 	counts?: Record<TxnType, number> | undefined;
+	/** Whether the counts are on their way, so each holds its place. */
+	countsPending?: boolean;
 	onOpenChange?: (isOpen: boolean) => void;
 	className?: string;
 };
@@ -25,6 +27,7 @@ export function TypeMenu({
 	value,
 	onChange,
 	counts,
+	countsPending = false,
 	onOpenChange,
 	className,
 }: Readonly<TypeMenuProps>) {
@@ -55,6 +58,7 @@ export function TypeMenu({
 						isSelected={chosen.includes(type)}
 						onChange={(on) => toggle(type, on)}
 						{...(counts ? { count: counts[type] } : {})}
+						countPending={countsPending}
 					/>
 				))}
 			</div>
