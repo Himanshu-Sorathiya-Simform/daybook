@@ -149,6 +149,62 @@ describe("showing", () => {
 	});
 });
 
+describe("changes", () => {
+	test("going pending while open keeps it open and turns the buttons busy", async () => {
+		const props = {
+			title: "Delete this view?",
+			confirmLabel: "Delete",
+			isOpen: true,
+			onOpenChange: vi.fn(),
+			onConfirm: vi.fn(),
+		};
+		const { rerender } = render(<ConfirmDialog {...props} />);
+		await screen.findByRole("alertdialog");
+
+		rerender(
+			<ConfirmDialog
+				{...props}
+				isPending
+			/>,
+		);
+
+		expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+		expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+	});
+
+	test("closes when the parent sets isOpen false, after the action", async () => {
+		const props = {
+			title: "Delete this view?",
+			confirmLabel: "Delete",
+			onOpenChange: vi.fn(),
+			onConfirm: vi.fn(),
+		};
+		const { rerender } = render(
+			<ConfirmDialog
+				{...props}
+				isOpen
+			/>,
+		);
+		await screen.findByRole("alertdialog");
+
+		rerender(
+			<ConfirmDialog
+				{...props}
+				isOpen={false}
+			/>,
+		);
+
+		await closed();
+		expect(props.onOpenChange).not.toHaveBeenCalled();
+	});
+});
+
 describe("tone", () => {
 	test("the action is the danger button by default", async () => {
 		const user = userEvent.setup();

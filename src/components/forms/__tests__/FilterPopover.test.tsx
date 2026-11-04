@@ -71,6 +71,45 @@ describe("trigger", () => {
 		expect(value).toHaveTextContent("Any");
 	});
 
+	test("with hideLabel shows only the value, still named by the label and the value", () => {
+		renderPopover({
+			label: "Group and sort",
+			hideLabel: true,
+			value: "Day · Newest first",
+		});
+
+		const button = screen.getByRole("button", {
+			name: "Group and sort Day · Newest first",
+		});
+		expect(button.querySelector(".sr-only")).toHaveTextContent("Group and sort");
+		expect(button.querySelector(".text-ink-2")).toBeNull();
+	});
+
+	test("with hideLabel still names the popover by the label", async () => {
+		const user = userEvent.setup();
+		render(
+			<FilterPopover
+				label="Group and sort"
+				hideLabel
+				value="Day · Newest first"
+			>
+				<p>Choices</p>
+			</FilterPopover>,
+		);
+
+		await user.click(screen.getByRole("button"));
+
+		expect(
+			await screen.findByRole("dialog", { name: "Group and sort" }),
+		).toBeVisible();
+	});
+
+	test("shows the label by default", () => {
+		renderPopover();
+
+		expect(trigger().querySelector(".sr-only")).toBeNull();
+	});
+
 	test("is closed at first", () => {
 		renderPopover();
 
@@ -111,6 +150,39 @@ describe("trigger", () => {
 		renderPopover({ className: "ml-auto" });
 
 		expect(trigger()).toHaveClass("ml-auto");
+	});
+});
+
+describe("changes", () => {
+	test("follows a value and active state the parent changes", () => {
+		const { rerender } = render(
+			<FilterPopover label="Date">Choices</FilterPopover>,
+		);
+
+		rerender(
+			<FilterPopover
+				label="Date"
+				value="Last month"
+				isActive
+			>
+				Choices
+			</FilterPopover>,
+		);
+
+		expect(trigger("Date Last month")).toHaveClass("border-accent");
+	});
+
+	test("an open popover shows content the parent changes", async () => {
+		const user = userEvent.setup();
+		const { rerender } = render(
+			<FilterPopover label="Date">{"12 days"}</FilterPopover>,
+		);
+		await user.click(trigger());
+		await screen.findByRole("dialog");
+
+		rerender(<FilterPopover label="Date">{"16 days"}</FilterPopover>);
+
+		expect(screen.getByRole("dialog")).toHaveTextContent("16 days");
 	});
 });
 

@@ -19,6 +19,9 @@ export type FilterPopoverProps = Pick<
 > & {
 	/** What the control filters, "Date". It also names the popover. */
 	label: string;
+	/** Keeps the label out of sight, for a trigger whose value says it all, "Day · Newest
+	 * first". The label still names the trigger and the popover for screen readers. */
+	hideLabel?: boolean;
 	/** The current choice, "Last month", shown after the label. */
 	value?: string;
 	/** A filter that narrows the list: the trigger takes the accent outline, beside the value. */
@@ -50,6 +53,7 @@ const widths = {
  */
 export function FilterPopover({
 	label,
+	hideLabel = false,
 	value,
 	isActive = false,
 	width = "md",
@@ -71,7 +75,7 @@ export function FilterPopover({
 					className,
 				)}
 			>
-				<span className="text-ink-2">{label}</span>
+				<span className={hideLabel ? "sr-only" : "text-ink-2"}>{label}</span>
 				{value && (
 					<>
 						{/* A space keeps the two apart in the button's name. */}{" "}

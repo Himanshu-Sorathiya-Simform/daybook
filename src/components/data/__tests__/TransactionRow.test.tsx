@@ -302,6 +302,42 @@ describe("density", () => {
 	});
 });
 
+describe("changes", () => {
+	test("follows every prop that changes", () => {
+		const { rerender, root } = renderRow();
+
+		rerender(
+			<TransactionRow
+				{...swiggy}
+				title="Zomato"
+				payee="Zomato"
+				description="Late dinner"
+				when="11:05 pm"
+				status="pending"
+				amountMinor={-120000}
+			/>,
+		);
+
+		expect(root).toHaveTextContent(
+			/^ZOZomatoFood: Late dinner · 11:05 pmPending sync−₹1,200.00$/,
+		);
+	});
+
+	test("turning into a Goal row drops the dot and the category", () => {
+		const { rerender, subtitle } = renderRow();
+
+		rerender(
+			<TransactionRow
+				{...swiggy}
+				title="To Vacation"
+				goal
+			/>,
+		);
+
+		expect(subtitle).toHaveTextContent(/^10:15 pm$/);
+	});
+});
+
 describe("markup", () => {
 	test("has no role and nothing focusable, so the list that holds it decides both", () => {
 		const { root } = renderRow({ status: "rejected" });

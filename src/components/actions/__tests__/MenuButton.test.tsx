@@ -416,6 +416,56 @@ describe("tone", () => {
 	});
 });
 
+describe("changes", () => {
+	test("lists items the parent changes, and runs the new ones", async () => {
+		const user = userEvent.setup();
+		const rename = vi.fn();
+		const { rerender } = render(
+			<MenuButton
+				label="View actions"
+				items={items().list}
+			/>,
+		);
+
+		rerender(
+			<MenuButton
+				label="View actions"
+				items={[{ id: "rename", label: "Rename view", onAction: rename }]}
+			/>,
+		);
+		await user.click(trigger());
+		const menu = await screen.findByRole("menu");
+
+		expect(
+			within(menu)
+				.getAllByRole("menuitem")
+				.map((each) => each.textContent),
+		).toEqual(["Rename view"]);
+		await user.click(
+			within(menu).getByRole("menuitem", { name: "Rename view" }),
+		);
+		expect(rename).toHaveBeenCalledOnce();
+	});
+
+	test("follows a label that changes", () => {
+		const { rerender } = render(
+			<MenuButton
+				label="View actions"
+				items={items().list}
+			/>,
+		);
+
+		rerender(
+			<MenuButton
+				label="Food last month actions"
+				items={items().list}
+			/>,
+		);
+
+		expect(trigger("Food last month actions")).toBeInTheDocument();
+	});
+});
+
 describe("controlled", () => {
 	test("reports opening and closing", async () => {
 		const onOpenChange = vi.fn();
