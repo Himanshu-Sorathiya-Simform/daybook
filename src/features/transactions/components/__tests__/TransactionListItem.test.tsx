@@ -1,10 +1,9 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { GridList as AriaGridList } from "react-aria-components";
 import { describe, expect, test } from "vitest";
 
 import type { Group } from "@/lib/transactions/model";
-import { idOf, row } from "../../lib/__tests__/fixtures";
+import { row } from "../../lib/__tests__/fixtures";
 import type { LabelLocale } from "../../lib/labels";
 import { TransactionListItem } from "../TransactionListItem";
 
@@ -58,24 +57,6 @@ describe("TransactionListItem (BR-F03-32)", () => {
 		expect(screen.getByRole("row")).toHaveAccessibleName(
 			"Swiggy, Food, Mon, 19 Oct · 10:15 pm, −₹640.00",
 		);
-	});
-
-	test("typing a payee's first letters moves to its row", async () => {
-		const user = userEvent.setup();
-		renderItems([
-			row({
-				id: idOf(1),
-				payee: "Acme Corp",
-				category: "salary",
-				type: "income",
-			}),
-			row({ id: idOf(2), payee: "Zomato" }),
-		]);
-		screen.getAllByRole("row")[0]!.focus();
-
-		await user.keyboard("zo");
-
-		expect(screen.getAllByRole("row")[1]).toHaveFocus();
 	});
 
 	test("shows a focus ring for the keyboard, and is 44px or more tall", () => {

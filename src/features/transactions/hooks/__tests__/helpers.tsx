@@ -5,7 +5,7 @@ import {
 	PathnameContext,
 	SearchParamsContext,
 } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
-import { type ReactNode, useMemo, useSyncExternalStore } from "react";
+import { type ReactNode, useEffect, useMemo, useSyncExternalStore } from "react";
 import { expect, vi } from "vitest";
 
 import { AppProviders } from "@/components/app/AppProviders";
@@ -112,8 +112,16 @@ export type HistoryCall = { mode: "push" | "replace"; href: string };
  * `useSearchParams` and `usePathname` read, and the browser's history calls, which Next
  * follows (its docs, "Using the native History API"). The history calls are recorded and
  * update the contexts, as Next's router would, without loading a page.
+ *
+ * With `late`, the history calls are heard only from the harness's own effect on, as in the
+ * app: Next's router patches the history API in an effect of its own component, which runs
+ * after the effects of the page inside it (`next/dist/client/components/app-router.js`).
  */
-export function urlHarness(start: string, pathname = "/transactions") {
+export function urlHarness(
+	start: string,
+	pathname = "/transactions",
+	{ late = false }: { late?: boolean } = {},
+) {
 	const calls: HistoryCall[] = [];
 	let search = start;
 	const listeners = new Set<() => void>();
@@ -132,10 +140,18 @@ export function urlHarness(start: string, pathname = "/transactions") {
 			search = new URL(text, window.location.origin).search;
 			for (const listener of listeners) listener();
 		};
-	vi.spyOn(window.history, "pushState").mockImplementation(record("push"));
-	vi.spyOn(window.history, "replaceState").mockImplementation(record("replace"));
+	const listen = () => {
+		vi.spyOn(window.history, "pushState").mockImplementation(record("push"));
+		vi.spyOn(window.history, "replaceState").mockImplementation(
+			record("replace"),
+		);
+	};
+	if (!late) listen();
 
 	function Url({ children }: { children: ReactNode }) {
+		useEffect(() => {
+			if (late) listen();
+		}, []);
 		const current = useSyncExternalStore(subscribe, read, read);
 		const params = useMemo(() => new URLSearchParams(current), [current]);
 		return (

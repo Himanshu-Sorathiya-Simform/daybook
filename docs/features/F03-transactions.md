@@ -15,7 +15,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-535                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-540                      |
 
 ## 1. User stories
 
@@ -168,7 +168,7 @@ A view's `filter` holds the filter object's fields with these differences from t
 - **BR-F03-09** `occurredAt` is never in the future (D-221).
     - **On create:** `occurredAt` is at most `createdAt` plus 5 minutes, and at most `ctx.now` (the request clock, P2, BR-P2-43) plus 5 minutes (D-494).
     - **On edit:** `occurredAt` is at most `ctx.now` (the request clock, P2, BR-P2-43) plus 5 minutes.
-    - **In the form:** on today's date, the time picker stops at the current time.
+    - **In the form:** on today's date, a time later than now, to the minute in the profile time zone, gets "The time can't be in the future." (D-540).
     - **Refusal:** 422 `validation_failed` on `occurredAt`.
 - **BR-F03-10** The server checks that `occurredOn` fits `occurredAt` (TIME-2, D-220). It must lie between the UTC date of `occurredAt` minus 12 hours and the UTC date of `occurredAt` plus 14 hours, the full range of real UTC offsets. Otherwise 422 `validation_failed` on `occurredOn`. The check does not use the current profile zone, so a time-zone change between an offline write and its sync cannot reject a correct row.
 - **BR-F03-11** Date and time are editable only on rows whose source is `manual` and whose `demo` is false (D-221). On those rows:
@@ -343,10 +343,10 @@ A view's `filter` holds the filter object's fields with these differences from t
 - **BR-F03-38** The text box commits its draft 300 ms after typing stops (FIL-4). Enter, or clearing the box, commits at once.
 - **BR-F03-39** Where filters appear (D-523):
     - **Desktop (768 px and wider):** the search box, then menus for Date, Type, Category, Amount and More, and the Group · Sort menu. Each change commits.
-        - **Date:** the presets with their counts (BR-F03-59). Custom adds From and To date fields, a two-month range calendar with future days disabled, "<n> days · <m> Transactions" with the header's count, and Done.
+        - **Date:** the presets with their counts (BR-F03-59). Custom adds From and To date fields, a two-month range calendar with future days disabled that moves a month at a time and sets the range once both ends are chosen (D-538), "<n> days · <m> Transactions" with the header's count, and Done.
         - **Type:** each type with its count.
         - **Category:** the expense categories, then the income categories under "Income", each with its count, and the line "Category filters hide Goal Transactions." (BR-F03-37).
-        - **Amount:** "<n> Transactions" with the header's count; the histogram's bars (BR-F03-60), those inside the chosen range highlighted; a slider with two thumbs that stop on the histogram's edges and commits when a thumb is released, the lower thumb writing its edge as `min` (none at the first edge) and the upper thumb 1 minor unit below its edge as `max` (none at the last edge); Min and Max fields in the user's format (BR-F03-04) that commit 300 ms after typing stops; the quick ranges (BR-F03-74); Clear and Done.
+        - **Amount:** "<n> Transactions" with the header's count; the histogram's bars (BR-F03-60), those inside the chosen range highlighted; a slider with two thumbs that stop on the histogram's edges and commits when a thumb is released, the lower thumb writing its edge as `min` (none at the first edge) and the upper thumb 1 minor unit below its edge as `max` (none at the last edge), the two thumbs staying at least one edge apart and a release that leaves the range as it was committing nothing (D-539); Min and Max fields in the user's format (BR-F03-04) that commit 300 ms after typing stops; the quick ranges (BR-F03-74); Clear and Done.
         - **More:** Source: "Any source", "Added by you" and "Subscription charges", each with its count.
         - **Group · Sort:** labeled with both, such as "Day · Newest first". It lists Day ("with day totals"), Category, Payee and "No grouping", then the four sorts (BR-F03-40), and stays open after each choice (D-529):
             - Newest first is `sort=date&dir=desc`, Oldest first `sort=date&dir=asc`, Largest first `sort=amount&dir=desc`, Smallest first `sort=amount&dir=asc`.
@@ -462,12 +462,12 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **Date:** a button reading "Today, 2 Nov", "Yesterday, 1 Nov", or the F02 day format, which opens a calendar where only the window's dates are enabled (BR-F03-08, BR-F03-11).
         - On a create, the field's hint is "Today or one of the 10 days before." and the calendar's note "You can choose today or one of the 10 days before. Arrow keys move, Enter picks."
         - On an edit, the calendar's note names the row's own window: "You can choose a date from 6 Oct to 16 Oct. Arrow keys move, Enter picks."
-    - **Time:** a time field in the profile's hour cycle (F02, BR-F02-19), which stops at the current time on today (BR-F03-09).
+    - **Time:** a time field in the profile's hour cycle (F02, BR-F02-19). A time later than now on today gets "The time can't be in the future." (BR-F03-09, D-540).
     - **A charge or a demo row** shows its date as text (BR-F03-11). A charge shows "Auto" in place of the time (BR-F03-16), and a demo row its time as text.
 
 **Keyboard**
 
-- **BR-F03-52** Shortcuts run through the one Hotkeys wrapper (D-171) and do nothing while a text field has focus. Enter, `E`, `D` and Delete do nothing on a Transaction of a read-only Goal (BR-F03-50).
+- **BR-F03-52** Shortcuts run through the one Hotkeys wrapper (D-171) and do nothing while a text field has focus. The list has no type-to-find, so a letter on a focused row is only ever a shortcut; the search box finds a payee (D-536). Enter, `E`, `D` and Delete do nothing on a Transaction of a read-only Goal (BR-F03-50).
 
     | Key                 | Where              | Does                                                              |
     | ------------------- | ------------------ | ----------------------------------------------------------------- |
@@ -1127,6 +1127,9 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
     - a create ends with "Transaction saved." and an edit with "Changes saved."
 - **AC-F03-63** (E2E) Server prefetch: as the golden user, loading `/transactions?from=2026-10-01&to=2026-10-31&cat=food` serves check B's 4 rows and Out ₹6,220.00 in the first HTML, and the browser requests no list, summary or views while the page loads.
 - **AC-F03-64** (client integration) Loading more: with 120 rows, scrolling to the end loads the second page with no press. Load more shows after the last row while a next page exists, loads that page when pressed, and hides on the last page.
+- **AC-F03-65** (unit) Calendars on the golden clock in `en-IN`: the entry date's calendar for 2 Nov enables 23 Oct to 2 Nov only, outlines 2 Nov, and with week start Monday starts each week on Monday; the custom range calendar shows October and November, its next arrow is disabled, previous shows September and October, and choosing 20 Oct then 5 Oct reports 5 Oct to 20 Oct (D-537, D-538).
+- **AC-F03-66** (unit) The Amount slider over the edges `[0, 100, 500, 1000, 5000, 10000, 100000]` rupees at thumbs 0 and 5: End on the lower thumb stops at 4; a thumb moved and moved back commits once; each thumb reads its edge as money, such as "₹5,000" (D-539).
+- **AC-F03-67** (unit) Time fields in the profile's hour cycle: 23:50 reads "11:50 pm" in `en-IN` and "23:50" in `de-DE` (D-537).
 
 ## 15. Illustrations
 

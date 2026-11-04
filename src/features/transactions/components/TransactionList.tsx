@@ -208,6 +208,8 @@ export function TransactionList({
 			<AriaGridList
 				ref={grid}
 				aria-label="Transactions"
+				// Letters are the page's shortcuts (BR-F03-52), and search finds a payee (D-536).
+				disallowTypeAhead
 				className="flex flex-col outline-none"
 			>
 				{sections.map((section) => {

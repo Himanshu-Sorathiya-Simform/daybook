@@ -148,8 +148,7 @@ export function rowDisplay(
 /**
  * A list row's name for screen readers, which React Aria takes from the row's text value: what
  * the row shows, in order, "Swiggy, Food, 11:50 pm, −₹380.00", with a description read after
- * its category, "BigBasket, Food: Monthly groceries, …". It starts with the title, so typing a
- * payee's first letters still finds its row.
+ * its category, "BigBasket, Food: Monthly groceries, …".
  */
 export function rowName(
 	shown: Pick<

@@ -979,6 +979,21 @@ describe("keyboard (AC-F03-24)", () => {
 		expect(rows[2]).toHaveFocus();
 	});
 
+	// D-536
+	test("typing letters on a row does not move to another row", async () => {
+		const { user } = renderPage(CHECK_B);
+		await grid();
+		const rows = screen
+			.getAllByRole("row")
+			.filter((each) => each.hasAttribute("data-key"));
+		rows[0]!.focus();
+
+		await user.keyboard("zo");
+		expect(rows[0]).toHaveFocus();
+		await user.keyboard("big");
+		expect(rows[0]).toHaveFocus();
+	});
+
 	test("Load more can be reached and pressed from the keyboard", async () => {
 		const { user } = renderPage("?sort=amount", { list: threePages() });
 		await grid();

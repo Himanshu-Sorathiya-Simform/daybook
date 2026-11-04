@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app/AppShell";
 import { FormPage } from "@/components/surfaces/FormPage";
 import { LoginForm } from "@/features/auth/components/LoginForm";
+import { profileBlock } from "@/lib/profile";
 import { isRail, SIDEBAR_COOKIE } from "@/lib/sidebar";
 import { readAsUser } from "@/server/dal/read";
 
@@ -11,14 +12,20 @@ import { readAsUser } from "@/server/dal/read";
  * `readAsUser` sends the visitor to login; without a profile, the page is onboarding
  * (BR-F02-01). */
 export default async function AppLayout({ children }: LayoutProps<"/">) {
-	const user = await readAsUser((ctx) =>
-		ctx.profile ? { name: ctx.user.name, email: ctx.user.email } : null,
+	const read = await readAsUser((ctx) =>
+		ctx.profile ?
+			{
+				user: { name: ctx.user.name, email: ctx.user.email },
+				dateLocale: profileBlock(ctx.profile).dateLocale,
+			}
+		:	null,
 	);
-	if (!user) redirect("/onboarding");
+	if (!read) redirect("/onboarding");
 	const rail = isRail((await cookies()).get(SIDEBAR_COOKIE)?.value);
 	return (
 		<AppShell
-			user={user}
+			user={read.user}
+			dateLocale={read.dateLocale}
 			rail={rail}
 			loggedOut={
 				<FormPage title="Log in">

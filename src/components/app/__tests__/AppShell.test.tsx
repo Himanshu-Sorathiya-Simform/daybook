@@ -9,7 +9,10 @@ import {
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
+import type { ReactNode } from "react";
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+
+import { TimeField } from "@/components/forms/TimeField";
 
 import { SESSION_EXPIRED_MESSAGE } from "../SessionExpiredBanner";
 import { meFor, url } from "./helpers";
@@ -62,7 +65,14 @@ const SERVER_USER = { name: "Asha Rao", email: "asha@example.com" };
 async function renderShell({
 	pathname = "/transactions",
 	rail = false,
-}: { pathname?: string; rail?: boolean } = {}) {
+	dateLocale = "en-IN",
+	body = <h1>Page body</h1>,
+}: {
+	pathname?: string;
+	rail?: boolean;
+	dateLocale?: string;
+	body?: ReactNode;
+} = {}) {
 	vi.resetModules();
 	const [{ AppProviders }, { AppShell }, { emitApiEvent }] = await Promise.all([
 		import("../AppProviders"),
@@ -79,10 +89,11 @@ async function renderShell({
 			>
 				<AppShell
 					user={SERVER_USER}
+					dateLocale={dateLocale}
 					rail={rail}
 					loggedOut={<p>Offline login screen</p>}
 				>
-					<h1>Page body</h1>
+					{body}
 				</AppShell>
 			</InRouter>
 		</AppProviders>,
@@ -174,6 +185,30 @@ describe("AppShell layout (root section 4, D-512)", () => {
 		expect(router.push).toHaveBeenCalledExactlyOnceWith("/goals");
 		expect(navigate).not.toHaveBeenCalled();
 	});
+});
+
+describe("AppShell date locale (BR-F02-19)", () => {
+	const clock = (
+		<TimeField
+			label="Time"
+			value="23:50"
+			onChange={() => {}}
+		/>
+	);
+
+	test.each([
+		["en-IN", "11:50 pm"],
+		["de-DE", "23:50"],
+		["en-US", "11:50 PM"],
+	])(
+		"gives React Aria the profile's %s, so a time reads %s",
+		async (dateLocale, shown) => {
+			await renderShell({ dateLocale, body: clock });
+
+			const time = screen.getByRole("group", { name: "Time" });
+			expect(time.textContent!.replace(/[\u2066-\u2069]/g, "")).toBe(shown);
+		},
+	);
 });
 
 describe("AppShell sidebar width (D-513)", () => {

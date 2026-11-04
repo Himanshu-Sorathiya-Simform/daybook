@@ -69,7 +69,16 @@ export function useTransactionsUrl(currency: CurrencyCode) {
 	if (cleaned !== null && !notice) setNotice(true);
 
 	useEffect(() => {
-		if (cleaned !== null) window.history.replaceState(null, "", cleaned);
+		if (cleaned === null) return;
+		// Next's router starts following the history API in an effect of its own component,
+		// which runs after this one on the first render; a microtask later it is listening.
+		let live = true;
+		queueMicrotask(() => {
+			if (live) window.history.replaceState(null, "", cleaned);
+		});
+		return () => {
+			live = false;
+		};
 	}, [cleaned]);
 
 	const go = (mode: "push" | "replace", next: State) => {
