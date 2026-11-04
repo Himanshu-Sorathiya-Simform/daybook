@@ -1,12 +1,18 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { Banner } from "@/components/feedback/Banner";
+import { showToast } from "@/components/feedback/showToast";
 import { useOnline } from "@/hooks/useOnline";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/date-format";
 import type { WeekStart } from "@/lib/geo";
+import { matchesFilter } from "@/lib/transactions/match";
+import { useCreatedAnswer, useEntryDialog } from "../hooks/useEntryDialog";
 import { useTransactionSummary } from "../hooks/useTransactionSummary";
 import { useTransactionsUrl } from "../hooks/useTransactionsUrl";
+import { ENTRY_TEXT } from "../lib/entry";
 import type { LabelLocale } from "../lib/labels";
 import { TRANSACTIONS_TEXT } from "../lib/messages";
 import { FilterBar } from "./FilterBar";
@@ -26,6 +32,10 @@ export type TransactionsPageProps = {
  * offline (D-533); the search box, the filter controls and the Group · Sort menu, then the
  * active filters as chips; the invalid-link notice (D-531); the header totals; and the list. Everything follows the URL (FIL-4), which the page reads and writes through
  * `useTransactionsUrl`.
+ *
+ * It answers the entry dialog's creates (BR-F03-21, BR-F03-22, D-548): a plain Save of a row the
+ * filter shows selects it, and a row the filter hides says so, with Show to clear the filters.
+ * `new=1` opens the dialog, and closing it removes the parameter (BR-F03-53).
  */
 export function TransactionsPage({
 	locale,
@@ -38,6 +48,24 @@ export function TransactionsPage({
 		filter: url.filter,
 		currency: locale.currency,
 	});
+	const entry = useEntryDialog();
+
+	useCreatedAnswer((row, kind) => {
+		if (!matchesFilter(row, url.filter, locale.currency)) {
+			showToast(ENTRY_TEXT.hidden, {
+				action: ENTRY_TEXT.show,
+				onAction: () => url.setFilter({}),
+			});
+			return;
+		}
+		if (kind === "save") url.select(row.id);
+		showToast(ENTRY_TEXT.saved);
+	});
+
+	const { isNew, setNew } = url;
+	useEffect(() => {
+		if (isNew) entry.openNew({ onClose: () => setNew(false) });
+	}, [isNew, entry, setNew]);
 
 	return (
 		<div
@@ -90,6 +118,7 @@ export function TransactionsPage({
 				list={url.list}
 				locale={locale}
 				onClearFilters={() => url.setFilter({})}
+				onAdd={() => entry.openNew()}
 			/>
 		</div>
 	);

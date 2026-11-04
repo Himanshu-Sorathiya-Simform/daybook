@@ -15,7 +15,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-547                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-551                      |
 
 ## 1. User stories
 
@@ -451,19 +451,26 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **Hints:** Description "Shown under the payee in your list."; Note "Only shown in the details. Line breaks are fine."
     - **Counters:** the payee's from 61 characters ("61 / 80"), the description's from 91 ("91 / 120"), and the note's always ("0 / 500").
     - **Buttons:** Save; "Save and add another" on a create or a duplicate; Cancel on desktop only, where the footer also shows "Ctrl Enter to save" ("⌘ Enter to save" on macOS); and on an edit, Delete. Duplicate lives in the panel (BR-F03-72).
-    - **Opened from:** the header's Add, the phone's Add tab, the palette (F13), the `N` shortcut, `new=1`, empty states, and the panel's Edit and Duplicate.
+    - **Opened from:** the header's Add, the phone's Add tab, the palette (F13), the `N` shortcut, `new=1`, empty states, and the panel's Edit and Duplicate. One dialog serves every logged-in page; on the Transactions page the page answers a create with BR-F03-21 and BR-F03-22, and elsewhere a create shows "Transaction saved." (D-548).
 - **BR-F03-49** Closing with unsaved changes asks "Discard changes?", explains "What you've typed here won't be saved.", and offers Discard and Keep editing.
 - **BR-F03-50** Read-only parts:
     - A charge's fixed fields show as text.
     - A Transaction of a read-only Goal opens read-only with the reason, for example "Vacation is completed, so its Transactions can't be changed."
 - **BR-F03-51** The Goal picker lists active, editable Goals with their progress. With none: "Create a Goal first" with a link to `/goals`.
 - **BR-F03-75** The dialog's choices (D-525):
-    - **Category:** tiles with each category's icon and label. They show the type's 7 most used categories, ordered by `/api/payees`'s `categories` (BR-F03-44) and then by CAT order, plus the chosen category when it is not among them. "+ N more" shows the rest, and "Show fewer" hides them again.
+    - **Category:** tiles with each category's icon and label. They show the type's 7 most used categories, ordered by `/api/payees`'s `categories` (BR-F03-44) and then by CAT order, plus the chosen category when it is not among them. "+ N more" adds the rest after the 7, in CAT order, where a category chosen stays put, and "Show fewer" hides them again (D-550).
     - **Date:** a button reading "Today, 2 Nov", "Yesterday, 1 Nov", or the F02 day format, which opens a calendar where only the window's dates are enabled (BR-F03-08, BR-F03-11).
         - On a create, the field's hint is "Today or one of the 10 days before." and the calendar's note "You can choose today or one of the 10 days before. Arrow keys move, Enter picks."
         - On an edit, the calendar's note names the row's own window: "You can choose a date from 6 Oct to 16 Oct. Arrow keys move, Enter picks."
-    - **Time:** a time field in the profile's hour cycle (F02, BR-F02-19). A time later than now on today gets "The time can't be in the future." (BR-F03-09, D-540).
+    - **Time:** a time field in the profile's hour cycle (F02, BR-F02-19). A time later than now on today gets "The time can't be in the future." (BR-F03-09, D-540), and an emptied one "Enter a time." (D-549).
     - **A charge or a demo row** shows its date as text (BR-F03-11). A charge shows "Auto" in place of the time (BR-F03-16), and a demo row its time as text.
+- **BR-F03-77** The dialog's behavior (D-551):
+    - **Unsaved changes** are any field that differs from where it started, the date and time included. After "Save and add another", the kept type, date and time are the new start.
+    - **The date window** and the default date and time are taken when the dialog opens. Save checks the date against today's window and the time against now, so a dialog left open past midnight refuses a date that has left the window with "Choose today or one of the 10 days before."
+    - **The amount** is re-formatted with grouping on blur when it reads as a number (BR-F03-04).
+    - **The payee's list** opens on focus. Choosing "Use “X” as a new payee" keeps the text and leaves the category as it is.
+    - **A refusal's field messages** move focus to the first field with one.
+    - **The footer** shows Cancel and the save hint from 768 px, where the dialog stops being a bottom sheet. The hint reads "⌘ Enter to save" on macOS.
 
 **Keyboard**
 
@@ -806,6 +813,7 @@ A count of one reads in the singular wherever a count appears: "1 Transaction", 
 | Goal                                                                          | Required                                                                        | Choose a Goal.                                                                                                                                                                                                          |
 | Date                                                                          | `date_out_of_window` on create                                                  | Choose today or one of the 10 days before.                                                                                                                                                                              |
 | Date                                                                          | `date_out_of_window` on edit                                                    | Choose a date from 6 Oct to 16 Oct. (The row's own window)                                                                                                                                                              |
+| Time                                                                          | Empty (D-549)                                                                   | Enter a time.                                                                                                                                                                                                           |
 | Time                                                                          | In the future                                                                   | The time can't be in the future.                                                                                                                                                                                        |
 | Recording time                                                                | `createdAt` more than 5 minutes after the request clock (API only, TIME-7)      | The recording time can't be in the future.                                                                                                                                                                              |
 | Goal                                                                          | `goal_read_only`                                                                | Vacation is completed, so its Transactions can't be changed. (Archived: Vacation is archived, so its Transactions can't be changed. Locked: Vacation is locked. Upgrade, or choose it as one of your 3 editable Goals.) |
@@ -1134,6 +1142,7 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
 - **AC-F03-67** (unit) Time fields in the profile's hour cycle: 23:50 reads "11:50 pm" in `en-IN` and "23:50" in `de-DE` (D-537).
 - **AC-F03-68** (unit) Filters on the golden clock: typing 12 into Custom's From day commits one range 300 ms after the last key, not one per digit; From after To reads "Choose a From date on or before To." and commits nothing; Min 900 with Max 799.99 reads "Choose a Min at or below Max." and commits nothing; the search box commits "swiggy" 300 ms after typing stops, at once on Enter or clear, and never commits "sw" (D-543, BR-F03-38).
 - **AC-F03-69** (client integration) History on golden data: in one visit to the Type menu, ticking Expense then Refund adds one history entry and replaces it, so Back returns to the page before the visit; a second visit adds a second entry; removing a chip adds its own; typing "swiggy", pausing and typing " monthly" in one focus of the search box adds one entry (D-547).
+- **AC-F03-70** (client integration) Adding on golden data on 2026-11-02 (D-548, D-549, D-551): `N` on a page outside Transactions opens "New Transaction" and a Save there says "Transaction saved."; on Transactions with no filter, a plain Save of an expense selects it (`txn=<id>`), and with the filter Type Income it says "Saved. It's hidden by your filters." and Show clears the filters; "Save and add another" keeps Expense, the date and the time, empties the rest and focuses Amount; an emptied time gets "Enter a time."; Escape after changing only the date asks "Discard changes?", and Escape on an untouched dialog closes it.
 
 ## 15. Illustrations
 

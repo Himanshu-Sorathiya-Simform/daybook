@@ -74,4 +74,64 @@ describe("focusFirstInvalid", () => {
 	test("is harmless without a form", () => {
 		expect(() => focusFirstInvalid(null)).not.toThrow();
 	});
+
+	/** Renders `html` in a form and answers it. */
+	function formWith(html: string): HTMLFormElement {
+		const { container } = render(<form />);
+		const form = container.querySelector("form")!;
+		form.innerHTML = html;
+		return form;
+	}
+
+	test("in an invalid radio group, focuses its chosen radio", () => {
+		const form = formWith(`
+			<div role="radiogroup" aria-invalid="true">
+				<input type="radio" name="c" aria-label="Food" />
+				<input type="radio" name="c" aria-label="Health" checked />
+			</div>`);
+
+		focusFirstInvalid(form);
+
+		expect(screen.getByLabelText("Health")).toHaveFocus();
+	});
+
+	test("in an invalid radio group with nothing chosen, focuses its first radio", () => {
+		const form = formWith(`
+			<div role="radiogroup" aria-invalid="true">
+				<input type="radio" name="c" aria-label="Food" />
+				<input type="radio" name="c" aria-label="Health" />
+			</div>`);
+
+		focusFirstInvalid(form);
+
+		expect(screen.getByLabelText("Food")).toHaveFocus();
+	});
+
+	test("an invalid radio group without radios moves nothing", () => {
+		const form = formWith(`<div role="radiogroup" aria-invalid="true"></div>`);
+
+		expect(() => focusFirstInvalid(form)).not.toThrow();
+		expect(document.body).toHaveFocus();
+	});
+
+	test("finds a picker's button marked data-invalid, in document order", () => {
+		const form = formWith(`
+			<button type="button" data-invalid="true">Date</button>
+			<input aria-label="Time" aria-invalid="true" />`);
+
+		focusFirstInvalid(form);
+
+		expect(screen.getByRole("button", { name: "Date" })).toHaveFocus();
+	});
+
+	test("ignores a data-invalid that is not on a button, and aria-invalid false", () => {
+		const form = formWith(`
+			<div data-invalid="true" tabindex="-1">Group</div>
+			<input aria-label="A" aria-invalid="false" />
+			<input aria-label="B" aria-invalid="true" />`);
+
+		focusFirstInvalid(form);
+
+		expect(screen.getByLabelText("B")).toHaveFocus();
+	});
 });

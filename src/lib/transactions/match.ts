@@ -79,7 +79,8 @@ function matchesFields(row: MatchableRow, filter: TransactionFilter): boolean {
 /**
  * Whether a row matches the filter, rule for rule as the SQL predicate (BR-F03-43). Fields
  * combine with AND (FIL-1), a category filter excludes Goal rows (FIL-6), and dates are the
- * row's local `occurredOn`. Used only for pending rows, never for confirmed figures.
+ * row's local `occurredOn`. Used for pending rows and to tell whether a new row shows
+ * (BR-F03-22), never for confirmed figures.
  */
 export function matchesFilter(
 	row: MatchableRow,

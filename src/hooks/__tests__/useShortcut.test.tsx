@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { useShortcut } from "@/hooks/useShortcut";
+import { shortcutLabel, useShortcut } from "@/hooks/useShortcut";
 
 function Page({
 	onKey,
@@ -70,5 +70,31 @@ describe("useShortcut (D-171)", () => {
 		await userEvent.setup().keyboard("{Control>}n{/Control}");
 
 		expect(onKey).not.toHaveBeenCalled();
+	});
+});
+
+describe("shortcutLabel (BR-F03-48)", () => {
+	afterEach(() => vi.restoreAllMocks());
+
+	test("names Mod as Ctrl, with the key as a word, outside macOS", () => {
+		vi.spyOn(navigator, "platform", "get").mockReturnValue("Linux x86_64");
+
+		expect(shortcutLabel("Mod+Enter")).toBe("Ctrl Enter");
+	});
+
+	test("on Windows too", () => {
+		vi.spyOn(navigator, "platform", "get").mockReturnValue("Win32");
+
+		expect(shortcutLabel("Mod+Enter")).toBe("Ctrl Enter");
+	});
+
+	test("names Mod as ⌘ on macOS", () => {
+		vi.spyOn(navigator, "platform", "get").mockReturnValue("MacIntel");
+
+		expect(shortcutLabel("Mod+Enter")).toBe("⌘ Enter");
+	});
+
+	test("a single key reads as itself", () => {
+		expect(shortcutLabel("N")).toBe("N");
 	});
 });

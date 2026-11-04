@@ -186,6 +186,29 @@ describe("size", () => {
 	});
 });
 
+describe("fill", () => {
+	test("by default the group is as wide as its options, each as wide as its label", () => {
+		render(<Controlled />);
+
+		expect(screen.getByRole("radiogroup")).toHaveClass("inline-flex");
+		expect(screen.getByRole("radiogroup")).not.toHaveClass("w-full");
+		expect(segment("Pace")).not.toHaveClass("flex-1");
+		expect(segment("Pace").parentElement).not.toHaveClass("flex-1");
+	});
+
+	test("fill shares the full width equally, with each label centred", () => {
+		render(<Controlled fill />);
+
+		const group = screen.getByRole("radiogroup");
+		expect(group).toHaveClass("flex", "w-full");
+		expect(group).not.toHaveClass("inline-flex");
+		for (const name of ["Daily", "Pace", "Weekly"]) {
+			expect(segment(name)).toHaveClass("flex-1", "justify-center");
+			expect(segment(name).parentElement).toHaveClass("flex", "flex-1");
+		}
+	});
+});
+
 describe("choosing with the mouse", () => {
 	test("selects an option on click and reports its value once", async () => {
 		const user = userEvent.setup();

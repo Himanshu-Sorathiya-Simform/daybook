@@ -33,6 +33,8 @@ export type TransactionListProps = {
 	locale: LabelLocale;
 	/** Clears the filter, from the filtered empty state. */
 	onClearFilters: () => void;
+	/** Opens the entry dialog, from the empty state of an account with no Transactions. */
+	onAdd: () => void;
 	className?: string;
 };
 
@@ -57,6 +59,7 @@ export function TransactionList({
 	list,
 	locale,
 	onClearFilters,
+	onAdd,
 	className,
 }: Readonly<TransactionListProps>) {
 	const query = useTransactionList({ filter, list, currency: locale.currency });
@@ -181,6 +184,8 @@ export function TransactionList({
 				:	<EmptyState
 						title="No Transactions yet."
 						body="Add your first Transaction to see your month take shape."
+						action="Add Transaction"
+						onAction={onAdd}
 					/>
 				}
 			</Section>

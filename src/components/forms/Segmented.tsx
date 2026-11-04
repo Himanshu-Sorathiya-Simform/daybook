@@ -17,6 +17,9 @@ export type SegmentedProps = {
 	/** The group's accessible name. It is a radio group, so it always needs one. */
 	label: string;
 	size?: "sm" | "md";
+	/** The options share the full width equally, with their labels centred, as the entry
+	 * dialog's Type does. Otherwise each is as wide as its label. */
+	fill?: boolean;
 	isDisabled?: boolean;
 	/** Submits the chosen value with a form under this name. */
 	name?: string;
@@ -41,6 +44,7 @@ export function Segmented({
 	onChange,
 	label,
 	size = "md",
+	fill = false,
 	isDisabled = false,
 	name,
 	"aria-describedby": describedBy,
@@ -56,7 +60,8 @@ export function Segmented({
 			isDisabled={isDisabled}
 			{...(name ? { name } : {})}
 			className={cn(
-				"rounded-control bg-soft inline-flex gap-0.5 p-0.5",
+				"rounded-control bg-soft gap-0.5 p-0.5",
+				fill ? "flex w-full" : "inline-flex",
 				className,
 			)}
 		>
@@ -70,11 +75,12 @@ export function Segmented({
 						key={id}
 						value={id}
 
-						className="flex"
+						className={cn("flex", fill && "flex-1")}
 					>
 						<AriaRadioButton
 							className={cn(
 								"text-ink-2 inline-flex cursor-pointer items-center rounded-lg border border-transparent px-3 font-semibold whitespace-nowrap",
+								fill && "flex-1 justify-center",
 								"transition-colors duration-(--dur-fast) ease-out max-md:min-h-11",
 								"selected:border-line selected:bg-page selected:text-ink",
 								"focus-visible:focus-ring",

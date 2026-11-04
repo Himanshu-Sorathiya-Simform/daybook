@@ -130,11 +130,20 @@ describe("the button", () => {
 		expect(button()).not.toHaveClass("border-edge");
 	});
 
+	// A button takes no aria-invalid; a form finds it by data-invalid to focus it.
+	test("an error marks the button data-invalid, and no aria-invalid", () => {
+		renderPicker({ error: "Choose a date from 6 Oct to 16 Oct." });
+
+		expect(button()).toHaveAttribute("data-invalid", "true");
+		expect(button()).not.toHaveAttribute("aria-invalid");
+	});
+
 	test("without an error keeps the usual outline", () => {
 		renderPicker();
 
 		expect(button()).toHaveClass("border-edge");
 		expect(button()).not.toHaveClass("border-neg");
+		expect(button()).not.toHaveAttribute("data-invalid");
 	});
 
 	test("disabled, it cannot be pressed or focused and opens nothing", async () => {

@@ -1,5 +1,5 @@
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { CurrencyCode } from "@/lib/currency";
 import {
@@ -45,7 +45,9 @@ function hrefOf(
  * - **Writing:** a filter, list or view change pushes a history entry; selecting a row, the new
  *   dialog and clearing an unknown view replace the current one (BR-F03-53, BR-F03-65,
  *   BR-F03-73). Each goes through the browser's history, which Next's router follows without
- *   asking the server again, so the page's prefetch runs only on a real page load.
+ *   asking the server again, so the page's prefetch runs only on a real page load. Each write
+ *   starts from the last one, so two in one event, such as closing `new=1` and selecting the
+ *   row it created, both land.
  */
 export function useTransactionsUrl(currency: CurrencyCode) {
 	const searchParams = useSearchParams();
@@ -81,7 +83,16 @@ export function useTransactionsUrl(currency: CurrencyCode) {
 		};
 	}, [cleaned]);
 
-	const go = (mode: "push" | "replace", next: State) => {
+	// The state the next write starts from: the URL as last read, or as last written when a
+	// write has not been read back yet.
+	const latest = useRef(current);
+	useLayoutEffect(() => {
+		latest.current = current;
+	});
+
+	const go = (mode: "push" | "replace", change: (state: State) => State) => {
+		const next = change(latest.current);
+		latest.current = next;
 		const href = hrefOf(pathname, next, currency);
 		if (mode === "push") window.history.pushState(null, "", href);
 		else window.history.replaceState(null, "", href);
@@ -101,13 +112,13 @@ export function useTransactionsUrl(currency: CurrencyCode) {
 		 * current one for a later change in the same visit to a control (D-547). */
 		setFilter: (
 			filter: TransactionFilter,
-			list: ListParams = current.list,
+			list?: ListParams,
 			mode: "push" | "replace" = "push",
 		) => {
 			setNotice(false);
-			go(mode, { ...current, filter, list });
+			go(mode, (state) => ({ ...state, filter, list: list ?? state.list }));
 		},
-		setList: (list: ListParams) => go("push", { ...current, list }),
+		setList: (list: ListParams) => go("push", (state) => ({ ...state, list })),
 		/** Applies a view: its filter and list replace the URL's, with `view=<id>`, or none for
 		 * All Transactions (BR-F03-65). The selected row stays. */
 		applyView: (
@@ -116,12 +127,13 @@ export function useTransactionsUrl(currency: CurrencyCode) {
 			list: ListParams,
 		) => {
 			setNotice(false);
-			go("push", { ...current, view, filter, list });
+			go("push", (state) => ({ ...state, view, filter, list }));
 		},
 		/** Drops `view` without a history entry: an id the views list does not have
 		 * (BR-F03-65), or a view just deleted (BR-F03-69). */
-		clearView: () => go("replace", { ...current, view: null }),
-		select: (txn: string | null) => go("replace", { ...current, txn }),
-		setNew: (isNew: boolean) => go("replace", { ...current, isNew }),
+		clearView: () => go("replace", (state) => ({ ...state, view: null })),
+		select: (txn: string | null) =>
+			go("replace", (state) => ({ ...state, txn })),
+		setNew: (isNew: boolean) => go("replace", (state) => ({ ...state, isNew })),
 	};
 }

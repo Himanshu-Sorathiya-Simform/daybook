@@ -444,6 +444,41 @@ describe("the selected row and the dialog (BR-F03-53, BR-F03-73)", () => {
 		expect(result.current.isNew).toBe(false);
 	});
 
+	test("two writes in one event both land: closing new=1 and selecting the new row", async () => {
+		const { result, calls } = await renderUrl("?cat=food&new=1");
+		act(() => {
+			result.current.setNew(false);
+			result.current.select("r1");
+		});
+		expect(calls.slice(-2)).toEqual([
+			{ mode: "replace", href: "/transactions?cat=food" },
+			{ mode: "replace", href: "/transactions?cat=food&txn=r1" },
+		]);
+		expect(result.current.isNew).toBe(false);
+		expect(result.current.txn).toBe("r1");
+	});
+
+	test("a filter and a selection in one event keep each other", async () => {
+		const { result, calls } = await renderUrl("?cat=food");
+		act(() => {
+			result.current.select("r1");
+			result.current.setFilter({}, undefined, "push");
+		});
+		expect(calls.at(-1)).toEqual({ mode: "push", href: "/transactions?txn=r1" });
+	});
+
+	test("a filter without list parameters keeps the latest grouping and sort", async () => {
+		const { result, calls } = await renderUrl("?cat=food");
+		act(() => {
+			result.current.setList({ sort: "date", dir: "desc", group: "category" });
+			result.current.setFilter({});
+		});
+		expect(calls.at(-1)).toEqual({
+			mode: "push",
+			href: "/transactions?group=category",
+		});
+	});
+
 	test("a txn with characters a URL needs escaped reads back the same", async () => {
 		const { result } = await renderUrl("");
 		act(() => result.current.select("x y/z?"));

@@ -9,7 +9,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { delay, http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { TimeField } from "@/components/forms/TimeField";
@@ -67,18 +67,30 @@ async function renderShell({
 	rail = false,
 	dateLocale = "en-IN",
 	body = <h1>Page body</h1>,
+	onAdd,
+	bodyWithFiller,
 }: {
 	pathname?: string;
 	rail?: boolean;
 	dateLocale?: string;
 	body?: ReactNode;
+	/** Fills the Add slot from the page, as the entry dialog does. */
+	onAdd?: () => void;
+	/** A page built with the slot filler, for pages that fill it more than once. */
+	bodyWithFiller?: (Filler: (props: { open: () => void }) => null) => ReactNode;
 } = {}) {
 	vi.resetModules();
-	const [{ AppProviders }, { AppShell }, { emitApiEvent }] = await Promise.all([
-		import("../AppProviders"),
-		import("../AppShell"),
-		import("@/lib/api/events"),
-	]);
+	const [{ AppProviders }, { AppShell }, { emitApiEvent }, { useAddSlot }] =
+		await Promise.all([
+			import("../AppProviders"),
+			import("../AppShell"),
+			import("@/lib/api/events"),
+			import("@/hooks/useAddSlot"),
+		]);
+	function Filler({ open }: { open: () => void }) {
+		useAddSlot(open);
+		return null;
+	}
 	const router = routerFake();
 	const navigate = vi.fn();
 	const view = render(
@@ -93,7 +105,8 @@ async function renderShell({
 					rail={rail}
 					loggedOut={<p>Offline login screen</p>}
 				>
-					{body}
+					{bodyWithFiller ? bodyWithFiller(Filler) : body}
+					{onAdd && <Filler open={onAdd} />}
 				</AppShell>
 			</InRouter>
 		</AppProviders>,
@@ -184,6 +197,70 @@ describe("AppShell layout (root section 4, D-512)", () => {
 		await user.click(within(sidebar()).getByRole("link", { name: "Goals" }));
 		expect(router.push).toHaveBeenCalledExactlyOnceWith("/goals");
 		expect(navigate).not.toHaveBeenCalled();
+	});
+});
+
+describe("AppShell Add (D-548)", () => {
+	const headerAdd = () =>
+		within(screen.getByRole("banner")).getByRole("button", {
+			name: "Add Transaction",
+		});
+	const barAdd = () =>
+		within(bottomBar()).getByRole("button", { name: "Add Transaction" });
+
+	test("the header's Add and the bottom bar's Add call what the page put in the slot", async () => {
+		const onAdd = vi.fn();
+		const { user } = await renderShell({ onAdd });
+
+		await user.click(headerAdd());
+		await user.click(barAdd());
+
+		expect(onAdd).toHaveBeenCalledTimes(2);
+	});
+
+	test("a page that leaves after a newer one filled the slot leaves the newer one", async () => {
+		const older = vi.fn();
+		const newer = vi.fn();
+		function Pages({
+			Filler,
+		}: {
+			Filler: (props: { open: () => void }) => null;
+		}) {
+			const [olderShown, setOlderShown] = useState(true);
+			return (
+				<>
+					<h1>Page body</h1>
+					{olderShown && <Filler open={older} />}
+					<Filler open={newer} />
+					<button
+						type="button"
+						onClick={() => setOlderShown(false)}
+					>
+						Drop older
+					</button>
+				</>
+			);
+		}
+		const { user } = await renderShell({
+			bodyWithFiller: (Filler) => <Pages Filler={Filler} />,
+		});
+
+		await user.click(screen.getByRole("button", { name: "Drop older" }));
+		await user.click(headerAdd());
+
+		expect(newer).toHaveBeenCalledOnce();
+		expect(older).not.toHaveBeenCalled();
+	});
+
+	test("with nothing in the slot, Add does nothing and nothing breaks", async () => {
+		const { user } = await renderShell();
+
+		await user.click(headerAdd());
+		await user.click(barAdd());
+
+		expect(
+			screen.getByRole("heading", { name: "Page body" }),
+		).toBeInTheDocument();
 	});
 });
 

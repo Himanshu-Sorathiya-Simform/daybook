@@ -19,7 +19,8 @@ export type ButtonProps = Omit<
 	size?: "sm" | "md" | "lg";
 	/** A lucide icon shown before the label, as the component: `icon={Plus}`. */
 	icon?: LucideIcon;
-	/** A keyboard shortcut shown as a key cap, for example "N". It only displays the key. */
+	/** A keyboard shortcut shown as a key cap, for example "N". It only displays the key, and
+	 * is hidden from screen readers so the button's name stays its label. */
 	shortcut?: string;
 	/** Why the button is disabled, or what it does. Shown under it and read with it. */
 	description?: string;
@@ -120,7 +121,10 @@ export function Button({
 			:	Icon && <Icon className="size-3.75 shrink-0" />}
 			{children}
 			{shortcut && (
-				<kbd className="rounded-kbd text-small border border-current px-1.25 font-sans opacity-85">
+				<kbd
+					aria-hidden="true"
+					className="rounded-kbd text-small border border-current px-1.25 font-sans opacity-85"
+				>
 					{shortcut}
 				</kbd>
 			)}

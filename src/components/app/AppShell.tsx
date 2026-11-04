@@ -1,13 +1,14 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import {
 	I18nProvider as AriaI18nProvider,
 	RouterProvider as AriaRouterProvider,
 } from "react-aria-components";
 
 import { Toaster } from "@/components/feedback/Toaster";
+import { type AddSlot, AddSlotContext } from "@/hooks/useAddSlot";
 import { useLogout } from "@/hooks/useLogout";
 import { useMe } from "@/hooks/useMe";
 import { writeSidebarChoice } from "@/lib/sidebar";
@@ -37,7 +38,8 @@ export type AppShellProps = {
  * The frame of every logged-in page (root section 4): the session check and its banner, the
  * sidebar from 768px up, the header, the page, the bottom bar below 768px, and the toasts.
  * React Aria links navigate through Next's router, so the shell stays mounted between pages,
- * and React Aria formats dates in the profile's locale.
+ * and React Aria formats dates in the profile's locale. The header's and the bottom bar's Add
+ * call what the page's entry dialog put in the Add slot (D-548).
  */
 export function AppShell({
 	user,
@@ -52,54 +54,67 @@ export function AppShell({
 	const { data: me } = useMe();
 	const { state: logout, logout: startLogout } = useLogout();
 	const shown = me?.user ?? user;
+	const addRef = useRef<(() => void) | null>(null);
+	const [slot] = useState<AddSlot>(() => ({
+		register: (open) => {
+			addRef.current = open;
+			return () => {
+				if (addRef.current === open) addRef.current = null;
+			};
+		},
+	}));
+	const add = () => addRef.current?.();
 
 	if (logout === "offline") return loggedOut;
 
 	return (
 		<AriaI18nProvider locale={dateLocale}>
 			<AriaRouterProvider navigate={(path) => router.push(path)}>
-				<SessionCheck />
-				<a
-					href="#content"
-					className="bg-page text-label text-ink rounded-control sr-only z-50 px-3 py-2 font-semibold focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
-				>
-					Skip to content
-				</a>
-				{/* Signing out ends the session first, and that is no expiry to warn about. */}
-				{logout === "idle" && <SessionExpiredBanner />}
-				<div className="bg-page flex min-h-dvh">
-					<Sidebar
-						pathname={pathname}
-						rail={rail}
-						onRailChange={(next) => {
-							setRail(next);
-							writeSidebarChoice(next);
-						}}
-						className="max-md:hidden"
-					/>
-					<div className="flex min-w-0 flex-1 flex-col">
-						<Header>
-							<UserMenu
-								name={shown.name}
-								email={shown.email}
-								loggingOut={logout === "running"}
-								onLogout={() => void startLogout()}
-							/>
-						</Header>
-						<main
-							id="content"
-							tabIndex={-1}
-							className="flex-1 outline-none max-md:pb-(--bottom-bar-height)"
-						>
-							{children}
-						</main>
+				<AddSlotContext value={slot}>
+					<SessionCheck />
+					<a
+						href="#content"
+						className="bg-page text-label text-ink rounded-control sr-only z-50 px-3 py-2 font-semibold focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+					>
+						Skip to content
+					</a>
+					{/* Signing out ends the session first, and that is no expiry to warn about. */}
+					{logout === "idle" && <SessionExpiredBanner />}
+					<div className="bg-page flex min-h-dvh">
+						<Sidebar
+							pathname={pathname}
+							rail={rail}
+							onRailChange={(next) => {
+								setRail(next);
+								writeSidebarChoice(next);
+							}}
+							className="max-md:hidden"
+						/>
+						<div className="flex min-w-0 flex-1 flex-col">
+							<Header onAdd={add}>
+								<UserMenu
+									name={shown.name}
+									email={shown.email}
+									loggingOut={logout === "running"}
+									onLogout={() => void startLogout()}
+								/>
+							</Header>
+							<main
+								id="content"
+								tabIndex={-1}
+								className="flex-1 outline-none max-md:pb-(--bottom-bar-height)"
+							>
+								{children}
+							</main>
+						</div>
 					</div>
-				</div>
-				<BottomBar
-					pathname={pathname}
-					className="md:hidden"
-				/>
-				<Toaster />
+					<BottomBar
+						pathname={pathname}
+						onAdd={add}
+						className="md:hidden"
+					/>
+					<Toaster />
+				</AddSlotContext>
 			</AriaRouterProvider>
 		</AriaI18nProvider>
 	);

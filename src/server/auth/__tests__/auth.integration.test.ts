@@ -15,6 +15,8 @@ import { breachedRange, failingRange, hangingRange } from "./pwned";
 const ORIGIN = serverEnv().APP_ORIGIN;
 const DOMAIN = "auth.integration.test";
 const PASSWORD = "correct horse battery";
+/** The one address every run signs up again; every other test makes a new one. */
+const LONGEST_EMAIL = `${"b".repeat(254 - DOMAIN.length - 1)}@${DOMAIN}`;
 
 let owner: Client;
 
@@ -23,6 +25,9 @@ beforeAll(async () => {
 		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
 	});
 	await owner.connect();
+	// A run that stopped before `afterAll` leaves this user behind, and its sign-up would then
+	// fail; the cascade removes its sessions and accounts too.
+	await owner.query(`DELETE FROM auth."user" WHERE email = $1`, [LONGEST_EMAIL]);
 });
 
 afterAll(async () => {
@@ -512,9 +517,8 @@ describe("F01's rules through the route (BR-F01-01)", () => {
 	});
 
 	test("accepts an email of exactly 254 characters", async () => {
-		const email = `${"b".repeat(254 - DOMAIN.length - 1)}@${DOMAIN}`;
-		expect(email).toHaveLength(254);
-		expect((await signUp(email)).status).toBe(200);
+		expect(LONGEST_EMAIL).toHaveLength(254);
+		expect((await signUp(LONGEST_EMAIL)).status).toBe(200);
 	});
 });
 

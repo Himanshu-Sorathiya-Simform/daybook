@@ -183,6 +183,13 @@ describe("icon and shortcut", () => {
 		expect(onPress).not.toHaveBeenCalled();
 	});
 
+	test("the key cap stays out of the button's name", () => {
+		render(<Button shortcut="N">Add Transaction</Button>);
+
+		expect(screen.getByRole("button")).toHaveAccessibleName("Add Transaction");
+		expect(document.querySelector("kbd")).toHaveAttribute("aria-hidden", "true");
+	});
+
 	test("has no key cap without a shortcut", () => {
 		render(<Button>Add</Button>);
 

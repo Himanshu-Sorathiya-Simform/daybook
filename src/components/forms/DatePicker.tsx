@@ -50,8 +50,9 @@ export type DatePickerProps = {
  * change.
  *
  * It is a button rather than a typed date, so no React Aria field links the label, hint and
- * error: the button names itself by the label and the day, and is described by the hint or
- * the error.
+ * error: the button names itself by the label and the day, and is described by the hint or the
+ * error. A button takes no `aria-invalid`, so an error marks it `data-invalid`, which
+ * `focusFirstInvalid` finds.
  */
 export function DatePicker({
 	label,
@@ -87,6 +88,7 @@ export function DatePicker({
 				<AriaButton
 					isDisabled={isDisabled}
 					aria-labelledby={`${id}-label ${id}-value`}
+					{...(error ? { "data-invalid": true } : {})}
 					{...(message ? { "aria-describedby": `${id}-message` } : {})}
 					className={cn(
 						"rounded-control bg-page text-body text-ink flex min-h-10.5 w-full cursor-pointer items-center gap-2 border px-3 text-start max-md:min-h-11",

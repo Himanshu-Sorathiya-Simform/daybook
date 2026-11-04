@@ -2,6 +2,8 @@ import { onlineManager } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { setupServer } from "msw/node";
+import { I18nProvider } from "react-aria-components";
+import { toast } from "sonner";
 import {
 	afterAll,
 	afterEach,
@@ -13,8 +15,13 @@ import {
 	vi,
 } from "vitest";
 
-import { renderInApp } from "@/components/app/__tests__/helpers";
+import {
+	GOLDEN_BLOCK,
+	meFor,
+	renderInApp,
+} from "@/components/app/__tests__/helpers";
 import { AppProviders } from "@/components/app/AppProviders";
+import { Toaster } from "@/components/feedback/Toaster";
 import type { Transaction } from "@/lib/transactions/model";
 import { readFilterParams } from "@/lib/transactions/url";
 import type { GroupTotal } from "@/server/dal/transactions/list";
@@ -26,7 +33,13 @@ import {
 	testClient,
 	urlHarness,
 } from "../../hooks/__tests__/helpers";
-import { idOf, page, row } from "../../lib/__tests__/fixtures";
+import {
+	GOLDEN_CATEGORIES,
+	GOLDEN_PAYEES,
+	idOf,
+	page,
+	row,
+} from "../../lib/__tests__/fixtures";
 import type { LabelLocale } from "../../lib/labels";
 import {
 	transactionListOptions,
@@ -34,6 +47,7 @@ import {
 	viewsOptions,
 } from "../../lib/queries";
 import { PAGE_BREAKDOWNS, type SummaryAnswer } from "../../lib/types";
+import { EntryDialogHost } from "../EntryDialogHost";
 import { TransactionsPage } from "../TransactionsPage";
 
 const network = setupServer();
@@ -121,6 +135,11 @@ class FakeObserver {
 beforeEach(() => {
 	observers.clear();
 	vi.stubGlobal("IntersectionObserver", FakeObserver);
+	// The entry dialog's host reads the profile, and the dialog the payees.
+	route(network, "get", "/api/me", () => ok(meFor("u1")));
+	route(network, "get", "/api/payees", () =>
+		ok({ items: GOLDEN_PAYEES, categories: GOLDEN_CATEGORIES }),
+	);
 });
 
 function intersect(match: (target: Element) => boolean) {
@@ -154,10 +173,12 @@ function renderPage(
 	const { calls, Url } = urlHarness(search);
 	const view = renderInApp(
 		<Url>
-			<TransactionsPage
-				locale={IN}
-				weekStart="monday"
-			/>
+			<EntryDialogHost profile={GOLDEN_BLOCK}>
+				<TransactionsPage
+					locale={IN}
+					weekStart="monday"
+				/>
+			</EntryDialogHost>
 		</Url>,
 	);
 	return { ...view, lists, summaries, calls, user: userEvent.setup() };
@@ -246,10 +267,12 @@ describe("the page (F03 section 6)", () => {
 				queryClient={queryClient}
 			>
 				<Url>
-					<TransactionsPage
-						locale={IN}
-						weekStart="monday"
-					/>
+					<EntryDialogHost profile={GOLDEN_BLOCK}>
+						<TransactionsPage
+							locale={IN}
+							weekStart="monday"
+						/>
+					</EntryDialogHost>
 				</Url>
 			</AppProviders>,
 		);
@@ -1408,16 +1431,18 @@ describe("another profile's formats", () => {
 		const { Url } = urlHarness("");
 		renderInApp(
 			<Url>
-				<TransactionsPage
-					weekStart="monday"
-					locale={{
-						today: "2026-11-02",
-						dateLocale: "de-DE",
-						timezone: "Europe/Berlin",
-						numberLocale: "de-DE",
-						currency: "EUR",
-					}}
-				/>
+				<EntryDialogHost profile={GOLDEN_BLOCK}>
+					<TransactionsPage
+						weekStart="monday"
+						locale={{
+							today: "2026-11-02",
+							dateLocale: "de-DE",
+							timezone: "Europe/Berlin",
+							numberLocale: "de-DE",
+							currency: "EUR",
+						}}
+					/>
+				</EntryDialogHost>
 			</Url>,
 		);
 		await grid();
@@ -1965,5 +1990,238 @@ describe("history (D-547)", () => {
 			await user.keyboard("{Escape}");
 			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 		}
+	});
+});
+
+describe("adding (BR-F03-21, BR-F03-22, BR-F03-53, D-548)", () => {
+	// The golden clock (TST-3); only `Date` is frozen, so user-event's timers stay real.
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-11-02T06:30:00.000Z"));
+	});
+	afterEach(() => {
+		act(() => {
+			toast.dismiss();
+		});
+	});
+
+	/** The page at `search` with the toasts, and the create answering the row it was sent. */
+	function renderAdding(search: string, list = () => ok(CHECK_B_PAGE)) {
+		route(network, "get", "/api/transactions", list);
+		route(network, "get", "/api/transactions/summary", () =>
+			ok(CHECK_B_SUMMARY),
+		);
+		const created = route(network, "post", "/api/transactions", ({ body }) =>
+			ok(row(body as Partial<Transaction>), 201),
+		);
+		const { calls, Url } = urlHarness(search);
+		const view = renderInApp(
+			<I18nProvider locale="en-IN">
+				<Url>
+					<EntryDialogHost profile={GOLDEN_BLOCK}>
+						<TransactionsPage
+							locale={IN}
+							weekStart="monday"
+						/>
+					</EntryDialogHost>
+				</Url>
+				<Toaster />
+			</I18nProvider>,
+		);
+		return { ...view, calls, created, user: userEvent.setup() };
+	}
+
+	type User = ReturnType<typeof userEvent.setup>;
+	const entry = () => screen.findByRole("dialog", { name: "New Transaction" });
+	const noEntry = () =>
+		waitFor(() =>
+			expect(
+				screen.queryByRole("dialog", {
+					name: "New Transaction",
+					hidden: true,
+				}),
+			).toBeNull(),
+		);
+
+	/** Fills an expense of 640.00 to Kirana for Food, today, and presses `how`. */
+	async function addExpense(user: User, how = "Save") {
+		await user.click(
+			screen.getByRole("textbox", { name: "Amount", hidden: true }),
+		);
+		await user.keyboard("640");
+		await user.click(
+			screen.getByRole("combobox", { name: "Payee", hidden: true }),
+		);
+		await user.keyboard("Kirana{Escape}");
+		await user.click(
+			screen
+				.getByRole("radio", { name: "Food", hidden: true })
+				.closest("label")!,
+		);
+		await user.click(screen.getByRole("button", { name: how, hidden: true }));
+	}
+
+	const idOfCreate = (created: { body: unknown }[]) =>
+		(created[0]!.body as { id: string }).id;
+
+	// AC-F03-70, AC-F03-58
+	test("a plain Save of a row the filter shows selects it and says Transaction saved.", async () => {
+		const { user, calls, created } = renderAdding("");
+		await grid();
+
+		await user.keyboard("n");
+		await entry();
+		await addExpense(user);
+		await noEntry();
+
+		expect(await screen.findByText("Transaction saved.")).toBeInTheDocument();
+		expect(calls).toEqual([
+			{ mode: "replace", href: `/transactions?txn=${idOfCreate(created)}` },
+		]);
+	});
+
+	test("a search the new row matches still selects it", async () => {
+		const { user, calls, created } = renderAdding("?q=kirana");
+		await grid();
+
+		await user.keyboard("n");
+		await entry();
+		await addExpense(user);
+		await noEntry();
+
+		expect(calls.at(-1)).toEqual({
+			mode: "replace",
+			href: `/transactions?q=kirana&txn=${idOfCreate(created)}`,
+		});
+	});
+
+	// AC-F03-70, BR-F03-22
+	test("a row the filter hides says so, selects nothing, and Show clears the filters", async () => {
+		const { user, calls } = renderAdding("?type=income");
+		await grid();
+
+		await user.keyboard("n");
+		await entry();
+		await addExpense(user);
+		await noEntry();
+
+		expect(
+			await screen.findByText("Saved. It's hidden by your filters."),
+		).toBeInTheDocument();
+		expect(calls).toEqual([]);
+		await user.click(screen.getByRole("button", { name: "Show" }));
+
+		expect(calls).toEqual([{ mode: "push", href: "/transactions" }]);
+	});
+
+	test("Show keeps the grouping and sort", async () => {
+		const { user, calls } = renderAdding("?type=income&sort=amount");
+		await grid();
+
+		await user.keyboard("n");
+		await entry();
+		await addExpense(user);
+		await user.click(await screen.findByRole("button", { name: "Show" }));
+
+		expect(calls.at(-1)).toEqual({
+			mode: "push",
+			href: "/transactions?sort=amount",
+		});
+	});
+
+	test("a date range that ends before today hides the new row", async () => {
+		const { user } = renderAdding(CHECK_B);
+		await grid();
+
+		await user.keyboard("n");
+		await entry();
+		await addExpense(user);
+
+		expect(
+			await screen.findByText("Saved. It's hidden by your filters."),
+		).toBeInTheDocument();
+	});
+
+	// BR-F03-21: only a plain Save selects
+	test("Save and add another selects nothing and keeps the dialog open", async () => {
+		const { user, calls } = renderAdding("");
+		await grid();
+
+		await user.keyboard("n");
+		await entry();
+		await addExpense(user, "Save and add another");
+
+		expect(await screen.findByText("Transaction saved.")).toBeInTheDocument();
+		expect(calls).toEqual([]);
+		expect(
+			screen.getByRole("dialog", { name: "New Transaction", hidden: true }),
+		).toBeInTheDocument();
+	});
+
+	// BR-F03-53
+	test("new=1 opens the dialog, and closing it removes the parameter", async () => {
+		const { user, calls } = renderAdding("?cat=food&new=1");
+
+		expect(await entry()).toBeInTheDocument();
+		await user.keyboard("{Escape}");
+		await noEntry();
+
+		expect(calls).toEqual([{ mode: "replace", href: "/transactions?cat=food" }]);
+	});
+
+	test("new=1 then Save both lands the selection and removes the parameter", async () => {
+		const { user, calls, created } = renderAdding("?new=1");
+
+		await entry();
+		await addExpense(user);
+		await noEntry();
+
+		expect(calls.at(-1)).toEqual({
+			mode: "replace",
+			href: `/transactions?txn=${idOfCreate(created)}`,
+		});
+	});
+
+	test("after new=1 closes, it stays closed", async () => {
+		const { user } = renderAdding("?new=1");
+
+		await entry();
+		await user.keyboard("{Escape}");
+		await noEntry();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		expect(
+			screen.queryByRole("dialog", { name: "New Transaction", hidden: true }),
+		).toBeNull();
+	});
+
+	test("new given twice or empty opens nothing", async () => {
+		renderAdding("?new=1&new=1");
+		await grid();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		expect(
+			screen.queryByRole("dialog", { name: "New Transaction", hidden: true }),
+		).toBeNull();
+	});
+
+	// F03 section 6: the empty state's Add
+	test("the empty state's Add Transaction opens the dialog", async () => {
+		const { user } = renderAdding("", () => ok(page()));
+
+		await user.click(
+			await screen.findByRole("button", { name: "Add Transaction" }),
+		);
+
+		expect(await entry()).toBeInTheDocument();
+	});
+
+	test("a filtered empty state has no Add, only Clear filters", async () => {
+		renderAdding("?type=income", () => ok(page()));
+
+		expect(
+			await screen.findByRole("button", { name: "Clear filters" }),
+		).toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: "Add Transaction" })).toBeNull();
 	});
 });
