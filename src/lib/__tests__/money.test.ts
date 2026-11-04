@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 
-import { MINUS, formatMoney, formatPercent, moneyParts } from "@/lib/money";
+import {
+	MINUS,
+	formatMoney,
+	formatMoneyShort,
+	formatPercent,
+	moneyParts,
+} from "@/lib/money";
 import type { CurrencyCode } from "@/lib/currency";
 
 const IN = "hi-IN-u-nu-latn";
@@ -116,6 +122,50 @@ describe("formatMoney", () => {
 
 	test("refuses a locale that does not exist", () => {
 		expect(() => formatMoney(100, "INR", "not a locale")).toThrow(RangeError);
+	});
+});
+
+describe("formatMoneyShort (BR-F03-39, BR-F03-74)", () => {
+	test("leaves out the decimals of a whole amount", () => {
+		expect(formatMoneyShort(100000, "INR", IN)).toBe("₹1,000");
+		expect(formatMoneyShort(250000, "INR", IN)).toBe("₹2,500");
+		expect(formatMoneyShort(10000000, "INR", IN)).toBe("₹1,00,000");
+	});
+
+	test("keeps every decimal of an amount with a fractional part", () => {
+		expect(formatMoneyShort(39999, "INR", IN)).toBe("₹399.99");
+		expect(formatMoneyShort(100050, "INR", IN)).toBe("₹1,000.50");
+		expect(formatMoneyShort(100005, "INR", IN)).toBe("₹1,000.05");
+	});
+
+	test.each([
+		["EUR", DE, 124000, "1.240\u00a0€"],
+		["EUR", DE, 124050, "1.240,50\u00a0€"],
+		["USD", US, 500, "$5"],
+		["USD", US, 1, "$0.01"],
+		["JPY", "ja-JP-u-nu-latn", 1240, "￥1,240"],
+		["KWD", US, 1240000, "KWD\u00a01,240"],
+		["KWD", US, 1240001, "KWD\u00a01,240.001"],
+	] as [CurrencyCode, string, number, string][])(
+		"writes %s in %s for %i as %j",
+		(currency, locale, minor, text) => {
+			expect(formatMoneyShort(minor, currency, locale)).toBe(text);
+		},
+	);
+
+	test("zero has no decimals, and a negative amount takes the minus sign", () => {
+		expect(formatMoneyShort(0, "INR", IN)).toBe("₹0");
+		expect(formatMoneyShort(-100000, "INR", IN)).toBe(`${MINUS}₹1,000`);
+		expect(formatMoneyShort(-150, "INR", IN)).toBe(`${MINUS}₹1.50`);
+	});
+
+	test("reaches Intl as an exact decimal past the float's precision", () => {
+		expect(formatMoneyShort(900719925474099, "INR", US)).toBe(
+			"₹9,007,199,254,740.99",
+		);
+		expect(formatMoneyShort(900719925474000, "INR", US)).toBe(
+			"₹9,007,199,254,740",
+		);
 	});
 });
 

@@ -62,19 +62,19 @@ Prices: 399 INR or 4.99 USD a month; 3,990 INR or 49.90 USD a year. India pays i
 
 ## Stack
 
-| Layer           | Choice                                                                                            |
-| --------------- | ------------------------------------------------------------------------------------------------- |
-| App and backend | Next.js 16 (App Router, route handlers, `proxy.ts`), TypeScript, React Compiler                   |
-| Database        | Postgres on Neon (free tier), row-level security, Drizzle ORM                                     |
-| Auth            | Better Auth, email and password                                                                   |
-| Client data     | TanStack Query (persisted to IndexedDB), TanStack Form with Zod, TanStack Table, TanStack Hotkeys |
-| UI state        | Zustand for UI state only; committed filters in the URL                                           |
-| UI              | Tailwind CSS with React Aria Components; designed by Claude Design                                |
-| Charts          | Apache ECharts 6                                                                                  |
-| Payments        | Stripe test mode: Elements with Checkout Sessions, Customer Portal, Entitlements                  |
-| CMS             | Sanity (free plan)                                                                                |
-| PWA             | Serwist service worker; IndexedDB write queue                                                     |
-| Quality         | Sentry, SonarQube Cloud, GitHub Actions CI, Vitest, MSW, Playwright                               |
+| Layer           | Choice                                                                                                            |
+| --------------- | ----------------------------------------------------------------------------------------------------------------- |
+| App and backend | Next.js 16 (App Router, route handlers, `proxy.ts`), TypeScript, React Compiler                                   |
+| Database        | Postgres on Neon (free tier), row-level security, Drizzle ORM                                                     |
+| Auth            | Better Auth, email and password                                                                                   |
+| Client data     | TanStack Query (persisted to IndexedDB), TanStack Form with Zod, TanStack Table, TanStack Hotkeys, TanStack Pacer |
+| UI state        | Zustand for UI state only; committed filters in the URL                                                           |
+| UI              | Tailwind CSS with React Aria Components; designed by Claude Design                                                |
+| Charts          | Apache ECharts 6                                                                                                  |
+| Payments        | Stripe test mode: Elements with Checkout Sessions, Customer Portal, Entitlements                                  |
+| CMS             | Sanity (free plan)                                                                                                |
+| PWA             | Serwist service worker; IndexedDB write queue                                                                     |
+| Quality         | Sentry, SonarQube Cloud, GitHub Actions CI, Vitest, MSW, Playwright                                               |
 
 ## Success criteria
 

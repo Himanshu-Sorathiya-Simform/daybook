@@ -4,28 +4,32 @@ import { Banner } from "@/components/feedback/Banner";
 import { useOnline } from "@/hooks/useOnline";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/date-format";
+import type { WeekStart } from "@/lib/geo";
 import { useTransactionSummary } from "../hooks/useTransactionSummary";
 import { useTransactionsUrl } from "../hooks/useTransactionsUrl";
 import type { LabelLocale } from "../lib/labels";
 import { TRANSACTIONS_TEXT } from "../lib/messages";
-import { GroupSortMenu } from "./GroupSortMenu";
+import { FilterBar } from "./FilterBar";
 import { HeaderTotals } from "./HeaderTotals";
 import { TransactionList } from "./TransactionList";
 
 export type TransactionsPageProps = {
 	/** The profile's formats and its today, from the server render (TIME-5). */
 	locale: LabelLocale;
+	/** The profile's week start, the first column of the calendars (D-537). */
+	weekStart: WeekStart;
 	className?: string;
 };
 
 /**
  * The Transactions page (F03 section 6), from top to bottom: the title, with "as of" while
- * offline (D-533); the invalid-link notice (D-531); the Group · Sort menu; the header totals;
- * and the list. Everything follows the URL (FIL-4), which the page reads and writes through
+ * offline (D-533); the search box, the filter controls and the Group · Sort menu, then the
+ * active filters as chips; the invalid-link notice (D-531); the header totals; and the list. Everything follows the URL (FIL-4), which the page reads and writes through
  * `useTransactionsUrl`.
  */
 export function TransactionsPage({
 	locale,
+	weekStart,
 	className,
 }: Readonly<TransactionsPageProps>) {
 	const url = useTransactionsUrl(locale.currency);
@@ -50,12 +54,16 @@ export function TransactionsPage({
 					</span>
 				)}
 			</div>
-			<div className="flex flex-wrap items-center justify-end gap-2">
-				<GroupSortMenu
-					list={url.list}
-					onChange={url.setList}
-				/>
-			</div>
+			<FilterBar
+				filter={url.filter}
+				list={url.list}
+				onFilterChange={(filter) => url.setFilter(filter)}
+				onListChange={url.setList}
+				locale={locale}
+				firstDayOfWeek={weekStart}
+				count={summary.data?.count}
+				isOffline={!online}
+			/>
 			{url.notice && (
 				<Banner
 					kind="info"

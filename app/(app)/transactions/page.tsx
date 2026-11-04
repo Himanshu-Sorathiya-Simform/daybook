@@ -72,6 +72,7 @@ export default async function Page({ searchParams }: PageProps<"/transactions">)
 					dateLocale: profile.dateLocale,
 					timezone: profile.timezone,
 				}}
+				weekStart={profile.weekStart}
 			/>
 		</HydrationBoundary>
 	);

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useDebouncer } from "@tanstack/react-pacer";
 import { useEffect, useState } from "react";
 
 import { useOnline } from "@/hooks/useOnline";
@@ -39,11 +40,9 @@ export function usePayeeSuggestions(text: string): PayeeSuggestions {
 	const online = useOnline();
 	const q = payeeQueryText(text);
 	const [settled, setSettled] = useState<string | null>(null);
+	const settle = useDebouncer(setSettled, { wait: SEARCH_DELAY_MS });
 
-	useEffect(() => {
-		const timer = setTimeout(() => setSettled(q), SEARCH_DELAY_MS);
-		return () => clearTimeout(timer);
-	}, [q]);
+	useEffect(() => settle.maybeExecute(q), [q, settle]);
 
 	const list = data?.items ?? [];
 	const device = q === null ? [] : deviceSuggestions(list, q);

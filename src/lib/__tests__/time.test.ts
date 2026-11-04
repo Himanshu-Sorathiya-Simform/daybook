@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { isIsoDate, monthsBefore, shiftDays, todayIn, utcDate } from "../time";
+import {
+	daysInRange,
+	isIsoDate,
+	monthsBefore,
+	shiftDays,
+	todayIn,
+	utcDate,
+} from "../time";
 
 // The golden clock (TST-3): 2026-11-02T12:00:00+05:30.
 const GOLDEN = new Date("2026-11-02T06:30:00.000Z");
@@ -85,6 +92,23 @@ describe("shiftDays", () => {
 		["2026-11-01", 1, "2026-11-02"],
 	])("%s moved %i days is %s", (date, days, expected) => {
 		expect(shiftDays(date, days)).toBe(expected);
+	});
+});
+
+describe("daysInRange", () => {
+	test.each([
+		["2026-10-05", "2026-10-20", 16],
+		["2026-10-05", "2026-10-05", 1],
+		["2026-10-01", "2026-10-31", 31],
+		["2026-02-01", "2026-02-28", 28],
+		["2028-02-01", "2028-02-29", 29],
+		["2025-12-31", "2026-01-01", 2],
+		["2026-01-01", "2026-12-31", 365],
+		// Daylight-saving changes never touch a calendar-date count.
+		["2026-03-28", "2026-03-30", 3],
+		["2026-10-24", "2026-10-26", 3],
+	])("from %s to %s counts %i days, both ends included", (from, to, days) => {
+		expect(daysInRange(from, to)).toBe(days);
 	});
 });
 

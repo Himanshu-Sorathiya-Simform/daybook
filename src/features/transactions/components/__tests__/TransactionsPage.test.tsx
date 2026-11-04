@@ -154,20 +154,33 @@ function renderPage(
 	const { calls, Url } = urlHarness(search);
 	const view = renderInApp(
 		<Url>
-			<TransactionsPage locale={IN} />
+			<TransactionsPage
+				locale={IN}
+				weekStart="monday"
+			/>
 		</Url>,
 	);
 	return { ...view, lists, summaries, calls, user: userEvent.setup() };
 }
 
 const grid = () => screen.findByRole("grid", { name: "Transactions" });
+/** The list's own polite live region, inside the list's section; the search box has one too. */
+const listLive = () =>
+	within(
+		screen.getByRole("grid", { name: "Transactions" }).closest("section")!,
+	).getByRole("status");
+/** The list's rows, not the filter chips, which are rows of their own grid. */
+const listRows = () =>
+	within(screen.getByRole("grid", { name: "Transactions" }))
+		.getAllByRole("row")
+		.filter((each) => each.hasAttribute("data-key"));
 const rowNames = () =>
-	within(screen.getByRole("grid"))
+	within(screen.getByRole("grid", { name: "Transactions" }))
 		.queryAllByRole("row")
 		.filter((each) => each.hasAttribute("data-key"))
 		.map((each) => each.getAttribute("aria-label"));
 const headers = () =>
-	within(screen.getByRole("grid"))
+	within(screen.getByRole("grid", { name: "Transactions" }))
 		.queryAllByRole("rowheader")
 		.map((each) => each.textContent);
 const figure = (label: string) =>
@@ -233,12 +246,17 @@ describe("the page (F03 section 6)", () => {
 				queryClient={queryClient}
 			>
 				<Url>
-					<TransactionsPage locale={IN} />
+					<TransactionsPage
+						locale={IN}
+						weekStart="monday"
+					/>
 				</Url>
 			</AppProviders>,
 		);
 
-		expect(await screen.findAllByRole("grid")).toHaveLength(1);
+		expect(
+			await screen.findAllByRole("grid", { name: "Transactions" }),
+		).toHaveLength(1);
 		expect(figure("Out")).toBe("₹6,220.00");
 		expect(rowNames()).toHaveLength(4);
 		await new Promise((resolve) => setTimeout(resolve, 50));
@@ -397,7 +415,9 @@ describe("day grouping (BR-F03-31, BR-F03-56)", () => {
 		renderPage(CHECK_B);
 		await grid();
 
-		const groups = within(screen.getByRole("grid")).getAllByRole("rowgroup");
+		const groups = within(
+			screen.getByRole("grid", { name: "Transactions" }),
+		).getAllByRole("rowgroup");
 		expect(groups).toHaveLength(4);
 		expect(groups[0]).toHaveAccessibleName("Sat, 31 Oct Out ₹380.00");
 		expect(within(groups[0]!).getAllByRole("row")).toHaveLength(2);
@@ -554,7 +574,7 @@ describe("page states (F03 section 6)", () => {
 			name: "Loading Transactions",
 		});
 		expect(loading).toHaveAttribute("aria-busy", "true");
-		expect(screen.queryByRole("grid")).toBeNull();
+		expect(screen.queryByRole("grid", { name: "Transactions" })).toBeNull();
 
 		answer();
 		await grid();
@@ -734,10 +754,7 @@ describe("loading more (BR-F03-30, D-530)", () => {
 	test('each load is announced: "Loaded 50 more Transactions", then the last page\'s own count', async () => {
 		const { user } = renderPage("?sort=amount", { list: threePages() });
 		await grid();
-		const live = () =>
-			screen
-				.getAllByRole("status")
-				.find((each) => each.classList.contains("sr-only"));
+		const live = listLive;
 
 		expect(live()).toHaveTextContent(/^$/);
 		await user.click(screen.getByRole("button", { name: "Load more" }));
@@ -821,9 +838,7 @@ describe("loading more (BR-F03-30, D-530)", () => {
 				screen.getByRole("button", { name: "Load more" }),
 			).not.toHaveAttribute("aria-disabled"),
 		);
-		const live = screen
-			.getAllByRole("status")
-			.find((each) => each.classList.contains("sr-only"));
+		const live = listLive();
 		expect(live).toHaveTextContent(/^$/);
 		expect(rowNames()).toHaveLength(50);
 
@@ -963,12 +978,11 @@ describe("keyboard (AC-F03-24)", () => {
 	test("Tab reaches the list once, on its first row, and the arrows move between rows past the headers", async () => {
 		const { user } = renderPage(CHECK_B);
 		await grid();
-		screen.getByRole("button", { name: /^Group and sort/ }).focus();
+		// The last stop before the list is Clear all, after the chips of check B's filters.
+		screen.getByRole("button", { name: "Clear all" }).focus();
 
 		await user.tab();
-		const rows = screen
-			.getAllByRole("row")
-			.filter((each) => each.hasAttribute("data-key"));
+		const rows = listRows();
 		expect(rows[0]).toHaveFocus();
 
 		await user.keyboard("{ArrowDown}");
@@ -983,9 +997,7 @@ describe("keyboard (AC-F03-24)", () => {
 	test("typing letters on a row does not move to another row", async () => {
 		const { user } = renderPage(CHECK_B);
 		await grid();
-		const rows = screen
-			.getAllByRole("row")
-			.filter((each) => each.hasAttribute("data-key"));
+		const rows = listRows();
 		rows[0]!.focus();
 
 		await user.keyboard("zo");
@@ -1317,10 +1329,7 @@ describe("the live region (D-530)", () => {
 		};
 		const { user } = renderPage("?sort=amount", { list: pages });
 		await grid();
-		const live = () =>
-			screen
-				.getAllByRole("status")
-				.find((each) => each.classList.contains("sr-only"))!;
+		const live = listLive;
 
 		await user.click(screen.getByRole("button", { name: "Load more" }));
 		await waitFor(() =>
@@ -1339,9 +1348,7 @@ describe("the live region (D-530)", () => {
 		renderPage(CHECK_B);
 		await grid();
 
-		const live = screen
-			.getAllByRole("status")
-			.find((each) => each.classList.contains("sr-only"));
+		const live = listLive();
 		expect(live).toBeDefined();
 		expect(live).not.toHaveAttribute("aria-live", "assertive");
 	});
@@ -1402,6 +1409,7 @@ describe("another profile's formats", () => {
 		renderInApp(
 			<Url>
 				<TransactionsPage
+					weekStart="monday"
 					locale={{
 						today: "2026-11-02",
 						dateLocale: "de-DE",
@@ -1430,5 +1438,309 @@ describe("the skeleton", () => {
 		expect(loading.children).toHaveLength(7);
 		for (const each of loading.children)
 			expect(each.querySelectorAll("[aria-hidden='true']")).toHaveLength(4);
+	});
+});
+
+/** Check B's filter counts (F03 section 5). */
+const CHECK_B_FACETS = {
+	type: {
+		income: 0,
+		expense: 4,
+		refund: 0,
+		goal_contribution: 0,
+		goal_withdrawal: 0,
+	},
+	category: {
+		food: 4,
+		entertainment: 2,
+		shopping: 2,
+		housing: 1,
+		salary: 1,
+		transportation: 1,
+	},
+	date: {
+		all: 7,
+		this_month: 1,
+		last_month: 4,
+		last_3_months: 7,
+		year_to_date: 7,
+		last_12_months: 7,
+	},
+	source: { manual: 4, subscription: 0 },
+};
+
+/** Check B's histogram (F03 section 5). */
+const CHECK_B_HISTOGRAM = {
+	edges: [
+		31500, 40000, 50000, 63000, 80000, 100000, 125000, 160000, 200000, 250000,
+		315000,
+	],
+	counts: [1, 0, 0, 1, 0, 0, 0, 0, 1, 1],
+	currency: "INR",
+};
+
+/** The page with the filter counts and the histogram served too. */
+function renderFiltered(search: string) {
+	const facets = route(network, "get", "/api/transactions/facets", () =>
+		ok(CHECK_B_FACETS),
+	);
+	const histograms = route(
+		network,
+		"get",
+		"/api/transactions/amount-histogram",
+		() => ok(CHECK_B_HISTOGRAM),
+	);
+	return { ...renderPage(search), facets, histograms };
+}
+
+const menu = (name: string) =>
+	screen.getByRole("button", { name: new RegExp(`^${name}`), hidden: true });
+const searchBox = () =>
+	screen.getByRole("searchbox", { name: "Search Transactions" });
+const requestOf = (seen: { path: string }) => {
+	const address = new URL(seen.path, "http://x");
+	return address.pathname + address.search;
+};
+
+describe("filters (BR-F03-39, D-523)", () => {
+	test("a page load asks for no filter counts and no histogram", async () => {
+		const { facets, histograms } = renderFiltered(CHECK_B);
+		await grid();
+
+		await new Promise((resolve) => setTimeout(resolve, 100));
+
+		expect(facets).toHaveLength(0);
+		expect(histograms).toHaveLength(0);
+	});
+
+	// AC-F03-40
+	test("the first control opened asks for the counts once, and every control shows them", async () => {
+		const { user, facets } = renderFiltered(CHECK_B);
+		await grid();
+
+		await user.click(menu("Type"));
+		expect(
+			await screen.findByRole("checkbox", { name: "Expense 4" }),
+		).toBeInTheDocument();
+		await user.keyboard("{Escape}");
+		await user.click(menu("Category"));
+
+		expect(
+			await screen.findByRole("checkbox", { name: "Food 4" }),
+		).toBeChecked();
+		expect(facets).toHaveLength(1);
+		expect(requestOf(facets[0]!)).toBe(
+			"/api/transactions/facets?from=2026-10-01&to=2026-10-31&cat=food",
+		);
+	});
+
+	test("the Amount control asks for the histogram when it first opens, and only it", async () => {
+		const { user, histograms } = renderFiltered(`${CHECK_B}&min=400.00`);
+		await grid();
+
+		await user.click(menu("Type"));
+		await user.keyboard("{Escape}");
+		expect(histograms).toHaveLength(0);
+		await user.click(menu("Amount"));
+		await screen.findByRole("slider", { name: /^Minimum amount/ });
+		await user.keyboard("{Escape}");
+		await user.click(menu("Amount"));
+
+		expect(histograms).toHaveLength(1);
+		// The histogram ignores the amount bounds (BR-F03-60).
+		expect(requestOf(histograms[0]!)).toBe(
+			"/api/transactions/amount-histogram?from=2026-10-01&to=2026-10-31&cat=food",
+		);
+	});
+
+	test.each([
+		["Type", "checkbox", /^Refund/, "/transactions?type=refund"],
+		["Category", "checkbox", /^Health/, "/transactions?cat=health"],
+		["More", "radio", /^Added by you/, "/transactions?src=manual"],
+		[
+			"Date",
+			"radio",
+			/^Last month/,
+			"/transactions?from=2026-10-01&to=2026-10-31",
+		],
+	])("%s: a choice pushes its URL at once", async (control, role, name, href) => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.click(menu(control));
+		await user.click(await screen.findByRole(role, { name }));
+
+		expect(calls).toEqual([{ mode: "push", href }]);
+	});
+
+	test("unticking the only type pushes the URL without it", async () => {
+		const { user, calls } = renderFiltered("?type=refund");
+		await grid();
+
+		await user.click(menu("Type"));
+		await user.click(await screen.findByRole("checkbox", { name: /^Refund/ }));
+
+		expect(calls).toEqual([{ mode: "push", href: "/transactions" }]);
+	});
+
+	test("Amount: a quick range pushes its min and max", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.click(menu("Amount"));
+		await user.click(await screen.findByRole("radio", { name: "₹400 to ₹800" }));
+
+		expect(calls).toEqual([
+			{ mode: "push", href: "/transactions?min=400.00&max=799.99" },
+		]);
+	});
+
+	test("a filter change keeps the grouping and sort", async () => {
+		const { user, calls } = renderFiltered("?sort=amount&group=payee");
+		await grid();
+
+		await user.click(menu("Type"));
+		await user.click(await screen.findByRole("checkbox", { name: /^Income/ }));
+
+		expect(calls.at(-1)).toEqual({
+			mode: "push",
+			href: "/transactions?type=income&sort=amount&group=payee",
+		});
+	});
+
+	test("a new filter asks for its list and its totals", async () => {
+		const { user, lists, summaries } = renderFiltered("");
+		await grid();
+		const before = { lists: lists.length, summaries: summaries.length };
+
+		await user.click(menu("Type"));
+		await user.click(await screen.findByRole("checkbox", { name: /^Refund/ }));
+
+		await waitFor(() => expect(lists.length).toBe(before.lists + 1));
+		expect(requestOf(lists.at(-1)!)).toBe("/api/transactions?type=refund");
+		expect(summaries.length).toBe(before.summaries + 1);
+	});
+
+	test("check B shows its chips, and the trigger values", async () => {
+		renderFiltered(CHECK_B);
+		await grid();
+
+		const chips = screen.getByRole("grid", { name: "Active filters" });
+		expect(
+			within(chips)
+				.getAllByRole("row")
+				.map((row) => row.textContent),
+		).toEqual(["Last month", "Food"]);
+		expect(menu("Date Last month")).toBeInTheDocument();
+		expect(menu("Category Food")).toBeInTheDocument();
+		expect(menu("Type Any")).toBeInTheDocument();
+		expect(menu("Filters \\(2\\)")).toBeInTheDocument();
+	});
+
+	test("removing a chip pushes the URL without that filter", async () => {
+		const { user, calls } = renderFiltered(CHECK_B);
+		await grid();
+
+		await user.click(screen.getByRole("button", { name: "Remove Food" }));
+
+		expect(calls).toEqual([
+			{ mode: "push", href: "/transactions?from=2026-10-01&to=2026-10-31" },
+		]);
+	});
+
+	test("Clear all drops every filter and keeps the grouping and sort", async () => {
+		const { user, calls } = renderFiltered(`${CHECK_B}&q=swiggy&sort=amount`);
+		await grid();
+
+		await user.click(screen.getByRole("button", { name: "Clear all" }));
+
+		expect(calls).toEqual([{ mode: "push", href: "/transactions?sort=amount" }]);
+		expect(searchBox()).toHaveValue("");
+	});
+
+	test("no filter shows no chips", async () => {
+		renderFiltered("");
+		await grid();
+
+		expect(screen.queryByRole("grid", { name: "Active filters" })).toBeNull();
+		expect(menu("Filters$")).toBeInTheDocument();
+	});
+});
+
+describe("search (BR-F03-38, golden check H)", () => {
+	test("commits after typing stops, after the other filters in the URL", async () => {
+		const { user, calls } = renderFiltered(CHECK_B);
+		await grid();
+
+		await user.type(searchBox(), "swiggy");
+		expect(calls).toEqual([]);
+
+		await waitFor(() =>
+			expect(calls).toEqual([
+				{
+					mode: "push",
+					href: "/transactions?from=2026-10-01&to=2026-10-31&cat=food&q=swiggy",
+				},
+			]),
+		);
+		expect(
+			within(screen.getByRole("grid", { name: "Active filters" })).getByRole(
+				"row",
+				{
+					name: "“swiggy”",
+				},
+			),
+		).toBeInTheDocument();
+	});
+
+	test("a search from the URL shows in the box, and its chip removed empties it", async () => {
+		const { user, calls } = renderFiltered("?q=649");
+		await grid();
+		expect(searchBox()).toHaveValue("649");
+
+		await user.click(screen.getByRole("button", { name: "Remove “649”" }));
+
+		expect(calls).toEqual([{ mode: "push", href: "/transactions" }]);
+		expect(searchBox()).toHaveValue("");
+	});
+
+	test("/ focuses the box from the list", async () => {
+		const { user } = renderFiltered("");
+		await grid();
+		listRows()[0]!.focus();
+
+		await user.keyboard("/");
+
+		expect(searchBox()).toHaveFocus();
+	});
+
+	test("offline the box is disabled and says search needs a connection", async () => {
+		renderFiltered("");
+		await grid();
+
+		goOffline();
+
+		expect(searchBox()).toBeDisabled();
+		expect(searchBox()).toHaveAttribute(
+			"placeholder",
+			"Search needs a connection",
+		);
+	});
+});
+
+describe("the phone sheet (BR-F03-39)", () => {
+	// AC-F03-61
+	test("Show writes check B's URL as one history entry", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.click(menu("Filters"));
+		const sheet = await screen.findByRole("dialog", { name: "Filters" });
+		await user.click(within(sheet).getByRole("radio", { name: "Last month" }));
+		await user.click(within(sheet).getByRole("button", { name: "Food" }));
+		expect(calls).toEqual([]);
+		await user.click(within(sheet).getByRole("button", { name: /^Show/ }));
+
+		expect(calls).toEqual([{ mode: "push", href: `/transactions${CHECK_B}` }]);
 	});
 });

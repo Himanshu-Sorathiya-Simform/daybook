@@ -15,7 +15,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-540                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-544                      |
 
 ## 1. User stories
 
@@ -343,7 +343,7 @@ A view's `filter` holds the filter object's fields with these differences from t
 - **BR-F03-38** The text box commits its draft 300 ms after typing stops (FIL-4). Enter, or clearing the box, commits at once.
 - **BR-F03-39** Where filters appear (D-523):
     - **Desktop (768 px and wider):** the search box, then menus for Date, Type, Category, Amount and More, and the Group · Sort menu. Each change commits.
-        - **Date:** the presets with their counts (BR-F03-59). Custom adds From and To date fields, a two-month range calendar with future days disabled that moves a month at a time and sets the range once both ends are chosen (D-538), "<n> days · <m> Transactions" with the header's count, and Done.
+        - **Date:** the presets with their counts (BR-F03-59). Custom adds From and To date fields that commit 300 ms after typing stops, a two-month range calendar with future days disabled that moves a month at a time and sets the range once both ends are chosen (D-538, D-543), "<n> days · <m> Transactions" with the header's count, and Done.
         - **Type:** each type with its count.
         - **Category:** the expense categories, then the income categories under "Income", each with its count, and the line "Category filters hide Goal Transactions." (BR-F03-37).
         - **Amount:** "<n> Transactions" with the header's count; the histogram's bars (BR-F03-60), those inside the chosen range highlighted; a slider with two thumbs that stop on the histogram's edges and commits when a thumb is released, the lower thumb writing its edge as `min` (none at the first edge) and the upper thumb 1 minor unit below its edge as `max` (none at the last edge), the two thumbs staying at least one edge apart and a release that leaves the range as it was committing nothing (D-539); Min and Max fields in the user's format (BR-F03-04) that commit 300 ms after typing stops; the quick ranges (BR-F03-74); Clear and Done.
@@ -354,13 +354,13 @@ A view's `filter` holds the filter object's fields with these differences from t
             - Choosing Day under an amount sort switches to the date sort in the same direction: Largest first becomes Newest first, Smallest first Oldest first.
     - **Phones:** "Filters" with the number of active chips, such as "Filters (2)", opens a sheet: chips for the date presets (no Custom), Type, Category and Source, and the amount block.
         - Changes stay a draft until "Show <n> Transactions" applies them, with one URL change. `n` comes from the summary of the draft, 300 ms after its last change; at zero the button reads "No matches", and until the summary answers, or offline, "Show Transactions".
-        - "Clear all" clears the draft. A custom range from a link still shows as a chip.
+        - "Clear all" clears the draft's dates, types, categories, amount and source; the search, a Goal and a Subscription stay (D-544). A custom range from a link still shows as a chip.
         - The Group · Sort menu stays beside the search box.
     - **Everywhere:** active filters show as removable chips, each named "Remove <label>" for assistive technology, with Clear all. A chip's label is:
         - a date preset's name, or "5 Oct to 20 Oct" for a custom range (F02 short date);
         - a type's or a category's label;
         - "₹1,000 to ₹2,500", "From ₹1,000" or "Up to ₹2,500" for amounts, in the user's format, with decimals only when the amount has a fractional part, and the quick range's own label when `min` and `max` equal one (BR-F03-74);
-        - a source's label; "Netflix charges" for `sub`; the Goal's name for `goal`;
+        - a source's label; "Netflix charges" for `sub`; the Goal's name for `goal`, and until F05 and F06 bring those names, "Subscription charges" and "Goal" (D-541);
         - the search text in quotes, “swiggy”.
     - **The search box:** the placeholder "Search payee, note or amount" and a `/` key hint. Esc clears the draft and leaves the box.
 - **BR-F03-40** Sort options are Newest first (the default), Oldest first, Largest first and Smallest first.
@@ -815,6 +815,8 @@ A count of one reads in the singular wherever a count appears: "1 Transaction", 
 | Save                                                                          | `currency_mismatch`                                                             | Not saved: your currency changed after this was made.                                                                                                                                                                   |
 | Edit or delete                                                                | `not_found`                                                                     | This Transaction was deleted on another device.                                                                                                                                                                         |
 | Search box                                                                    | Under 3 characters, not numeric                                                 | Type at least 3 characters, or an amount. (No request is sent)                                                                                                                                                          |
+| Custom range                                                                  | From after To                                                                   | Choose a From date on or before To. (D-543)                                                                                                                                                                             |
+| Amount filter                                                                 | Min above Max                                                                   | Choose a Min at or below Max. (D-543)                                                                                                                                                                                   |
 | Link                                                                          | Invalid parameters                                                              | Some filters in this link weren't valid and were removed.                                                                                                                                                               |
 | Save                                                                          | Hidden by the filter                                                            | Saved. It's hidden by your filters.                                                                                                                                                                                     |
 | Deep link                                                                     | `txn` not found                                                                 | We couldn't find that Transaction.                                                                                                                                                                                      |
@@ -1130,6 +1132,7 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
 - **AC-F03-65** (unit) Calendars on the golden clock in `en-IN`: the entry date's calendar for 2 Nov enables 23 Oct to 2 Nov only, outlines 2 Nov, and with week start Monday starts each week on Monday; the custom range calendar shows October and November, its next arrow is disabled, previous shows September and October, and choosing 20 Oct then 5 Oct reports 5 Oct to 20 Oct (D-537, D-538).
 - **AC-F03-66** (unit) The Amount slider over the edges `[0, 100, 500, 1000, 5000, 10000, 100000]` rupees at thumbs 0 and 5: End on the lower thumb stops at 4; a thumb moved and moved back commits once; each thumb reads its edge as money, such as "₹5,000" (D-539).
 - **AC-F03-67** (unit) Time fields in the profile's hour cycle: 23:50 reads "11:50 pm" in `en-IN` and "23:50" in `de-DE` (D-537).
+- **AC-F03-68** (unit) Filters on the golden clock: typing 12 into Custom's From day commits one range 300 ms after the last key, not one per digit; From after To reads "Choose a From date on or before To." and commits nothing; Min 900 with Max 799.99 reads "Choose a Min at or below Max." and commits nothing; the search box commits "swiggy" 300 ms after typing stops, at once on Enter or clear, and never commits "sw" (D-543, BR-F03-38).
 
 ## 15. Illustrations
 

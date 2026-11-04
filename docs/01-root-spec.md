@@ -768,7 +768,7 @@ The core codes are below. The full registry, including the codes added for Stret
 
 ## 13. Stack, environment and scripts
 
-**Stack (versions pinned at M0).** Next.js 16, latest patch, with the React Compiler. TypeScript. Drizzle ORM, stable 0.x. node-postgres. Better Auth. TanStack Query with the IndexedDB persister. TanStack Form. TanStack Table. TanStack Hotkeys, pinned and wrapped behind one hook. Zustand. Zod. React Aria Components with Tailwind CSS. lucide icons, sonner toasts and next-themes. date-fns 4 with `@date-fns/tz`. Apache ECharts 6 with modular imports. Serwist. Stripe and Stripe.js. Sanity client with `next-sanity`. Sentry. Playwright, which is also used at runtime for PDFs. Vitest and MSW.
+**Stack (versions pinned at M0).** Next.js 16, latest patch, with the React Compiler. TypeScript. Drizzle ORM, stable 0.x. node-postgres. Better Auth. TanStack Query with the IndexedDB persister. TanStack Form. TanStack Table. TanStack Hotkeys, pinned and wrapped behind one hook. TanStack Pacer, pinned, for client-side debouncing (D-542). Zustand. Zod. React Aria Components with Tailwind CSS. lucide icons, sonner toasts and next-themes. date-fns 4 with `@date-fns/tz`. Apache ECharts 6 with modular imports. Serwist. Stripe and Stripe.js. Sanity client with `next-sanity`. Sentry. Playwright, which is also used at runtime for PDFs. Vitest and MSW.
 
 **Lists (D-171).** The Transactions list uses React Aria's GridList, fed by TanStack Query's infinite pages and not virtualized, since `maxPages` keeps it to 250 rows (D-36). TanStack Table renders report and Budget tables. TanStack Virtual is used only where a long React Aria collection must virtualize.
 

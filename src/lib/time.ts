@@ -1,5 +1,12 @@
 import { tz } from "@date-fns/tz";
-import { addDays, format, isValid, parse, subMonths } from "date-fns";
+import {
+	addDays,
+	differenceInCalendarDays,
+	format,
+	isValid,
+	parse,
+	subMonths,
+} from "date-fns";
 
 const UTC = tz("UTC");
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -31,6 +38,12 @@ export function isIsoDate(text: string): boolean {
  * read and written in UTC, so the machine's zone never moves them (TIME-10). */
 export function shiftDays(date: string, days: number): string {
 	return writeDate(addDays(readDate(date), days, { in: UTC }));
+}
+
+/** How many calendar days run from `from` to `to`, both counted: 1 for the same day, 16 for
+ * 5 Oct to 20 Oct. */
+export function daysInRange(from: string, to: string): number {
+	return differenceInCalendarDays(readDate(to), readDate(from), { in: UTC }) + 1;
 }
 
 /** The calendar date `months` before `date`, as `YYYY-MM-DD`. A day the earlier month lacks
