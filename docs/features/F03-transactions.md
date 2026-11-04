@@ -15,7 +15,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-527                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-528                      |
 
 ## 1. User stories
 
@@ -280,11 +280,10 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **Filter counts and the histogram** load when their control first opens (D-523), then follow the filter.
     - **Payee suggestions** load once a logged-in page has rendered, so the first entry dialog has them at once.
 - **BR-F03-31** Day grouping (BR-F03-55) shows sticky day headers by `occurredOn` (D-522): "Today"; "Yesterday · " followed by that day in the F02 day format ("Yesterday · Sun, 1 Nov"); or the F02 day format ("Sat, 31 Oct"; "Sat, 31 Oct 2025" outside the current year). Every other grouping shows the day on each row instead, before the time: "Today · 11:40 am", or "Sat, 31 Oct · 11:50 pm" in the F02 day format (so yesterday reads "Sun, 1 Nov · 12:30 am"). A charge shows its day alone.
-- **BR-F03-32** A row shows six things:
+- **BR-F03-32** A row shows five things (D-528):
     - **Avatar:** the payee's initials (D-86), taken from the letters and digits of the payee: the first character of each of the first two words, or the first two characters of a single word, uppercase. With none, the category icon. Goal rows show the Goal's icon and color.
     - **Title:** the payee. Goal rows read "To Vacation" or "From Vacation".
-    - **Subtitle:** the description, else the category label. Goal rows show nothing.
-    - **Category chip:** with the category's color (CAT-4); none on Goal rows.
+    - **Subtitle:** a dot in the category's color (CAT-4), then the description, else the category label, then " · " and the time. With a description, the category label is read to screen readers before it. Goal rows show the time alone.
     - **Time:** or "Auto" for charges; outside day grouping, the day and the time (BR-F03-31).
     - **Amount and badges:** the signed amount (D-231), then any badge: "Pending sync" or "Not saved".
 
