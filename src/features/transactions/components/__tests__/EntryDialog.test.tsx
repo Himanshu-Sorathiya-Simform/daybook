@@ -615,6 +615,7 @@ describe("checks on Save (F03 section 8)", () => {
 	});
 
 	// D-549
+	// AC-F03-70
 	test("an emptied time gets Enter a time.", async () => {
 		const sent = creates();
 		const { user } = renderDialog();
@@ -831,6 +832,7 @@ describe("Save (BR-F03-20, BR-F03-21)", () => {
 	});
 });
 
+// AC-F03-70
 describe("Save and add another (BR-F03-21, D-551)", () => {
 	test("keeps the type, date and time, empties the rest and focuses Amount", async () => {
 		const sent = creates();
@@ -1152,6 +1154,7 @@ describe("offline (D-241)", () => {
 });
 
 describe("closing (BR-F03-49, D-551)", () => {
+	// AC-F03-70: Escape on an untouched dialog closes it
 	test.each([
 		["Escape", async (user: User) => user.keyboard("{Escape}")],
 		["Cancel", async (user: User) => user.click(button("Cancel"))],
@@ -1968,6 +1971,34 @@ describe("an edit after a time zone change (BR-F03-11, D-238)", () => {
 		expect(sent[0]!.body).toEqual({
 			occurredAt: "2026-11-01T19:00:00Z",
 			occurredOn: "2026-11-01",
+		});
+	});
+});
+
+// AC-F03-32 on Los Angeles's daylight-saving end, where 1:00 to 2:00 am happens twice.
+describe("the repeated hour (D-221)", () => {
+	test("a new Transaction at 1:30 am on 1 Nov in Los Angeles is saved at the earlier 1:30, in PDT", async () => {
+		const sent = creates();
+		const { user } = renderDialog({
+			locale: { ...IN, timezone: "America/Los_Angeles" },
+		});
+		await screen.findByRole("heading", { name: "New Transaction" });
+		// The golden clock is 11:30 pm on 1 Nov there.
+		expect(dateButton()).toHaveAccessibleName("Date Today, 1 Nov");
+
+		await fillValid(user);
+		await user.click(timePart("hour"));
+		await user.keyboard("1");
+		await user.click(timePart("minute"));
+		await user.keyboard("30");
+		await user.click(timePart("am/pm"));
+		await user.keyboard("a");
+		await user.click(button("Save"));
+
+		await waitFor(() => expect(sent).toHaveLength(1));
+		expect(sent[0]!.body).toMatchObject({
+			occurredOn: "2026-11-01",
+			occurredAt: "2026-11-01T08:30:00Z",
 		});
 	});
 });

@@ -844,6 +844,40 @@ describe("loading more (BR-F03-30, D-530)", () => {
 		expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
 	});
 
+	// AC-F03-64: a next page that fails keeps what is loaded, and Load more tries again.
+	test("a failed next page keeps the rows and Load more, says nothing, and a second press loads it", async () => {
+		const pages = threePages();
+		let failed = false;
+		const { lists, user } = renderPage("?sort=amount", {
+			list: (request) => {
+				if (
+					pathOf(request.path).searchParams.get("cursor") === "p1"
+					&& !failed
+				) {
+					failed = true;
+					return refuse(500, "internal");
+				}
+				return pages(request);
+			},
+		});
+		await grid();
+
+		await user.click(screen.getByRole("button", { name: "Load more" }));
+		await waitFor(() => expect(lists).toHaveLength(2));
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "Load more" }),
+			).not.toHaveAttribute("aria-disabled"),
+		);
+		expect(rowNames()).toHaveLength(50);
+		expect(listLive()).not.toHaveTextContent("Loaded");
+		expect(screen.queryByText("Transactions could not be loaded.")).toBeNull();
+
+		await user.click(screen.getByRole("button", { name: "Load more" }));
+		await waitFor(() => expect(rowNames()).toHaveLength(100));
+		expect(listLive()).toHaveTextContent("Loaded 50 more Transactions");
+	});
+
 	test('each load is announced: "Loaded 50 more Transactions", then the last page\'s own count', async () => {
 		const { user } = renderPage("?sort=amount", { list: threePages() });
 		await grid();
@@ -2440,6 +2474,65 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 			).toBeInTheDocument();
 		});
 
+		// BR-F03-73: a filter change keeps txn and the panel, even when the row leaves the list.
+		test("a filter that hides the selected row keeps it in the panel and in the URL", async () => {
+			docked();
+			// Outside the list, the panel asks for the row on its own (BR-F03-53).
+			const { alone, calls, user } = renderPanel(`?txn=${m1(24).id}`, {
+				list: ({ path }) =>
+					ok(pathOf(path).searchParams.has("q") ? page() : NEWEST),
+				one: {
+					id: m1(24).id,
+					respond: () => ok({ ...m1(24), currency: "INR" }),
+				},
+			});
+			await grid();
+			expect(panel()).toHaveTextContent("−₹640.00");
+
+			await user.type(screen.getByRole("searchbox"), "acme");
+
+			await waitFor(() =>
+				expect(calls.at(-1)?.href).toBe(
+					`/transactions?q=acme&txn=${m1(24).id}`,
+				),
+			);
+			await screen.findByText("No Transactions match these filters.");
+			await waitFor(() => expect(panel()).toHaveTextContent("−₹640.00"));
+			expect(panel()).toHaveTextContent("Swiggy");
+			expect(alone).toHaveLength(1);
+		});
+
+		// F03 section 13: the selected row edited on another device.
+		test("a selected row changed elsewhere shows its new values once the list reloads", async () => {
+			docked();
+			let amountMinor = 64000;
+			const { queryClient } = renderPanel(`?txn=${m1(24).id}`, {
+				list: () =>
+					ok({
+						...NEWEST,
+						items: NEWEST.items.map((each) =>
+							each.id === m1(24).id ?
+								{
+									...each,
+									amountMinor,
+									version: amountMinor === 64000 ? 1 : 2,
+								}
+							:	each,
+						),
+					}),
+			});
+			await grid();
+			expect(panel()).toHaveTextContent("−₹640.00");
+
+			amountMinor = 66000;
+			await act(() => queryClient.invalidateQueries());
+
+			await waitFor(() => expect(panel()).toHaveTextContent("−₹660.00"));
+			expect(rowNamed(/^Swiggy, Food, 10:15 pm/)).toHaveTextContent(
+				"−₹660.00",
+			);
+		});
+
 		// AC-F03-72
 		test("a press on the selected row keeps it selected", async () => {
 			docked();
@@ -2756,6 +2849,67 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 			await waitFor(() => expect(panel()).toHaveTextContent("−₹700.00"));
 		});
 
+		// AC-F03-71, BR-F03-78: Keep mine that meets another 409 shows the newer version.
+		test("Keep mine meeting a newer version shows it, and Keep mine again saves at that version", async () => {
+			docked();
+			const v2 = {
+				...m1(24),
+				amountMinor: 66000,
+				version: 2,
+				currency: "INR",
+			};
+			const v3 = { ...v2, amountMinor: 68000, version: 3 };
+			const edited = route(
+				network,
+				"patch",
+				`/api/transactions/${m1(24).id}`,
+				({ body }, index) =>
+					index === 0 ?
+						refuse(409, "version_conflict", { details: { current: v2 } })
+					: index === 1 ?
+						refuse(409, "version_conflict", { details: { current: v3 } })
+					:	ok({ ...v3, ...(body as object), version: 4 }),
+			);
+			const { user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+			await user.click(within(panel()).getByRole("button", { name: "Edit" }));
+			await screen.findByRole("dialog", { name: "Edit Transaction" });
+			await user.clear(screen.getByRole("textbox", { name: "Amount" }));
+			await user.keyboard("700");
+			await user.click(screen.getByRole("button", { name: "Save" }));
+			const conflict = () =>
+				screen.findByRole("dialog", {
+					name: "This Transaction changed on another device",
+				});
+			const amountRow = async () =>
+				within(await conflict())
+					.getByRole("rowheader", { name: /^Amount/ })
+					.closest("tr")!;
+
+			expect(await amountRow()).toHaveTextContent(
+				"AmountDiffers₹700.00₹660.00",
+			);
+			await user.click(
+				within(await conflict()).getByRole("button", { name: "Keep mine" }),
+			);
+			await waitFor(async () =>
+				expect(await amountRow()).toHaveTextContent(
+					"AmountDiffers₹700.00₹680.00",
+				),
+			);
+			await user.click(
+				within(await conflict()).getByRole("button", { name: "Keep mine" }),
+			);
+
+			expect(await screen.findByText("Changes saved.")).toBeInTheDocument();
+			expect(edited.map((each) => each.headers.get("If-Match"))).toEqual([
+				'"1"',
+				'"2"',
+				'"3"',
+			]);
+			expect(edited[2]!.body).toEqual({ amountMinor: 70000, currency: "INR" });
+		});
+
 		// AC-F03-71
 		test("a conflict's Keep theirs sends nothing more and the panel shows the saved row", async () => {
 			docked();
@@ -2922,7 +3076,8 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 			).toBeInTheDocument();
 		});
 
-		// AC-F03-58
+		// AC-F03-58. Another user's id takes this same path: the server answers it 404, never 403
+		// (SEC-2, proven in app/api/transactions/[id]/__tests__/route.integration.test.ts).
 		test("an unknown txn says We couldn't find that Transaction. and loses txn", async () => {
 			docked();
 			const unknown = idOf(999);
@@ -3200,9 +3355,17 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 			await user.click(
 				within(panel()).getByRole("button", { name: "Delete" }),
 			);
-			await user.click(
-				within(await confirmView()).getByRole("button", { name: "Cancel" }),
-			);
+			// AC-F03-73: the confirm shows #24 as the list does, with its day.
+			const asking = await confirmView();
+			for (const text of [
+				"Swiggy",
+				"Food",
+				"Mon, 19 Oct",
+				"10:15 pm",
+				"−₹640.00",
+			])
+				expect(asking).toHaveTextContent(text);
+			await user.click(within(asking).getByRole("button", { name: "Cancel" }));
 			endWindow();
 
 			expect(has24()).toBe(true);
@@ -3292,6 +3455,7 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 		});
 
 		// AC-F03-73
+		// AC-F03-73
 		test("the edit dialog's Delete asks over it, and once confirmed closes it and deletes with Undo", async () => {
 			docked();
 			route(
@@ -3307,14 +3471,22 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 			const edit = await screen.findByRole("dialog", {
 				name: "Edit Transaction",
 			});
+			const amount = within(edit).getByRole("textbox", { name: "Amount" });
+			await user.clear(amount);
+			await user.type(amount, "700");
 			await user.click(within(edit).getByRole("button", { name: "Delete" }));
-			// Cancel goes back to the dialog; Delete then closes it.
+			// Cancel goes back to the dialog with what was typed; Delete then closes it.
 			await user.click(
 				within(await confirmView()).getByRole("button", { name: "Cancel" }),
 			);
 			expect(
 				screen.getByRole("dialog", { name: "Edit Transaction" }),
 			).toBeInTheDocument();
+			expect(
+				within(
+					screen.getByRole("dialog", { name: "Edit Transaction" }),
+				).getByRole("textbox", { name: "Amount" }),
+			).toHaveValue("700.00");
 			expect(has24()).toBe(true);
 			await user.click(
 				within(

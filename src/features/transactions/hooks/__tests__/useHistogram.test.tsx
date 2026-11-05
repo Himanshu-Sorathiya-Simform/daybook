@@ -1,6 +1,6 @@
 import { waitFor } from "@testing-library/react";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import type { TransactionFilter } from "@/lib/transactions/url";
 import { useHistogram } from "../useHistogram";
@@ -103,5 +103,37 @@ describe("useHistogram (BR-F03-60, BR-F03-76)", () => {
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		rerender({ filter: { ...CHECK_B, src: "manual" }, enabled: true });
 		await waitFor(() => expect(seen).toHaveLength(2));
+	});
+
+	// D-546: reopening on the same filter within 30 seconds asks nothing; after, it asks again.
+	test("its answer stays fresh for 30 seconds after the control closes", async () => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-11-02T06:30:00.000Z"));
+		try {
+			const seen = route(
+				network,
+				"get",
+				"/api/transactions/amount-histogram",
+				() => ok(CHECK_B_HISTOGRAM),
+			);
+			const { result, rerender } = renderHistogram({
+				filter: CHECK_B,
+				enabled: true,
+			});
+			await waitFor(() => expect(result.current.isSuccess).toBe(true));
+			rerender({ filter: CHECK_B, enabled: false });
+
+			vi.setSystemTime(new Date("2026-11-02T06:30:29.000Z"));
+			rerender({ filter: CHECK_B, enabled: true });
+			await new Promise((resolve) => setTimeout(resolve, 30));
+			expect(seen).toHaveLength(1);
+			rerender({ filter: CHECK_B, enabled: false });
+
+			vi.setSystemTime(new Date("2026-11-02T06:30:31.000Z"));
+			rerender({ filter: CHECK_B, enabled: true });
+			await waitFor(() => expect(seen).toHaveLength(2));
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

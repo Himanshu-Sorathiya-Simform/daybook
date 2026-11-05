@@ -14,6 +14,7 @@ import {
 	EntryDialogOpenContext,
 	type GoneAnswer,
 } from "../hooks/useEntryDialog";
+import { usePayees } from "../hooks/usePayees";
 import { useTransactionDeletes } from "../hooks/useTransactionDeletes";
 import { ENTRY_TEXT, type EntryMode } from "../lib/entry";
 import { TRANSACTIONS_TEXT } from "../lib/messages";
@@ -39,13 +40,16 @@ const noAnswer: GoneAnswer = () => {};
  * as a duplicate; each opening starts fresh. A page may answer creates itself with
  * `useCreatedAnswer`, as the Transactions page does to select the new row; elsewhere a create
  * says "Transaction saved.". An edit says "Changes saved." (BR-F03-23), and an edit whose row
- * was deleted elsewhere says so (BR-F03-25), with the page's `useGoneAnswer` after.
+ * was deleted elsewhere says so (BR-F03-25), with the page's `useGoneAnswer` after. Payee
+ * suggestions load as soon as the page renders, so the first dialog has them at once
+ * (BR-F03-76).
  */
 export function EntryDialogHost({
 	profile,
 	children,
 }: Readonly<EntryDialogHostProps>) {
 	const { data: me } = useMe();
+	usePayees();
 	const deletes = useTransactionDeletes();
 	const shown = me?.profile ?? profile;
 	// Each opening mounts a new dialog, so nothing typed before survives a close.

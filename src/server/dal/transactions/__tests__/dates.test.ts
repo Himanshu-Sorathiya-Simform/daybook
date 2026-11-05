@@ -51,6 +51,24 @@ describe("entryWindow (TIME-7, BR-F03-08)", () => {
 		).toBe("2026-10-15");
 	});
 
+	// AC-F03-06 on Los Angeles's daylight-saving end, a 25-hour day.
+	test("counts calendar days across Los Angeles's daylight-saving end", () => {
+		const LA = "America/Los_Angeles";
+		const window = { firstOn: "2026-10-22", lastOn: "2026-11-01" };
+		// Recorded at the first and the second 01:30 on 1 November, and at 23:59 PST.
+		for (const createdAt of [
+			"2026-11-01T08:30:00.000Z",
+			"2026-11-01T09:30:00.000Z",
+			"2026-11-02T07:59:00.000Z",
+		]) {
+			expect(entryWindow(createdAt, LA)).toEqual(window);
+		}
+		expect(entryWindow("2026-11-02T08:00:00.000Z", LA)).toEqual({
+			firstOn: "2026-10-23",
+			lastOn: "2026-11-02",
+		});
+	});
+
 	test("crosses a month and a year", () => {
 		expect(entryWindow("2026-01-05T06:30:00.000Z", "Asia/Kolkata")).toEqual({
 			firstOn: "2025-12-26",

@@ -222,6 +222,44 @@ describe("PATCH (AC-F03-52)", () => {
 			400,
 		);
 	});
+
+	// AC-F03-52: a stale Update view, which sends the four list fields together.
+	test("a stale If-Match on the filter, sort, direction and group gets 409, and the view stays", async () => {
+		const { id } = await view();
+		await patch(id, { name: "Renamed before the update" });
+		const { status, body } = await patch(id, {
+			filter: { cat: ["shopping"] },
+			sort: "amount",
+			dir: "desc",
+			group: "none",
+		});
+		expect(status).toBe(409);
+		expect(errorOf(body).code).toBe("version_conflict");
+		expect((await listed()).get(id)).toMatchObject({
+			filter: { range: "last_month", cat: ["food"] },
+			sort: "date",
+			group: "day",
+			version: 2,
+		});
+	});
+
+	// AC-F03-47 for a rename: BR-F03-12's text rules, counted in code points.
+	test("a rename with a control character gets 422 on name, and 40 emoji pass", async () => {
+		const { id } = await view();
+		const refused = await patch(id, { name: "Food\u0007" });
+		expect(refused.status).toBe(422);
+		expect(errorOf(refused.body).fields).toEqual({
+			name: "Remove unsupported characters.",
+		});
+		const emoji = "🍕".repeat(40);
+		const passed = await patch(id, { name: emoji });
+		expect(passed.status).toBe(200);
+		expect((await listed()).get(id)).toMatchObject({ name: emoji });
+		const tooLong = await patch(id, { name: "🍕".repeat(41) }, { version: "2" });
+		expect(errorOf(tooLong.body).fields).toEqual({
+			name: "Use 40 characters or fewer.",
+		});
+	});
 });
 
 describe("DELETE (BR-F03-69)", () => {
@@ -231,6 +269,14 @@ describe("DELETE (BR-F03-69)", () => {
 		expect(status).toBe(204);
 		expect(body).toBeNull();
 		expect((await listed()).has(id)).toBe(false);
+	});
+
+	test("no If-Match gets 400, and the view stays", async () => {
+		const { id } = await view();
+		const { status, body } = await remove(id, { version: null });
+		expect(status).toBe(400);
+		expect(errorOf(body).code).toBe("bad_request");
+		expect((await listed()).has(id)).toBe(true);
 	});
 
 	test("a stale If-Match gets 409 with the view, and the view stays", async () => {

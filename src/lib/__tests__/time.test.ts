@@ -38,6 +38,30 @@ test("a zone behind UTC is still on the previous day", () => {
 	);
 });
 
+// 1 November 2026 is Los Angeles's daylight-saving end: 01:00 to 02:00 happens twice, so the
+// day has 25 hours, and its midnight moves from 07:00 to 08:00 UTC.
+describe("todayIn across Los Angeles's daylight-saving end", () => {
+	const LA = "America/Los_Angeles";
+
+	test.each([
+		["2026-11-01T07:00:00.000Z", "2026-11-01", "midnight, in PDT"],
+		["2026-11-01T08:30:00.000Z", "2026-11-01", "the first 01:30, in PDT"],
+		["2026-11-01T09:30:00.000Z", "2026-11-01", "the second 01:30, in PST"],
+		[
+			"2026-11-02T07:59:59.999Z",
+			"2026-11-01",
+			"23:59 in PST, an hour later in UTC",
+		],
+		["2026-11-02T08:00:00.000Z", "2026-11-02", "the next midnight, in PST"],
+	])("%s is %s: %s", (instant, expected) => {
+		expect(todayIn(LA, new Date(instant))).toBe(expected);
+	});
+
+	test("the day before keeps its PDT midnight", () => {
+		expect(todayIn(LA, new Date("2026-11-01T06:59:59.999Z"))).toBe("2026-10-31");
+	});
+});
+
 test("utcDate is the date in UTC", () => {
 	expect(utcDate(new Date("2026-11-02T23:59:59.999Z"))).toBe("2026-11-02");
 	expect(utcDate(new Date("2026-11-03T00:00:00.000Z"))).toBe("2026-11-03");

@@ -150,6 +150,15 @@ describe("viewUrl (BR-F03-65)", () => {
 		});
 	});
 
+	// AC-F03-49: Last month from the first day of a month, across a year and a short February.
+	test.each([
+		["2027-01-01", "2026-12-01", "2026-12-31"],
+		["2027-03-01", "2027-02-01", "2027-02-28"],
+		["2028-03-01", "2028-02-01", "2028-02-29"],
+	])("a Last month view applied on %s writes %s to %s", (today, from, to) => {
+		expect(viewUrl(FOOD, today).filter).toEqual({ from, to, cat: ["food"] });
+	});
+
 	test("custom dates stay, and all time has none", () => {
 		expect(
 			viewUrl(

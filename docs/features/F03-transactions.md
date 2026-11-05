@@ -1076,7 +1076,7 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
 - **AC-F03-27** (integration) On golden's income, expense and refund rows alone, list checks B, C, D, E, G and H hold. At M1 the charges load as unlinked rows with source `subscription`.
 - **AC-F03-28** (integration, M2) A charge delete and a catch-up run for the same Subscription start together. Afterwards the tombstone exists and no charge exists for that due date.
 - **AC-F03-29** (integration, M2) Moving a demo contribution to one of the user's own Goals returns 422 on `goalId`.
-- **AC-F03-30** (client integration) A delete refused with 409 after the Undo window opens the conflict view, and Keep theirs brings the row back. From M2, a delete refused by the Goal floor brings the row back with its reason.
+- **AC-F03-30** (client integration) A delete refused with 409 after the Undo window opens the conflict view (BR-F03-78), and "Keep it" brings the row back. From M2, a delete refused by the Goal floor brings the row back with its reason.
 - **AC-F03-31** (integration) `q=swiggy monthly` does not match a row with payee Swiggy and description "Monthly groceries", because the fields never join into one string.
 - **AC-F03-32** (client integration) After golden moves to `America/Los_Angeles`, row 26's dialog shows 1 November and 12:00 pm. Changing only the time keeps `occurredOn` 2026-11-01.
 - **AC-F03-33** (unit) Group normalization:
@@ -1125,7 +1125,7 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
 - **AC-F03-54** (client integration) `view=<id>` for an id that is not the user's is removed from the URL and All Transactions is selected. Offline, Save as view, Update view, Rename and Delete are disabled with "You are offline. Connect to save." With nothing edited, "+ Save view" shows "Change a filter, then save it as a view." and sends no request. An edited saved view offers Update view and Revert, and no Save as view.
 - **AC-F03-55** (client integration) View outcomes:
     - Save as view, Update view, Rename and Delete show "Saved as a new view.", "View updated.", "View renamed." and "View deleted.";
-    - a 409 on any of them shows "This view changed on another device. Try again." and reloads the views list;
+    - a 409 on Update view, Rename or Delete shows "This view changed on another device. Try again." and reloads the views list (a create has no version, BR-F03-63);
     - a 404 on Rename or Update view shows "This view was deleted on another device." and reloads the list, and a 404 on Delete removes the view with "View deleted.";
     - a 422 on `name` during Save as view retries with the next suffix.
 

@@ -4,6 +4,7 @@ import { localTime, toOccurred } from "@/lib/transactions/occurred";
 
 const KOLKATA = "Asia/Kolkata";
 const NEW_YORK = "America/New_York";
+const LOS_ANGELES = "America/Los_Angeles";
 const MACHINE_ZONE = process.env["TZ"];
 
 afterEach(() => {
@@ -56,6 +57,16 @@ describe("toOccurred (BR-F03-06)", () => {
 		);
 	});
 
+	test("midnight and noon are 00:00 and 12:00, not 12:00 and 00:00", () => {
+		expect(toOccurred("2026-11-02", "00:00", KOLKATA)).toEqual({
+			occurredAt: "2026-11-01T18:30:00Z",
+			occurredOn: "2026-11-02",
+		});
+		expect(toOccurred("2026-11-02", "12:00", KOLKATA).occurredAt).toBe(
+			"2026-11-02T06:30:00Z",
+		);
+	});
+
 	// AC-F03-08
 	describe("daylight saving (D-221)", () => {
 		test("a time in the spring-forward gap moves forward by the gap: 02:30 becomes 03:30 EDT", () => {
@@ -94,6 +105,26 @@ describe("toOccurred (BR-F03-06)", () => {
 			expect(
 				toOccurred("2026-10-04", "02:15", "Australia/Lord_Howe").occurredAt,
 			).toBe("2026-10-03T15:45:00Z");
+		});
+
+		// Los Angeles ends daylight saving on 1 November 2026 too, three hours after New York.
+		test("Los Angeles's repeated 01:30 takes the earlier instant, in PDT", () => {
+			expect(toOccurred("2026-11-01", "01:30", LOS_ANGELES)).toEqual({
+				occurredAt: "2026-11-01T08:30:00Z",
+				occurredOn: "2026-11-01",
+			});
+		});
+
+		test("the minutes around Los Angeles's repeated hour stay where they are", () => {
+			expect(toOccurred("2026-11-01", "00:59", LOS_ANGELES).occurredAt).toBe(
+				"2026-11-01T07:59:00Z",
+			);
+			expect(toOccurred("2026-11-01", "02:00", LOS_ANGELES).occurredAt).toBe(
+				"2026-11-01T10:00:00Z",
+			);
+			expect(toOccurred("2026-11-01", "23:59", LOS_ANGELES).occurredAt).toBe(
+				"2026-11-02T07:59:00Z",
+			);
 		});
 
 		test("London's gap at 01:00 moves 01:30 to 02:30 BST", () => {

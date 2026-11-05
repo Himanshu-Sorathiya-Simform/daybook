@@ -134,6 +134,26 @@ describe("idempotency (AC-F03-05, golden invariant 4)", () => {
 		expect(rows[0]).toEqual({ n: 1 });
 	});
 
+	// AC-F03-05: two identical creates sent at once on one key run once (BR-P2-19).
+	test("two identical creates sent at once on one key make one row, and both answer it", async () => {
+		const input = body();
+		const key = randomUUIDv7();
+		const answers = await Promise.all([
+			post(input, { key }),
+			post(input, { key }),
+		]);
+		const { rows } = await owner.query(
+			"SELECT count(*)::int AS n FROM app.transactions WHERE id = $1",
+			[input.id],
+		);
+		expect(rows[0]).toEqual({ n: 1 });
+		for (const answer of answers) {
+			expect([200, 201]).toContain(answer.status);
+			expect(answer.body).toMatchObject({ data: { id: input.id } });
+		}
+		expect(answers.map(({ status }) => status)).toContain(201);
+	});
+
 	test("a new key with the same id answers 200 with the existing row", async () => {
 		const input = body();
 		const first = await post(input);
@@ -237,6 +257,33 @@ describe("the schema's refusals", () => {
 });
 
 // BR-F03-12: trimmed, NFC, empty description and note stored as null, CRLF as LF.
+// BR-F03-12 through the route: each limit in code points, so an emoji counts once.
+describe("text lengths", () => {
+	test.each([
+		["payee", 80],
+		["description", 120],
+		["note", 500],
+	])("%s takes %i emoji and refuses one more", async (field, max) => {
+		const passed = await post(body({ [field]: "🍕".repeat(max) }));
+		expect(passed.status).toBe(201);
+		const refused = await post(body({ [field]: "🍕".repeat(max + 1) }));
+		expect(refused.status).toBe(422);
+		expect(errorOf(refused.body).fields).toEqual({
+			[field]: `Use ${max} characters or fewer.`,
+		});
+	});
+});
+
+test("a time with seconds gets 422 on occurredAt: Use a time in whole minutes.", async () => {
+	const { status, body: answer } = await post(
+		body({ occurredAt: "2026-11-02T06:10:30.000Z" }),
+	);
+	expect(status).toBe(422);
+	expect(errorOf(answer).fields).toEqual({
+		occurredAt: "Use a time in whole minutes.",
+	});
+});
+
 test("stores text as BR-F03-12 says", async () => {
 	const { body: answer } = await post(
 		body({
@@ -453,6 +500,21 @@ describe("a Goal Transaction, before Goals exist (D-483)", () => {
 		const { body: answer } = await post(goal({ payee: "Someone" }));
 		expect(errorOf(answer).code).toBe("validation_failed");
 	});
+
+	test.each([
+		["category", "food", "Goal Transactions have no category."],
+		["description", "Saved up", "Goal Transactions have no description."],
+	])(
+		"a %s on a Goal Transaction gets its message",
+		async (field, value, message) => {
+			const { status, body: answer } = await post(goal({ [field]: value }));
+			expect(status).toBe(422);
+			expect(errorOf(answer)).toMatchObject({
+				code: "validation_failed",
+				fields: { [field]: message },
+			});
+		},
+	);
 
 	test("an id in capitals answers the row with its id in lowercase", async () => {
 		const input = body();

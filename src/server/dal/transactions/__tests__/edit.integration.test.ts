@@ -254,6 +254,7 @@ describe("the type (AC-F03-09, BR-F03-02)", () => {
 });
 
 describe("charges and demo rows (BR-F03-11, BR-F03-16, BR-F03-18; D-486)", () => {
+	// AC-F03-11 (its M1 bullet: amount and category change)
 	// golden #12: the Sunrise Apartments charge, 18,000.00 on 1 October at 00:00 IST.
 	test("a charge takes a new amount, category, payee, description and note", async () => {
 		const { result } = await edit(golden.id(12), {
@@ -286,6 +287,7 @@ describe("charges and demo rows (BR-F03-11, BR-F03-16, BR-F03-18; D-486)", () =>
 		},
 	);
 
+	// AC-F03-11 (its M1 bullet: occurredOn is refused)
 	test("a charge's new date and time are refused on both", async () => {
 		expect(
 			await refusal(

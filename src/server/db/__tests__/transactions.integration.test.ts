@@ -7,6 +7,7 @@ import {
 	goldenRow,
 	type GoldenTransaction,
 } from "../../../../seed/golden";
+import { describeError } from "../../api/errors";
 import { parseOwnerEnv, parseServerEnv } from "../../env";
 import { createUser } from "./private-rows";
 
@@ -404,4 +405,41 @@ test("deleting the user removes their Transactions without a foreign-key error",
 		await owner.query("ROLLBACK");
 		await owner.query(`DELETE FROM auth."user" WHERE id = $1`, [doomed]);
 	}
+});
+
+// SEC-12, D-381: a refused Transaction's error, as the runtime role gets it, holds none of the
+// row's values: with row-level security on, Postgres leaves out its "Failing row contains"
+// detail. What may reach a log or Sentry is the SQLSTATE, table and constraint alone. (Drizzle's
+// wrapper does hold the parameters in its message; errors.test.ts proves that never leaves.)
+test("a refused row's payee, note and amount reach neither its error nor the log", async () => {
+	let caught: unknown;
+	await asUser(async (client) => {
+		try {
+			await insert(
+				client,
+				valid({
+					payee: "Secret Payee",
+					note: "private note",
+					amount_minor: 1234567,
+					description: "",
+				}),
+			);
+		} catch (error) {
+			caught = error;
+		}
+	});
+	expect(caught).toBeInstanceOf(DatabaseError);
+	const { message, detail } = caught as DatabaseError;
+	expect(detail).toBeUndefined();
+	const logged = JSON.stringify(describeError(caught));
+	for (const secret of ["Secret Payee", "private note", "1234567"])
+		expect(message).not.toContain(secret);
+	for (const secret of ["Secret Payee", "private note", "1234567"])
+		expect(logged).not.toContain(secret);
+	expect(describeError(caught)).toEqual({
+		name: "DatabaseError",
+		sqlstate: "23514",
+		table: "transactions",
+		constraint: "transactions_description_text",
+	});
 });

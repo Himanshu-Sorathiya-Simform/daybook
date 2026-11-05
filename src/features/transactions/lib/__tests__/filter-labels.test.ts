@@ -149,6 +149,36 @@ describe("quickRangeLabel (BR-F03-74)", () => {
 		expect(quickRangeLabel({ maxMinor: 4 }, IN)).toBe("Under ₹0.05");
 	});
 
+	// AC-F03-59 in a currency with no decimals: 1 minor unit is 1 yen, so 399 reads "to ¥400".
+	test("names yen edges whole, one yen above each range's max", () => {
+		const JP: FilterLocale = {
+			today: "2026-11-02",
+			dateLocale: "ja-JP",
+			numberLocale: "ja-JP-u-nu-latn",
+			currency: "JPY",
+		};
+		expect(quickRangeLabel({ maxMinor: 399 }, JP)).toBe("Under ￥400");
+		expect(quickRangeLabel({ minMinor: 400, maxMinor: 799 }, JP)).toBe(
+			"￥400 to ￥800",
+		);
+		expect(quickRangeLabel({ minMinor: 2500 }, JP)).toBe("￥2,500 and over");
+	});
+
+	// AC-F03-59 in a currency with three decimals: 1 minor unit is 0.001 dinar.
+	test("names dinar edges whole, or with all three decimals", () => {
+		const KW: FilterLocale = {
+			today: "2026-11-02",
+			dateLocale: "en-US",
+			numberLocale: "en-US-u-nu-latn",
+			currency: "KWD",
+		};
+		expect(quickRangeLabel({ maxMinor: 399999 }, KW)).toBe("Under KWD\u00a0400");
+		expect(quickRangeLabel({ minMinor: 400000, maxMinor: 799999 }, KW)).toBe(
+			"KWD\u00a0400 to KWD\u00a0800",
+		);
+		expect(quickRangeLabel({ maxMinor: 4 }, KW)).toBe("Under KWD\u00a00.005");
+	});
+
 	test("reads in the user's number format", () => {
 		expect(quickRangeLabel({ minMinor: 10000000 }, IN)).toBe(
 			"₹1,00,000 and over",

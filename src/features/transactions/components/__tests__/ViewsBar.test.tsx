@@ -702,6 +702,21 @@ describe("Revert (BR-F03-66)", () => {
 		expect(checked()).toEqual(["Food last month"]);
 	});
 
+	// AC-F03-50: Revert clears either edit.
+	test.each([
+		["an added type", `?${CHECK_B}&type=expense&view=${FOOD.id}`],
+		["a new grouping", `?${CHECK_B}&group=payee&view=${FOOD.id}`],
+	])("clears %s from the view", async (_edit, search) => {
+		const { calls, user } = renderBar(search);
+		await loaded();
+		expect(checked()).toEqual(["Food last month · edited"]);
+		await user.click(button("Revert"));
+		expect(calls).toEqual([
+			{ mode: "push", href: `/transactions?${CHECK_B}&view=${FOOD.id}` },
+		]);
+		expect(checked()).toEqual(["Food last month"]);
+	});
+
 	test("works offline, since it only changes the URL", async () => {
 		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
 		const { calls, user } = renderBar("?cat=food");

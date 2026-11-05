@@ -246,6 +246,38 @@ test("a filter with no rows answers zeros and a null span", async () => {
 	});
 });
 
+// F03 section 13: refunds above a category's spending make its Out negative; the header keeps
+// the sign, and the breakdown, which shows only Out above zero, leaves the category out.
+test("a category whose refunds exceed its spending turns Out negative and leaves the breakdown", async () => {
+	const { result } = await asUser(golden.userId, async (tx) => {
+		await addExpense(tx, golden.userId, {
+			payee: "Croma",
+			category: "shopping",
+			type: "refund",
+			amountMinor: 50000,
+			occurredOn: "2030-01-01",
+		});
+		await addExpense(tx, golden.userId, {
+			payee: "Swiggy",
+			amountMinor: 10000,
+			occurredOn: "2030-01-01",
+		});
+		return transactionSummary(
+			tx,
+			goldenContext(golden.userId),
+			{ from: "2030-01-01" },
+			["category", "payee"],
+		);
+	});
+	expect(result).toMatchObject({ count: 2, spendingMinor: -40000 });
+	expect(result.byCategory).toEqual([
+		{ key: "food", label: null, count: 1, outMinor: 10000 },
+	]);
+	expect(result.byPayee).toEqual([
+		{ key: "swiggy", label: "Swiggy", count: 1, outMinor: 10000 },
+	]);
+});
+
 // T2: the breakdowns at their edges (BR-F03-58, D-480). Rows are dated 2030, clear of golden's.
 describe("a payee with refunds only", () => {
 	const FROM_2030: TransactionFilter = { from: "2030-01-01" };

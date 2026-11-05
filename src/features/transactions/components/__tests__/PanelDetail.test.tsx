@@ -147,11 +147,12 @@ describe("PanelDetail (BR-F03-72)", () => {
 		});
 
 		expect(screen.getByText("+₹85,000.00")).toBeInTheDocument();
-		expect(
-			await screen.findByText(
-				"2 Transactions · ₹1,70,000.00 · usually around the 1st",
-			),
-		).toBeInTheDocument();
+		const box = await screen.findByRole("region", {
+			name: "Acme Corp in the last 3 months",
+		});
+		expect(box).toHaveTextContent(
+			"2 Transactions · ₹1,70,000.00 · usually around the 1st",
+		);
 	});
 
 	// AC-F03-57
@@ -168,9 +169,12 @@ describe("PanelDetail (BR-F03-72)", () => {
 				),
 		});
 
-		expect(
-			await screen.findByText("1 Transaction · ₹12,000.00"),
-		).toBeInTheDocument();
+		const box = await screen.findByRole("region", {
+			name: "Studio Nine in the last 3 months",
+		});
+		expect(box).toHaveTextContent(
+			/^Studio Nine in the last 3 months1 Transaction · ₹12,000\.00$/,
+		);
 	});
 
 	// AC-F03-57
@@ -183,11 +187,12 @@ describe("PanelDetail (BR-F03-72)", () => {
 			Date: "Mon, 5 Oct, 2026 · Auto",
 			Source: "From a deleted Subscription",
 		});
-		expect(
-			await screen.findByText(
-				"2 Transactions · ₹1,298.00 · usually around the 5th",
-			),
-		).toBeInTheDocument();
+		const box = await screen.findByRole("region", {
+			name: "Netflix in the last 3 months",
+		});
+		expect(box).toHaveTextContent(
+			"2 Transactions · ₹1,298.00 · usually around the 5th",
+		);
 	});
 
 	test("a description shows under the title, and a note in full", () => {

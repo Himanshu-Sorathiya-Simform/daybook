@@ -1,6 +1,6 @@
 import { waitFor } from "@testing-library/react";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import type { TransactionFilter } from "@/lib/transactions/url";
 import { useFacets } from "../useFacets";
@@ -55,5 +55,46 @@ describe("useFacets (BR-F03-59, BR-F03-76)", () => {
 		rerender({ filter: { type: ["income"] }, enabled: true });
 		await waitFor(() => expect(seen).toHaveLength(2));
 		expect(seen[1]?.path).toBe("/api/transactions/facets?type=income");
+	});
+
+	// D-546: reopening on the same filter within 30 seconds asks nothing; after, it asks again.
+	test("its answer stays fresh for 30 seconds after the control closes", async () => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-11-02T06:30:00.000Z"));
+		try {
+			const seen = route(network, "get", "/api/transactions/facets", () =>
+				ok(COUNTS),
+			);
+			const { result, rerender } = renderFacets({
+				filter: { cat: ["food"] } as TransactionFilter,
+				enabled: true,
+			});
+			await waitFor(() => expect(result.current.isSuccess).toBe(true));
+			rerender({
+				filter: { cat: ["food"] } as TransactionFilter,
+				enabled: false,
+			});
+
+			vi.setSystemTime(new Date("2026-11-02T06:30:29.000Z"));
+			rerender({
+				filter: { cat: ["food"] } as TransactionFilter,
+				enabled: true,
+			});
+			await new Promise((resolve) => setTimeout(resolve, 30));
+			expect(seen).toHaveLength(1);
+			rerender({
+				filter: { cat: ["food"] } as TransactionFilter,
+				enabled: false,
+			});
+
+			vi.setSystemTime(new Date("2026-11-02T06:30:31.000Z"));
+			rerender({
+				filter: { cat: ["food"] } as TransactionFilter,
+				enabled: true,
+			});
+			await waitFor(() => expect(seen).toHaveLength(2));
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });

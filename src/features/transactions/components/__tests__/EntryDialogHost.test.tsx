@@ -56,15 +56,17 @@ afterEach(() => {
 });
 afterAll(() => network.close());
 
-/** The reads the dialog makes, and the create, answering the row it was sent. */
+/** The reads the dialog makes, and the create, answering the row it was sent. Returns the
+ * creates and the payee reads. */
 function serve(profile = GOLDEN_BLOCK) {
 	route(network, "get", "/api/me", () => ok(meFor("u1", profile)));
-	route(network, "get", "/api/payees", () =>
+	const payees = route(network, "get", "/api/payees", () =>
 		ok({ items: GOLDEN_PAYEES, categories: GOLDEN_CATEGORIES }),
 	);
-	return route(network, "post", "/api/transactions", ({ body }) =>
+	const sent = route(network, "post", "/api/transactions", ({ body }) =>
 		ok(row(body as Partial<ReturnType<typeof row>>), 201),
 	);
+	return { sent, payees };
 }
 
 /** A page button that opens the dialog, telling `onClose` when it closes. */
@@ -87,7 +89,7 @@ function Answerer({ answer }: { answer: CreatedAnswer }) {
 }
 
 function renderHost(children: ReactNode = <Opener />, slot?: AddSlot) {
-	const sent = serve();
+	const { sent, payees } = serve();
 	const host = (
 		<I18nProvider locale="en-IN">
 			<TransactionDeletesHost profile={GOLDEN_BLOCK}>
@@ -102,7 +104,7 @@ function renderHost(children: ReactNode = <Opener />, slot?: AddSlot) {
 	const view = renderInApp(
 		slot ? <AddSlotContext value={slot}>{host}</AddSlotContext> : host,
 	);
-	return { ...view, sent, user: userEvent.setup() };
+	return { ...view, sent, payees, user: userEvent.setup() };
 }
 
 type User = ReturnType<typeof userEvent.setup>;
@@ -125,6 +127,30 @@ async function save(user: User, how = "Save") {
 	await user.click(screen.getByRole("button", { name: how, hidden: true }));
 }
 
+// BR-F03-76: suggestions load once a logged-in page has rendered, so the first dialog has them.
+describe("payee suggestions (BR-F03-76)", () => {
+	test("load once the page renders, before any dialog opens", async () => {
+		const { payees } = renderHost();
+
+		await waitFor(() => expect(payees).toHaveLength(1));
+		expect(dialogs()).toHaveLength(0);
+	});
+
+	test("the first dialog shows them at once, with no second request", async () => {
+		const { payees, user } = renderHost();
+		await waitFor(() => expect(payees).toHaveLength(1));
+
+		await user.click(screen.getByRole("button", { name: "Open" }));
+		await opened();
+		await user.click(screen.getByRole("combobox", { name: "Payee" }));
+
+		expect(
+			screen.getByRole("option", { name: /^Swiggy/, hidden: true }),
+		).toBeInTheDocument();
+		expect(payees).toHaveLength(1);
+	});
+});
+
 describe("opening (BR-F03-48, D-548)", () => {
 	test("renders the page, with no dialog until asked", () => {
 		renderHost();
@@ -143,6 +169,7 @@ describe("opening (BR-F03-48, D-548)", () => {
 	});
 
 	// BR-F03-52
+	// AC-F03-70
 	test("N on the page opens it", async () => {
 		const { user } = renderHost();
 
@@ -332,6 +359,7 @@ describe("closing", () => {
 });
 
 describe("answering a create (BR-F03-21, D-548)", () => {
+	// AC-F03-62, AC-F03-70
 	test("with no page answering, says Transaction saved.", async () => {
 		const { user, sent } = renderHost();
 
@@ -511,6 +539,7 @@ const raise = async (user: User) => {
 };
 
 describe("edit and duplicate (BR-F03-23, BR-F03-28)", () => {
+	// AC-F03-62
 	test("openEdit opens Edit Transaction for the row, and its save says Changes saved.", async () => {
 		const edits = route(
 			network,

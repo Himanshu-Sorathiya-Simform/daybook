@@ -391,6 +391,57 @@ describe("payee", () => {
 		]);
 	});
 
+	// F03 section 13: a category whose refunds exceed its expenses ranks by the size of its Out
+	// and keeps its sign, as a payee does.
+	test("weighs a category whose refunds exceed its spending by the size of its Out", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "Croma",
+				category: "shopping",
+				type: "refund",
+				amountMinor: 50000,
+				occurredOn: "2030-01-01",
+			});
+			await addExpense(tx, golden.userId, {
+				payee: "Swiggy",
+				amountMinor: 10000,
+				occurredOn: "2030-01-01",
+			});
+			return rollup(tx, ctx(), [
+				{ filter: { from: "2030-01-01" }, by: "category" },
+			]);
+		});
+		expect(
+			result[0].map(({ key, spendingMinor, netMinor }) => [
+				key,
+				spendingMinor,
+				netMinor,
+			]),
+		).toEqual([
+			["shopping", -50000, 50000],
+			["food", 10000, -10000],
+		]);
+	});
+
+	// AC-F03-36: payee keys fold case beyond ASCII, as Postgres's lower() does (D-497).
+	test("groups ÜMIT and ümit under one key", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			for (const payee of ["ÜMIT", "ümit"]) {
+				await addExpense(tx, golden.userId, {
+					payee,
+					amountMinor: 10000,
+					occurredOn: "2030-01-01",
+				});
+			}
+			return rollup(tx, ctx(), [
+				{ filter: { from: "2030-01-01" }, by: "payee" },
+			]);
+		});
+		expect(result[0]).toEqual([
+			expect.objectContaining({ key: "ümit", count: 2, spendingMinor: 20000 }),
+		]);
+	});
+
 	// D-472: code point order puts "zeta" (z, U+007A) before "ümit" (ü, U+00FC); a linguistic
 	// collation would put ü first.
 	test("orders equal weights by key in code point order", async () => {

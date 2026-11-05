@@ -161,6 +161,33 @@ describe("the list (BR-F03-44)", () => {
 		]);
 	});
 
+	// AC-F03-21: case folding beyond ASCII, as Postgres's lower() folds (D-497).
+	test("groups ÜMIT and ümit into one, shown in the newest spelling", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "ÜMIT",
+				amountMinor: 100,
+				occurredOn: "2026-10-30",
+			});
+			await addExpense(tx, golden.userId, {
+				payee: "ümit",
+				amountMinor: 100,
+				occurredOn: "2026-11-02",
+			});
+			return listPayees(tx, ctx());
+		});
+		const umit = result.items.filter(
+			({ payee }) => payee.toLowerCase() === "ümit",
+		);
+		expect(umit).toEqual([
+			expect.objectContaining({
+				payee: "ümit",
+				count: 2,
+				lastUsedOn: "2026-11-02",
+			}),
+		]);
+	});
+
 	// AC-F03-21
 	test("groups swiggy and Swiggy into one, shown in the newest spelling", async () => {
 		const { result } = await asUser(golden.userId, async (tx) => {
@@ -179,6 +206,30 @@ describe("the list (BR-F03-44)", () => {
 		expect(
 			result.items.filter(({ payee }) => payee.toLowerCase() === "swiggy"),
 		).toHaveLength(1);
+	});
+
+	// AC-F03-21 in Los Angeles, where the golden clock's today is still 1 November (the day its
+	// clocks go back), so the window runs from 2 November 2025.
+	test("in Los Angeles the window ends on its own today", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "Too Old",
+				amountMinor: 100,
+				occurredOn: "2025-11-01",
+			});
+			await addExpense(tx, golden.userId, {
+				payee: "Just In",
+				amountMinor: 100,
+				occurredOn: "2025-11-02",
+			});
+			return listPayees(tx, {
+				...goldenContext(golden.userId, { timezone: "America/Los_Angeles" }),
+				today: "2026-11-01",
+			});
+		});
+		const names = result.items.map(({ payee }) => payee);
+		expect(names).toContain("Just In");
+		expect(names).not.toContain("Too Old");
 	});
 
 	// AC-F03-21: the window runs from 3 November 2025 to 2 November 2026.
@@ -443,6 +494,56 @@ describe("history (BR-F03-62)", () => {
 			outMinor: 300000,
 			usualDay: 7,
 		});
+	});
+
+	// AC-F03-43 in Los Angeles: its today on the golden clock is 1 November, so 3 months start on
+	// 1 August, a day earlier than in India.
+	test("in Los Angeles the 3 months end on its own today", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "Swiggy",
+				amountMinor: 10000,
+				occurredOn: "2026-08-01",
+			});
+			await addExpense(tx, golden.userId, {
+				payee: "Swiggy",
+				amountMinor: 10000,
+				occurredOn: "2026-07-31",
+			});
+			return payeeHistory(
+				tx,
+				{
+					...goldenContext(golden.userId, {
+						timezone: "America/Los_Angeles",
+					}),
+					today: "2026-11-01",
+				},
+				"Swiggy",
+				3,
+			);
+		});
+		// Section 5's four rows (3,290.00), and the one on 1 August.
+		expect(result).toMatchObject({ count: 5, outMinor: 339000 });
+	});
+
+	// BR-F03-62: a day the earlier month lacks clamps to its last day, as date-fns does.
+	test("3 months before 31 May start on 28 February", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			for (const occurredOn of ["2026-02-27", "2026-02-28", "2026-05-31"]) {
+				await addExpense(tx, golden.userId, {
+					payee: "Month End",
+					amountMinor: 100,
+					occurredOn,
+				});
+			}
+			return payeeHistory(
+				tx,
+				{ ...ctx(), today: "2026-05-31" },
+				"Month End",
+				3,
+			);
+		});
+		expect(result.count).toBe(2);
 	});
 
 	test("includes the window's first day and leaves out the day before it", async () => {

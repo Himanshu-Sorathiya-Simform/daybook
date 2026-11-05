@@ -64,3 +64,92 @@ test("requireCurrency passes the profile's currency and refuses any other", asyn
 		code: "currency_mismatch",
 	});
 });
+
+/** A second connection as the owner, which plays the F02 currency change: it locks the
+ * profile `FOR UPDATE` (BR-F02-15, D-213). A lock timeout keeps a wrong guess from hanging. */
+async function ownerConnection() {
+	const client = new Client({
+		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
+	});
+	await client.connect();
+	return client;
+}
+
+// BR-F03-05: the lock serializes a write with a currency change.
+test("a write waits for a currency change holding FOR UPDATE, then refuses the old currency", async () => {
+	const change = await ownerConnection();
+	try {
+		await change.query("BEGIN");
+		await change.query(
+			"SELECT currency FROM app.profile WHERE user_id = $1 FOR UPDATE",
+			[withProfile],
+		);
+		await change.query(
+			"UPDATE app.profile SET currency = 'USD' WHERE user_id = $1",
+			[withProfile],
+		);
+		let settled = false;
+		const write = asUser(withProfile, (tx) =>
+			requireCurrency(tx, "INR"),
+		).finally(() => {
+			settled = true;
+		});
+		await new Promise((resolve) => setTimeout(resolve, 500));
+		expect(settled).toBe(false);
+
+		await change.query("COMMIT");
+		await expect(write).rejects.toMatchObject({ code: "currency_mismatch" });
+	} finally {
+		await change.query("ROLLBACK").catch(() => {});
+		await change.query(
+			"UPDATE app.profile SET currency = 'INR' WHERE user_id = $1",
+			[withProfile],
+		);
+		await change.end();
+	}
+});
+
+// BR-F03-05: while a write holds the lock, a currency change can't take the profile, but
+// catch-up's update of last_catch_up_on goes through.
+test("a write's lock refuses FOR UPDATE and lets catch-up's update through", async () => {
+	const other = await ownerConnection();
+	let release!: () => void;
+	const held = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let locked!: () => void;
+	const lockTaken = new Promise<void>((resolve) => {
+		locked = resolve;
+	});
+	const write = asUser(withProfile, async (tx) => {
+		await lockCurrency(tx);
+		locked();
+		await held;
+	});
+	try {
+		await lockTaken;
+		await other.query("BEGIN");
+		await other.query("SET LOCAL lock_timeout = '2s'");
+		await expect(
+			other.query(
+				"SELECT currency FROM app.profile WHERE user_id = $1 FOR UPDATE NOWAIT",
+				[withProfile],
+			),
+		).rejects.toMatchObject({ code: "55P03" });
+		await other.query("ROLLBACK");
+
+		await other.query("BEGIN");
+		await other.query("SET LOCAL lock_timeout = '2s'");
+		const { rowCount } = await other.query(
+			"UPDATE app.profile SET last_catch_up_on = last_catch_up_on WHERE user_id = $1",
+			[withProfile],
+		);
+		expect(rowCount).toBe(1);
+		await other.query("ROLLBACK");
+	} finally {
+		release();
+		await write;
+		await other.query("ROLLBACK").catch(() => {});
+		await other.end();
+	}
+});

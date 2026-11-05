@@ -282,7 +282,7 @@ describe("delete with Undo (BR-F03-26)", () => {
 		expect(sent).toEqual([]);
 	});
 
-	// BR-F03-26, AC-F03-73
+	// BR-F03-26, AC-F03-73, AC-F03-18 (its M1 bullet: Undo sends no request)
 	test("Undo brings the row back, tells the page, and nothing is ever sent", async () => {
 		const sent = deletes(SWIGGY.id);
 		const restored = vi.fn();

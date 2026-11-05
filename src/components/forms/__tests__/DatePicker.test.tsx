@@ -286,7 +286,8 @@ describe("the month", () => {
 		expect(day("2 November 2026")).not.toHaveClass("ring-accent");
 	});
 
-	test("enables only today and the 10 days before (AC-F03-61)", async () => {
+	// AC-F03-65
+	test("enables only today and the 10 days before", async () => {
 		const { user } = renderPicker({ value: "2026-10-30" });
 
 		const dialog = await open(user);
@@ -312,6 +313,45 @@ describe("the month", () => {
 			"31",
 			"1",
 			"2",
+		]);
+	});
+
+	// AC-F03-65: the window across a year start, on 3 January 2027.
+	test("a window across New Year enables 24 Dec to 3 Jan, over two years", async () => {
+		const { user } = renderPicker({
+			value: "2027-01-03",
+			today: "2027-01-03",
+			minValue: "2026-12-24",
+			maxValue: "2027-01-03",
+		});
+
+		const dialog = await open(user);
+		const enabled = (month: RegExp) =>
+			within(dialog)
+				.getAllByRole("button", { name: month })
+				.filter((cell) => !cell.hasAttribute("aria-disabled"))
+				.map((cell) => cell.textContent);
+		const january = enabled(/January 2027/);
+		expect(
+			within(dialog).getByRole("button", { name: "Next month" }),
+		).toBeDisabled();
+		await user.click(
+			within(dialog).getByRole("button", { name: "Previous month" }),
+		);
+		const december = enabled(/December 2026/);
+
+		expect([...december, ...january]).toEqual([
+			"24",
+			"25",
+			"26",
+			"27",
+			"28",
+			"29",
+			"30",
+			"31",
+			"1",
+			"2",
+			"3",
 		]);
 	});
 
