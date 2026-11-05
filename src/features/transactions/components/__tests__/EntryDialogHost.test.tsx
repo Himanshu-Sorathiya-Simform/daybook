@@ -1,6 +1,7 @@
 import { onlineManager } from "@tanstack/react-query";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { type ReactNode, useState } from "react";
 import { I18nProvider } from "react-aria-components";
@@ -26,8 +27,11 @@ import { type AddSlot, AddSlotContext } from "@/hooks/useAddSlot";
 import { ok, route } from "../../hooks/__tests__/helpers";
 import {
 	type CreatedAnswer,
+	type GoneAnswer,
 	useCreatedAnswer,
 	useEntryDialog,
+	useEntryDialogOpen,
+	useGoneAnswer,
 } from "../../hooks/useEntryDialog";
 import { GOLDEN_CATEGORIES, GOLDEN_PAYEES, row } from "../../lib/__tests__/fixtures";
 import { EntryDialogHost } from "../EntryDialogHost";
@@ -457,5 +461,211 @@ describe("the profile (BR-F02-18)", () => {
 		const dialog = await opened();
 
 		expect(within(dialog).getByText("₹")).toBeInTheDocument();
+	});
+});
+
+// Golden #24 as the API answers it.
+const ROW_24 = row();
+
+/** Page buttons that open #24 as an edit and as a duplicate, and say whether a dialog is open. */
+function RowOpener({ onClose }: { onClose?: () => void }) {
+	const { openEdit, openDuplicate } = useEntryDialog();
+	const isOpen = useEntryDialogOpen();
+	const options = onClose ? { onClose } : undefined;
+	return (
+		<>
+			<button
+				type="button"
+				onClick={() => openEdit(ROW_24, options)}
+			>
+				Edit row
+			</button>
+			<button
+				type="button"
+				onClick={() => openDuplicate(ROW_24, options)}
+			>
+				Duplicate row
+			</button>
+			<p>{isOpen ? "Dialog open" : "Dialog closed"}</p>
+		</>
+	);
+}
+
+/** A page that answers deleted rows while it is shown. */
+function GoneAnswerer({ answer }: { answer: GoneAnswer }) {
+	useGoneAnswer(answer);
+	return null;
+}
+
+const titled = (name: string) => screen.findByRole("dialog", { name });
+const raise = async (user: User) => {
+	await user.click(amount());
+	await user.clear(amount());
+	await user.keyboard("700");
+	await user.click(screen.getByRole("button", { name: "Save", hidden: true }));
+};
+
+describe("edit and duplicate (BR-F03-23, BR-F03-28)", () => {
+	test("openEdit opens Edit Transaction for the row, and its save says Changes saved.", async () => {
+		const edits = route(
+			network,
+			"patch",
+			`/api/transactions/${ROW_24.id}`,
+			({ body }) => ok({ ...ROW_24, ...(body as object), version: 2 }),
+		);
+		const onClose = vi.fn();
+		const { user } = renderHost(<RowOpener onClose={onClose} />);
+
+		await user.click(screen.getByRole("button", { name: "Edit row" }));
+		await titled("Edit Transaction");
+		await raise(user);
+
+		expect(await screen.findByText("Changes saved.")).toBeInTheDocument();
+		expect(edits).toHaveLength(1);
+		await waitFor(() =>
+			expect(
+				screen.queryByRole("dialog", { name: "Edit Transaction" }),
+			).toBeNull(),
+		);
+		expect(onClose).toHaveBeenCalledOnce();
+	});
+
+	test("openDuplicate opens Duplicate Transaction, and its save answers as a create", async () => {
+		const answer = vi.fn();
+		const { user, sent } = renderHost(
+			<>
+				<RowOpener />
+				<Answerer answer={answer} />
+			</>,
+		);
+
+		await user.click(screen.getByRole("button", { name: "Duplicate row" }));
+		await titled("Duplicate Transaction");
+		await user.click(screen.getByRole("button", { name: "Save", hidden: true }));
+
+		await waitFor(() => expect(answer).toHaveBeenCalledOnce());
+		expect(sent).toHaveLength(1);
+		expect(answer).toHaveBeenCalledWith(
+			expect.objectContaining({ payee: "Swiggy", amountMinor: 64000 }),
+			"save",
+		);
+	});
+
+	test("says whether a dialog is open, for the page's shortcuts", async () => {
+		const { user } = renderHost(<RowOpener />);
+		expect(screen.getByText("Dialog closed")).toBeInTheDocument();
+
+		await user.click(screen.getByRole("button", { name: "Edit row" }));
+		await titled("Edit Transaction");
+
+		expect(
+			screen.getByText("Dialog open", { ignore: false }),
+		).toBeInTheDocument();
+	});
+
+	test("while one dialog is open, another open does nothing", async () => {
+		const { user } = renderHost(<RowOpener />);
+		// The open dialog hides the page, so the second button is found before.
+		const duplicate = screen.getByRole("button", { name: "Duplicate row" });
+
+		await user.click(screen.getByRole("button", { name: "Edit row" }));
+		await titled("Edit Transaction");
+		act(() => {
+			duplicate.click();
+		});
+
+		expect(
+			screen.queryByRole("dialog", { name: "Duplicate Transaction" }),
+		).toBeNull();
+		expect(
+			screen.getByRole("dialog", { name: "Edit Transaction" }),
+		).toBeInTheDocument();
+	});
+
+	// BR-F03-25
+	test("an edit whose row was deleted says so and tells the page that answers", async () => {
+		route(network, "patch", `/api/transactions/${ROW_24.id}`, () =>
+			HttpResponse.json(
+				{ error: { code: "not_found", message: "m", requestId: "r" } },
+				{ status: 404 },
+			),
+		);
+		const gone = vi.fn();
+		const { user } = renderHost(
+			<>
+				<RowOpener />
+				<GoneAnswerer answer={gone} />
+			</>,
+		);
+
+		await user.click(screen.getByRole("button", { name: "Edit row" }));
+		await titled("Edit Transaction");
+		await raise(user);
+
+		expect(
+			await screen.findByText(
+				"This Transaction was deleted on another device.",
+			),
+		).toBeInTheDocument();
+		expect(gone).toHaveBeenCalledWith(ROW_24.id);
+		expect(screen.queryByText("Changes saved.")).toBeNull();
+	});
+
+	test("with no page answering, a deleted row's message still shows", async () => {
+		route(network, "patch", `/api/transactions/${ROW_24.id}`, () =>
+			HttpResponse.json(
+				{ error: { code: "not_found", message: "m", requestId: "r" } },
+				{ status: 404 },
+			),
+		);
+		const { user } = renderHost(<RowOpener />);
+
+		await user.click(screen.getByRole("button", { name: "Edit row" }));
+		await titled("Edit Transaction");
+		await raise(user);
+
+		expect(
+			await screen.findByText(
+				"This Transaction was deleted on another device.",
+			),
+		).toBeInTheDocument();
+	});
+
+	test("a page that stops answering deleted rows hands back to the message alone", async () => {
+		route(network, "patch", `/api/transactions/${ROW_24.id}`, () =>
+			HttpResponse.json(
+				{ error: { code: "not_found", message: "m", requestId: "r" } },
+				{ status: 404 },
+			),
+		);
+		const gone = vi.fn();
+		function Page() {
+			const [answering, setAnswering] = useState(true);
+			return (
+				<>
+					<RowOpener />
+					{answering && <GoneAnswerer answer={gone} />}
+					<button
+						type="button"
+						onClick={() => setAnswering(false)}
+					>
+						Leave
+					</button>
+				</>
+			);
+		}
+		const { user } = renderHost(<Page />);
+
+		await user.click(screen.getByRole("button", { name: "Leave" }));
+		await user.click(screen.getByRole("button", { name: "Edit row" }));
+		await titled("Edit Transaction");
+		await raise(user);
+
+		expect(
+			await screen.findByText(
+				"This Transaction was deleted on another device.",
+			),
+		).toBeInTheDocument();
+		expect(gone).not.toHaveBeenCalled();
 	});
 });

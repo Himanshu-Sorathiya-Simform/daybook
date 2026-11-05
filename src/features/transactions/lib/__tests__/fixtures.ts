@@ -1,6 +1,8 @@
 import type { PayeeItem } from "../suggestions";
 import type {
+	BreakdownGroup,
 	PayeesAnswer,
+	SummaryAnswer,
 	TransactionAnswer,
 	TransactionPageAnswer,
 } from "../types";
@@ -91,3 +93,42 @@ export const GOLDEN_CATEGORIES: NonNullable<PayeesAnswer["categories"]> = [
 /** A payee suggestion with made-up figures, for lists that only test matching. */
 export const named = (payee: string): PayeeItem =>
 	item(payee, 1, "2026-10-01", "expense", "food");
+
+const group = (
+	key: string,
+	outMinor: number,
+	count: number,
+	label: string | null = null,
+): BreakdownGroup => ({
+	key,
+	label,
+	count,
+	outMinor,
+});
+
+/** Golden check A's summary at M1 with the panel's breakdowns (F03 section 5): October, 11
+ * rows before Goal rows, and the breakdowns, which count no Goal row. */
+export const CHECK_A_SUMMARY: SummaryAnswer = {
+	count: 11,
+	incomeMinor: 8500000,
+	spendingMinor: 3116800,
+	toGoalsMinor: 0,
+	firstOn: "2026-10-01",
+	lastOn: "2026-10-31",
+	byCategory: [
+		group("housing", 1800000, 1),
+		group("food", 622000, 4),
+		group("shopping", 300000, 2),
+		group("entertainment", 214800, 2),
+		group("transportation", 180000, 1),
+	],
+	byPayee: [
+		group("sunrise apartments", 1800000, 1, "Sunrise Apartments"),
+		group("croma", 300000, 2, "Croma"),
+		group("bigbasket", 290000, 1, "BigBasket"),
+		group("zomato", 230000, 1, "Zomato"),
+		group("indian oil", 180000, 1, "Indian Oil"),
+		group("amazon prime", 149900, 1, "Amazon Prime"),
+	],
+	currency: "INR",
+};

@@ -11,8 +11,11 @@ import {
 	type CreatedAnswer,
 	type EntryDialogApi,
 	EntryDialogContext,
+	EntryDialogOpenContext,
+	type GoneAnswer,
 } from "../hooks/useEntryDialog";
-import { ENTRY_TEXT } from "../lib/entry";
+import { ENTRY_TEXT, type EntryMode } from "../lib/entry";
+import { TRANSACTIONS_TEXT } from "../lib/messages";
 import { EntryDialog } from "./EntryDialog";
 
 export type EntryDialogHostProps = {
@@ -27,11 +30,15 @@ const toastSaved: CreatedAnswer = () => {
 	showToast(ENTRY_TEXT.saved);
 };
 
+const noAnswer: GoneAnswer = () => {};
+
 /**
  * The one entry dialog of the logged-in pages (BR-F03-48, D-548). The shell's Add buttons, `N`
- * outside a text field, and whatever below calls `useEntryDialog` open it; each opening starts
- * fresh. A page may answer creates itself with `useCreatedAnswer`, as the Transactions page does
- * to select the new row; elsewhere a create says "Transaction saved.".
+ * outside a text field, and whatever below calls `useEntryDialog` open it, new, as an edit or
+ * as a duplicate; each opening starts fresh. A page may answer creates itself with
+ * `useCreatedAnswer`, as the Transactions page does to select the new row; elsewhere a create
+ * says "Transaction saved.". An edit says "Changes saved." (BR-F03-23), and an edit whose row
+ * was deleted elsewhere says so (BR-F03-25), with the page's `useGoneAnswer` after.
  */
 export function EntryDialogHost({
 	profile,
@@ -42,26 +49,41 @@ export function EntryDialogHost({
 	// Each opening mounts a new dialog, so nothing typed before survives a close.
 	const [opening, setOpening] = useState(0);
 	const [isOpen, setOpen] = useState(false);
+	const [mode, setMode] = useState<EntryMode>({ kind: "new" });
 	// Whether a dialog is open, known at once: two opens in one event make one dialog.
 	const opened = useRef(false);
 	const onClosed = useRef<(() => void) | undefined>(undefined);
 	const answer = useRef<CreatedAnswer>(toastSaved);
+	const gone = useRef<GoneAnswer>(noAnswer);
 
-	const [api] = useState<EntryDialogApi>(() => ({
-		openNew: (options) => {
+	const [api] = useState<EntryDialogApi>(() => {
+		const open = (next: EntryMode, options?: { onClose?: () => void }) => {
 			if (opened.current) return;
 			opened.current = true;
 			onClosed.current = options?.onClose;
+			setMode(next);
 			setOpen(true);
 			setOpening((count) => count + 1);
-		},
-		answerCreates: (next) => {
-			answer.current = next;
-			return () => {
-				if (answer.current === next) answer.current = toastSaved;
-			};
-		},
-	}));
+		};
+		return {
+			openNew: (options) => open({ kind: "new" }, options),
+			openEdit: (row, options) => open({ kind: "edit", row }, options),
+			openDuplicate: (row, options) =>
+				open({ kind: "duplicate", row }, options),
+			answerCreates: (next) => {
+				answer.current = next;
+				return () => {
+					if (answer.current === next) answer.current = toastSaved;
+				};
+			},
+			answerGone: (next) => {
+				gone.current = next;
+				return () => {
+					if (gone.current === next) gone.current = noAnswer;
+				};
+			},
+		};
+	});
 
 	useAddSlot(api.openNew);
 	useShortcut("N", () => api.openNew(), { enabled: !isOpen });
@@ -76,17 +98,25 @@ export function EntryDialogHost({
 
 	return (
 		<EntryDialogContext value={api}>
-			{children}
-			{opening > 0 && (
-				<EntryDialog
-					key={opening}
-					isOpen={isOpen}
-					onClose={close}
-					onCreated={(row, kind) => answer.current(row, kind)}
-					locale={shown}
-					firstDayOfWeek={shown.weekStart}
-				/>
-			)}
+			<EntryDialogOpenContext value={isOpen}>
+				{children}
+				{opening > 0 && (
+					<EntryDialog
+						key={opening}
+						mode={mode}
+						isOpen={isOpen}
+						onClose={close}
+						onCreated={(row, kind) => answer.current(row, kind)}
+						onEdited={() => showToast(ENTRY_TEXT.changesSaved)}
+						onGone={(id) => {
+							showToast(TRANSACTIONS_TEXT.deletedElsewhere);
+							gone.current(id);
+						}}
+						locale={shown}
+						firstDayOfWeek={shown.weekStart}
+					/>
+				)}
+			</EntryDialogOpenContext>
 		</EntryDialogContext>
 	);
 }

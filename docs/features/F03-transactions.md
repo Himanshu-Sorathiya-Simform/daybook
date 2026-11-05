@@ -15,7 +15,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-551                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-555                      |
 
 ## 1. User stories
 
@@ -228,13 +228,18 @@ A view's `filter` holds the filter object's fields with these differences from t
 
 **Editing**
 
-- **BR-F03-23** `PATCH /api/transactions/[id]` sends only the changed fields, with `If-Match`. When the date or the time changes, `occurredAt` and `occurredOn` are sent together; otherwise neither is sent. An edit with no field is refused (D-463). The server validates the merged row against every rule here. A confirmed edit closes the dialog and shows "Changes saved."
-- **BR-F03-24** A 409 `version_conflict` opens the conflict view (OFF-7). Both versions appear side by side, with differences highlighted, and two actions:
+- **BR-F03-23** `PATCH /api/transactions/[id]` sends only the changed fields, with `If-Match`. When the date or the time changes, `occurredAt` and `occurredOn` are sent together; otherwise neither is sent. An edit with no field is refused (D-463), so Save with nothing changed closes the dialog and sends nothing (D-552). The server validates the merged row against every rule here. A confirmed edit closes the dialog and shows "Changes saved."
+- **BR-F03-24** A 409 `version_conflict` opens the conflict view (OFF-7, BR-F03-78). Both versions appear side by side, with differences highlighted, and two actions:
     - **Keep mine:** resends the change against the current version.
     - **Keep theirs:** discards the change.
 
     Online saves and queued replays use the same view.
 
+- **BR-F03-78** The conflict view (BR-P1-26, D-553) is a dialog titled "This Transaction changed on another device", with "Your version and the saved one are side by side, with the differences marked."
+    - **Field descriptors:** Type, Amount, Payee, Category, Date, Time, Description and Note, in the dialog's order; from M2, the Goal in place of Category on a Goal Transaction. Each shows as the panel words it: the amount unsigned in the profile's format, the date in F02's list day format, the time in the profile zone or "Auto" on a charge, and "None" for empty text.
+    - **Columns:** "Field", "Yours" (the change over the row as the user opened it) and "Saved now" (`details.current`). A field that reads differently is tinted and marked "Differs".
+    - **What Keep mine saves:** a line naming the fields the user changed, "Keep mine saves your change to Description and keeps the rest as it is saved now." ("your changes to Amount and Note" for more than one).
+    - **Keep mine** resends the change at the saved version under a new idempotency key: another 409 shows the newer version, and any other refusal closes the view and shows in the dialog (flow 7.3). **Keep theirs** sends nothing, shows the saved row everywhere and closes the dialog. Closing the view without a choice goes back to the dialog with what was typed.
 - **BR-F03-25** A 404 on an edit shows "This Transaction was deleted on another device." and the row leaves the list. A 404 on a delete counts as done, with no message (D-239).
 
 **Deleting**
@@ -283,7 +288,7 @@ A view's `filter` holds the filter object's fields with these differences from t
 - **BR-F03-32** A row shows five things (D-528):
     - **Avatar:** the payee's initials (D-86), taken from the letters and digits of the payee: the first character of each of the first two words, or the first two characters of a single word, uppercase. With none, the category icon. Goal rows show the Goal's icon and color.
     - **Title:** the payee. Goal rows read "To Vacation" or "From Vacation".
-    - **Subtitle:** a dot in the category's color (CAT-4), then the description, else the category label, then " · " and the time. With a description, the category label is read to screen readers before it. Goal rows show the time alone.
+    - **Subtitle:** a dot in the category's color (CAT-4), then the category label, then " · " and the description when there is one, then " · " and the time: "Food · Monthly groceries · 7:00 pm". Goal rows show the time alone.
     - **Time:** or "Auto" for charges; outside day grouping, the day and the time (BR-F03-31).
     - **Amount and badges:** the signed amount (D-231), then any badge: "Pending sync" or "Not saved".
 
@@ -461,9 +466,9 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **Category:** tiles with each category's icon and label. They show the type's 7 most used categories, ordered by `/api/payees`'s `categories` (BR-F03-44) and then by CAT order, plus the chosen category when it is not among them. "+ N more" adds the rest after the 7, in CAT order, where a category chosen stays put, and "Show fewer" hides them again (D-550).
     - **Date:** a button reading "Today, 2 Nov", "Yesterday, 1 Nov", or the F02 day format, which opens a calendar where only the window's dates are enabled (BR-F03-08, BR-F03-11).
         - On a create, the field's hint is "Today or one of the 10 days before." and the calendar's note "You can choose today or one of the 10 days before. Arrow keys move, Enter picks."
-        - On an edit, the calendar's note names the row's own window: "You can choose a date from 6 Oct to 16 Oct. Arrow keys move, Enter picks."
+        - On an edit, the calendar's note names the row's own window: "You can choose a date from 6 Oct to 16 Oct. Arrow keys move, Enter picks." The calendar enables that window and the stored date, which after a time zone change can sit a day outside it, and the field has no hint (D-555).
     - **Time:** a time field in the profile's hour cycle (F02, BR-F02-19). A time later than now on today gets "The time can't be in the future." (BR-F03-09, D-540), and an emptied one "Enter a time." (D-549).
-    - **A charge or a demo row** shows its date as text (BR-F03-11). A charge shows "Auto" in place of the time (BR-F03-16), and a demo row its time as text.
+    - **A charge or a demo row** shows its date as text in F02's list day format, "Mon, 5 Oct", also for today and yesterday (BR-F03-11, D-555). A charge shows "Auto" in place of the time (BR-F03-16), and a demo row its time as text.
 - **BR-F03-77** The dialog's behavior (D-551):
     - **Unsaved changes** are any field that differs from where it started, the date and time included. After "Save and add another", the kept type, date and time are the new start.
     - **The date window** and the default date and time are taken when the dialog opens. Save checks the date against today's window and the time against now, so a dialog left open past midnight refuses a date that has left the window with "Choose today or one of the 10 days before."
@@ -476,23 +481,24 @@ A view's `filter` holds the filter object's fields with these differences from t
 
 - **BR-F03-52** Shortcuts run through the one Hotkeys wrapper (D-171) and do nothing while a text field has focus. The list has no type-to-find, so a letter on a focused row is only ever a shortcut; the search box finds a payee (D-536). Enter, `E`, `D` and Delete do nothing on a Transaction of a read-only Goal (BR-F03-50).
 
-    | Key                 | Where              | Does                                                              |
-    | ------------------- | ------------------ | ----------------------------------------------------------------- |
-    | `N`                 | Any logged-in page | Opens a new Transaction                                           |
-    | `/`                 | Transactions       | Focuses the search box                                            |
-    | Ctrl or Cmd+Enter   | Dialog             | Saves                                                             |
-    | Esc                 | Dialog             | Closes, with BR-F03-49                                            |
-    | Arrow keys          | List               | Select the next or previous row, and the panel follows (GridList) |
-    | Enter or `E`        | List or panel      | Opens the selected row in the edit dialog                         |
-    | Delete or Backspace | List or panel      | Deletes the selected row, with Undo                               |
-    | `D`                 | List or panel      | Duplicates the selected row                                       |
-    | Esc                 | List or panel      | Clears the selection and closes the drawer                        |
+    | Key                 | Where              | Does                                                                                                    |
+    | ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------- |
+    | `N`                 | Any logged-in page | Opens a new Transaction                                                                                 |
+    | `/`                 | Transactions       | Focuses the search box                                                                                  |
+    | Ctrl or Cmd+Enter   | Dialog             | Saves                                                                                                   |
+    | Esc                 | Dialog             | Closes, with BR-F03-49                                                                                  |
+    | Arrow keys          | List               | Select the next or previous row, and the panel follows (GridList); below 1180 px they only move (D-554) |
+    | Enter or `E`        | List or panel      | Opens the selected row in the edit dialog                                                               |
+    | Delete or Backspace | List or panel      | Deletes the selected row, with Undo                                                                     |
+    | `D`                 | List or panel      | Duplicates the selected row                                                                             |
+    | Esc                 | List or panel      | Clears the selection and closes the drawer                                                              |
 
 **Deep links**
 
 - **BR-F03-53** `txn=<id>` selects that Transaction (BR-F03-73) and shows it in the panel, which is the drawer below 1180 px (D-229).
     - **A row outside the loaded pages** is loaded alone through `GET /api/transactions/[id]`.
-    - **A 404** shows "We couldn't find that Transaction." and removes `txn` by replacing the URL.
+    - **A 404** for a row the page has not shown shows "We couldn't find that Transaction." and removes `txn` by replacing the URL; a row it has shown follows BR-F03-73 (D-554).
+    - **A failed load** shows "This Transaction could not be loaded." in the panel with Retry (D-554).
     - **`new=1`** opens an empty entry dialog, and closing it removes the parameter by replacing the URL.
 
 **The panel**
@@ -510,14 +516,15 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **Empty parts** are left out. The panel ends with the hint "Select a Transaction to see it here. Up and down arrows move, Enter opens."
 - **BR-F03-72** With a row selected, the panel shows it.
     - **The top:** "Transaction" and Close ("Close details"); the avatar (BR-F03-32), the title and the description; the signed amount (D-231) with its badge, if any.
-    - **Details:** Type; Category, or the Goal for Goal rows; Date, F02's list day header options with `year: 'numeric'` always, then " · " and the time, "Mon, 19 Oct 2026 · 10:15 pm", or " · Auto" for a charge; Source, "Demo data" for any demo row, else "Added by you", "Auto from Netflix" linking to the Subscription, or "From a deleted Subscription"; Note, or "None".
+    - **Details:** Type; Category, or the Goal for Goal rows; Date, F02's list day header options with `year: 'numeric'` always, then " · " and the time, "Mon, 19 Oct, 2026 · 10:15 pm" in `en-IN`, whose own pattern puts a comma before the year (D-555), or " · Auto" for a charge; Source, "Demo data" for any demo row, else "Added by you", "Auto from Netflix" linking to the Subscription, or "From a deleted Subscription"; Note, or "None".
     - **Payee history:** for income, expense and refund rows, "Swiggy in the last 3 months" from `/api/payees/history?months=3` (BR-F03-62), reading "4 Transactions · ₹3,290.00 · usually around the 3rd".
         - The amount is `outMinor` on an expense or refund row and `inMinor` on an income row.
         - The usual day, an English ordinal, shows only when `usualDay` is not null.
         - The box is left out with a count of 0, offline, or when the request fails.
     - **Actions:** Edit, Duplicate and Delete, then the hint "E to edit · D to duplicate · Delete to delete · Esc to close". Edit and Duplicate open the dialog (BR-F03-48, BR-F03-28); Delete deletes with Undo (BR-F03-26). A Transaction of a read-only Goal shows the reason (BR-F03-50) in place of Edit, Duplicate and Delete.
 - **BR-F03-73** One row at a time can be selected (D-521).
-    - **Selecting:** by pointer, by tap, or by the arrow keys in the list. A selected row is highlighted and shown in the panel.
+    - **Selecting:** by pointer, by tap, or by the arrow keys in the list. A selected row is highlighted and shown in the panel, and a press on it again keeps it selected.
+    - **Below 1180 px (D-554):** the arrow keys only move between rows, since the drawer takes focus; Enter, Space, a click or a tap selects the row and opens the drawer.
     - **The URL:** selecting writes `txn=<id>`, and clearing it removes `txn`, both by replacing the URL, so no history entry is added.
     - **Clearing:** Esc, Close, the drawer's scrim, or the row's delete.
     - **After a save:** a plain Save of a new Transaction that the filter shows selects it. An edited row stays selected, even when the edit takes it out of the filter, until the selection is cleared.
@@ -697,10 +704,10 @@ So the four ranges are "Under ₹400" (`max=399.99`, #25), "₹400 to ₹800" (`
     - the heading reads "14 Transactions" and "1 Oct to 31 Oct", or "11 Transactions" at M1, before Goal rows;
     - "Out by category" lists the summary breakdown of check A above;
     - "Top payees by Out" lists Sunrise Apartments 18,000.00 (1), Croma 3,000.00 (2), BigBasket 2,900.00 (1) and Zomato 2,300.00 (1).
-- **Detail, #24:** Expense; Food; "Mon, 19 Oct 2026 · 10:15 pm"; "Added by you"; Note "None". The history reads "Swiggy in the last 3 months" and "4 Transactions · ₹3,290.00 · usually around the 3rd".
+- **Detail, #24:** Expense; Food; "Mon, 19 Oct, 2026 · 10:15 pm"; "Added by you"; Note "None". The history reads "Swiggy in the last 3 months" and "4 Transactions · ₹3,290.00 · usually around the 3rd".
 - **Detail, #13:** "2 Transactions · ₹1,70,000.00 · usually around the 1st", the In of Acme Corp in India's grouping.
 - **Detail, #11:** "1 Transaction · ₹12,000.00", with no usual day.
-- **Detail, #16 at M1:** "Mon, 5 Oct 2026 · Auto" and "From a deleted Subscription"; the history reads "Netflix in the last 3 months" and "2 Transactions · ₹1,298.00 · usually around the 5th" (#5, #16).
+- **Detail, #16 at M1:** "Mon, 5 Oct, 2026 · Auto" and "From a deleted Subscription"; the history reads "Netflix in the last 3 months" and "2 Transactions · ₹1,298.00 · usually around the 5th" (#5, #16).
 
 ## 6. Screens and states
 
@@ -717,7 +724,7 @@ So the four ranges are "Under ₹400" (`max=399.99`, #25), "₹400 to ₹800" (`
 
 **Entry dialog.** BR-F03-48 to BR-F03-51 and BR-F03-75.
 
-**Conflict view.** BR-F03-24.
+**Conflict view.** BR-F03-24 and BR-F03-78.
 
 | State                         | List                                                                                                                                                                                                                                                                          | Header                                   | Panel                                               | Dialog                                                    |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------- | --------------------------------------------------------- |
@@ -847,6 +854,10 @@ A count of one reads in the singular wherever a count appears: "1 Transaction", 
 | List                                                                          | Error (body)                                                                    | Check your connection, then try again. Your data is safe.                                                                                                                                                               |
 | Panel                                                                         | Nothing selected (hint)                                                         | Select a Transaction to see it here. Up and down arrows move, Enter opens.                                                                                                                                              |
 | Panel                                                                         | A row selected (hint)                                                           | E to edit · D to duplicate · Delete to delete · Esc to close                                                                                                                                                            |
+| Panel                                                                         | A selected row failed to load alone                                             | This Transaction could not be loaded.                                                                                                                                                                                   |
+| Conflict view                                                                 | Title and lead (BR-F03-78)                                                      | This Transaction changed on another device · Your version and the saved one are side by side, with the differences marked.                                                                                              |
+| Conflict view                                                                 | Columns, the difference mark and the actions                                    | Field · Yours · Saved now · Differs · Keep mine · Keep theirs                                                                                                                                                           |
+| Conflict view                                                                 | What Keep mine saves                                                            | Keep mine saves your change to Description and keeps the rest as it is saved now. ("your changes to Amount and Note" for more than one)                                                                                 |
 | Save view                                                                     | Nothing edited (hint)                                                           | Change a filter, then save it as a view.                                                                                                                                                                                |
 | View name                                                                     | Required                                                                        | Enter a name.                                                                                                                                                                                                           |
 | View name                                                                     | Length                                                                          | Use 40 characters or fewer.                                                                                                                                                                                             |
@@ -1143,6 +1154,8 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
 - **AC-F03-68** (unit) Filters on the golden clock: typing 12 into Custom's From day commits one range 300 ms after the last key, not one per digit; From after To reads "Choose a From date on or before To." and commits nothing; Min 900 with Max 799.99 reads "Choose a Min at or below Max." and commits nothing; the search box commits "swiggy" 300 ms after typing stops, at once on Enter or clear, and never commits "sw" (D-543, BR-F03-38).
 - **AC-F03-69** (client integration) History on golden data: in one visit to the Type menu, ticking Expense then Refund adds one history entry and replaces it, so Back returns to the page before the visit; a second visit adds a second entry; removing a chip adds its own; typing "swiggy", pausing and typing " monthly" in one focus of the search box adds one entry (D-547).
 - **AC-F03-70** (client integration) Adding on golden data on 2026-11-02 (D-548, D-549, D-551): `N` on a page outside Transactions opens "New Transaction" and a Save there says "Transaction saved."; on Transactions with no filter, a plain Save of an expense selects it (`txn=<id>`), and with the filter Type Income it says "Saved. It's hidden by your filters." and Show clears the filters; "Save and add another" keeps Expense, the date and the time, empties the rest and focuses Amount; an emptied time gets "Enter a time."; Escape after changing only the date asks "Discard changes?", and Escape on an untouched dialog closes it.
+- **AC-F03-71** (client integration) The conflict view on golden #24 (D-553): an edit to 700.00 meets 409 with `details.current` at version 2 holding 660.00 and the note "Split"; the view shows Amount "₹700.00" beside "₹660.00" marked "Differs" and "Keep mine saves your change to Amount and keeps the rest as it is saved now."; Keep mine sends `{ amountMinor: 70000, currency: "INR" }` with `If-Match: "2"` and a new idempotency key, and "Changes saved." follows; Keep theirs sends nothing and the panel shows 660.00; Escape goes back to the dialog with 700.00 still typed.
+- **AC-F03-72** (client integration) Selection details on golden data (D-552, D-554): below 1180 px, with no row selected, Down moves focus to the next row without selecting it, and Enter then selects it and opens the drawer; at 1180 px a second press on the selected row keeps it; a shown row that leaves the pages on a refetch and answers 404 says "This Transaction was deleted on another device."; Save on an edit with nothing changed closes the dialog and sends no request.
 
 ## 15. Illustrations
 
@@ -1263,7 +1276,7 @@ Transactions                                   | Transaction                    
 [Category: Food v] [Amount: Any v] [More v]    | −₹640.00
 [Day · Newest first v]                         | Type      Expense
 Last month x  Food x               Clear all   | Category  Food
-Count 4 · In ₹0.00 · Out ₹6,220.00 · To Goals ₹0.00 | Date  Mon, 19 Oct 2026 · 10:15 pm
+Count 4 · In ₹0.00 · Out ₹6,220.00 · To Goals ₹0.00 | Date  Mon, 19 Oct, 2026 · 10:15 pm
                                                | Source    Added by you
 Sat, 31 Oct                       Out ₹380.00  | Note      None
  (SW) Swiggy      Food  11:50 pm    −₹380.00   |

@@ -10,6 +10,7 @@ import type { PayeeHistory, PayeeList } from "@/server/dal/transactions/payees";
 import type { Breakdown } from "@/server/dal/transactions/query";
 
 export type { Breakdown } from "@/server/dal/transactions/query";
+export type { BreakdownGroup } from "@/server/dal/transactions/summary";
 
 /** The answers of F03 section 11's reads and writes, as the routes send them. The types come
  * from the data access layer that builds each answer, so the two cannot drift. */

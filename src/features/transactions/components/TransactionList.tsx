@@ -14,6 +14,7 @@ import { GroupHeader } from "@/components/data/GroupHeader";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Skeleton } from "@/components/feedback/Skeleton";
 import { Section } from "@/components/surfaces/Section";
+import { useShortcut } from "@/hooks/useShortcut";
 import { cn } from "@/lib/cn";
 import type { ListParams, TransactionFilter } from "@/lib/transactions/url";
 import { useInView } from "../hooks/useInView";
@@ -35,6 +36,18 @@ export type TransactionListProps = {
 	onClearFilters: () => void;
 	/** Opens the entry dialog, from the empty state of an account with no Transactions. */
 	onAdd: () => void;
+	/** The selected row's id (`txn`), or null (BR-F03-73). */
+	selectedId: string | null;
+	/** A row was selected by pointer, tap or the arrow keys, or the selection was cleared with
+	 * Escape (BR-F03-73). */
+	onSelect: (id: string | null) => void;
+	/** Enter on the selected row: its edit dialog (BR-F03-52). Left out, Enter only selects,
+	 * as for a row that can't be edited. */
+	onOpen?: (() => void) | undefined;
+	/** Whether selection follows focus, so the arrow keys select: beside the docked panel. Below
+	 * it, a selection opens a drawer that takes focus, so the arrow keys only move and Enter,
+	 * Space, a click or a tap selects (D-554). */
+	selectionFollowsFocus: boolean;
 	className?: string;
 };
 
@@ -60,13 +73,19 @@ export function TransactionList({
 	locale,
 	onClearFilters,
 	onAdd,
+	selectedId,
+	onSelect,
+	onOpen,
+	selectionFollowsFocus,
 	className,
 }: Readonly<TransactionListProps>) {
 	const query = useTransactionList({ filter, list, currency: locale.currency });
 	const [announcement, setAnnouncement] = useState({ text: "", count: 0 });
 	const top = useRef<HTMLDivElement>(null);
 	const loadMore = useRef<HTMLDivElement>(null);
-	const grid = useRef<HTMLDivElement>(null);
+	const grid = useRef<HTMLDivElement | null>(null);
+	// The grid as state too, so Enter's shortcut listens on it once it is on the page.
+	const [gridElement, setGridElement] = useState<HTMLDivElement | null>(null);
 	// The row that takes focus from Load more when the last page takes the button away (D-535).
 	const focusNext = useRef<string | null>(null);
 	const {
@@ -114,6 +133,21 @@ export function TransactionList({
 			void query.fetchPreviousPage();
 	};
 	useInView(top, hasPreviousPage, loadEarlier);
+
+	// Enter opens the selected row and Escape clears it (BR-F03-52). Both listen on the grid
+	// before the rows' own handlers, which take the keys for themselves: React Aria's row action
+	// would also run on a tap, which must select instead (D-554), and the grid keeps a selected
+	// row on Escape, since a press must never clear it.
+	useShortcut("Enter", () => onOpen?.(), {
+		target: gridElement,
+		capture: true,
+		enabled: selectedId !== null && onOpen !== undefined,
+	});
+	useShortcut("Escape", () => onSelect(null), {
+		target: gridElement,
+		capture: true,
+		enabled: selectedId !== null,
+	});
 
 	const frame = cn("px-5 pt-1.5 pb-3.5 max-md:px-4", className);
 	const filtered = Object.keys(filter).length > 0;
@@ -211,8 +245,21 @@ export function TransactionList({
 				</div>
 			)}
 			<AriaGridList
-				ref={grid}
+				ref={(element: HTMLDivElement | null) => {
+					grid.current = element;
+					setGridElement(element);
+				}}
 				aria-label="Transactions"
+				// One row at a time (BR-F03-73). A press on the selected row keeps it, so only
+				// Escape, Close, the scrim or a delete clear it, through the page.
+				selectionMode="single"
+				disallowEmptySelection
+				selectionBehavior={selectionFollowsFocus ? "replace" : "toggle"}
+				selectedKeys={selectedId === null ? [] : [selectedId]}
+				onSelectionChange={(keys) => {
+					const [key] = keys === "all" ? [] : [...keys];
+					onSelect(key === undefined ? null : String(key));
+				}}
 				// Letters are the page's shortcuts (BR-F03-52), and search finds a payee (D-536).
 				disallowTypeAhead
 				className="flex flex-col outline-none"

@@ -67,22 +67,15 @@ describe("subtitle", () => {
 		expect(subtitle).toHaveTextContent(/^Food · 10:15 pm$/);
 	});
 
-	test("shows the description instead of the category label", () => {
+	// D-528, edited 5 Nov 2026
+	test("shows the category label, then the description, then the time", () => {
 		const { subtitle } = renderRow({ description: "Dinner with team" });
 
-		expect(subtitle).toHaveTextContent("Dinner with team · 10:15 pm");
+		expect(subtitle).toHaveTextContent(/^Food · Dinner with team · 10:15 pm$/);
 	});
 
-	test("reads the category before the description to screen readers, so colour is never its only sign", () => {
+	test("hides nothing: every word shown is read, and nothing more", () => {
 		const { subtitle } = renderRow({ description: "Dinner with team" });
-
-		const hidden = subtitle.querySelector(".sr-only");
-		expect(hidden).toHaveTextContent("Food:");
-		expect(subtitle).toHaveTextContent(/^Food: Dinner with team · 10:15 pm$/);
-	});
-
-	test("reads no extra category when it already shows the label", () => {
-		const { subtitle } = renderRow();
 
 		expect(subtitle.querySelector(".sr-only")).toBeNull();
 	});
@@ -91,7 +84,6 @@ describe("subtitle", () => {
 		const { subtitle } = renderRow({ description: "" });
 
 		expect(subtitle).toHaveTextContent(/^Food · 10:15 pm$/);
-		expect(subtitle.querySelector(".sr-only")).toBeNull();
 	});
 
 	test("starts with a dot in the category's colour, hidden from screen readers", () => {
@@ -319,7 +311,7 @@ describe("changes", () => {
 		);
 
 		expect(root).toHaveTextContent(
-			/^ZOZomatoFood: Late dinner · 11:05 pmPending sync−₹1,200.00$/,
+			/^ZOZomatoFood · Late dinner · 11:05 pmPending sync−₹1,200.00$/,
 		);
 	});
 
@@ -353,7 +345,7 @@ describe("markup", () => {
 		});
 
 		expect(root).toHaveTextContent(
-			/^SWSwiggyFood: Dinner · 10:15 pmPending sync−₹845.00$/,
+			/^SWSwiggyFood · Dinner · 10:15 pmPending sync−₹845.00$/,
 		);
 	});
 

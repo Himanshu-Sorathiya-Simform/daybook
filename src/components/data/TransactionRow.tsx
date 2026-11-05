@@ -16,7 +16,7 @@ export type TransactionRowProps = {
 	category?: CategoryKey;
 	/** A Goal row: the Goal's icon, and no category or subtitle text before the time. */
 	goal?: boolean;
-	/** Shown in place of the category label. */
+	/** Shown after the category label. */
 	description?: string;
 	/** The time ("10:15 pm"), "Auto" for a charge, or the day and time outside day grouping
 	 * ("Sat, 31 Oct · 10:15 pm"), as the list words it (BR-F03-31). */
@@ -35,10 +35,10 @@ export type TransactionRowProps = {
 
 /**
  * One Transaction as the lists show it (BR-F03-32, D-528): the avatar; the title; a subtitle of
- * a dot in the category's colour, the description or else the category label, and the time;
- * any badge; and the signed amount, which never wraps. It is markup only, with no role: the list
- * that holds it gives the row its role, selection and keyboard. With a description, the category
- * label is read to screen readers, so the dot is never the only sign of it.
+ * a dot in the category's colour, the category label, any description, and the time, so the dot
+ * is never the only sign of the category; any badge; and the signed amount, which never wraps.
+ * It is markup only, with no role: the list that holds it gives the row its role, selection and
+ * keyboard.
  */
 export function TransactionRow({
 	title,
@@ -83,10 +83,8 @@ export function TransactionRow({
 						/>
 					)}
 					<span className="truncate">
-						{!goal && description && (
-							<span className="sr-only">{label}: </span>
-						)}
-						{!goal && `${description || label} · `}
+						{!goal && `${label} · `}
+						{!goal && description && `${description} · `}
 						{when}
 					</span>
 				</span>

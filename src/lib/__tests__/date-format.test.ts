@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
-import { formatDayHeader, formatShortDate, formatTime } from "../date-format";
+import {
+	formatDayHeader,
+	formatFullDay,
+	formatShortDate,
+	formatTime,
+} from "../date-format";
 
 const IN = { dateLocale: "en-IN", today: "2026-11-02" };
 
@@ -53,6 +58,28 @@ describe("formatShortDate (BR-F02-19)", () => {
 	test("a leap day formats", () => {
 		expect(formatShortDate("2028-02-29", { ...IN, today: "2028-03-01" })).toBe(
 			"29 Feb",
+		);
+	});
+});
+
+describe("formatFullDay (BR-F03-72)", () => {
+	test("always adds the year, also in the current one, in the locale's own pattern", () => {
+		expect(formatFullDay("2026-10-19", IN)).toBe("Mon, 19 Oct, 2026");
+		expect(formatFullDay("2025-10-31", IN)).toBe("Fri, 31 Oct, 2025");
+	});
+
+	test("order and words follow the date locale", () => {
+		expect(formatFullDay("2026-10-19", { dateLocale: "en-US" })).toBe(
+			"Mon, Oct 19, 2026",
+		);
+		expect(formatFullDay("2026-10-19", { dateLocale: "de-DE" })).toBe(
+			"Mo., 19. Okt. 2026",
+		);
+	});
+
+	test("no time zone moves the day", () => {
+		expect(formatFullDay("2026-11-01", { dateLocale: "en-IN" })).toBe(
+			"Sun, 1 Nov, 2026",
 		);
 	});
 });

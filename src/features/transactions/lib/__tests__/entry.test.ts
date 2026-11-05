@@ -5,15 +5,25 @@ import { isUuidV7, uuidV7Time } from "@/lib/ids";
 import { TRANSACTION_MESSAGES } from "@/lib/transactions/schemas";
 import {
 	categoryTiles,
+	changedFields,
+	chargeNotice,
 	checkEntry,
 	counterOf,
 	createBody,
+	duplicateValues,
+	editBody,
+	editCalendarNote,
 	ENTRY_TEXT,
+	ENTRY_TITLES,
 	type EntryLocale,
 	type EntryValues,
 	entryDateLabel,
+	hasFixedDate,
 	isChanged,
+	modeValues,
 	nextValues,
+	rowValues,
+	rowWindow,
 	SERVER_FIELDS,
 	startValues,
 	tidyAmount,
@@ -21,7 +31,7 @@ import {
 	windowStart,
 } from "../entry";
 import { DIALOG_FIELDS } from "../write-errors";
-import { GOLDEN_CATEGORIES } from "./fixtures";
+import { GOLDEN_CATEGORIES, row } from "./fixtures";
 
 // The golden clock (TST-3): 2026-11-02 12:00 in Asia/Kolkata.
 const NOW = new Date("2026-11-02T06:30:00.000Z");
@@ -700,7 +710,15 @@ describe("ENTRY_TEXT (F03 section 8)", () => {
 	test("holds the dialog's words", () => {
 		expect(ENTRY_TEXT).toEqual({
 			newTitle: "New Transaction",
+			editTitle: "Edit Transaction",
+			duplicateTitle: "Duplicate Transaction",
 			saved: "Transaction saved.",
+			changesSaved: "Changes saved.",
+			auto: "Auto",
+			chargeUnlinked:
+				"From a deleted Subscription. Its type, date and time are fixed.",
+			chargeLinked:
+				"Its type, date and time are fixed; editing it stops the Subscription from changing this charge.",
 			hidden: "Saved. It's hidden by your filters.",
 			show: "Show",
 			offline: "You are offline. Connect to save.",
@@ -714,5 +732,411 @@ describe("ENTRY_TEXT (F03 section 8)", () => {
 			discardTitle: "Discard changes?",
 			discardBody: "What you've typed here won't be saved.",
 		});
+	});
+});
+
+// Golden #24 as the API answers it: Swiggy 640.00 on 19 Oct at 10:15 pm in Kolkata, recorded a
+// minute later, so its own window runs from 9 Oct to 19 Oct.
+const ROW_24 = row();
+const LA: EntryLocale = { ...IN, timezone: "America/Los_Angeles" };
+// Golden #26: Swiggy 420.00, stored on 1 Nov at 00:30 Kolkata time.
+const ROW_26 = row({
+	amountMinor: 42000,
+	occurredOn: "2026-11-01",
+	occurredAt: "2026-10-31T19:00:00.000Z",
+	createdAt: "2026-10-31T19:00:00.000Z",
+	updatedAt: "2026-10-31T19:00:00.000Z",
+});
+
+describe("ENTRY_TITLES (BR-F03-48)", () => {
+	test("each mode's title", () => {
+		expect(ENTRY_TITLES).toEqual({
+			new: "New Transaction",
+			edit: "Edit Transaction",
+			duplicate: "Duplicate Transaction",
+		});
+	});
+});
+
+describe("rowValues (BR-F03-11, D-238)", () => {
+	test("#24: its values in the user's format, the stored date and the time in the zone", () => {
+		expect(rowValues(ROW_24, IN)).toEqual({
+			type: "expense",
+			amount: "640.00",
+			payee: "Swiggy",
+			category: "food",
+			date: "2026-10-19",
+			time: "22:15",
+			description: "",
+			note: "",
+		});
+	});
+
+	test("the amount takes the profile's grouping and the text keeps line breaks", () => {
+		expect(
+			rowValues(
+				row({ amountMinor: 17000000, description: "Rent", note: "a\nb" }),
+				IN,
+			),
+		).toMatchObject({
+			amount: "1,70,000.00",
+			description: "Rent",
+			note: "a\nb",
+		});
+	});
+
+	// AC-F03-32
+	test("#26 in America/Los_Angeles shows the stored 1 Nov with 12:00 pm", () => {
+		expect(rowValues(ROW_26, LA)).toMatchObject({
+			date: "2026-11-01",
+			time: "12:00",
+		});
+	});
+
+	test("a row with no payee or category starts them empty", () => {
+		expect(rowValues(row({ payee: null, category: null }), IN)).toMatchObject({
+			payee: "",
+			category: null,
+		});
+	});
+
+	test("Goal rows wait for M2's Goal fields", () => {
+		expect(() =>
+			rowValues(row({ type: "goal_contribution", category: null }), IN),
+		).toThrow(RangeError);
+		expect(() =>
+			rowValues(row({ type: "goal_withdrawal", category: null }), IN),
+		).toThrow(RangeError);
+	});
+});
+
+describe("duplicateValues (BR-F03-28)", () => {
+	test("copies the row's values and dates it now", () => {
+		expect(
+			duplicateValues(row({ description: "Dinner", note: "Team" }), IN, NOW),
+		).toEqual({
+			type: "expense",
+			amount: "640.00",
+			payee: "Swiggy",
+			category: "food",
+			date: "2026-11-02",
+			time: "12:00",
+			description: "Dinner",
+			note: "Team",
+		});
+	});
+
+	test("a charge copies the same way; the create makes it a manual row", () => {
+		expect(
+			duplicateValues(row({ source: "subscription", demo: true }), IN, NOW),
+		).toMatchObject({ date: "2026-11-02", time: "12:00", payee: "Swiggy" });
+	});
+});
+
+describe("modeValues", () => {
+	test("new, edit and duplicate start where each should", () => {
+		expect(modeValues({ kind: "new" }, IN, NOW)).toEqual(
+			startValues(IN.timezone, NOW),
+		);
+		expect(modeValues({ kind: "edit", row: ROW_24 }, IN, NOW)).toEqual(
+			rowValues(ROW_24, IN),
+		);
+		expect(modeValues({ kind: "duplicate", row: ROW_24 }, IN, NOW)).toEqual(
+			duplicateValues(ROW_24, IN, NOW),
+		);
+	});
+});
+
+describe("hasFixedDate (BR-F03-11)", () => {
+	test("a charge and a demo row have a fixed date and time; a manual row does not", () => {
+		expect(hasFixedDate({ source: "subscription", demo: false })).toBe(true);
+		expect(hasFixedDate({ source: "manual", demo: true })).toBe(true);
+		expect(hasFixedDate({ source: "manual", demo: false })).toBe(false);
+	});
+});
+
+describe("rowWindow (TIME-7, BR-F03-11)", () => {
+	test("#24: its recording date and the 10 days before", () => {
+		expect(rowWindow(ROW_24.createdAt, IN.timezone)).toEqual({
+			firstOn: "2026-10-09",
+			lastOn: "2026-10-19",
+		});
+	});
+
+	test("the recording date is read in the current zone", () => {
+		expect(rowWindow(ROW_26.createdAt, "Asia/Kolkata")).toEqual({
+			firstOn: "2026-10-22",
+			lastOn: "2026-11-01",
+		});
+		expect(rowWindow(ROW_26.createdAt, "America/Los_Angeles")).toEqual({
+			firstOn: "2026-10-21",
+			lastOn: "2026-10-31",
+		});
+	});
+});
+
+describe("editCalendarNote (BR-F03-75)", () => {
+	test("names the row's own window", () => {
+		expect(
+			editCalendarNote(
+				{ firstOn: "2026-10-06", lastOn: "2026-10-16" },
+				{ today: "2026-11-02", dateLocale: "en-IN" },
+			),
+		).toBe(
+			"You can choose a date from 6 Oct to 16 Oct. Arrow keys move, Enter picks.",
+		);
+	});
+
+	test("a year shows outside the current one", () => {
+		expect(
+			editCalendarNote(
+				{ firstOn: "2025-12-25", lastOn: "2026-01-04" },
+				{ today: "2026-01-10", dateLocale: "en-IN" },
+			),
+		).toBe(
+			"You can choose a date from 25 Dec 2025 to 4 Jan. Arrow keys move, Enter picks.",
+		);
+	});
+});
+
+describe("checkEntry on an edit (BR-F03-09, BR-F03-11, D-499)", () => {
+	const start = rowValues(ROW_24, IN);
+	const rules = { start, window: rowWindow(ROW_24.createdAt, IN.timezone) };
+	const editFields = (changes: Partial<EntryValues>, locale = IN, now = NOW) => {
+		const checked = checkEntry({ ...start, ...changes }, locale, now, rules);
+		return checked.ok ? {} : checked.fields;
+	};
+
+	test("the row as it opened passes, though its date is outside today's window", () => {
+		expect(editFields({})).toEqual({});
+	});
+
+	test("a date moved inside the row's window passes, at either end", () => {
+		expect(editFields({ date: "2026-10-09" })).toEqual({});
+		expect(editFields({ date: "2026-10-19" })).toEqual({});
+	});
+
+	test("a date moved outside the row's window names that window", () => {
+		expect(editFields({ date: "2026-10-08" })).toEqual({
+			date: "Choose a date from 9 Oct to 19 Oct.",
+		});
+		expect(editFields({ date: "2026-10-20" })).toEqual({
+			date: "Choose a date from 9 Oct to 19 Oct.",
+		});
+	});
+
+	test("the stored date outside the window, after a zone change, passes while kept", () => {
+		const shifted = rowValues(ROW_26, LA);
+		const laRules = {
+			start: shifted,
+			window: rowWindow(ROW_26.createdAt, LA.timezone),
+		};
+		expect(checkEntry(shifted, LA, NOW, laRules).ok).toBe(true);
+		expect(
+			checkEntry({ ...shifted, date: "2026-10-30" }, LA, NOW, laRules).ok,
+		).toBe(true);
+	});
+
+	test("an unchanged date and time are never checked against now", () => {
+		const today = row({
+			occurredOn: "2026-11-02",
+			occurredAt: "2026-11-02T06:33:00.000Z",
+			createdAt: "2026-11-02T06:33:00.000Z",
+		});
+		const kept = rowValues(today, IN);
+		expect(
+			checkEntry(kept, IN, NOW, {
+				start: kept,
+				window: rowWindow(today.createdAt, IN.timezone),
+			}).ok,
+		).toBe(true);
+	});
+
+	test("a changed time later than now on today gets the future message", () => {
+		const today = row({
+			occurredOn: "2026-11-02",
+			occurredAt: "2026-11-02T05:30:00.000Z",
+			createdAt: "2026-11-02T05:31:00.000Z",
+		});
+		const kept = rowValues(today, IN);
+		const todayRules = {
+			start: kept,
+			window: rowWindow(today.createdAt, IN.timezone),
+		};
+		expect(checkEntry({ ...kept, time: "12:00" }, IN, NOW, todayRules).ok).toBe(
+			true,
+		);
+		const later = checkEntry({ ...kept, time: "12:01" }, IN, NOW, todayRules);
+		expect(later.ok ? {} : later.fields).toEqual({
+			time: TRANSACTION_MESSAGES.timeInFuture,
+		});
+	});
+
+	test("a date moved to today with a time already past now gets the future message", () => {
+		const yesterday = row({
+			occurredOn: "2026-11-01",
+			occurredAt: "2026-11-01T08:00:00.000Z",
+			createdAt: "2026-11-02T05:00:00.000Z",
+		});
+		const kept = rowValues(yesterday, IN);
+		const checked = checkEntry({ ...kept, date: "2026-11-02" }, IN, NOW, {
+			start: kept,
+			window: rowWindow(yesterday.createdAt, IN.timezone),
+		});
+		expect(checked.ok ? {} : checked.fields).toEqual({
+			time: TRANSACTION_MESSAGES.timeInFuture,
+		});
+	});
+
+	test("the other fields are checked as on a create", () => {
+		expect(
+			editFields({ amount: "", payee: " ", category: "salary", time: null }),
+		).toEqual({
+			amount: "Enter an amount.",
+			payee: TRANSACTION_MESSAGES.payeeRequired,
+			category: TRANSACTION_MESSAGES.categoryRequired,
+			time: ENTRY_TEXT.timeRequired,
+		});
+	});
+});
+
+describe("editBody (BR-F03-23)", () => {
+	const start = rowValues(ROW_24, IN);
+	const bodyOf = (
+		changes: Partial<EntryValues>,
+		base = ROW_24,
+		from = start,
+		locale = IN,
+	) => {
+		const values = { ...from, ...changes };
+		const checked = checkEntry(values, locale, NOW, {
+			start: from,
+			window: rowWindow(base.createdAt, locale.timezone),
+		});
+		if (!checked.ok) throw new Error(JSON.stringify(checked.fields));
+		return editBody(values, checked, { row: base, start: from }, locale);
+	};
+
+	test("nothing changed sends nothing", () => {
+		expect(bodyOf({})).toBeNull();
+	});
+
+	test("the amount typed differently but the same value is no change", () => {
+		expect(bodyOf({ amount: "640" })).toBeNull();
+	});
+
+	test("an amount brings its currency", () => {
+		expect(bodyOf({ amount: "700" })).toEqual({
+			amountMinor: 70000,
+			currency: "INR",
+		});
+	});
+
+	test("each text field alone, trimmed, with empty text as null", () => {
+		expect(bodyOf({ payee: " Zomato " })).toEqual({ payee: "Zomato" });
+		expect(bodyOf({ description: "Dinner" })).toEqual({ description: "Dinner" });
+		expect(bodyOf({ note: "Team\nlunch" })).toEqual({ note: "Team\nlunch" });
+		const described = row({ description: "Dinner", note: "Old" });
+		const from = rowValues(described, IN);
+		expect(bodyOf({ description: "  ", note: "" }, described, from)).toEqual({
+			description: null,
+			note: null,
+		});
+	});
+
+	test("a type within the group keeps a shared category, and sends it only if moved", () => {
+		expect(bodyOf({ type: "refund" })).toEqual({ type: "refund" });
+		expect(bodyOf({ type: "income", category: "salary" })).toEqual({
+			type: "income",
+			category: "salary",
+		});
+		expect(bodyOf({ category: "shopping" })).toEqual({ category: "shopping" });
+	});
+
+	test("a date sends the date and the time together", () => {
+		expect(bodyOf({ date: "2026-10-18" })).toEqual({
+			occurredAt: "2026-10-18T16:45:00Z",
+			occurredOn: "2026-10-18",
+		});
+	});
+
+	// AC-F03-32: 1 Nov 2026 is the day Los Angeles leaves daylight saving, so 11:00 am is UTC−8.
+	test("#26 in America/Los_Angeles: a new time alone keeps the stored 1 Nov", () => {
+		const shifted = rowValues(ROW_26, LA);
+		expect(bodyOf({ time: "11:00" }, ROW_26, shifted, LA)).toEqual({
+			occurredAt: "2026-11-01T19:00:00Z",
+			occurredOn: "2026-11-01",
+		});
+	});
+
+	test("several changes go together", () => {
+		expect(bodyOf({ amount: "700", payee: "Zomato", time: "21:00" })).toEqual({
+			amountMinor: 70000,
+			currency: "INR",
+			payee: "Zomato",
+			occurredAt: "2026-10-19T15:30:00Z",
+			occurredOn: "2026-10-19",
+		});
+	});
+});
+
+describe("changedFields (BR-F03-78)", () => {
+	const start = { date: "2026-10-19", time: "22:15" };
+
+	test("each sent field in the dialog's order", () => {
+		expect(
+			changedFields(
+				{
+					note: null,
+					description: "x",
+					category: "shopping",
+					payee: "Zomato",
+					amountMinor: 1,
+					currency: "INR",
+					type: "refund",
+				},
+				start,
+				start,
+			),
+		).toEqual(["type", "amount", "payee", "category", "description", "note"]);
+	});
+
+	test("the date and the time each count only when they moved", () => {
+		const body = {
+			occurredAt: "2026-10-19T16:00:00Z",
+			occurredOn: "2026-10-19",
+		};
+		expect(changedFields(body, { ...start, time: "21:30" }, start)).toEqual([
+			"time",
+		]);
+		expect(changedFields(body, { ...start, date: "2026-10-18" }, start)).toEqual(
+			["date"],
+		);
+		expect(
+			changedFields(body, { date: "2026-10-18", time: "21:30" }, start),
+		).toEqual(["date", "time"]);
+	});
+
+	test("nothing sent names nothing", () => {
+		expect(changedFields({}, start, start)).toEqual([]);
+	});
+});
+
+describe("chargeNotice (BR-F03-48, BR-F03-16)", () => {
+	test("an unlinked charge, as every charge is at M1 (D-475)", () => {
+		expect(chargeNotice({ subscriptionId: null, payee: "Netflix" })).toBe(
+			"From a deleted Subscription. Its type, date and time are fixed.",
+		);
+	});
+
+	test("a linked charge names its payee", () => {
+		expect(
+			chargeNotice({
+				subscriptionId: "0192f0c4-7a1e-7c3b-9d2a-000000000001",
+				payee: "Netflix",
+			}),
+		).toBe(
+			"Auto from Netflix. Its type, date and time are fixed; editing it stops the Subscription from changing this charge.",
+		);
 	});
 });

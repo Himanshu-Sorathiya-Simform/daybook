@@ -64,6 +64,7 @@ function renderDialog(props: Partial<EntryDialogProps> = {}) {
 	payees();
 	const onClose = vi.fn();
 	const onCreated = vi.fn();
+	const onEdited = props.onEdited ?? vi.fn();
 	function Harness() {
 		const [isOpen, setOpen] = useState(true);
 		return (
@@ -72,6 +73,7 @@ function renderDialog(props: Partial<EntryDialogProps> = {}) {
 				firstDayOfWeek="monday"
 				onCreated={onCreated}
 				{...props}
+				onEdited={onEdited}
 				isOpen={props.isOpen ?? isOpen}
 				onClose={() => {
 					onClose();
@@ -85,7 +87,7 @@ function renderDialog(props: Partial<EntryDialogProps> = {}) {
 			<Harness />
 		</I18nProvider>,
 	);
-	return { ...view, onClose, onCreated, user: userEvent.setup() };
+	return { ...view, onClose, onCreated, onEdited, user: userEvent.setup() };
 }
 
 type User = ReturnType<typeof userEvent.setup>;
@@ -1263,5 +1265,781 @@ describe("closing (BR-F03-49, D-551)", () => {
 
 		await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
 		expect(onClose).not.toHaveBeenCalled();
+	});
+});
+
+// Golden #24 as the API answers it: Swiggy 640.00 on 19 Oct at 10:15 pm, recorded a minute
+// later, so its own window runs from 9 Oct to 19 Oct.
+const ROW_24 = row();
+const ROW_24_PATH = `/api/transactions/${ROW_24.id}`;
+
+/** `PATCH /api/transactions/[id]`, answering `respond`, or the row with the change applied
+ * and its version raised. */
+function edits(
+	respond: Parameters<typeof route>[3] = ({ body }) =>
+		ok({ ...ROW_24, ...(body as object), version: ROW_24.version + 1 }),
+	path = ROW_24_PATH,
+) {
+	return route(network, "patch", path, respond);
+}
+
+const titled = (name: string) => screen.getByRole("dialog", { name, ...hidden });
+const conflictView = () =>
+	screen.getByRole("dialog", {
+		name: "This Transaction changed on another device",
+	});
+
+/** Raises the amount to 700 and saves. */
+async function raiseAmount(user: User) {
+	await user.click(amount());
+	await user.clear(amount());
+	await user.keyboard("700");
+	await user.click(button("Save"));
+}
+
+describe("editing a row (BR-F03-23, flow 7.3)", () => {
+	test("opens as Edit Transaction with the row's values", async () => {
+		renderDialog({ mode: { kind: "edit", row: ROW_24 } });
+
+		expect(
+			await screen.findByRole("heading", { name: "Edit Transaction" }),
+		).toBeInTheDocument();
+		expect(typeRadio("Expense")).toBeChecked();
+		expect(amount()).toHaveValue("640.00");
+		expect(payee()).toHaveValue("Swiggy");
+		expect(radio("Food")).toBeChecked();
+		expect(dateButton()).toHaveAccessibleName("Date Mon, 19 Oct");
+		expect(timePart("hour")).toHaveAttribute("aria-valuetext", "10 pm");
+		expect(timePart("minute")).toHaveAttribute("aria-valuenow", "15");
+		expect(textbox("Description")).toHaveValue("");
+		expect(button("Add a note")).toBeInTheDocument();
+	});
+
+	// AC-F03-62
+	test("shows Save and Cancel, and no Save and add another or Duplicate", async () => {
+		renderDialog({ mode: { kind: "edit", row: ROW_24 } });
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		expect(button("Save")).toBeInTheDocument();
+		expect(button("Cancel")).toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", {
+				name: "Save and add another",
+				...hidden,
+			}),
+		).toBeNull();
+		expect(
+			screen.queryByRole("button", { name: "Duplicate", ...hidden }),
+		).toBeNull();
+	});
+
+	test("a row with a note opens with the note showing", async () => {
+		renderDialog({
+			mode: {
+				kind: "edit",
+				row: row({ note: "Team lunch", description: "Office" }),
+			},
+		});
+
+		expect(await screen.findByRole("textbox", { name: "Note" })).toHaveValue(
+			"Team lunch",
+		);
+		expect(textbox("Description")).toHaveValue("Office");
+		expect(screen.queryByRole("button", { name: "Add a note" })).toBeNull();
+	});
+
+	test("the date has no hint, and its calendar offers the row's own window", async () => {
+		const { user } = renderDialog({ mode: { kind: "edit", row: ROW_24 } });
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		expect(described(dateButton())).toBe("");
+		await user.click(dateButton());
+		const calendar = await screen.findByRole("dialog", {
+			name: "Choose a date",
+		});
+
+		expect(calendar).toHaveTextContent(
+			"You can choose a date from 9 Oct to 19 Oct. Arrow keys move, Enter picks.",
+		);
+		expect(
+			screen.getByRole("button", { name: /, 9 October 2026/, hidden: true }),
+		).not.toHaveAttribute("aria-disabled");
+		expect(
+			screen.getByRole("button", { name: /, 8 October 2026/, hidden: true }),
+		).toHaveAttribute("aria-disabled", "true");
+		expect(
+			screen.getByRole("button", { name: /, 20 October 2026/, hidden: true }),
+		).toHaveAttribute("aria-disabled", "true");
+	});
+
+	// BR-F03-23
+	test("Save sends only the changed amount, with its currency, at the row's version", async () => {
+		const sent = edits();
+		const { user, onEdited, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+			onEdited: vi.fn(),
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await raiseAmount(user);
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(sent).toHaveLength(1);
+		expect(sent[0]!.body).toEqual({ amountMinor: 70000, currency: "INR" });
+		expect(sent[0]!.headers.get("If-Match")).toBe('"1"');
+		expect(isUuidV7(sent[0]!.headers.get("Idempotency-Key") ?? "")).toBe(true);
+		expect(onEdited).toHaveBeenCalledWith(
+			expect.objectContaining({
+				id: ROW_24.id,
+				amountMinor: 70000,
+				version: 2,
+			}),
+		);
+	});
+
+	// D-552, AC-F03-72
+	test("Save with nothing changed closes and sends nothing", async () => {
+		const sent = edits();
+		const onEdited = vi.fn();
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+			onEdited,
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await user.click(button("Save"));
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(sent).toHaveLength(0);
+		expect(onEdited).not.toHaveBeenCalled();
+	});
+
+	test("a new time alone sends the date and time together, the date kept", async () => {
+		const sent = edits();
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await user.click(timePart("hour"));
+		await user.keyboard("9");
+		await user.click(button("Save"));
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(sent[0]!.body).toEqual({
+			occurredAt: "2026-10-19T15:45:00Z",
+			occurredOn: "2026-10-19",
+		});
+	});
+
+	// BR-F03-02
+	test("Income clears the category, and Save sends the type and the new category", async () => {
+		const sent = edits();
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await user.click(typeRadio("Income"));
+		expect(radio("Salary")).not.toBeChecked();
+		await user.click(tile("Salary"));
+		await user.click(button("Save"));
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(sent[0]!.body).toEqual({ type: "income", category: "salary" });
+	});
+
+	test("Refund keeps the category and sends the type alone", async () => {
+		const sent = edits();
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await user.click(typeRadio("Refund"));
+		await user.click(button("Save"));
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(sent[0]!.body).toEqual({ type: "refund" });
+	});
+
+	test("Escape with nothing changed closes at once; after a change it asks first", async () => {
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await user.click(amount());
+		await user.keyboard("1");
+		await user.keyboard("{Escape}");
+
+		expect(
+			await screen.findByRole("alertdialog", { name: "Discard changes?" }),
+		).toBeInTheDocument();
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	test("Escape on an unchanged edit closes without asking", async () => {
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+		});
+		await waitFor(() => expect(amount()).toHaveFocus());
+
+		await user.keyboard("{Escape}");
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+	});
+
+	// D-499
+	test("a refused date names the row's window from the server's details", async () => {
+		edits(() =>
+			refuse(422, "date_out_of_window", {
+				fields: {
+					occurredOn: "Choose a date in this Transaction's entry window.",
+				},
+				details: { firstOn: "2026-10-06", lastOn: "2026-10-16" },
+			}),
+		);
+		const { user } = renderDialog({ mode: { kind: "edit", row: ROW_24 } });
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await user.click(dateButton());
+		await screen.findByRole("dialog", { name: "Choose a date" });
+		await user.click(
+			screen.getByRole("button", { name: /, 18 October 2026/, hidden: true }),
+		);
+		await user.click(button("Save"));
+
+		await waitFor(() =>
+			expect(described(dateButton())).toBe(
+				"Choose a date from 6 Oct to 16 Oct.",
+			),
+		);
+		expect(dateButton()).toHaveAttribute("data-invalid", "true");
+	});
+
+	test("a failed save keeps the dialog open with the line", async () => {
+		edits(() => refuse(500, "internal"));
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await raiseAmount(user);
+
+		expect(
+			await screen.findByText("Your change wasn't saved. Try again."),
+		).toBeInTheDocument();
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	// BR-F03-25
+	test("a 404 tells the page the row is gone and closes", async () => {
+		edits(() => refuse(404, "not_found"));
+		const onGone = vi.fn();
+		const onEdited = vi.fn();
+		const { user, onClose, queryClient } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+			onGone,
+			onEdited,
+		});
+		queryClient.setQueryData(["transactions", "detail", ROW_24.id], ROW_24);
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await raiseAmount(user);
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(onGone).toHaveBeenCalledWith(ROW_24.id);
+		expect(onEdited).not.toHaveBeenCalled();
+	});
+
+	test("offline, Save is disabled with the message", async () => {
+		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+		renderDialog({ mode: { kind: "edit", row: ROW_24 } });
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		expect(
+			screen.getByText("You are offline. Connect to save."),
+		).toBeInTheDocument();
+		expect(button("Save")).toHaveAttribute("aria-disabled", "true");
+	});
+});
+
+describe("the conflict view (BR-F03-24, flow 7.4)", () => {
+	const CURRENT = { ...ROW_24, amountMinor: 66000, note: "Split", version: 2 };
+
+	// AC-F03-19
+	test("a 409 opens both versions; Keep mine resends the change at the saved version", async () => {
+		const sent = edits((request, index) =>
+			index === 0 ?
+				refuse(409, "version_conflict", { details: { current: CURRENT } })
+			:	ok({ ...CURRENT, ...(request.body as object), version: 3 }),
+		);
+		const onEdited = vi.fn();
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+			onEdited,
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await raiseAmount(user);
+		const view = await screen.findByRole("dialog", {
+			name: "This Transaction changed on another device",
+		});
+		const amountRow = within(view)
+			.getByRole("rowheader", { name: /^Amount/ })
+			.closest("tr")!;
+		expect(
+			within(amountRow)
+				.getAllByRole("cell")
+				.map((each) => each.textContent),
+		).toEqual(["₹700.00", "₹660.00"]);
+		expect(view).toHaveTextContent(
+			"Keep mine saves your change to Amount and keeps the rest as it is saved now.",
+		);
+		await user.click(within(view).getByRole("button", { name: "Keep mine" }));
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(sent).toHaveLength(2);
+		expect(sent[1]!.body).toEqual({ amountMinor: 70000, currency: "INR" });
+		expect(sent[1]!.headers.get("If-Match")).toBe('"2"');
+		expect(sent[1]!.headers.get("Idempotency-Key")).not.toBe(
+			sent[0]!.headers.get("Idempotency-Key"),
+		);
+		expect(onEdited).toHaveBeenCalledWith(
+			expect.objectContaining({
+				amountMinor: 70000,
+				note: "Split",
+				version: 3,
+			}),
+		);
+	});
+
+	test("Keep theirs sends nothing, shows the saved row and closes", async () => {
+		const sent = edits(() =>
+			refuse(409, "version_conflict", { details: { current: CURRENT } }),
+		);
+		const onEdited = vi.fn();
+		const { user, onClose, queryClient } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+			onEdited,
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await raiseAmount(user);
+		await user.click(
+			within(
+				await screen.findByRole("dialog", {
+					name: "This Transaction changed on another device",
+				}),
+			).getByRole("button", { name: "Keep theirs" }),
+		);
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(sent).toHaveLength(1);
+		expect(onEdited).not.toHaveBeenCalled();
+		expect(
+			queryClient.getQueryData(["transactions", "detail", ROW_24.id]),
+		).toEqual(CURRENT);
+	});
+
+	test("another 409 on Keep mine shows the newer saved version", async () => {
+		const NEWER = { ...CURRENT, amountMinor: 68000, version: 3 };
+		const sent = edits((_, index) =>
+			refuse(409, "version_conflict", {
+				details: { current: index === 0 ? CURRENT : NEWER },
+			}),
+		);
+		const { user } = renderDialog({ mode: { kind: "edit", row: ROW_24 } });
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await raiseAmount(user);
+		await user.click(
+			within(
+				await screen.findByRole("dialog", {
+					name: "This Transaction changed on another device",
+				}),
+			).getByRole("button", { name: "Keep mine" }),
+		);
+
+		await waitFor(() => expect(conflictView()).toHaveTextContent("₹680.00"));
+		expect(sent[1]!.headers.get("If-Match")).toBe('"2"');
+		await user.click(
+			within(conflictView()).getByRole("button", { name: "Keep mine" }),
+		);
+		await waitFor(() => expect(sent).toHaveLength(3));
+		expect(sent[2]!.headers.get("If-Match")).toBe('"3"');
+	});
+
+	test("a refusal of Keep mine closes the view and shows under its field", async () => {
+		edits((_, index) =>
+			index === 0 ?
+				refuse(409, "version_conflict", { details: { current: CURRENT } })
+			:	refuse(422, "validation_failed", {
+					fields: {
+						amountMinor: "The largest amount is 99,99,99,999.99.",
+					},
+				}),
+		);
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await raiseAmount(user);
+		await user.click(
+			within(
+				await screen.findByRole("dialog", {
+					name: "This Transaction changed on another device",
+				}),
+			).getByRole("button", { name: "Keep mine" }),
+		);
+
+		await waitFor(() =>
+			expect(
+				screen.queryByRole("dialog", {
+					name: "This Transaction changed on another device",
+				}),
+			).toBeNull(),
+		);
+		expect(
+			await screen.findByText("The largest amount is 99,99,99,999.99."),
+		).toBeInTheDocument();
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	test("closing the view goes back to the dialog with what was typed", async () => {
+		const sent = edits(() =>
+			refuse(409, "version_conflict", { details: { current: CURRENT } }),
+		);
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await raiseAmount(user);
+		await screen.findByRole("dialog", {
+			name: "This Transaction changed on another device",
+		});
+		await user.keyboard("{Escape}");
+
+		await waitFor(() =>
+			expect(
+				screen.queryByRole("dialog", {
+					name: "This Transaction changed on another device",
+				}),
+			).toBeNull(),
+		);
+		expect(titled("Edit Transaction")).toBeInTheDocument();
+		expect(amount()).toHaveValue("700.00");
+		expect(onClose).not.toHaveBeenCalled();
+		expect(sent).toHaveLength(1);
+	});
+
+	test("a 409 without the saved row shows the server's message in the dialog", async () => {
+		edits(() =>
+			refuse(409, "version_conflict", { message: "This changed. Try again." }),
+		);
+		const { user } = renderDialog({ mode: { kind: "edit", row: ROW_24 } });
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await raiseAmount(user);
+
+		expect(
+			await screen.findByText("This changed. Try again."),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("dialog", {
+				name: "This Transaction changed on another device",
+			}),
+		).toBeNull();
+	});
+});
+
+describe("editing a charge or a demo row (BR-F03-11, BR-F03-16)", () => {
+	// Golden #16 at M1: the unlinked Netflix charge of 5 Oct.
+	const ROW_16 = row({
+		id: "0192f0c4-7a1e-7c3b-9d2a-000000000016",
+		amountMinor: 64900,
+		occurredOn: "2026-10-05",
+		occurredAt: "2026-10-04T18:30:00.000Z",
+		category: "entertainment",
+		payee: "Netflix",
+		source: "subscription",
+		dueOn: "2026-10-05",
+	});
+
+	test("a charge has no Type, says why, and shows its date with Auto", async () => {
+		renderDialog({ mode: { kind: "edit", row: ROW_16 } });
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		expect(
+			screen.queryByRole("radiogroup", { name: "Type", ...hidden }),
+		).toBeNull();
+		expect(
+			screen.getByText(
+				"From a deleted Subscription. Its type, date and time are fixed.",
+			),
+		).toBeInTheDocument();
+		expect(
+			screen.queryByRole("button", { name: /^Date /, ...hidden }),
+		).toBeNull();
+		expect(screen.queryByRole("group", { name: "Time", ...hidden })).toBeNull();
+		const terms = screen
+			.getAllByRole("term", hidden)
+			.map((term) => [term.textContent, term.nextElementSibling?.textContent]);
+		expect(terms).toEqual([
+			["Date", "Mon, 5 Oct"],
+			["Time", "Auto"],
+		]);
+	});
+
+	test("a charge's amount, category and text can change, and only they are sent", async () => {
+		const sent = edits(
+			({ body }) => ok({ ...ROW_16, ...(body as object), version: 2 }),
+			`/api/transactions/${ROW_16.id}`,
+		);
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_16 },
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await raiseAmount(user);
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(sent[0]!.body).toEqual({ amountMinor: 70000, currency: "INR" });
+	});
+
+	test("a fixed date of today reads as its day, not Today", async () => {
+		renderDialog({
+			mode: {
+				kind: "edit",
+				row: row({
+					demo: true,
+					occurredOn: "2026-11-02",
+					occurredAt: "2026-11-02T04:00:00.000Z",
+					createdAt: "2026-11-02T04:00:00.000Z",
+				}),
+			},
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		expect(
+			screen.getAllByRole("term", hidden)[0]!.nextElementSibling,
+		).toHaveTextContent("Mon, 2 Nov");
+	});
+
+	test("a linked charge says what editing it does", async () => {
+		renderDialog({
+			mode: {
+				kind: "edit",
+				row: {
+					...ROW_16,
+					subscriptionId: "0192f0c4-7a1e-7c3b-9d2a-000000000001",
+				},
+			},
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		expect(
+			screen.getByText(
+				"Auto from Netflix. Its type, date and time are fixed; editing it stops the Subscription from changing this charge.",
+			),
+		).toBeInTheDocument();
+	});
+
+	test("a demo row keeps its Type and shows its date and time as text", async () => {
+		renderDialog({ mode: { kind: "edit", row: row({ demo: true }) } });
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		expect(group("Type")).toBeInTheDocument();
+		const terms = screen
+			.getAllByRole("term", hidden)
+			.map((term) => [term.textContent, term.nextElementSibling?.textContent]);
+		expect(terms).toEqual([
+			["Date", "Mon, 19 Oct"],
+			["Time", "10:15 pm"],
+		]);
+	});
+});
+
+// AC-F03-32
+describe("an edit after a time zone change (BR-F03-11, D-238)", () => {
+	// Golden #26 in America/Los_Angeles, where the golden clock reads 1 Nov, 11:30 pm.
+	const ROW_26 = row({
+		id: "0192f0c4-7a1e-7c3b-9d2a-000000000026",
+		amountMinor: 42000,
+		occurredOn: "2026-11-01",
+		occurredAt: "2026-10-31T19:00:00.000Z",
+		createdAt: "2026-10-31T19:00:00.000Z",
+		updatedAt: "2026-10-31T19:00:00.000Z",
+	});
+	const LA: EntryLocale = { ...IN, timezone: "America/Los_Angeles" };
+
+	test("row 26 shows 1 November and 12:00 pm; a new time alone keeps 2026-11-01", async () => {
+		const sent = edits(
+			({ body }) => ok({ ...ROW_26, ...(body as object), version: 2 }),
+			`/api/transactions/${ROW_26.id}`,
+		);
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_26 },
+			locale: LA,
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		expect(dateButton()).toHaveAccessibleName("Date Today, 1 Nov");
+		expect(timePart("hour")).toHaveAttribute("aria-valuetext", "12 pm");
+		expect(timePart("minute")).toHaveAttribute("aria-valuenow", "0");
+		await user.click(timePart("hour"));
+		await user.keyboard("11");
+		await user.click(timePart("am/pm"));
+		await user.keyboard("a");
+		await user.click(button("Save"));
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(sent[0]!.body).toEqual({
+			occurredAt: "2026-11-01T19:00:00Z",
+			occurredOn: "2026-11-01",
+		});
+	});
+});
+
+describe("the edit calendar after a time zone change (D-555)", () => {
+	test("enables the stored date a day before the row's window, and nothing earlier", async () => {
+		// Recorded in Los Angeles on 19 Oct at 10 pm and dated 9 Oct, the first day of its window
+		// there; read in Kolkata, the recording date is 20 Oct, so the window starts on 10 Oct.
+		const moved = row({
+			occurredOn: "2026-10-09",
+			occurredAt: "2026-10-09T19:00:00.000Z",
+			createdAt: "2026-10-20T05:00:00.000Z",
+		});
+		const { user } = renderDialog({ mode: { kind: "edit", row: moved } });
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await user.click(dateButton());
+		await screen.findByRole("dialog", { name: "Choose a date" });
+
+		expect(
+			await screen.findByRole("button", {
+				name: /, 9 October 2026/,
+				hidden: true,
+			}),
+		).not.toHaveAttribute("aria-disabled");
+		expect(
+			screen.getByRole("button", { name: /, 8 October 2026/, hidden: true }),
+		).toHaveAttribute("aria-disabled", "true");
+		expect(
+			screen.getByRole("button", { name: /, 20 October 2026/, hidden: true }),
+		).not.toHaveAttribute("aria-disabled");
+		expect(
+			screen.getByRole("button", { name: /, 21 October 2026/, hidden: true }),
+		).toHaveAttribute("aria-disabled", "true");
+	});
+});
+
+describe("the edit calendar after a move west (D-555)", () => {
+	test("enables the stored date a day after the row's window", async () => {
+		// Golden #26 in Los Angeles: stored on 1 Nov, its window there 21 Oct to 31 Oct.
+		const shifted = row({
+			occurredOn: "2026-11-01",
+			occurredAt: "2026-10-31T19:00:00.000Z",
+			createdAt: "2026-10-31T19:00:00.000Z",
+		});
+		const { user } = renderDialog({
+			mode: { kind: "edit", row: shifted },
+			locale: { ...IN, timezone: "America/Los_Angeles" },
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await user.click(dateButton());
+		await screen.findByRole("dialog", { name: "Choose a date" });
+
+		expect(
+			await screen.findByRole("button", {
+				name: /, 1 November 2026/,
+				hidden: true,
+			}),
+		).not.toHaveAttribute("aria-disabled");
+	});
+});
+
+describe("duplicating a row (BR-F03-28)", () => {
+	test("opens as Duplicate Transaction with the row's values, dated now", async () => {
+		renderDialog({
+			mode: {
+				kind: "duplicate",
+				row: row({ description: "Dinner", note: "Team" }),
+			},
+		});
+
+		expect(
+			await screen.findByRole("heading", { name: "Duplicate Transaction" }),
+		).toBeInTheDocument();
+		expect(amount()).toHaveValue("640.00");
+		expect(payee()).toHaveValue("Swiggy");
+		expect(radio("Food")).toBeChecked();
+		expect(dateButton()).toHaveAccessibleName("Date Today, 2 Nov");
+		expect(timePart("hour")).toHaveAttribute("aria-valuetext", "12 pm");
+		expect(textbox("Description")).toHaveValue("Dinner");
+		expect(textbox("Note")).toHaveValue("Team");
+		expect(button("Save and add another")).toBeInTheDocument();
+		expect(described(dateButton())).toBe("Today or one of the 10 days before.");
+	});
+
+	test("Save creates a new manual row with a new id, even from a charge", async () => {
+		const sent = creates();
+		const charge = row({
+			source: "subscription",
+			demo: true,
+			dueOn: "2026-10-19",
+		});
+		const { user, onCreated, onClose } = renderDialog({
+			mode: { kind: "duplicate", row: charge },
+		});
+		await screen.findByRole("heading", { name: "Duplicate Transaction" });
+
+		await user.click(button("Save"));
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		const body = sent[0]!.body as Record<string, unknown>;
+		expect(body).toMatchObject({
+			type: "expense",
+			amountMinor: 64000,
+			payee: "Swiggy",
+			category: "food",
+			occurredOn: "2026-11-02",
+			occurredAt: "2026-11-02T06:30:00Z",
+		});
+		expect(body["id"]).not.toBe(charge.id);
+		expect(isUuidV7(body["id"] as string)).toBe(true);
+		expect(body).not.toHaveProperty("source");
+		expect(body).not.toHaveProperty("demo");
+		expect(onCreated).toHaveBeenCalledWith(expect.anything(), "save");
+	});
+
+	test("Escape with the copy untouched closes without asking", async () => {
+		const { user, onClose } = renderDialog({
+			mode: { kind: "duplicate", row: ROW_24 },
+		});
+		await waitFor(() => expect(amount()).toHaveFocus());
+
+		await user.keyboard("{Escape}");
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+	});
+
+	test("Save and add another goes on as a New Transaction", async () => {
+		creates();
+		const { user } = renderDialog({ mode: { kind: "duplicate", row: ROW_24 } });
+		await screen.findByRole("heading", { name: "Duplicate Transaction" });
+
+		await user.click(button("Save and add another"));
+
+		expect(
+			await screen.findByRole("heading", { name: "New Transaction" }),
+		).toBeInTheDocument();
+		expect(amount()).toHaveValue("");
+		expect(payee()).toHaveValue("");
 	});
 });

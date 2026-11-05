@@ -34,6 +34,7 @@ import {
 	urlHarness,
 } from "../../hooks/__tests__/helpers";
 import {
+	CHECK_A_SUMMARY,
 	GOLDEN_CATEGORIES,
 	GOLDEN_PAYEES,
 	idOf,
@@ -2223,5 +2224,726 @@ describe("adding (BR-F03-21, BR-F03-22, BR-F03-53, D-548)", () => {
 			await screen.findByRole("button", { name: "Clear filters" }),
 		).toBeInTheDocument();
 		expect(screen.queryByRole("button", { name: "Add Transaction" })).toBeNull();
+	});
+});
+
+describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(new Date("2026-11-02T06:30:00.000Z"));
+		route(network, "get", "/api/payees/history", () =>
+			ok({
+				count: 4,
+				inMinor: 0,
+				outMinor: 329000,
+				usualDay: 3,
+				currency: "INR",
+			}),
+		);
+	});
+	afterEach(() => {
+		act(() => {
+			toast.dismiss();
+		});
+		// @ts-expect-error jsdom has none; the docked tests set one.
+		delete window.matchMedia;
+	});
+
+	/** A window at least 1180 px wide, where the panel docks. jsdom has no `matchMedia`, which
+	 * the page reads as narrower. */
+	function docked() {
+		window.matchMedia = vi.fn((query: string) => ({
+			matches: query === "(min-width: 1180px)",
+			media: query,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+		})) as unknown as typeof window.matchMedia;
+	}
+
+	/** Golden row `n` as the API answers it at M1, where charges are unlinked (D-475). */
+	const m1 = (n: number): Transaction => ({ ...golden(n), subscriptionId: null });
+
+	// Newest first on golden data (F03 section 5): #26, #27, #25, #24.
+	const NEWEST = page({
+		items: [26, 27, 25, 24].map(m1),
+		groups: [
+			day("2026-11-01", 1842000, 0, 2),
+			day("2026-10-31", 38000),
+			day("2026-10-19", 64000),
+		],
+	});
+
+	function renderPanel(
+		search: string,
+		{
+			list = () => ok(NEWEST),
+			one,
+		}: {
+			list?: Parameters<typeof route>[3];
+			one?: { id: string; respond: Parameters<typeof route>[3] };
+		} = {},
+	) {
+		const lists = route(network, "get", "/api/transactions", list);
+		route(network, "get", "/api/transactions/summary", () =>
+			ok(CHECK_A_SUMMARY),
+		);
+		const alone =
+			one ?
+				route(network, "get", `/api/transactions/${one.id}`, one.respond)
+			:	[];
+		const { calls, Url } = urlHarness(search);
+		const view = renderInApp(
+			<I18nProvider locale="en-IN">
+				<Url>
+					<EntryDialogHost profile={GOLDEN_BLOCK}>
+						<TransactionsPage
+							locale={IN}
+							weekStart="monday"
+						/>
+					</EntryDialogHost>
+				</Url>
+				<Toaster />
+			</I18nProvider>,
+		);
+		return { ...view, calls, lists, alone, user: userEvent.setup() };
+	}
+
+	const rowNamed = (name: RegExp) =>
+		within(screen.getByRole("grid", { name: "Transactions", hidden: true }))
+			.getAllByRole("row", { hidden: true })
+			.find((each) => name.test(each.getAttribute("aria-label") ?? ""))!;
+	const panel = () =>
+		screen.getByRole("complementary", { name: "Transaction details" });
+	const replaced = (calls: { mode: string; href: string }[]) =>
+		calls.filter((call) => call.mode === "replace").map((call) => call.href);
+
+	describe("docked, from 1180 px", () => {
+		// AC-F03-56
+		test("with nothing selected, the panel shows check A's summary with 4 top payees", async () => {
+			docked();
+			renderPanel("?from=2026-10-01&to=2026-10-31");
+			await grid();
+
+			expect(panel()).toHaveTextContent("This list");
+			expect(panel()).toHaveTextContent("11 Transactions");
+			expect(panel()).toHaveTextContent("1 Oct to 31 Oct");
+			expect(
+				within(
+					within(panel()).getByRole("region", {
+						name: "Top payees by Out",
+					}),
+				).getAllByRole("listitem"),
+			).toHaveLength(4);
+			expect(screen.queryByRole("dialog")).toBeNull();
+		});
+
+		test("a click selects the row, writes txn by replacing, and the panel shows it", async () => {
+			docked();
+			const { calls, user } = renderPanel("");
+			await grid();
+
+			await user.click(rowNamed(/^Swiggy, Food, 10:15 pm/));
+
+			expect(rowNamed(/^Swiggy, Food, 10:15 pm/)).toHaveAttribute(
+				"aria-selected",
+				"true",
+			);
+			expect(replaced(calls)).toEqual([`/transactions?txn=${m1(24).id}`]);
+			expect(calls.filter((call) => call.mode === "push")).toEqual([]);
+			expect(panel()).toHaveTextContent("Mon, 19 Oct, 2026 · 10:15 pm");
+			expect(
+				await within(panel()).findByText(
+					"4 Transactions · ₹3,290.00 · usually around the 3rd",
+				),
+			).toBeInTheDocument();
+		});
+
+		// AC-F03-72
+		test("a press on the selected row keeps it selected", async () => {
+			docked();
+			const { calls, user } = renderPanel("");
+			await grid();
+
+			await user.click(rowNamed(/^Swiggy, Food, 10:15 pm/));
+			await user.click(rowNamed(/^Swiggy, Food, 10:15 pm/));
+
+			expect(rowNamed(/^Swiggy, Food, 10:15 pm/)).toHaveAttribute(
+				"aria-selected",
+				"true",
+			);
+			expect(replaced(calls)).not.toContain("/transactions");
+			expect(panel()).toHaveTextContent("Mon, 19 Oct, 2026 · 10:15 pm");
+		});
+
+		// AC-F03-58
+		test("with #26 selected, Down selects #27 and replaces txn, adding no history entry", async () => {
+			docked();
+			const { calls, user } = renderPanel(`?txn=${m1(26).id}`);
+			await grid();
+			expect(rowNamed(/^Swiggy, Food, 12:30 am/)).toHaveAttribute(
+				"aria-selected",
+				"true",
+			);
+
+			await user.click(rowNamed(/^Swiggy, Food, 12:30 am/));
+			await user.keyboard("{ArrowDown}");
+
+			expect(rowNamed(/^Sunrise Apartments/)).toHaveAttribute(
+				"aria-selected",
+				"true",
+			);
+			expect(replaced(calls).at(-1)).toBe(`/transactions?txn=${m1(27).id}`);
+			expect(calls.filter((call) => call.mode === "push")).toEqual([]);
+			expect(panel()).toHaveTextContent("From a deleted Subscription");
+		});
+
+		// AC-F03-58
+		test("Enter and E open Edit Transaction for the selected row, and D duplicates it", async () => {
+			docked();
+			const { user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+			await user.click(rowNamed(/^Swiggy, Food, 10:15 pm/));
+			await user.keyboard("{Enter}");
+			const edit = await screen.findByRole("dialog", {
+				name: "Edit Transaction",
+			});
+			expect(
+				within(edit).getByRole("textbox", { name: "Amount" }),
+			).toHaveValue("640.00");
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+			await user.keyboard("e");
+			expect(
+				await screen.findByRole("dialog", { name: "Edit Transaction" }),
+			).toBeInTheDocument();
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+			await user.keyboard("d");
+			expect(
+				await screen.findByRole("dialog", { name: "Duplicate Transaction" }),
+			).toBeInTheDocument();
+		});
+
+		test("the panel's Edit and Duplicate open the dialog too", async () => {
+			docked();
+			const { user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(
+				within(panel()).getByRole("button", { name: "Duplicate" }),
+			);
+			expect(
+				await screen.findByRole("dialog", { name: "Duplicate Transaction" }),
+			).toBeInTheDocument();
+		});
+
+		// AC-F03-58
+		test("Escape clears the selection and removes txn, and the summary comes back", async () => {
+			docked();
+			const { calls, user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+			await user.click(rowNamed(/^Swiggy, Food, 10:15 pm/));
+
+			await user.keyboard("{Escape}");
+
+			await waitFor(() =>
+				expect(replaced(calls).at(-1)).toBe("/transactions"),
+			);
+			expect(panel()).toHaveTextContent("11 Transactions");
+		});
+
+		test("Escape from the panel's buttons clears it too", async () => {
+			docked();
+			const { calls, user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			within(panel()).getByRole("button", { name: "Edit" }).focus();
+			await user.keyboard("{Escape}");
+
+			expect(replaced(calls).at(-1)).toBe("/transactions");
+		});
+
+		test("Close details clears the selection", async () => {
+			docked();
+			const { calls, user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(
+				within(panel()).getByRole("button", { name: "Close details" }),
+			);
+
+			expect(replaced(calls).at(-1)).toBe("/transactions");
+		});
+
+		test("E and D do nothing while typing in the search box", async () => {
+			docked();
+			const { user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(screen.getByRole("searchbox"));
+			await user.keyboard("ed");
+
+			expect(screen.queryByRole("dialog")).toBeNull();
+		});
+
+		test("the keys do nothing with nothing selected", async () => {
+			docked();
+			const { calls, user } = renderPanel("");
+			await grid();
+
+			await user.keyboard("ed{Escape}");
+
+			expect(screen.queryByRole("dialog")).toBeNull();
+			expect(calls).toEqual([]);
+		});
+
+		test("the page's keys wait while the dialog is open", async () => {
+			docked();
+			const { user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(within(panel()).getByRole("button", { name: "Edit" }));
+			const edit = await screen.findByRole("dialog", {
+				name: "Edit Transaction",
+			});
+			within(edit).getByRole("button", { name: "Cancel" }).focus();
+			await user.keyboard("d");
+
+			expect(
+				screen.queryByRole("dialog", { name: "Duplicate Transaction" }),
+			).toBeNull();
+			expect(
+				screen.getByRole("dialog", { name: "Edit Transaction" }),
+			).toBeInTheDocument();
+		});
+
+		test("a saved edit says Changes saved. and the row stays selected with its new amount", async () => {
+			docked();
+			const edited = route(
+				network,
+				"patch",
+				`/api/transactions/${m1(24).id}`,
+				({ body }) =>
+					ok({
+						...m1(24),
+						...(body as object),
+						version: 2,
+						currency: "INR",
+					}),
+			);
+			const { calls, user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(within(panel()).getByRole("button", { name: "Edit" }));
+			await screen.findByRole("dialog", { name: "Edit Transaction" });
+			const amount = screen.getByRole("textbox", { name: "Amount" });
+			await user.clear(amount);
+			await user.keyboard("700");
+			await user.click(screen.getByRole("button", { name: "Save" }));
+
+			expect(await screen.findByText("Changes saved.")).toBeInTheDocument();
+			expect(edited).toHaveLength(1);
+			await waitFor(() => expect(panel()).toHaveTextContent("−₹700.00"));
+			expect(replaced(calls)).not.toContain("/transactions");
+		});
+
+		// AC-F03-71
+		test("a conflict shows both versions; Escape goes back, and Keep mine saves at the saved version", async () => {
+			docked();
+			const current = {
+				...m1(24),
+				amountMinor: 66000,
+				note: "Split",
+				version: 2,
+				currency: "INR",
+			};
+			const edited = route(
+				network,
+				"patch",
+				`/api/transactions/${m1(24).id}`,
+				({ body }, index) =>
+					index < 2 ?
+						refuse(409, "version_conflict", { details: { current } })
+					:	ok({ ...current, ...(body as object), version: 3 }),
+			);
+			const { user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+			const conflictOf = async () => {
+				await user.click(
+					within(panel()).getByRole("button", { name: "Edit" }),
+				);
+				await screen.findByRole("dialog", { name: "Edit Transaction" });
+				await user.clear(screen.getByRole("textbox", { name: "Amount" }));
+				await user.keyboard("700");
+				await user.click(screen.getByRole("button", { name: "Save" }));
+				return screen.findByRole("dialog", {
+					name: "This Transaction changed on another device",
+				});
+			};
+
+			const view = await conflictOf();
+			const amountRow = within(view)
+				.getByRole("rowheader", { name: /^Amount/ })
+				.closest("tr")!;
+			expect(amountRow).toHaveTextContent("AmountDiffers₹700.00₹660.00");
+			expect(view).toHaveTextContent(
+				"Keep mine saves your change to Amount and keeps the rest as it is saved now.",
+			);
+			await user.keyboard("{Escape}");
+			await waitFor(() =>
+				expect(
+					screen.queryByRole("dialog", {
+						name: "This Transaction changed on another device",
+					}),
+				).toBeNull(),
+			);
+			expect(screen.getByRole("textbox", { name: "Amount" })).toHaveValue(
+				"700.00",
+			);
+			await user.click(screen.getByRole("button", { name: "Save" }));
+			await user.click(
+				within(
+					await screen.findByRole("dialog", {
+						name: "This Transaction changed on another device",
+					}),
+				).getByRole("button", { name: "Keep mine" }),
+			);
+
+			expect(await screen.findByText("Changes saved.")).toBeInTheDocument();
+			expect(edited[2]!.body).toEqual({ amountMinor: 70000, currency: "INR" });
+			expect(edited[2]!.headers.get("If-Match")).toBe('"2"');
+			expect(edited[2]!.headers.get("Idempotency-Key")).not.toBe(
+				edited[1]!.headers.get("Idempotency-Key"),
+			);
+			await waitFor(() => expect(panel()).toHaveTextContent("−₹700.00"));
+		});
+
+		// AC-F03-71
+		test("a conflict's Keep theirs sends nothing more and the panel shows the saved row", async () => {
+			docked();
+			const current = {
+				...m1(24),
+				amountMinor: 66000,
+				note: "Split",
+				version: 2,
+				currency: "INR",
+			};
+			const edited = route(
+				network,
+				"patch",
+				`/api/transactions/${m1(24).id}`,
+				() => refuse(409, "version_conflict", { details: { current } }),
+			);
+			const { user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(within(panel()).getByRole("button", { name: "Edit" }));
+			await screen.findByRole("dialog", { name: "Edit Transaction" });
+			await user.clear(screen.getByRole("textbox", { name: "Amount" }));
+			await user.keyboard("700");
+			await user.click(screen.getByRole("button", { name: "Save" }));
+			await user.click(
+				within(
+					await screen.findByRole("dialog", {
+						name: "This Transaction changed on another device",
+					}),
+				).getByRole("button", { name: "Keep theirs" }),
+			);
+
+			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+			expect(edited).toHaveLength(1);
+			await waitFor(() => expect(panel()).toHaveTextContent("−₹660.00"));
+			expect(panel()).toHaveTextContent("Split");
+			expect(screen.queryByText("Changes saved.")).toBeNull();
+		});
+
+		// BR-F03-25
+		test("an edit of a row deleted elsewhere says so and clears the selection", async () => {
+			docked();
+			route(network, "patch", `/api/transactions/${m1(24).id}`, () =>
+				refuse(404, "not_found"),
+			);
+			const { calls, user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(within(panel()).getByRole("button", { name: "Edit" }));
+			await screen.findByRole("dialog", { name: "Edit Transaction" });
+			await user.clear(screen.getByRole("textbox", { name: "Amount" }));
+			await user.keyboard("700");
+			await user.click(screen.getByRole("button", { name: "Save" }));
+
+			expect(
+				await screen.findByText(
+					"This Transaction was deleted on another device.",
+				),
+			).toBeInTheDocument();
+			await waitFor(() =>
+				expect(replaced(calls).at(-1)).toBe("/transactions"),
+			);
+			expect(
+				screen.getAllByText(
+					"This Transaction was deleted on another device.",
+				),
+			).toHaveLength(1);
+		});
+
+		// AC-F03-58
+		test("txn of a row outside the loaded pages shows it after asking for it alone", async () => {
+			docked();
+			const { alone } = renderPanel(`?txn=${m1(13).id}`, {
+				one: {
+					id: m1(13).id,
+					respond: () => ok({ ...m1(13), currency: "INR" }),
+				},
+			});
+
+			expect(
+				await within(panel()).findByText("Thu, 1 Oct, 2026 · 10:05 am", {
+					exact: false,
+				}),
+			).toBeInTheDocument();
+			expect(alone.map((each) => each.path)).toEqual([
+				`/api/transactions/${m1(13).id}`,
+			]);
+		});
+
+		test("a row in the loaded pages is never asked for alone", async () => {
+			docked();
+			const { alone } = renderPanel(`?txn=${m1(24).id}`, {
+				one: {
+					id: m1(24).id,
+					respond: () => ok({ ...m1(24), currency: "INR" }),
+				},
+			});
+			await grid();
+
+			expect(panel()).toHaveTextContent("Mon, 19 Oct, 2026");
+			expect(alone).toEqual([]);
+		});
+
+		test("while the row loads alone the panel shows skeleton lines", async () => {
+			docked();
+			let release = () => {};
+			const { alone } = renderPanel(`?txn=${m1(13).id}`, {
+				one: {
+					id: m1(13).id,
+					respond: () =>
+						new Promise((resolve) => {
+							release = () =>
+								resolve(ok({ ...m1(13), currency: "INR" }));
+						}),
+				},
+			});
+
+			await waitFor(() => expect(alone).toHaveLength(1));
+			expect(
+				await within(panel()).findByRole("status", {
+					name: "Loading the Transaction",
+				}),
+			).toBeInTheDocument();
+			release();
+			expect(
+				await within(panel()).findByText("Acme Corp"),
+			).toBeInTheDocument();
+		});
+
+		test("a row that fails to load alone offers Retry, which asks again", async () => {
+			docked();
+			const { alone, user } = renderPanel(`?txn=${m1(13).id}`, {
+				one: {
+					id: m1(13).id,
+					respond: (_, index) =>
+						index === 0 ?
+							refuse(500, "internal")
+						:	ok({ ...m1(13), currency: "INR" }),
+				},
+			});
+
+			await user.click(
+				await within(panel()).findByRole("button", { name: "Retry" }),
+			);
+
+			expect(
+				await within(panel()).findByText("Acme Corp"),
+			).toBeInTheDocument();
+			expect(alone).toHaveLength(2);
+		});
+
+		test("when the list fails, the selected row is still asked for alone and shown", async () => {
+			docked();
+			renderPanel(`?txn=${m1(13).id}`, {
+				list: () => refuse(500, "internal"),
+				one: {
+					id: m1(13).id,
+					respond: () => ok({ ...m1(13), currency: "INR" }),
+				},
+			});
+
+			expect(
+				await within(panel()).findByText("Acme Corp"),
+			).toBeInTheDocument();
+		});
+
+		// AC-F03-58
+		test("an unknown txn says We couldn't find that Transaction. and loses txn", async () => {
+			docked();
+			const unknown = idOf(999);
+			const { calls } = renderPanel(`?txn=${unknown}`, {
+				one: { id: unknown, respond: () => refuse(404, "not_found") },
+			});
+
+			expect(
+				await screen.findByText("We couldn't find that Transaction."),
+			).toBeInTheDocument();
+			await waitFor(() =>
+				expect(replaced(calls).at(-1)).toBe("/transactions"),
+			);
+			expect(panel()).toHaveTextContent("11 Transactions");
+		});
+
+		// BR-F03-73, AC-F03-72
+		test("a shown row that leaves the pages on a refetch and is gone says it was deleted", async () => {
+			docked();
+			const { calls, queryClient } = renderPanel(`?txn=${m1(24).id}`, {
+				list: (_, index) =>
+					ok(index === 0 ? NEWEST : page({ items: [26, 27, 25].map(m1) })),
+				one: { id: m1(24).id, respond: () => refuse(404, "not_found") },
+			});
+			await grid();
+			expect(panel()).toHaveTextContent("Mon, 19 Oct, 2026");
+
+			await act(() =>
+				queryClient.invalidateQueries({ queryKey: ["transactions"] }),
+			);
+
+			expect(
+				await screen.findByText(
+					"This Transaction was deleted on another device.",
+				),
+			).toBeInTheDocument();
+			await waitFor(() =>
+				expect(replaced(calls).at(-1)).toBe("/transactions"),
+			);
+		});
+
+		test("a Goal row shows no actions, and E and D do nothing, until M2", async () => {
+			docked();
+			const goalRow = { ...golden(22) };
+			const { user } = renderPanel(`?txn=${goalRow.id}`, {
+				list: () =>
+					ok(page({ items: [goalRow], groups: [day("2026-10-15", 0)] })),
+			});
+			await grid();
+
+			expect(
+				within(panel()).queryByRole("button", { name: "Edit" }),
+			).toBeNull();
+			await user.keyboard("ed{Enter}");
+			expect(screen.queryByRole("dialog")).toBeNull();
+		});
+	});
+
+	describe("as a drawer, below 1180 px", () => {
+		// AC-F03-56
+		test("no panel shows until a row is selected, which opens the drawer", async () => {
+			const { user } = renderPanel("");
+			await grid();
+
+			expect(screen.queryByRole("complementary")).toBeNull();
+			expect(screen.queryByText("This list")).toBeNull();
+			await user.click(rowNamed(/^Swiggy, Food, 10:15 pm/));
+
+			const drawer = await screen.findByRole("dialog", {
+				name: "Transaction details",
+			});
+			expect(drawer).toHaveTextContent("Mon, 19 Oct, 2026 · 10:15 pm");
+		});
+
+		// AC-F03-56
+		test("Close details, Escape and the scrim each close it and remove txn", async () => {
+			const { calls, user } = renderPanel(`?txn=${m1(24).id}`);
+			// The drawer, once its row has arrived.
+			const drawer = async () => {
+				const open = await screen.findByRole("dialog", {
+					name: "Transaction details",
+				});
+				await within(open).findByRole("button", { name: "Close details" });
+				return open;
+			};
+			const goneDrawer = () =>
+				waitFor(() =>
+					expect(
+						screen.queryByRole("dialog", {
+							name: "Transaction details",
+						}),
+					).toBeNull(),
+				);
+
+			await user.click(
+				within(await drawer()).getByRole("button", {
+					name: "Close details",
+				}),
+			);
+			await goneDrawer();
+			expect(replaced(calls).at(-1)).toBe("/transactions");
+
+			await user.click(rowNamed(/^Swiggy, Food, 10:15 pm/));
+			await drawer();
+			await user.keyboard("{Escape}");
+			await goneDrawer();
+			expect(replaced(calls).at(-1)).toBe("/transactions");
+
+			await user.click(rowNamed(/^Swiggy, Food, 10:15 pm/));
+			const open = await drawer();
+			await user.pointer({
+				keys: "[MouseLeft]",
+				target: open.closest(".bg-scrim")!,
+			});
+			await goneDrawer();
+			expect(replaced(calls).at(-1)).toBe("/transactions");
+		});
+
+		// D-554, AC-F03-72
+		test("the arrow keys only move between rows, and Enter opens the drawer", async () => {
+			const { calls, user } = renderPanel("");
+			await grid();
+
+			await user.click(rowNamed(/^Swiggy, Food, 12:30 am/));
+			await user.click(
+				within(
+					await screen.findByRole("dialog", {
+						name: "Transaction details",
+					}),
+				).getByRole("button", { name: "Close details" }),
+			);
+			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+			rowNamed(/^Swiggy, Food, 12:30 am/).focus();
+			await user.keyboard("{ArrowDown}");
+
+			expect(document.activeElement).toBe(rowNamed(/^Sunrise Apartments/));
+			expect(screen.queryByRole("dialog")).toBeNull();
+			const before = calls.length;
+			await user.keyboard("{Enter}");
+
+			expect(
+				await screen.findByRole("dialog", { name: "Transaction details" }),
+			).toHaveTextContent("Sunrise Apartments");
+			expect(calls.slice(before)).toEqual([
+				{ mode: "replace", href: `/transactions?txn=${m1(27).id}` },
+			]);
+		});
+
+		test("E in the drawer opens the edit dialog", async () => {
+			const { user } = renderPanel(`?txn=${m1(24).id}`);
+			await screen.findByRole("dialog", { name: "Transaction details" });
+
+			await user.keyboard("e");
+
+			expect(
+				await screen.findByRole("dialog", { name: "Edit Transaction" }),
+			).toBeInTheDocument();
+		});
 	});
 });

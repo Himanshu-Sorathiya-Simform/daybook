@@ -39,6 +39,23 @@ export function formatDayHeader(
 	}).format(asInstant(date));
 }
 
+/**
+ * F02's list day header options with the year always (BR-F03-72), as the panel's Date reads:
+ * "Mon, 19 Oct, 2026" for `en-IN`, whose own pattern puts a comma before the year.
+ */
+export function formatFullDay(
+	date: string,
+	{ dateLocale }: { dateLocale: string },
+): string {
+	return new Intl.DateTimeFormat(dateLocale, {
+		weekday: "short",
+		day: "numeric",
+		month: "short",
+		year: "numeric",
+		timeZone: "UTC",
+	}).format(asInstant(date));
+}
+
 /** F02's time (BR-F02-19): `{ hour: 'numeric', minute: '2-digit' }` in `dateLocale`'s hour
  * cycle, read in the profile zone (TIME-4), as "11:40 am" for `en-IN`. `instant` is an ISO
  * 8601 instant or a `Date`. */

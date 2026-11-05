@@ -10,6 +10,10 @@
 	--radius-section: 14px; /* framed sections */
 	--radius-card: 16px; /* Premium card, dialogs, sheets */
 
+	/* From this width the Transactions panel docks beside the list; below it, a drawer
+	   (BR-F03-70, D-520). It gives the dock: and max-dock: variants. */
+	--breakpoint-dock: 1180px;
+
 	/* Motion curve: only in response to an action */
 	--ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
