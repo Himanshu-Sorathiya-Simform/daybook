@@ -1,6 +1,14 @@
 import { onlineManager } from "@tanstack/react-query";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { I18nProvider } from "react-aria-components";
 import { toast } from "sonner";
@@ -49,6 +57,7 @@ import {
 } from "../../lib/queries";
 import { PAGE_BREAKDOWNS, type SummaryAnswer } from "../../lib/types";
 import { EntryDialogHost } from "../EntryDialogHost";
+import { TransactionDeletesHost } from "../TransactionDeletesHost";
 import { TransactionsPage } from "../TransactionsPage";
 
 const network = setupServer();
@@ -174,12 +183,14 @@ function renderPage(
 	const { calls, Url } = urlHarness(search);
 	const view = renderInApp(
 		<Url>
-			<EntryDialogHost profile={GOLDEN_BLOCK}>
-				<TransactionsPage
-					locale={IN}
-					weekStart="monday"
-				/>
-			</EntryDialogHost>
+			<TransactionDeletesHost profile={GOLDEN_BLOCK}>
+				<EntryDialogHost profile={GOLDEN_BLOCK}>
+					<TransactionsPage
+						locale={IN}
+						weekStart="monday"
+					/>
+				</EntryDialogHost>
+			</TransactionDeletesHost>
 		</Url>,
 	);
 	return { ...view, lists, summaries, calls, user: userEvent.setup() };
@@ -268,12 +279,14 @@ describe("the page (F03 section 6)", () => {
 				queryClient={queryClient}
 			>
 				<Url>
-					<EntryDialogHost profile={GOLDEN_BLOCK}>
-						<TransactionsPage
-							locale={IN}
-							weekStart="monday"
-						/>
-					</EntryDialogHost>
+					<TransactionDeletesHost profile={GOLDEN_BLOCK}>
+						<EntryDialogHost profile={GOLDEN_BLOCK}>
+							<TransactionsPage
+								locale={IN}
+								weekStart="monday"
+							/>
+						</EntryDialogHost>
+					</TransactionDeletesHost>
 				</Url>
 			</AppProviders>,
 		);
@@ -1432,18 +1445,20 @@ describe("another profile's formats", () => {
 		const { Url } = urlHarness("");
 		renderInApp(
 			<Url>
-				<EntryDialogHost profile={GOLDEN_BLOCK}>
-					<TransactionsPage
-						weekStart="monday"
-						locale={{
-							today: "2026-11-02",
-							dateLocale: "de-DE",
-							timezone: "Europe/Berlin",
-							numberLocale: "de-DE",
-							currency: "EUR",
-						}}
-					/>
-				</EntryDialogHost>
+				<TransactionDeletesHost profile={GOLDEN_BLOCK}>
+					<EntryDialogHost profile={GOLDEN_BLOCK}>
+						<TransactionsPage
+							weekStart="monday"
+							locale={{
+								today: "2026-11-02",
+								dateLocale: "de-DE",
+								timezone: "Europe/Berlin",
+								numberLocale: "de-DE",
+								currency: "EUR",
+							}}
+						/>
+					</EntryDialogHost>
+				</TransactionDeletesHost>
 			</Url>,
 		);
 		await grid();
@@ -2019,12 +2034,14 @@ describe("adding (BR-F03-21, BR-F03-22, BR-F03-53, D-548)", () => {
 		const view = renderInApp(
 			<I18nProvider locale="en-IN">
 				<Url>
-					<EntryDialogHost profile={GOLDEN_BLOCK}>
-						<TransactionsPage
-							locale={IN}
-							weekStart="monday"
-						/>
-					</EntryDialogHost>
+					<TransactionDeletesHost profile={GOLDEN_BLOCK}>
+						<EntryDialogHost profile={GOLDEN_BLOCK}>
+							<TransactionsPage
+								locale={IN}
+								weekStart="monday"
+							/>
+						</EntryDialogHost>
+					</TransactionDeletesHost>
 				</Url>
 				<Toaster />
 			</I18nProvider>,
@@ -2284,7 +2301,7 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 		} = {},
 	) {
 		const lists = route(network, "get", "/api/transactions", list);
-		route(network, "get", "/api/transactions/summary", () =>
+		const summaries = route(network, "get", "/api/transactions/summary", () =>
 			ok(CHECK_A_SUMMARY),
 		);
 		const alone =
@@ -2295,17 +2312,26 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 		const view = renderInApp(
 			<I18nProvider locale="en-IN">
 				<Url>
-					<EntryDialogHost profile={GOLDEN_BLOCK}>
-						<TransactionsPage
-							locale={IN}
-							weekStart="monday"
-						/>
-					</EntryDialogHost>
+					<TransactionDeletesHost profile={GOLDEN_BLOCK}>
+						<EntryDialogHost profile={GOLDEN_BLOCK}>
+							<TransactionsPage
+								locale={IN}
+								weekStart="monday"
+							/>
+						</EntryDialogHost>
+					</TransactionDeletesHost>
 				</Url>
 				<Toaster />
 			</I18nProvider>,
 		);
-		return { ...view, calls, lists, alone, user: userEvent.setup() };
+		return {
+			...view,
+			calls,
+			lists,
+			summaries,
+			alone,
+			user: userEvent.setup(),
+		};
 	}
 
 	const rowNamed = (name: RegExp) =>
@@ -2842,6 +2868,439 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 			).toBeNull();
 			await user.keyboard("ed{Enter}");
 			expect(screen.queryByRole("dialog")).toBeNull();
+		});
+	});
+
+	describe("deleting (BR-F03-26, BR-F03-52, BR-F03-73)", () => {
+		// The Undo window runs on fake timers that keep moving, so React Aria and user-event run.
+		beforeEach(() => {
+			vi.useFakeTimers({ shouldAdvanceTime: true });
+			vi.setSystemTime(new Date("2026-11-02T06:30:00.000Z"));
+		});
+		afterEach(() => {
+			// Unmount while the timers are still fake, so a waiting delete never leaks.
+			cleanup();
+		});
+
+		const endWindow = () =>
+			act(() => {
+				vi.advanceTimersByTime(5000);
+			});
+		const swiggy24 = () => rowNamed(/^Swiggy, Food, 10:15 pm/);
+		const has24 = () =>
+			within(screen.getByRole("grid", { name: "Transactions", hidden: true }))
+				.queryAllByRole("row", { hidden: true })
+				.some((each) =>
+					/^Swiggy, Food, 10:15 pm/.test(
+						each.getAttribute("aria-label") ?? "",
+					),
+				);
+		const keys = () =>
+			userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+		const confirmView = () =>
+			screen.findByRole("alertdialog", { name: "Delete this Transaction?" });
+		/** Presses Delete in the confirm (D-84). */
+		const confirm = async (user: ReturnType<typeof userEvent.setup>) => {
+			await user.click(
+				within(await confirmView()).getByRole("button", { name: "Delete" }),
+			);
+			await waitFor(() =>
+				expect(screen.queryByRole("alertdialog")).toBeNull(),
+			);
+		};
+
+		// AC-F03-73
+		test("the panel's Delete takes the row out at once, clears the selection, and sends after 5 seconds", async () => {
+			docked();
+			const sent = route(
+				network,
+				"delete",
+				`/api/transactions/${m1(24).id}`,
+				() => new HttpResponse(null, { status: 204 }),
+			);
+			const { calls, user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(
+				within(panel()).getByRole("button", { name: "Delete" }),
+			);
+			await confirm(user);
+
+			expect(has24()).toBe(false);
+			expect(
+				await screen.findByText("Transaction deleted."),
+			).toBeInTheDocument();
+			await waitFor(() =>
+				expect(replaced(calls).at(-1)).toBe("/transactions"),
+			);
+			expect(panel()).toHaveTextContent("11 Transactions");
+			expect(sent).toEqual([]);
+			endWindow();
+
+			await waitFor(() => expect(sent).toHaveLength(1));
+			expect(sent[0]!.headers.get("If-Match")).toBe('"1"');
+			expect(has24()).toBe(false);
+		});
+
+		// BR-F03-73, AC-F03-73
+		test("Undo brings the row back selected, and nothing is sent", async () => {
+			docked();
+			const sent = route(
+				network,
+				"delete",
+				`/api/transactions/${m1(24).id}`,
+				() => new HttpResponse(null, { status: 204 }),
+			);
+			const { calls, user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(
+				within(panel()).getByRole("button", { name: "Delete" }),
+			);
+			await confirm(user);
+			await user.click(await screen.findByRole("button", { name: "Undo" }));
+			endWindow();
+
+			expect(has24()).toBe(true);
+			await waitFor(() =>
+				expect(replaced(calls).at(-1)).toBe(
+					`/transactions?txn=${m1(24).id}`,
+				),
+			);
+			expect(swiggy24()).toHaveAttribute("aria-selected", "true");
+			expect(sent).toEqual([]);
+		});
+
+		// AC-F03-73, AC-F03-24
+		test("Delete and Backspace ask first, and once confirmed by keyboard focus moves to the next row", async () => {
+			docked();
+			route(
+				network,
+				"delete",
+				`/api/transactions/${m1(24).id}`,
+				() => new HttpResponse(null, { status: 204 }),
+			);
+			route(
+				network,
+				"delete",
+				`/api/transactions/${m1(25).id}`,
+				() => new HttpResponse(null, { status: 204 }),
+			);
+			const { calls } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+			const user = keys();
+
+			await user.click(swiggy24());
+			await user.keyboard("{Delete}");
+			expect(await confirmView()).toHaveTextContent("Swiggy");
+			expect(has24()).toBe(true);
+			// From Cancel, which has focus, to Delete.
+			await user.keyboard("{Tab}{Enter}");
+
+			expect(has24()).toBe(false);
+			// #24 is the last row, so focus moves to the one before it, selecting nothing: the
+			// delete cleared the selection (BR-F03-73).
+			await waitFor(() =>
+				expect(document.activeElement).toBe(
+					rowNamed(/^Swiggy, Food, 11:50 pm/),
+				),
+			);
+			expect(replaced(calls).at(-1)).toBe("/transactions");
+
+			// Space selects the focused row, and Backspace deletes it.
+			await user.keyboard(" ");
+			await waitFor(() =>
+				expect(replaced(calls).at(-1)).toBe(
+					`/transactions?txn=${m1(25).id}`,
+				),
+			);
+			await user.keyboard("{Backspace}");
+			expect(await confirmView()).toHaveTextContent("11:50 pm");
+			await user.keyboard("{Tab}{Enter}");
+
+			await waitFor(() =>
+				expect(document.activeElement).toBe(rowNamed(/^Sunrise Apartments/)),
+			);
+			expect(
+				within(screen.getByRole("grid", { name: "Transactions" }))
+					.queryAllByRole("row")
+					.some((each) =>
+						/11:50 pm/.test(each.getAttribute("aria-label") ?? ""),
+					),
+			).toBe(false);
+			expect(screen.getAllByText("Transaction deleted.")).toHaveLength(2);
+		});
+
+		test("deleting a row in the middle moves focus to the row after it", async () => {
+			docked();
+			route(
+				network,
+				"delete",
+				`/api/transactions/${m1(27).id}`,
+				() => new HttpResponse(null, { status: 204 }),
+			);
+			renderPanel(`?txn=${m1(27).id}`);
+			await grid();
+			const user = keys();
+
+			await user.click(rowNamed(/^Sunrise Apartments/));
+			await user.keyboard("{Delete}");
+			await confirmView();
+			await user.keyboard("{Tab}{Enter}");
+
+			await waitFor(() =>
+				expect(document.activeElement).toBe(
+					rowNamed(/^Swiggy, Food, 11:50 pm/),
+				),
+			);
+		});
+
+		test("a delete by mouse leaves focus where the browser puts it, off the list", async () => {
+			docked();
+			route(
+				network,
+				"delete",
+				`/api/transactions/${m1(24).id}`,
+				() => new HttpResponse(null, { status: 204 }),
+			);
+			const { user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(
+				within(panel()).getByRole("button", { name: "Delete" }),
+			);
+			await confirm(user);
+			// Long enough for the focus move after a keyboard delete to have run.
+			await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+
+			expect(document.activeElement?.getAttribute("role")).not.toBe("row");
+		});
+
+		test("Cancel in the confirm keeps the row selected and sends nothing", async () => {
+			docked();
+			const sent = route(
+				network,
+				"delete",
+				`/api/transactions/${m1(24).id}`,
+				() => new HttpResponse(null, { status: 204 }),
+			);
+			const { calls, user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(
+				within(panel()).getByRole("button", { name: "Delete" }),
+			);
+			await user.click(
+				within(await confirmView()).getByRole("button", { name: "Cancel" }),
+			);
+			endWindow();
+
+			expect(has24()).toBe(true);
+			expect(replaced(calls)).not.toContain("/transactions");
+			expect(sent).toEqual([]);
+		});
+
+		test("the panel's Delete pressed by keyboard moves focus to the next row", async () => {
+			docked();
+			route(
+				network,
+				"delete",
+				`/api/transactions/${m1(24).id}`,
+				() => new HttpResponse(null, { status: 204 }),
+			);
+			renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+			const user = keys();
+
+			within(panel()).getByRole("button", { name: "Delete" }).focus();
+			await user.keyboard("{Enter}");
+			await confirmView();
+			await user.keyboard("{Tab}{Enter}");
+
+			await waitFor(() =>
+				expect(document.activeElement).toBe(
+					rowNamed(/^Swiggy, Food, 11:50 pm/),
+				),
+			);
+		});
+
+		test("the page's keys wait while the confirm is open", async () => {
+			docked();
+			renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+			const user = keys();
+
+			await user.click(swiggy24());
+			await user.keyboard("{Delete}");
+			const view = await confirmView();
+			await user.keyboard("e");
+
+			expect(
+				screen.queryByRole("dialog", { name: "Edit Transaction" }),
+			).toBeNull();
+			expect(view).toBeInTheDocument();
+		});
+
+		test("in the drawer, below 1180 px, Delete asks, then closes the drawer and removes txn", async () => {
+			route(
+				network,
+				"delete",
+				`/api/transactions/${m1(24).id}`,
+				() => new HttpResponse(null, { status: 204 }),
+			);
+			const { calls, user } = renderPanel(`?txn=${m1(24).id}`);
+			const drawer = await screen.findByRole("dialog", {
+				name: "Transaction details",
+			});
+
+			await user.click(
+				await within(drawer).findByRole("button", { name: "Delete" }),
+			);
+			await confirm(user);
+
+			await waitFor(() =>
+				expect(
+					screen.queryByRole("dialog", { name: "Transaction details" }),
+				).toBeNull(),
+			);
+			expect(replaced(calls).at(-1)).toBe("/transactions");
+			expect(has24()).toBe(false);
+		});
+
+		// AC-F03-73
+		test("Delete and Backspace do nothing while typing in the search box", async () => {
+			docked();
+			renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+			const user = keys();
+
+			await user.click(screen.getByRole("searchbox"));
+			await user.keyboard("ab{Backspace}{Delete}");
+
+			expect(has24()).toBe(true);
+			expect(screen.queryByText("Transaction deleted.")).toBeNull();
+		});
+
+		// AC-F03-73
+		test("the edit dialog's Delete asks over it, and once confirmed closes it and deletes with Undo", async () => {
+			docked();
+			route(
+				network,
+				"delete",
+				`/api/transactions/${m1(24).id}`,
+				() => new HttpResponse(null, { status: 204 }),
+			);
+			const { user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(within(panel()).getByRole("button", { name: "Edit" }));
+			const edit = await screen.findByRole("dialog", {
+				name: "Edit Transaction",
+			});
+			await user.click(within(edit).getByRole("button", { name: "Delete" }));
+			// Cancel goes back to the dialog; Delete then closes it.
+			await user.click(
+				within(await confirmView()).getByRole("button", { name: "Cancel" }),
+			);
+			expect(
+				screen.getByRole("dialog", { name: "Edit Transaction" }),
+			).toBeInTheDocument();
+			expect(has24()).toBe(true);
+			await user.click(
+				within(
+					screen.getByRole("dialog", { name: "Edit Transaction" }),
+				).getByRole("button", { name: "Delete" }),
+			);
+			await confirm(user);
+
+			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+			expect(has24()).toBe(false);
+			expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+		});
+
+		// AC-F03-30
+		test("a 409 after the window opens the conflict view, and Keep it brings the row back selected", async () => {
+			docked();
+			const current = {
+				...m1(24),
+				amountMinor: 70000,
+				version: 2,
+				currency: "INR",
+			};
+			const sent = route(
+				network,
+				"delete",
+				`/api/transactions/${m1(24).id}`,
+				() => refuse(409, "version_conflict", { details: { current } }),
+			);
+			const { calls, user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(
+				within(panel()).getByRole("button", { name: "Delete" }),
+			);
+			await confirm(user);
+			endWindow();
+			const view = await screen.findByRole("dialog", {
+				name: "This Transaction changed on another device",
+			});
+			await user.click(within(view).getByRole("button", { name: "Keep it" }));
+
+			await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+			expect(has24()).toBe(true);
+			await waitFor(() =>
+				expect(replaced(calls).at(-1)).toBe(
+					`/transactions?txn=${m1(24).id}`,
+				),
+			);
+			await waitFor(() => expect(panel()).toHaveTextContent("−₹700.00"));
+			expect(sent).toHaveLength(1);
+		});
+
+		// AC-F03-73
+		test("a delete the server can't take brings the row back with the message", async () => {
+			docked();
+			route(network, "delete", `/api/transactions/${m1(24).id}`, () =>
+				HttpResponse.error(),
+			);
+			const { user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+
+			await user.click(
+				within(panel()).getByRole("button", { name: "Delete" }),
+			);
+			await confirm(user);
+			endWindow();
+
+			expect(
+				await screen.findByText(
+					"Couldn't delete. Check your connection and try again.",
+				),
+			).toBeInTheDocument();
+			expect(has24()).toBe(true);
+		});
+
+		// AC-F03-73
+		test("a confirmed delete refreshes the header totals", async () => {
+			docked();
+			route(
+				network,
+				"delete",
+				`/api/transactions/${m1(24).id}`,
+				() => new HttpResponse(null, { status: 204 }),
+			);
+			const { summaries, user } = renderPanel(`?txn=${m1(24).id}`);
+			await grid();
+			const before = summaries.length;
+
+			await user.click(
+				within(panel()).getByRole("button", { name: "Delete" }),
+			);
+			await confirm(user);
+			expect(summaries).toHaveLength(before);
+			endWindow();
+
+			await waitFor(() => expect(summaries.length).toBeGreaterThan(before));
 		});
 	});
 

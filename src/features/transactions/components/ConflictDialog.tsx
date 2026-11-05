@@ -12,8 +12,11 @@ export type ConflictDialogProps = {
 	onOpenChange: (isOpen: boolean) => void;
 	/** Every field of both versions, from `conflictRows`. */
 	rows: readonly ConflictRow[];
-	/** What Keep mine saves, from `keepMineLine`. */
-	keepMineLine: string;
+	/** What Keep mine saves, from `keepMineLine`; a delete's view has none. */
+	keepMineLine?: string;
+	/** The view for a delete (BR-P1-26): the row as it was deleted beside the saved one, with
+	 * "Delete anyway" and "Keep it". */
+	isDelete?: boolean;
 	onKeepMine: () => void;
 	onKeepTheirs: () => void;
 	/** While Keep mine's resend runs: both choices wait, and so does closing. */
@@ -25,13 +28,15 @@ export type ConflictDialogProps = {
  * The conflict view (BR-F03-24, BR-P1-26, BR-F03-78): after a 409, the user's version beside
  * the one saved now, field by field, each difference marked with "Differs" as well as a tint, so
  * colour is never the only sign. Keep mine resends the user's change against the saved version;
- * Keep theirs drops it.
+ * Keep theirs drops it. For a delete, the row as it was deleted sits beside the saved one, and
+ * the choices read "Delete anyway" and "Keep it" (BR-F03-26).
  */
 export function ConflictDialog({
 	isOpen,
 	onOpenChange,
 	rows,
 	keepMineLine,
+	isDelete = false,
 	onKeepMine,
 	onKeepTheirs,
 	isPending = false,
@@ -54,19 +59,23 @@ export function ConflictDialog({
 						isDisabled={isPending}
 						onPress={onKeepTheirs}
 					>
-						{CONFLICT_TEXT.keepTheirs}
+						{isDelete ? CONFLICT_TEXT.keepIt : CONFLICT_TEXT.keepTheirs}
 					</Button>
 					<Button
 						isPending={isPending}
 						onPress={onKeepMine}
 					>
-						{CONFLICT_TEXT.keepMine}
+						{isDelete ?
+							CONFLICT_TEXT.deleteAnyway
+						:	CONFLICT_TEXT.keepMine}
 					</Button>
 				</>
 			}
 			{...(className ? { className } : {})}
 		>
-			<p className="text-body text-ink-2">{CONFLICT_TEXT.intro}</p>
+			<p className="text-body text-ink-2">
+				{isDelete ? CONFLICT_TEXT.deleteIntro : CONFLICT_TEXT.intro}
+			</p>
 			<table className="text-body w-full table-fixed border-collapse">
 				<thead>
 					<tr className="text-label text-ink-2 text-left">
@@ -80,7 +89,9 @@ export function ConflictDialog({
 							scope="col"
 							className="pb-1.5 font-normal"
 						>
-							{CONFLICT_TEXT.mine}
+							{isDelete ?
+								CONFLICT_TEXT.deletedMine
+							:	CONFLICT_TEXT.mine}
 						</th>
 						<th
 							scope="col"
@@ -123,7 +134,9 @@ export function ConflictDialog({
 					))}
 				</tbody>
 			</table>
-			<p className="text-caption text-ink-2">{keepMineLine}</p>
+			{keepMineLine && (
+				<p className="text-caption text-ink-2">{keepMineLine}</p>
+			)}
 		</Dialog>
 	);
 }

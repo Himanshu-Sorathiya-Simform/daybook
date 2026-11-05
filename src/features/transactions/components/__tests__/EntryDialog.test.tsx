@@ -1333,6 +1333,73 @@ describe("editing a row (BR-F03-23, flow 7.3)", () => {
 		).toBeNull();
 	});
 
+	// AC-F03-62
+	test("Delete hands the row over and closes, changes and all, once the delete is confirmed", async () => {
+		const onDelete = vi.fn();
+		const sent = edits();
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+			onDelete,
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await user.click(amount());
+		await user.keyboard("9");
+		await user.click(button("Delete"));
+
+		// The host's confirm asks first; the dialog stays until it is confirmed (D-84).
+		expect(onDelete).toHaveBeenCalledWith(ROW_24, expect.any(Function));
+		expect(onClose).not.toHaveBeenCalled();
+		act(() => {
+			(onDelete.mock.calls[0]![1] as () => void)();
+		});
+		expect(onClose).toHaveBeenCalledOnce();
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+		expect(sent).toEqual([]);
+	});
+
+	test("Delete waits while a save runs", async () => {
+		let release = () => {};
+		edits(
+			() =>
+				new Promise((resolve) => {
+					release = () =>
+						resolve(ok({ ...ROW_24, amountMinor: 70000, version: 2 }));
+				}),
+		);
+		const onDelete = vi.fn();
+		const { user } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+			onDelete,
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await raiseAmount(user);
+		await waitFor(() =>
+			expect(button("Delete")).toHaveAttribute("aria-disabled", "true"),
+		);
+		await user.click(button("Delete"));
+
+		expect(onDelete).not.toHaveBeenCalled();
+		release();
+	});
+
+	test("a new Transaction and a duplicate have no Delete", async () => {
+		const onDelete = vi.fn();
+		const first = renderDialog({ onDelete });
+		await screen.findByRole("heading", { name: "New Transaction" });
+		expect(
+			screen.queryByRole("button", { name: "Delete", ...hidden }),
+		).toBeNull();
+		first.unmount();
+
+		renderDialog({ mode: { kind: "duplicate", row: ROW_24 }, onDelete });
+		await screen.findByRole("heading", { name: "Duplicate Transaction" });
+		expect(
+			screen.queryByRole("button", { name: "Delete", ...hidden }),
+		).toBeNull();
+	});
+
 	test("a row with a note opens with the note showing", async () => {
 		renderDialog({
 			mode: {

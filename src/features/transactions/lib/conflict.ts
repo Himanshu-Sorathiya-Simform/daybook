@@ -17,6 +17,11 @@ export const CONFLICT_TEXT = {
 	differs: "Differs",
 	keepMine: "Keep mine",
 	keepTheirs: "Keep theirs",
+	deleteIntro:
+		"It changed after you deleted it. Delete it anyway, or keep it as it is saved now.",
+	deletedMine: "When you deleted it",
+	deleteAnyway: "Delete anyway",
+	keepIt: "Keep it",
 } as const;
 
 /** The conflict view's field descriptors (BR-P1-26, BR-F03-78): each field's label, in the

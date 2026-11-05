@@ -24,6 +24,9 @@ export function useDeleteTransaction() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationKey: [QUERY_ROOTS.transactions, "delete"],
+		// Before M5 nothing queues: offline, the request fails at once, and the row comes back
+		// with its message (BR-F03-26), instead of waiting paused for the connection.
+		networkMode: "always",
 		mutationFn: async ({
 			id,
 			version,

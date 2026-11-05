@@ -14,6 +14,7 @@ import {
 	EntryDialogOpenContext,
 	type GoneAnswer,
 } from "../hooks/useEntryDialog";
+import { useTransactionDeletes } from "../hooks/useTransactionDeletes";
 import { ENTRY_TEXT, type EntryMode } from "../lib/entry";
 import { TRANSACTIONS_TEXT } from "../lib/messages";
 import { EntryDialog } from "./EntryDialog";
@@ -45,6 +46,7 @@ export function EntryDialogHost({
 	children,
 }: Readonly<EntryDialogHostProps>) {
 	const { data: me } = useMe();
+	const deletes = useTransactionDeletes();
 	const shown = me?.profile ?? profile;
 	// Each opening mounts a new dialog, so nothing typed before survives a close.
 	const [opening, setOpening] = useState(0);
@@ -112,6 +114,9 @@ export function EntryDialogHost({
 							showToast(TRANSACTIONS_TEXT.deletedElsewhere);
 							gone.current(id);
 						}}
+						onDelete={(row, onConfirmed) =>
+							deletes.remove(row, { onConfirmed })
+						}
 						locale={shown}
 						firstDayOfWeek={shown.weekStart}
 					/>

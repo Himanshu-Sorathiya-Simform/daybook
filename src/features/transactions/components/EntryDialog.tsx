@@ -26,6 +26,7 @@ import { categoriesFor } from "@/lib/transactions/model";
 import type { TransactionEditInput } from "@/lib/transactions/schemas";
 import { useCreateTransaction } from "../hooks/useCreateTransaction";
 import { useEditTransaction } from "../hooks/useEditTransaction";
+import { useDeleteDialogOpen } from "../hooks/useTransactionDeletes";
 import type { SaveKind } from "../hooks/useEntryDialog";
 import { usePayees } from "../hooks/usePayees";
 import { conflictRows, keepMineLine } from "../lib/conflict";
@@ -77,6 +78,9 @@ export type EntryDialogProps = {
 	/** An edit met a 404: the row was deleted elsewhere (BR-F03-25); the dialog closes itself
 	 * after. */
 	onGone?: (id: string) => void;
+	/** Delete on an edit: the confirm asks over the dialog, which closes through `onConfirmed`
+	 * once the delete is confirmed (BR-F03-26, D-84). */
+	onDelete?: (row: TransactionAnswer, onConfirmed: () => void) => void;
 	locale: EntryLocale;
 	firstDayOfWeek: WeekStart;
 };
@@ -99,7 +103,8 @@ const SAVE_KEY = "Mod+Enter";
  *   and closes with no request when nothing did (BR-F03-23, D-552). A changed date must lie in
  *   the row's own window (BR-F03-11). A charge's type, date and time, and a demo row's date and
  *   time, show as text (BR-F03-16, BR-F03-75). A 409 opens the conflict view (BR-F03-24) and a
- *   404 closes it (BR-F03-25).
+ *   404 closes it (BR-F03-25). Delete asks "Delete this Transaction?" over it; once confirmed
+ *   the dialog closes, unsaved changes and all, and the row is deleted with Undo (BR-F03-26).
  *
  * Save checks every field, then on each change (as F01's forms do), and sends one request with
  * a new key per press. A refusal keeps the dialog open: field messages go under their fields
@@ -114,10 +119,13 @@ export function EntryDialog({
 	onCreated,
 	onEdited,
 	onGone,
+	onDelete,
 	locale,
 	firstDayOfWeek,
 }: Readonly<EntryDialogProps>) {
 	const online = useOnline();
+	// The delete confirm, open over the dialog, takes the keys while it is.
+	const deleting = useDeleteDialogOpen();
 	const queryClient = useQueryClient();
 	const create = useCreateTransaction();
 	const edit = useEditTransaction();
@@ -320,7 +328,7 @@ export function EntryDialog({
 	};
 
 	useShortcut(SAVE_KEY, () => save("save"), {
-		enabled: isOpen && !confirming && conflict === null,
+		enabled: isOpen && !confirming && conflict === null && !deleting,
 	});
 
 	/** A payee chosen from the list (BR-F03-45, D-89): it fills the payee, and its last category
@@ -368,6 +376,15 @@ export function EntryDialog({
 				isKeyboardDismissDisabled={busy}
 				footer={
 					<>
+						{editing && onDelete && (
+							<Button
+								variant="danger"
+								isDisabled={busy}
+								onPress={() => onDelete(editing, onClose)}
+							>
+								Delete
+							</Button>
+						)}
 						<span className="text-caption text-ink-3 max-md:hidden">
 							{shortcutLabel(SAVE_KEY)} to save
 						</span>

@@ -168,6 +168,48 @@ describe("sectionsOf (BR-F03-56)", () => {
 		expect(sections[0]?.total?.label).toBe("SWIGGY");
 	});
 
+	// BR-F03-26
+	test("leaves out deleted rows, keeping their group's figures until the server's change", () => {
+		const a = row({ id: idOf(1), occurredOn: "2026-11-01" });
+		const b = row({ id: idOf(2), occurredOn: "2026-11-01" });
+		const c = row({ id: idOf(3), occurredOn: "2026-10-31" });
+		const sections = sectionsOf(
+			[
+				page({
+					items: [a, b, c],
+					groups: [total("2026-11-01", 2), total("2026-10-31", 1)],
+				}),
+			],
+			"day",
+			new Set([idOf(1)]),
+		);
+		expect(sections).toEqual([
+			{ key: "2026-11-01", total: total("2026-11-01", 2), rows: [b] },
+			{ key: "2026-10-31", total: total("2026-10-31", 1), rows: [c] },
+		]);
+	});
+
+	test("a group whose rows are all deleted goes, and its neighbours join if they share a key", () => {
+		const a = row({ id: idOf(1), category: "food" });
+		const b = row({ id: idOf(2), category: "shopping" });
+		const c = row({ id: idOf(3), category: "food" });
+		const sections = sectionsOf(
+			[page({ items: [a, b, c] })],
+			"category",
+			new Set([idOf(2)]),
+		);
+		expect(sections.map((each) => [each.key, each.rows])).toEqual([
+			["food", [a, c]],
+		]);
+	});
+
+	test("with every row deleted there are no sections", () => {
+		const a = row({ id: idOf(1) });
+		expect(
+			sectionsOf([page({ items: [a] })], "day", new Set([idOf(1)])),
+		).toEqual([]);
+	});
+
 	test("never changes the pages it is given", () => {
 		const pages = [page({ items: [row()], groups: [total("2026-10-19", 1)] })];
 		const copy = structuredClone(pages);

@@ -31,13 +31,16 @@ export type PanelDetailProps = {
 	onClose: () => void;
 	onEdit: () => void;
 	onDuplicate: () => void;
+	/** Deletes it with Undo (BR-F03-26); `byKeyboard` when Delete was pressed with a key, so focus
+	 * can move on to the next row. */
+	onDelete: (byKeyboard: boolean) => void;
 	className?: string;
 };
 
 /**
  * The panel with a row selected (BR-F03-72): "Transaction" and Close; the avatar, title and
  * description; the signed amount; Type, Category, Date, Source and Note; the payee's last 3
- * months; then Edit and Duplicate with their keys. The history box is left out for a Goal row,
+ * months; then Edit, Duplicate and Delete with their keys. The history box is left out for a Goal row,
  * with no rows, offline, or when its request fails. A Goal row has no actions until M2 brings
  * its fields (D-241).
  */
@@ -48,6 +51,7 @@ export function PanelDetail({
 	onClose,
 	onEdit,
 	onDuplicate,
+	onDelete,
 	className,
 }: Readonly<PanelDetailProps>) {
 	const goal = isGoalType(row.type);
@@ -150,6 +154,14 @@ export function PanelDetail({
 							onPress={onDuplicate}
 						>
 							Duplicate
+						</Button>
+						<Button
+							variant="danger"
+							onPress={(event) =>
+								onDelete(event.pointerType === "keyboard")
+							}
+						>
+							Delete
 						</Button>
 					</div>
 					<p className="text-caption text-ink-3">{DETAIL_HINT}</p>

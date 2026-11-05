@@ -27,11 +27,14 @@ export function groupKeyOf(row: Transaction, group: Group): string {
  * The loaded pages as sections in display order (BR-F03-56). Rows already arrive grouped, so a
  * new section starts wherever the key changes. A group's totals come from the last loaded page
  * that carries it, so a header never depends on how many of its rows are loaded. Under no
- * grouping, one section holds every row.
+ * grouping, one section holds every row. Rows in `hidden`, deleted in this tab, are left out,
+ * and a group left with none goes too; the figures change once the server's answer does
+ * (BR-F03-26).
  */
 export function sectionsOf(
 	pages: readonly TransactionPageAnswer[],
 	group: Group,
+	hidden: ReadonlySet<string> = new Set(),
 ): ListSection[] {
 	const totals = new Map<string, GroupTotal>();
 	for (const page of pages)
@@ -40,6 +43,7 @@ export function sectionsOf(
 	const sections: ListSection[] = [];
 	for (const page of pages) {
 		for (const row of page.items) {
+			if (hidden.has(row.id)) continue;
 			const key = groupKeyOf(row, group);
 			const last = sections.at(-1);
 			if (last && last.key === key) last.rows.push(row);

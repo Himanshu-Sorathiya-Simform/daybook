@@ -30,7 +30,12 @@ function renderPanel(props: Partial<TransactionPanelProps> = {}) {
 	route(network, "get", "/api/payees/history", () =>
 		ok({ count: 4, inMinor: 0, outMinor: 329000, usualDay: 3, currency: "INR" }),
 	);
-	const handlers = { onClose: vi.fn(), onEdit: vi.fn(), onDuplicate: vi.fn() };
+	const handlers = {
+		onClose: vi.fn(),
+		onEdit: vi.fn(),
+		onDuplicate: vi.fn(),
+		onDelete: vi.fn(),
+	};
 	const view = renderInApp(
 		<TransactionPanel
 			isDocked

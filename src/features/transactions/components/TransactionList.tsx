@@ -36,6 +36,8 @@ export type TransactionListProps = {
 	onClearFilters: () => void;
 	/** Opens the entry dialog, from the empty state of an account with no Transactions. */
 	onAdd: () => void;
+	/** Rows deleted in this tab, which the list leaves out (BR-F03-26). */
+	hiddenIds?: ReadonlySet<string>;
 	/** The selected row's id (`txn`), or null (BR-F03-73). */
 	selectedId: string | null;
 	/** A row was selected by pointer, tap or the arrow keys, or the selection was cleared with
@@ -73,6 +75,7 @@ export function TransactionList({
 	locale,
 	onClearFilters,
 	onAdd,
+	hiddenIds,
 	selectedId,
 	onSelect,
 	onOpen,
@@ -205,7 +208,7 @@ export function TransactionList({
 		);
 	}
 
-	const sections = sectionsOf(data.pages, list.group);
+	const sections = sectionsOf(data.pages, list.group, hiddenIds);
 	if (sections.length === 0) {
 		return (
 			<Section className={frame}>

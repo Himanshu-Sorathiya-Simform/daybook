@@ -73,6 +73,7 @@ function renderDetail(
 	const onClose = vi.fn();
 	const onEdit = vi.fn();
 	const onDuplicate = vi.fn();
+	const onDelete = vi.fn();
 	const view = renderInApp(
 		<PanelDetail
 			row={shown}
@@ -81,9 +82,18 @@ function renderDetail(
 			onClose={onClose}
 			onEdit={onEdit}
 			onDuplicate={onDuplicate}
+			onDelete={onDelete}
 		/>,
 	);
-	return { ...view, asked, onClose, onEdit, onDuplicate, user: userEvent.setup() };
+	return {
+		...view,
+		asked,
+		onClose,
+		onEdit,
+		onDuplicate,
+		onDelete,
+		user: userEvent.setup(),
+	};
 }
 
 /** The detail rows, term to value. */
@@ -264,23 +274,36 @@ describe("PanelDetail (BR-F03-72)", () => {
 		expect(asked).toEqual([]);
 	});
 
-	test("Close, Edit and Duplicate each call the page", async () => {
-		const { user, onClose, onEdit, onDuplicate } = renderDetail();
+	test("Close, Edit, Duplicate and Delete each call the page", async () => {
+		const { user, onClose, onEdit, onDuplicate, onDelete } = renderDetail();
 
 		await user.click(screen.getByRole("button", { name: "Close details" }));
 		await user.click(screen.getByRole("button", { name: "Edit" }));
 		await user.click(screen.getByRole("button", { name: "Duplicate" }));
+		await user.click(screen.getByRole("button", { name: "Delete" }));
 
+		expect(onDelete).toHaveBeenCalledWith(false);
 		expect(onClose).toHaveBeenCalledOnce();
 		expect(onEdit).toHaveBeenCalledOnce();
 		expect(onDuplicate).toHaveBeenCalledOnce();
+	});
+
+	test("Delete pressed with a key says so, so focus can move on to the next row", async () => {
+		const { user, onDelete } = renderDetail();
+
+		screen.getByRole("button", { name: "Delete" }).focus();
+		await user.keyboard("{Enter}");
+
+		expect(onDelete).toHaveBeenCalledWith(true);
 	});
 
 	test("ends with the keys' hint", () => {
 		renderDetail();
 
 		expect(
-			screen.getByText("E to edit · D to duplicate · Esc to close"),
+			screen.getByText(
+				"E to edit · D to duplicate · Delete to delete · Esc to close",
+			),
 		).toBeInTheDocument();
 	});
 
@@ -295,6 +318,7 @@ describe("PanelDetail (BR-F03-72)", () => {
 		expect(screen.getByText("−₹640.00")).toBeInTheDocument();
 		expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
 		expect(screen.queryByRole("button", { name: "Duplicate" })).toBeNull();
+		expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		expect(asked).toEqual([]);
 	});

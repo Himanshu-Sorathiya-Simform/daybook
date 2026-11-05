@@ -6,6 +6,10 @@ describe("TRANSACTIONS_TEXT (F03 section 8)", () => {
 	test.each([
 		["saveFailed", "Your change wasn't saved. Try again."],
 		["deletedElsewhere", "This Transaction was deleted on another device."],
+		["deleteTitle", "Delete this Transaction?"],
+		["deleteBody", "It leaves your list now. You can undo for 5 seconds."],
+		["deleted", "Transaction deleted."],
+		["undo", "Undo"],
 		["deleteFailed", "Couldn't delete. Check your connection and try again."],
 		["notFound", "We couldn't find that Transaction."],
 		["viewChanged", "This view changed on another device. Try again."],

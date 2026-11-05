@@ -24,6 +24,7 @@ export type TransactionPanelProps = {
 	onClose: () => void;
 	onEdit: (row: TransactionAnswer) => void;
 	onDuplicate: (row: TransactionAnswer) => void;
+	onDelete: (row: TransactionAnswer, byKeyboard: boolean) => void;
 	className?: string;
 };
 
@@ -64,6 +65,7 @@ export function TransactionPanel({
 	onClose,
 	onEdit,
 	onDuplicate,
+	onDelete,
 	className,
 }: Readonly<TransactionPanelProps>) {
 	const detail = (() => {
@@ -91,6 +93,7 @@ export function TransactionPanel({
 				onClose={onClose}
 				onEdit={() => onEdit(selection.row)}
 				onDuplicate={() => onDuplicate(selection.row)}
+				onDelete={(byKeyboard) => onDelete(selection.row, byKeyboard)}
 			/>
 		);
 	})();

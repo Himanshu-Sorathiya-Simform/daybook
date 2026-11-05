@@ -35,6 +35,7 @@ import {
 } from "../../hooks/useEntryDialog";
 import { GOLDEN_CATEGORIES, GOLDEN_PAYEES, row } from "../../lib/__tests__/fixtures";
 import { EntryDialogHost } from "../EntryDialogHost";
+import { TransactionDeletesHost } from "../TransactionDeletesHost";
 
 const network = setupServer();
 beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
@@ -89,10 +90,12 @@ function renderHost(children: ReactNode = <Opener />, slot?: AddSlot) {
 	const sent = serve();
 	const host = (
 		<I18nProvider locale="en-IN">
-			<EntryDialogHost profile={GOLDEN_BLOCK}>
-				<input aria-label="Page search" />
-				{children}
-			</EntryDialogHost>
+			<TransactionDeletesHost profile={GOLDEN_BLOCK}>
+				<EntryDialogHost profile={GOLDEN_BLOCK}>
+					<input aria-label="Page search" />
+					{children}
+				</EntryDialogHost>
+			</TransactionDeletesHost>
 			<Toaster />
 		</I18nProvider>
 	);
@@ -438,9 +441,11 @@ describe("the profile (BR-F02-18)", () => {
 		serve({ ...GOLDEN_BLOCK, currency: "USD", numberLocale: "en-US-u-nu-latn" });
 		renderInApp(
 			<I18nProvider locale="en-IN">
-				<EntryDialogHost profile={GOLDEN_BLOCK}>
-					<Opener />
-				</EntryDialogHost>
+				<TransactionDeletesHost profile={GOLDEN_BLOCK}>
+					<EntryDialogHost profile={GOLDEN_BLOCK}>
+						<Opener />
+					</EntryDialogHost>
+				</TransactionDeletesHost>
 			</I18nProvider>,
 		);
 		// Let /api/me answer before the dialog opens.

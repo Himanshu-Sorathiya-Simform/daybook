@@ -55,8 +55,10 @@ describe("PANEL_TEXT (F03 section 8)", () => {
 		});
 	});
 
-	test("the detail hint names only the keys that work before delete with Undo", () => {
-		expect(DETAIL_HINT).toBe("E to edit · D to duplicate · Esc to close");
+	test("the detail hint names every key", () => {
+		expect(DETAIL_HINT).toBe(
+			"E to edit · D to duplicate · Delete to delete · Esc to close",
+		);
 	});
 });
 

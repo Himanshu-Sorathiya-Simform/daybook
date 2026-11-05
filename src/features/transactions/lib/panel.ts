@@ -27,9 +27,9 @@ export const PANEL_TEXT = {
 	failed: "This Transaction could not be loaded.",
 } as const;
 
-/** The panel's hint under a selected row's actions (BR-F03-72). Delete and its key arrive with
- * delete with Undo, so until then the hint names only what works. */
-export const DETAIL_HINT = "E to edit · D to duplicate · Esc to close";
+/** The panel's hint under a selected row's actions (BR-F03-72). */
+export const DETAIL_HINT =
+	"E to edit · D to duplicate · Delete to delete · Esc to close";
 
 /** The selected row as the page knows it: from the loaded pages at once, or on its way from
  * `GET /api/transactions/[id]` (BR-F03-53). */

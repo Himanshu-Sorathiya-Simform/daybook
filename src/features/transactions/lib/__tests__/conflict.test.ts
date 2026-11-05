@@ -41,6 +41,11 @@ describe("CONFLICT_TEXT and CONFLICT_FIELDS (BR-F03-78)", () => {
 			differs: "Differs",
 			keepMine: "Keep mine",
 			keepTheirs: "Keep theirs",
+			deleteIntro:
+				"It changed after you deleted it. Delete it anyway, or keep it as it is saved now.",
+			deletedMine: "When you deleted it",
+			deleteAnyway: "Delete anyway",
+			keepIt: "Keep it",
 		});
 	});
 
