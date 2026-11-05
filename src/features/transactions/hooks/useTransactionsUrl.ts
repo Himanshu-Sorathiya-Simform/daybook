@@ -43,7 +43,7 @@ function hrefOf(
  * - **Invalid parameters** are dropped with the notice (BR-F03-34): the URL is replaced by its
  *   normalized form, and `notice` stays true until dismissed or the filter changes.
  * - **Writing:** a filter, list or view change pushes a history entry; selecting a row, the new
- *   dialog and clearing an unknown view replace the current one (BR-F03-53, BR-F03-65,
+ *   dialog and marking a view replace the current one (BR-F03-53, BR-F03-65,
  *   BR-F03-73). Each goes through the browser's history, which Next's router follows without
  *   asking the server again, so the page's prefetch runs only on a real page load. Each write
  *   starts from the last one, so two in one event, such as closing `new=1` and selecting the
@@ -129,9 +129,11 @@ export function useTransactionsUrl(currency: CurrencyCode) {
 			setNotice(false);
 			go("push", (state) => ({ ...state, view, filter, list }));
 		},
-		/** Drops `view` without a history entry: an id the views list does not have
-		 * (BR-F03-65), or a view just deleted (BR-F03-69). */
-		clearView: () => go("replace", (state) => ({ ...state, view: null })),
+		/** Marks a view as selected without a history entry, the URL's filter unchanged: a view
+		 * just saved from it (BR-F03-67), or none for an id the views list does not have
+		 * (BR-F03-65) or a view just deleted (BR-F03-69). */
+		markView: (view: string | null) =>
+			go("replace", (state) => ({ ...state, view })),
 		select: (txn: string | null) =>
 			go("replace", (state) => ({ ...state, txn })),
 		setNew: (isNew: boolean) => go("replace", (state) => ({ ...state, isNew })),

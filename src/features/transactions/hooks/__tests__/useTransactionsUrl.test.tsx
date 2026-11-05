@@ -383,12 +383,22 @@ describe("views in the URL (BR-F03-65)", () => {
 
 	test("an unknown view is cleared by replacing, keeping the filter", async () => {
 		const { result, calls } = await renderUrl(`?cat=food&view=${VIEW}`);
-		act(() => result.current.clearView());
+		act(() => result.current.markView(null));
 		expect(calls.at(-1)).toEqual({
 			mode: "replace",
 			href: "/transactions?cat=food",
 		});
 		expect(result.current.view).toBeNull();
+	});
+
+	test("a view saved from the URL is marked by replacing, keeping the filter and the row", async () => {
+		const { result, calls } = await renderUrl(`?cat=food&txn=${TXN}`);
+		act(() => result.current.markView(VIEW));
+		expect(calls.at(-1)).toEqual({
+			mode: "replace",
+			href: `/transactions?cat=food&view=${VIEW}&txn=${TXN}`,
+		});
+		expect(result.current.view).toBe(VIEW);
 	});
 
 	test("a view id is escaped in the URL", async () => {

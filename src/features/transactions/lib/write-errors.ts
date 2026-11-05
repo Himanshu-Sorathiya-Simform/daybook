@@ -151,8 +151,10 @@ export function readDeleteError(error: unknown): DeleteOutcome {
 export type ViewOutcome =
 	/** A 422 on `name`: Save as view tries the next suffix; a rename shows it under the field. */
 	| { kind: "name"; message: string }
-	/** A 409 or a 404: the message, and the views list reloads. */
-	| { kind: "stale"; message: string; current: ViewAnswer | null }
+	/** A 409: the view changed elsewhere. The message, and the views list reloads. */
+	| { kind: "changed"; message: string; current: ViewAnswer | null }
+	/** A 404 on a rename or update: the view was deleted elsewhere, and the list reloads. */
+	| { kind: "gone"; message: string }
 	| { kind: "form"; message: string }
 	| { kind: "handled" };
 
@@ -164,17 +166,13 @@ export function readViewError(error: unknown): ViewOutcome {
 	if (isHandled(error)) return { kind: "handled" };
 	if (error.code === "version_conflict") {
 		return {
-			kind: "stale",
+			kind: "changed",
 			message: TRANSACTIONS_TEXT.viewChanged,
 			current: currentRow<ViewAnswer>(error),
 		};
 	}
 	if (error.status === 404) {
-		return {
-			kind: "stale",
-			message: TRANSACTIONS_TEXT.viewDeleted,
-			current: null,
-		};
+		return { kind: "gone", message: TRANSACTIONS_TEXT.viewDeleted };
 	}
 	const name = error.fields["name"];
 	if (name !== undefined) return { kind: "name", message: name };

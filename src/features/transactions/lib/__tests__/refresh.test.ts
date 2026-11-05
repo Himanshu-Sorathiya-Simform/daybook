@@ -6,7 +6,13 @@ import { createQueryClient } from "@/lib/api/query-client";
 import { QUERY_ROOTS } from "@/lib/api/query-keys";
 import type { ListParams } from "@/lib/transactions/url";
 import { payeeKeys, transactionKeys, viewKeys } from "../keys";
-import { refreshAfterTransactionWrite, refreshViews } from "../refresh";
+import {
+	dropView,
+	putView,
+	refreshAfterTransactionWrite,
+	refreshViews,
+} from "../refresh";
+import type { ViewsAnswer } from "../types";
 import { idOf, row } from "./fixtures";
 
 const LIST: ListParams = { sort: "date", dir: "desc", group: "day" };
@@ -214,5 +220,79 @@ describe("refreshViews", () => {
 		await refreshViews(queryClient);
 		expect(fetched.get("views")).toBe(1);
 		expect([...fetched.keys()]).toEqual(["views"]);
+	});
+});
+
+const VIEW = (n: number, name: string) => ({
+	id: idOf(n),
+	name,
+	filter: { cat: ["food" as const] },
+	sort: "date" as const,
+	dir: "desc" as const,
+	group: "day" as const,
+	version: 1,
+	createdAt: "2026-11-02T06:30:00.000Z",
+	updatedAt: "2026-11-02T06:30:00.000Z",
+});
+const listed = (queryClient: QueryClient) =>
+	queryClient.getQueryData<ViewsAnswer>(viewKeys.list());
+
+describe("putView (BR-F03-63, BR-F03-65)", () => {
+	function withViews(...items: ReturnType<typeof VIEW>[]) {
+		const queryClient = createQueryClient();
+		queryClient.setQueryData<ViewsAnswer>(viewKeys.list(), {
+			items,
+			currency: "INR",
+		});
+		return queryClient;
+	}
+
+	test("a new view joins the list last, without the answer's currency", () => {
+		const queryClient = withViews(VIEW(1, "Food"));
+		putView(queryClient, { ...VIEW(2, "Rent"), currency: "INR" });
+		expect(listed(queryClient)).toEqual({
+			items: [VIEW(1, "Food"), VIEW(2, "Rent")],
+			currency: "INR",
+		});
+	});
+
+	test("a changed view takes its own place", () => {
+		const queryClient = withViews(VIEW(1, "Food"), VIEW(2, "Rent"));
+		putView(queryClient, {
+			...VIEW(1, "Eating out"),
+			version: 2,
+			currency: "INR",
+		});
+		expect(listed(queryClient)?.items).toEqual([
+			{ ...VIEW(1, "Eating out"), version: 2 },
+			VIEW(2, "Rent"),
+		]);
+	});
+
+	test("with no list cached, nothing is written: the list loads whole later", () => {
+		const queryClient = createQueryClient();
+		putView(queryClient, { ...VIEW(1, "Food"), currency: "INR" });
+		expect(listed(queryClient)).toBeUndefined();
+	});
+});
+
+describe("dropView (BR-F03-69)", () => {
+	test("takes the view out and keeps the rest in order", () => {
+		const queryClient = createQueryClient();
+		queryClient.setQueryData<ViewsAnswer>(viewKeys.list(), {
+			items: [VIEW(1, "Food"), VIEW(2, "Rent"), VIEW(3, "Travel")],
+			currency: "INR",
+		});
+		dropView(queryClient, idOf(2));
+		expect(listed(queryClient)).toEqual({
+			items: [VIEW(1, "Food"), VIEW(3, "Travel")],
+			currency: "INR",
+		});
+	});
+
+	test("with no list cached, nothing is written", () => {
+		const queryClient = createQueryClient();
+		dropView(queryClient, idOf(2));
+		expect(listed(queryClient)).toBeUndefined();
 	});
 });

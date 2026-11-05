@@ -2,7 +2,8 @@ import { hashKey, type QueryClient } from "@tanstack/react-query";
 
 import { QUERY_ROOTS } from "@/lib/api/query-keys";
 import { payeeKeys, transactionKeys, viewKeys } from "./keys";
-import type { TransactionAnswer } from "./types";
+import type { SavedView } from "@/lib/transactions/views";
+import type { TransactionAnswer, ViewAnswer, ViewsAnswer } from "./types";
 
 export type TransactionWrite =
 	| { kind: "create" | "edit"; row: TransactionAnswer }
@@ -49,4 +50,42 @@ export async function refreshAfterTransactionWrite(
  * list reloads. Views change no Transaction. */
 export async function refreshViews(queryClient: QueryClient): Promise<void> {
 	await queryClient.invalidateQueries({ queryKey: viewKeys.all });
+}
+
+/** A view's answer as the list holds it, without the answer's `currency`. */
+function listed({
+	id,
+	name,
+	filter,
+	sort,
+	dir,
+	group,
+	version,
+	createdAt,
+	updatedAt,
+}: ViewAnswer): SavedView {
+	return { id, name, filter, sort, dir, group, version, createdAt, updatedAt };
+}
+
+/** Puts a saved view into the cached list as the server answered it, before the list reloads,
+ * so the bar shows it at once and never takes a new view's id for an unknown one (BR-F03-65):
+ * a changed view in its place, a new one last, since views keep creation order (BR-F03-63). */
+export function putView(queryClient: QueryClient, view: ViewAnswer): void {
+	queryClient.setQueryData<ViewsAnswer>(viewKeys.list(), (old) => {
+		if (!old) return old;
+		const items =
+			old.items.some((item) => item.id === view.id) ?
+				old.items.map((item) => (item.id === view.id ? listed(view) : item))
+			:	[...old.items, listed(view)];
+		return { ...old, items };
+	});
+}
+
+/** Takes a deleted view out of the cached list before it reloads (BR-F03-69). */
+export function dropView(queryClient: QueryClient, id: string): void {
+	queryClient.setQueryData<ViewsAnswer>(
+		viewKeys.list(),
+		(old) =>
+			old && { ...old, items: old.items.filter((item) => item.id !== id) },
+	);
 }

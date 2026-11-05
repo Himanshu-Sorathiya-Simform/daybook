@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest";
 
-import { editWindowMessage, TRANSACTIONS_TEXT } from "../messages";
+import {
+	deleteViewTitle,
+	editWindowMessage,
+	TRANSACTIONS_TEXT,
+	VIEW_TEXT,
+} from "../messages";
 
 describe("TRANSACTIONS_TEXT (F03 section 8)", () => {
 	test.each([
@@ -25,5 +30,26 @@ describe("editWindowMessage (D-499)", () => {
 		expect(editWindowMessage("6 Oct", "16 Oct")).toBe(
 			"Choose a date from 6 Oct to 16 Oct.",
 		);
+	});
+});
+
+describe("VIEW_TEXT (F03 section 8, BR-F03-66 to BR-F03-69)", () => {
+	test.each([
+		["saved", "Saved as a new view."],
+		["updated", "View updated."],
+		["renamed", "View renamed."],
+		["deleted", "View deleted."],
+		["hint", "Change a filter, then save it as a view."],
+		["offline", "You are offline. Connect to save."],
+		["deleteBody", "Your Transactions stay as they are."],
+		["renameTitle", "Rename view"],
+	] as const)("%s reads as the spec says", (key, text) => {
+		expect(VIEW_TEXT[key]).toBe(text);
+	});
+});
+
+describe("deleteViewTitle (BR-F03-69)", () => {
+	test("names the view in curly quotes", () => {
+		expect(deleteViewTitle("Food last month")).toBe("Delete “Food last month”?");
 	});
 });

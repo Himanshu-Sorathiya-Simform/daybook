@@ -509,7 +509,7 @@ describe("readViewError (AC-F03-55)", () => {
 				http(409, "version_conflict", { details: { current: view } }),
 			),
 		).toEqual({
-			kind: "stale",
+			kind: "changed",
 			message: "This view changed on another device. Try again.",
 			current: view,
 		});
@@ -517,7 +517,7 @@ describe("readViewError (AC-F03-55)", () => {
 
 	test("a version_conflict without a usable view still says it changed", () => {
 		expect(readViewError(http(409, "version_conflict"))).toEqual({
-			kind: "stale",
+			kind: "changed",
 			message: "This view changed on another device. Try again.",
 			current: null,
 		});
@@ -525,9 +525,8 @@ describe("readViewError (AC-F03-55)", () => {
 
 	test("a 404 says the view was deleted", () => {
 		expect(readViewError(http(404, "not_found"))).toEqual({
-			kind: "stale",
+			kind: "gone",
 			message: "This view was deleted on another device.",
-			current: null,
 		});
 	});
 

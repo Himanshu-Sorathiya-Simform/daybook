@@ -35,6 +35,7 @@ import { FilterBar } from "./FilterBar";
 import { HeaderTotals } from "./HeaderTotals";
 import { TransactionList } from "./TransactionList";
 import { TransactionPanel } from "./TransactionPanel";
+import { type ViewDialog, ViewsBar } from "./ViewsBar";
 
 export type TransactionsPageProps = {
 	/** The profile's formats and its today, from the server render (TIME-5). */
@@ -65,15 +66,15 @@ const DOCKED = "(min-width: 1180px)";
 
 /**
  * The Transactions page (F03 section 6), from top to bottom: the title, with "as of" while
- * offline (D-533); the search box, the filter controls and the Group · Sort menu, then the
+ * offline (D-533); the saved views bar (BR-F03-63 to BR-F03-69); the search box, the filter controls and the Group · Sort menu, then the
  * active filters as chips; the invalid-link notice (D-531); the header totals; and the list.
  * Beside them from 1180 px, the panel; below, its drawer while a row is selected (BR-F03-70).
  * Everything follows the URL (FIL-4), which the page reads and writes through
  * `useTransactionsUrl`, the selected row as `txn` (BR-F03-73).
  *
  * Keys (BR-F03-52): the arrow keys select, Enter and `E` edit the selected row, `D` duplicates
- * it, Delete or Backspace deletes it with Undo, and Escape clears it, none of them while the
- * entry dialog is open or in a text field. Rows deleted in this tab leave the list at once
+ * it, Delete or Backspace deletes it with Undo, and Escape clears it, none of them while a
+ * dialog is open or in a text field. Rows deleted in this tab leave the list at once
  * (BR-F03-26).
  *
  * It answers the entry dialog's creates (BR-F03-21, BR-F03-22, D-548): a plain Save of a row the
@@ -96,6 +97,7 @@ export function TransactionsPage({
 	const deleted = useDeletedRows();
 	const dialogOpen = useEntryDialogOpen();
 	const deleteOpen = useDeleteDialogOpen();
+	const [viewDialog, setViewDialog] = useState<ViewDialog | null>(null);
 	const listArea = useRef<HTMLDivElement>(null);
 	// The row that takes focus once a delete from the keyboard is confirmed.
 	const [focusAfter, setFocusAfter] = useState<{ id: string } | null>(null);
@@ -110,8 +112,8 @@ export function TransactionsPage({
 	});
 	const shown = selection?.state === "shown" ? selection.row : null;
 	// Goal rows wait for M2's Goal fields to be edited or copied (D-241).
-	const actionable =
-		shown !== null && !isGoalType(shown.type) && !dialogOpen && !deleteOpen;
+	const anyDialog = dialogOpen || deleteOpen || viewDialog !== null;
+	const actionable = shown !== null && !isGoalType(shown.type) && !anyDialog;
 	const edit = () => {
 		if (actionable) entry.openEdit(shown);
 	};
@@ -152,7 +154,7 @@ export function TransactionsPage({
 	useShortcut("Delete", remove, { enabled: actionable });
 	useShortcut("Backspace", remove, { enabled: actionable });
 	useShortcut("Escape", () => url.select(null), {
-		enabled: url.txn !== null && !dialogOpen && !deleteOpen,
+		enabled: url.txn !== null && !anyDialog,
 		// Escape in a text field, a menu or the drawer belongs to them.
 		ignoreInputs: true,
 		ignoreDefaultPrevented: true,
@@ -203,6 +205,19 @@ export function TransactionsPage({
 						</span>
 					)}
 				</div>
+				<ViewsBar
+					filter={url.filter}
+					list={url.list}
+					viewId={url.view}
+					locale={locale}
+					isOffline={!online}
+					onApply={(view, state) =>
+						url.applyView(view, state.filter, state.list)
+					}
+					onMark={url.markView}
+					dialog={viewDialog}
+					onDialogChange={setViewDialog}
+				/>
 				<FilterBar
 					filter={url.filter}
 					list={url.list}

@@ -1,3 +1,4 @@
+import { onlineManager } from "@tanstack/react-query";
 import { act, waitFor } from "@testing-library/react";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
@@ -9,7 +10,10 @@ import { ok, refuse, renderHookInApp, route, testClient, settled } from "./helpe
 
 const network = setupServer();
 beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
+afterEach(() => {
+	network.resetHandlers();
+	onlineManager.setOnline(true);
+});
 afterAll(() => network.close());
 
 const ID = "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c02";
@@ -27,6 +31,13 @@ const VIEW = {
 	updatedAt: "2026-11-02T06:40:00.000Z",
 	currency: "INR",
 };
+
+/** A view as the list holds it: the answer without its `currency`. */
+function listedOf<T extends { currency?: unknown }>(answer: T): Omit<T, "currency"> {
+	const copy = { ...answer };
+	delete copy.currency;
+	return copy;
+}
 
 async function edit(
 	result: { current: ReturnType<typeof useEditView> },
@@ -88,7 +99,7 @@ describe("useEditView (BR-F03-68, BR-F03-69)", () => {
 		const { result } = renderHookInApp(() => useEditView(), { queryClient });
 		await edit(result, { name: "Food" });
 		expect(readViewError(result.current.error)).toEqual({
-			kind: "stale",
+			kind: "changed",
 			message: "This view changed on another device. Try again.",
 			current: VIEW,
 		});
@@ -106,8 +117,8 @@ describe("useEditView (BR-F03-68, BR-F03-69)", () => {
 		queryClient.setQueryData(viewKeys.list(), { items: [], currency: "INR" });
 		const { result } = renderHookInApp(() => useEditView(), { queryClient });
 		await edit(result, { name: "Food" });
-		expect(readViewError(result.current.error)).toMatchObject({
-			kind: "stale",
+		expect(readViewError(result.current.error)).toEqual({
+			kind: "gone",
 			message: "This view was deleted on another device.",
 		});
 		await waitFor(() =>
@@ -115,5 +126,42 @@ describe("useEditView (BR-F03-68, BR-F03-69)", () => {
 				true,
 			),
 		);
+	});
+
+	test("the answer replaces the cached view at once", async () => {
+		route(network, "patch", PATH, () => ok(VIEW));
+		const queryClient = testClient();
+		const listed = listedOf(VIEW);
+		const other = { ...listed, id: "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c03" };
+		queryClient.setQueryData(viewKeys.list(), {
+			items: [{ ...listed, name: "Old", version: 1 }, other],
+			currency: "INR",
+		});
+		const { result } = renderHookInApp(() => useEditView(), { queryClient });
+		await edit(result, { name: "Food" });
+		expect(queryClient.getQueryData(viewKeys.list())).toEqual({
+			items: [listed, other],
+			currency: "INR",
+		});
+	});
+
+	test("a refusal leaves the cached view as it was", async () => {
+		route(network, "patch", PATH, () => refuse(409, "version_conflict"));
+		const queryClient = testClient();
+		const listed = listedOf(VIEW);
+		const cached = { items: [{ ...listed, name: "Old" }], currency: "INR" };
+		queryClient.setQueryData(viewKeys.list(), cached);
+		const { result } = renderHookInApp(() => useEditView(), { queryClient });
+		await edit(result, { name: "Food" });
+		expect(queryClient.getQueryData(viewKeys.list())).toEqual(cached);
+	});
+
+	// BR-F03-63: online only, never queued
+	test("offline, the request is still sent, so it fails at once instead of waiting", async () => {
+		const seen = route(network, "patch", PATH, () => ok(VIEW));
+		onlineManager.setOnline(false);
+		const { result } = renderHookInApp(() => useEditView());
+		await edit(result, { name: "Food" });
+		expect(seen).toHaveLength(1);
 	});
 });

@@ -1,3 +1,4 @@
+import { onlineManager } from "@tanstack/react-query";
 import { act, waitFor } from "@testing-library/react";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
@@ -9,7 +10,10 @@ import { ok, refuse, renderHookInApp, route, testClient, settled } from "./helpe
 
 const network = setupServer();
 beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
+afterEach(() => {
+	network.resetHandlers();
+	onlineManager.setOnline(true);
+});
 afterAll(() => network.close());
 
 const KEY = "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1cfc";
@@ -29,6 +33,13 @@ const SAVED = {
 	updatedAt: "2026-11-02T06:30:00.000Z",
 	currency: "INR",
 };
+
+/** A view as the list holds it: the answer without its `currency`. */
+function listedOf<T extends { currency?: unknown }>(answer: T): Omit<T, "currency"> {
+	const copy = { ...answer };
+	delete copy.currency;
+	return copy;
+}
 
 async function create(
 	result: { current: ReturnType<typeof useCreateView> },
@@ -125,6 +136,34 @@ describe("useCreateView (BR-F03-67)", () => {
 		const seen = route(network, "post", "/api/transaction-views", () =>
 			refuse(500, "internal"),
 		);
+		const { result } = renderHookInApp(() => useCreateView());
+		await create(result);
+		expect(seen).toHaveLength(1);
+	});
+
+	test("the saved view joins the cached list at once, last (BR-F03-63)", async () => {
+		route(network, "post", "/api/transaction-views", () => ok(SAVED, 201));
+		const queryClient = testClient();
+		const listed = listedOf(SAVED);
+		const before = { ...listed, id: "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c01" };
+		queryClient.setQueryData(viewKeys.list(), {
+			items: [before],
+			currency: "INR",
+		});
+		const { result } = renderHookInApp(() => useCreateView(), { queryClient });
+		await create(result);
+		expect(queryClient.getQueryData(viewKeys.list())).toEqual({
+			items: [before, listed],
+			currency: "INR",
+		});
+	});
+
+	// BR-F03-63: online only, never queued
+	test("offline, the request is still sent, so it fails at once instead of waiting", async () => {
+		const seen = route(network, "post", "/api/transaction-views", () =>
+			ok(SAVED, 201),
+		);
+		onlineManager.setOnline(false);
 		const { result } = renderHookInApp(() => useCreateView());
 		await create(result);
 		expect(seen).toHaveLength(1);

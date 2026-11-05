@@ -150,6 +150,10 @@ beforeEach(() => {
 	route(network, "get", "/api/payees", () =>
 		ok({ items: GOLDEN_PAYEES, categories: GOLDEN_CATEGORIES }),
 	);
+	// The views bar reads the saved views; tests that need some answer them later.
+	route(network, "get", "/api/transaction-views", () =>
+		ok({ items: [], currency: "INR" }),
+	);
 });
 
 function intersect(match: (target: Element) => boolean) {
@@ -300,6 +304,58 @@ describe("the page (F03 section 6)", () => {
 		expect(lists).toEqual([]);
 		expect(summaries).toEqual([]);
 		expect(views).toEqual([]);
+	});
+
+	test("the saved views bar sits between the title and the search box", async () => {
+		renderPage("");
+		await grid();
+
+		const bar = await screen.findByRole("radiogroup", { name: "Saved views" });
+		const title = screen.getByRole("heading", { level: 1 });
+		const search = screen.getByRole("searchbox");
+		expect(
+			title.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+		expect(
+			bar.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+	});
+
+	// BR-F03-65: view never enters a query key
+	test("choosing a view whose filter the URL already has asks for nothing new", async () => {
+		route(network, "get", "/api/transaction-views", () =>
+			ok({
+				items: [
+					{
+						id: idOf(1),
+						name: "October food",
+						filter: {
+							from: "2026-10-01",
+							to: "2026-10-31",
+							cat: ["food"],
+						},
+						sort: "date",
+						dir: "desc",
+						group: "day",
+						version: 1,
+						createdAt: "2026-11-01T06:30:00.000Z",
+						updatedAt: "2026-11-01T06:30:00.000Z",
+					},
+				],
+				currency: "INR",
+			}),
+		);
+		const { calls, lists, summaries, user } = renderPage(CHECK_B);
+		await grid();
+		await user.click(await screen.findByRole("radio", { name: "October food" }));
+
+		expect(calls.at(-1)).toEqual({
+			mode: "push",
+			href: `/transactions${CHECK_B}&view=${idOf(1)}`,
+		});
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(lists).toHaveLength(1);
+		expect(summaries).toHaveLength(1);
 	});
 });
 
@@ -2542,6 +2598,60 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 			).toBeNull();
 			expect(
 				screen.getByRole("dialog", { name: "Edit Transaction" }),
+			).toBeInTheDocument();
+		});
+
+		test("the page's keys wait while a view's Rename or Delete dialog is open", async () => {
+			docked();
+			route(network, "get", "/api/transaction-views", () =>
+				ok({
+					items: [
+						{
+							id: idOf(1),
+							name: "Everything",
+							filter: {},
+							sort: "date",
+							dir: "desc",
+							group: "day",
+							version: 1,
+							createdAt: "2026-11-01T06:30:00.000Z",
+							updatedAt: "2026-11-01T06:30:00.000Z",
+						},
+					],
+					currency: "INR",
+				}),
+			);
+			const { calls, user } = renderPanel(`?view=${idOf(1)}&txn=${m1(24).id}`);
+			const dialogs = () => [
+				...screen.queryAllByRole("dialog"),
+				...screen.queryAllByRole("alertdialog"),
+			];
+			await grid();
+
+			for (const action of ["Rename", "Delete"]) {
+				await user.click(
+					await screen.findByRole("button", { name: "View options" }),
+				);
+				await user.click(
+					await screen.findByRole("menuitem", { name: action }),
+				);
+				const dialog = await screen.findByRole(
+					action === "Rename" ? "dialog" : "alertdialog",
+				);
+				within(dialog).getByRole("button", { name: "Cancel" }).focus();
+				await user.keyboard("de{Delete}");
+
+				expect(dialogs()).toEqual([dialog]);
+				await user.keyboard("{Escape}");
+				await waitFor(() => expect(dialogs()).toEqual([]));
+			}
+			expect(calls).toEqual([]);
+			expect(panel()).toBeInTheDocument();
+
+			// Closed, the keys work again.
+			await user.keyboard("d");
+			expect(
+				await screen.findByRole("dialog", { name: "Duplicate Transaction" }),
 			).toBeInTheDocument();
 		});
 

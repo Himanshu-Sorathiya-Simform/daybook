@@ -14,6 +14,24 @@ export const TRANSACTIONS_TEXT = {
 	invalidLink: "Some filters in this link weren't valid and were removed.",
 } as const;
 
+/** F03 section 8's messages for the saved views bar (BR-F03-63 to BR-F03-69). A refusal's own
+ * words are `TRANSACTIONS_TEXT.viewChanged` and `viewDeleted`, or the server's. */
+export const VIEW_TEXT = {
+	saved: "Saved as a new view.",
+	updated: "View updated.",
+	renamed: "View renamed.",
+	deleted: "View deleted.",
+	hint: "Change a filter, then save it as a view.",
+	offline: "You are offline. Connect to save.",
+	deleteBody: "Your Transactions stay as they are.",
+	renameTitle: "Rename view",
+} as const;
+
+/** "Delete “Food last month”?": the view delete's question (BR-F03-69). */
+export function deleteViewTitle(name: string): string {
+	return `Delete “${name}”?`;
+}
+
 /** F03 section 8's messages for the search box and the filter controls (BR-F03-37 to
  * BR-F03-39). */
 export const FILTER_TEXT = {

@@ -1,3 +1,4 @@
+import { onlineManager } from "@tanstack/react-query";
 import { act, waitFor } from "@testing-library/react";
 import { HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -10,7 +11,10 @@ import { refuse, renderHookInApp, route, testClient, settled } from "./helpers";
 
 const network = setupServer();
 beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
+afterEach(() => {
+	network.resetHandlers();
+	onlineManager.setOnline(true);
+});
 afterAll(() => network.close());
 
 const ID = "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c02";
@@ -69,7 +73,7 @@ describe("useDeleteView (BR-F03-69)", () => {
 		const { result } = renderHookInApp(() => useDeleteView(), { queryClient });
 		await remove(result);
 		expect(readViewError(result.current.error)).toMatchObject({
-			kind: "stale",
+			kind: "changed",
 			message: "This view changed on another device. Try again.",
 		});
 		await waitFor(() =>
@@ -101,6 +105,66 @@ describe("useDeleteView (BR-F03-69)", () => {
 		const { result } = renderHookInApp(() => useDeleteView());
 		await remove(result);
 		expect(result.current.isError).toBe(true);
+		expect(seen).toHaveLength(1);
+	});
+
+	function withView() {
+		const queryClient = testClient();
+		queryClient.setQueryData(viewKeys.list(), {
+			items: [{ id: ID, name: "Food" }],
+			currency: "INR",
+		});
+		return queryClient;
+	}
+
+	test("the deleted view leaves the cached list at once", async () => {
+		route(
+			network,
+			"delete",
+			PATH,
+			() => new HttpResponse(null, { status: 204 }),
+		);
+		const queryClient = withView();
+		const { result } = renderHookInApp(() => useDeleteView(), { queryClient });
+		await remove(result);
+		expect(queryClient.getQueryData(viewKeys.list())).toEqual({
+			items: [],
+			currency: "INR",
+		});
+	});
+
+	// AC-F03-55: a 404 on Delete removes the view
+	test("a 404 takes it out of the cached list too", async () => {
+		route(network, "delete", PATH, () => refuse(404, "not_found"));
+		const queryClient = withView();
+		const { result } = renderHookInApp(() => useDeleteView(), { queryClient });
+		await remove(result);
+		expect(queryClient.getQueryData(viewKeys.list())).toMatchObject({
+			items: [],
+		});
+	});
+
+	test("a 409 keeps it in the cached list", async () => {
+		route(network, "delete", PATH, () => refuse(409, "version_conflict"));
+		const queryClient = withView();
+		const { result } = renderHookInApp(() => useDeleteView(), { queryClient });
+		await remove(result);
+		expect(queryClient.getQueryData(viewKeys.list())).toMatchObject({
+			items: [{ id: ID }],
+		});
+	});
+
+	// BR-F03-63: online only, never queued
+	test("offline, the request is still sent, so it fails at once instead of waiting", async () => {
+		const seen = route(
+			network,
+			"delete",
+			PATH,
+			() => new HttpResponse(null, { status: 204 }),
+		);
+		onlineManager.setOnline(false);
+		const { result } = renderHookInApp(() => useDeleteView());
+		await remove(result);
 		expect(seen).toHaveLength(1);
 	});
 });

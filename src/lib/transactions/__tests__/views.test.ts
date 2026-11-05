@@ -576,13 +576,13 @@ describe("isEdited (BR-F03-66)", () => {
 
 // AC-F03-51
 describe("viewName (BR-F03-67)", () => {
-	test("joins the chip labels", () => {
-		expect(viewName(["Food", "Last month"], [])).toBe("Food, Last month");
+	test("joins the chip labels in their order", () => {
+		expect(viewName(["Last month", "Food"], [])).toBe("Last month, Food");
 	});
 
 	test("adds 2 when the name is taken, comparing without case", () => {
-		expect(viewName(["Food", "Last month"], ["food, last month"])).toBe(
-			"Food, Last month 2",
+		expect(viewName(["Last month", "Food"], ["last month, food"])).toBe(
+			"Last month, Food 2",
 		);
 	});
 
