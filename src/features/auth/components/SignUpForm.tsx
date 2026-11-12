@@ -13,18 +13,21 @@ import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
 import { useOnline } from "@/hooks/useOnline";
 import { authClient } from "@/lib/auth-client";
 import { useAuthSubmit } from "../hooks/useAuthSubmit";
+import { handOverEmail } from "../lib/email-handoff";
 import { fieldError } from "../lib/field-error";
-import { AUTH_MESSAGES } from "../lib/messages";
+import { AUTH_MESSAGES, SIGN_UP_TEXT } from "../lib/messages";
 import { type SignUpValues, signUpSchema } from "../lib/schemas";
 import { StrengthMeter } from "./StrengthMeter";
 
 const EMPTY: SignUpValues = { email: "", password: "", name: "" };
 
 /**
- * Sign-up (F01 flow 7.1): email, password with the strength meter and a show/hide button,
- * display name. Fields are checked on submit, then as they change (D-510). A refusal shows
- * under its field or above the button; a breached password clears only the password. Success
- * opens `/onboarding` with a full page load (BR-F01-06). Offline, the form is disabled.
+ * Sign-up (F01 flow 7.1): the name first, so the strength meter can count it, then email, then
+ * the password with the meter and a show/hide button (F01 section 6, D-510). Fields are checked
+ * on submit, then as they change. A refusal shows under its field, or at the top with focus; a
+ * breached password clears only the password, and a taken email offers "Log in instead.",
+ * which takes the email along (BR-F01-31). Success opens `/onboarding` with a full page load
+ * (BR-F01-06). Offline, the form is disabled.
  */
 export function SignUpForm() {
 	const online = useOnline();
@@ -72,9 +75,31 @@ export function SignUpForm() {
 						{!online && (
 							<OfflineNote>{AUTH_MESSAGES.offline}</OfflineNote>
 						)}
-						<form.Field name="email">
+						{formFailure && (
+							<FormAlert takesFocus>{formFailure}</FormAlert>
+						)}
+						<form.Field name="name">
 							{(field) => (
-								<div className="flex flex-col gap-1.5">
+								<TextInput
+									label="Your name"
+									name="name"
+									autoComplete="name"
+									hint={SIGN_UP_TEXT.nameHint}
+									value={field.state.value}
+									onChange={(value) => {
+										field.handleChange(value);
+										changed("name");
+									}}
+									onBlur={field.handleBlur}
+									error={fieldError(field, failure)}
+									isDisabled={disabled}
+								/>
+							)}
+						</form.Field>
+						<form.Field name="email">
+							{(field) => {
+								const error = fieldError(field, failure);
+								return (
 									<TextInput
 										label="Email"
 										name="email"
@@ -86,22 +111,27 @@ export function SignUpForm() {
 											changed("email");
 										}}
 										onBlur={field.handleBlur}
-										error={fieldError(field, failure)}
+										error={
+											error === AUTH_MESSAGES.emailTaken ?
+												<>
+													{error}{" "}
+													<TextLink
+														href="/login"
+														onPress={() =>
+															handOverEmail(
+																field.state.value,
+															)
+														}
+													>
+														Log in instead.
+													</TextLink>
+												</>
+											:	error
+										}
 										isDisabled={disabled}
 									/>
-									{failure
-										&& "field" in failure
-										&& failure.message
-											=== AUTH_MESSAGES.emailTaken && (
-											<TextLink
-												href="/login"
-												className="text-label self-start"
-											>
-												Log in instead.
-											</TextLink>
-										)}
-								</div>
-							)}
+								);
+							}}
 						</form.Field>
 						<form.Field name="password">
 							{(field) => (
@@ -110,7 +140,7 @@ export function SignUpForm() {
 										label="Password"
 										name="password"
 										autoComplete="new-password"
-										hint="At least 12 characters."
+										hint={SIGN_UP_TEXT.passwordHint}
 										value={field.state.value}
 										onChange={(value) => {
 											field.handleChange(value);
@@ -136,33 +166,21 @@ export function SignUpForm() {
 								</div>
 							)}
 						</form.Field>
-						<form.Field name="name">
-							{(field) => (
-								<TextInput
-									label="Display name"
-									name="name"
-									autoComplete="name"
-									value={field.state.value}
-									onChange={(value) => {
-										field.handleChange(value);
-										changed("name");
-									}}
-									onBlur={field.handleBlur}
-									error={fieldError(field, failure)}
-									isDisabled={disabled}
-								/>
-							)}
-						</form.Field>
-						{formFailure && <FormAlert>{formFailure}</FormAlert>}
-						<Button
-							type="submit"
-							size="lg"
-							isPending={busy}
-							isDisabled={!online}
-						>
-							Create account
-						</Button>
-						<p className="text-label text-ink-2">
+						<div className="flex flex-col gap-2.5">
+							<Button
+								type="submit"
+								size="lg"
+								className="justify-center"
+								isPending={busy}
+								isDisabled={!online}
+							>
+								Create account
+							</Button>
+							<p className="text-caption text-ink-2 text-center">
+								{SIGN_UP_TEXT.nextStep}
+							</p>
+						</div>
+						<p className="text-label text-ink-2 text-center">
 							Already have an account?{" "}
 							<TextLink href="/login">Log in</TextLink>
 						</p>

@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vite
 
 import { renderInApp } from "@/components/app/__tests__/helpers";
 import { clearLogoutMarker, hasLogoutMarker } from "@/lib/logout-marker";
+import { takeHandedEmail } from "../../lib/email-handoff";
 import { AUTH_MESSAGES } from "../../lib/messages";
 import { SignUpForm } from "../SignUpForm";
 import {
@@ -20,6 +21,7 @@ beforeAll(() => authNetwork.listen({ onUnhandledFrame: "error" }));
 afterEach(() => {
 	authNetwork.resetHandlers();
 	clearLogoutMarker();
+	sessionStorage.clear();
 	vi.restoreAllMocks();
 });
 afterAll(() => authNetwork.close());
@@ -29,7 +31,7 @@ const signedUp = () => HttpResponse.json({ token: "t", user: USER });
 
 const email = () => screen.getByRole("textbox", { name: "Email" });
 const password = () => screen.getByLabelText("Password", { selector: "input" });
-const name = () => screen.getByRole("textbox", { name: "Display name" });
+const name = () => screen.getByRole("textbox", { name: "Your name" });
 const submit = () => screen.getByRole("button", { name: /Create account/ });
 
 async function fill(
@@ -41,9 +43,9 @@ async function fill(
 		password: p = PASSWORD,
 		name: n = "Asha",
 	} = values;
+	if (n) await user.type(name(), n);
 	if (e) await user.type(email(), e);
 	if (p) await user.type(password(), p);
-	if (n) await user.type(name(), n);
 }
 
 function setup() {
@@ -53,7 +55,7 @@ function setup() {
 }
 
 describe("the form (F01 section 6)", () => {
-	test("has Email, Password and Display name, with what browsers need to fill them", () => {
+	test("has Your name, Email and Password, with what browsers need to fill them", () => {
 		setup();
 		expect(email()).toHaveAttribute("type", "email");
 		expect(email()).toHaveAttribute("autocomplete", "email");
@@ -61,6 +63,29 @@ describe("the form (F01 section 6)", () => {
 		expect(password()).toHaveAttribute("autocomplete", "new-password");
 		expect(name()).toHaveAttribute("autocomplete", "name");
 		expect(password()).toHaveAccessibleDescription("At least 12 characters.");
+		expect(name()).toHaveAccessibleDescription(
+			"Shown in Daybook. You can change it later in Settings.",
+		);
+	});
+
+	// D-510: the name comes first, so the strength meter can count it from the start.
+	test("asks for the name first, then the email, then the password", () => {
+		setup();
+		const fields = [name(), email(), password()];
+		for (const [index, field] of fields.slice(1).entries())
+			expect(
+				fields[index]!.compareDocumentPosition(field)
+					& Node.DOCUMENT_POSITION_FOLLOWING,
+			).toBeTruthy();
+	});
+
+	test("says what comes next under Create account", () => {
+		setup();
+		expect(
+			screen.getByText(
+				"Next, you'll confirm your country, currency, time zone and week start.",
+			),
+		).toBeInTheDocument();
 	});
 
 	test("offers Create account and a link to log in instead", () => {
@@ -84,16 +109,14 @@ describe("the form (F01 section 6)", () => {
 		const calls = route("post", SIGN_UP, signedUp);
 		const { user, navigate } = setup();
 		await user.tab();
+		expect(name()).toHaveFocus();
+		await user.keyboard("Asha");
+		await user.tab();
 		expect(email()).toHaveFocus();
 		await user.keyboard("asha@example.com");
 		await user.tab();
 		expect(password()).toHaveFocus();
-		await user.keyboard(PASSWORD);
-		await user.tab();
-		expect(screen.getByRole("button", { name: "Show password" })).toHaveFocus();
-		await user.tab();
-		expect(name()).toHaveFocus();
-		await user.keyboard("Asha{Enter}");
+		await user.keyboard(`${PASSWORD}{Enter}`);
 		await waitFor(() => expect(navigate).toHaveBeenCalledWith("/onboarding"));
 		expect(calls).toHaveLength(1);
 	});
@@ -113,7 +136,7 @@ describe("checks (D-510)", () => {
 		).not.toBeInTheDocument();
 	});
 
-	test("an empty submit shows every field's message, sends nothing, and focuses the email", async () => {
+	test("an empty submit shows every field's message, sends nothing, and focuses the name", async () => {
 		const calls = route("post", SIGN_UP, signedUp);
 		const { user } = setup();
 		await user.click(submit());
@@ -123,12 +146,13 @@ describe("checks (D-510)", () => {
 		expect(screen.getByText(AUTH_MESSAGES.passwordRequired)).toBeInTheDocument();
 		expect(screen.getByText(AUTH_MESSAGES.name)).toBeInTheDocument();
 		expect(email()).toHaveAttribute("aria-invalid", "true");
-		expect(email()).toHaveFocus();
+		expect(name()).toHaveFocus();
 		expect(calls).toHaveLength(0);
 	});
 
-	test("focuses the first field with a message, not always the email", async () => {
+	test("focuses the first field with a message, not always the name", async () => {
 		const { user } = setup();
+		await user.type(name(), "Asha");
 		await user.type(email(), "asha@example.com");
 		await user.click(submit());
 		await waitFor(() => expect(password()).toHaveFocus());
@@ -224,11 +248,28 @@ describe("refusals (F01 section 8)", () => {
 			await screen.findByText(AUTH_MESSAGES.emailTaken),
 		).toBeInTheDocument();
 		expect(email()).toHaveAttribute("aria-invalid", "true");
+		expect(email()).toHaveAccessibleDescription(
+			"An account with this email already exists. Log in instead.",
+		);
 		expect(
 			screen.getByRole("link", { name: "Log in instead." }),
 		).toHaveAttribute("href", "/login");
 		await waitFor(() => expect(email()).toHaveFocus());
 		expect(navigate).not.toHaveBeenCalled();
+	});
+
+	// BR-F01-31, D-510
+	test("Log in instead takes the typed email to the login form", async () => {
+		route("post", SIGN_UP, () =>
+			refusal("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL", 422),
+		);
+		const { user } = setup();
+		await fill(user, { email: "  asha@example.com" });
+		await user.click(submit());
+		await user.click(
+			await screen.findByRole("link", { name: "Log in instead." }),
+		);
+		expect(takeHandedEmail()).toBe("asha@example.com");
 	});
 
 	test("changing the email takes the taken-email message and its link away", async () => {
@@ -295,14 +336,17 @@ describe("refusals (F01 section 8)", () => {
 	});
 
 	// BR-F01-08
-	test("too many attempts shows the rate-limit line above the button", async () => {
+	test("too many attempts shows the rate-limit line at the top, with focus", async () => {
 		route("post", SIGN_UP, () => new HttpResponse(null, { status: 429 }));
 		const { user } = setup();
 		await fill(user);
 		await user.click(submit());
-		expect(await screen.findByRole("alert")).toHaveTextContent(
-			AUTH_MESSAGES.rateLimited,
-		);
+		const alert = await screen.findByRole("alert");
+		expect(alert).toHaveTextContent(AUTH_MESSAGES.rateLimited);
+		await waitFor(() => expect(alert).toHaveFocus());
+		expect(
+			alert.compareDocumentPosition(name()) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
 	});
 
 	test.each([

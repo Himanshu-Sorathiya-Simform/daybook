@@ -1,10 +1,12 @@
 "use client";
 
 import { revalidateLogic, useForm } from "@tanstack/react-form";
-import { useId, useRef, useState } from "react";
+import { Clock3 } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/actions/Button";
 import { FormAlert } from "@/components/feedback/FormAlert";
+import { FormNote } from "@/components/feedback/FormNote";
 import { OfflineNote } from "@/components/feedback/OfflineNote";
 import { PasswordInput } from "@/components/forms/PasswordInput";
 import { TextInput } from "@/components/forms/TextInput";
@@ -13,6 +15,7 @@ import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
 import { useOnline } from "@/hooks/useOnline";
 import { authClient } from "@/lib/auth-client";
 import { useAuthSubmit } from "../hooks/useAuthSubmit";
+import { takeHandedEmail } from "../lib/email-handoff";
 import { fieldError } from "../lib/field-error";
 import { AUTH_MESSAGES } from "../lib/messages";
 import { type LoginValues, loginSchema } from "../lib/schemas";
@@ -29,8 +32,10 @@ export type LoginFormProps = {
 
 /**
  * Login (F01 flow 7.2): email and password with a show/hide button. A wrong email and a wrong
- * password read the same (BR-F01-07); a rate limit has its own line. Success opens the
- * destination with a full page load (D-510). Offline, the form is disabled.
+ * password read the same (BR-F01-07); a rate limit has its own line. A refusal of the form
+ * shows at the top and takes focus. The email starts as sign-up's "Log in instead." left it
+ * (BR-F01-31). Success opens the destination with a full page load (D-510). Offline, the form
+ * is disabled.
  */
 export function LoginForm({
 	destination,
@@ -60,6 +65,13 @@ export function LoginForm({
 		onSubmit: ({ value }) => submit(value),
 	});
 
+	// Storage is the browser's, so the email is read after the first render, which matches the
+	// server's.
+	useEffect(() => {
+		const handed = takeHandedEmail();
+		if (handed) form.setFieldValue("email", handed);
+	}, [form]);
+
 	return (
 		<form.Subscribe selector={(state) => state.isSubmitting}>
 			{(submitting) => {
@@ -76,15 +88,15 @@ export function LoginForm({
 						}}
 					>
 						{expired && (
-							<p
-								role="status"
-								className="text-label text-ink-2 bg-soft rounded-control px-3 py-2"
-							>
+							<FormNote icon={Clock3}>
 								{AUTH_MESSAGES.expired}
-							</p>
+							</FormNote>
 						)}
 						{!online && (
 							<OfflineNote>{AUTH_MESSAGES.offline}</OfflineNote>
+						)}
+						{formFailure && (
+							<FormAlert takesFocus>{formFailure}</FormAlert>
 						)}
 						<form.Field name="email">
 							{(field) => (
@@ -135,21 +147,21 @@ export function LoginForm({
 							<p
 								id={noteId}
 								hidden={!showForgot}
-								className="text-label text-ink-2"
+								className="rounded-control bg-soft text-caption text-ink-2 px-3 py-2.5"
 							>
 								{AUTH_MESSAGES.forgotPassword}
 							</p>
 						</div>
-						{formFailure && <FormAlert>{formFailure}</FormAlert>}
 						<Button
 							type="submit"
 							size="lg"
+							className="justify-center"
 							isPending={busy}
 							isDisabled={!online}
 						>
 							Log in
 						</Button>
-						<p className="text-label text-ink-2">
+						<p className="text-label text-ink-2 text-center">
 							New here?{" "}
 							<TextLink href="/signup">Create an account</TextLink>
 						</p>

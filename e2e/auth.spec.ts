@@ -74,6 +74,35 @@ test("logging in lands on /transactions, and a wrong password is refused", async
 	await fresh.close();
 });
 
+// BR-F01-05, BR-F01-31: "Log in instead." takes the email along, once.
+test("a taken email offers Log in instead, which opens login with that email", async ({
+	browser,
+	page,
+}) => {
+	const account = newAccount();
+	await signUp(page, account);
+
+	const fresh = await browser.newContext({
+		extraHTTPHeaders: { "x-forwarded-for": clientAddress() },
+	});
+	const other = await fresh.newPage();
+	await other.goto("/signup");
+	await other.getByLabel("Your name").fill("Asha");
+	await other.getByLabel("Email").fill(account.email);
+	await other.getByLabel("Password", { exact: true }).fill(account.password);
+	await other.getByRole("button", { name: "Create account" }).click();
+	await expect(other.getByLabel("Email")).toHaveAccessibleDescription(
+		"An account with this email already exists. Log in instead.",
+	);
+
+	await other.getByRole("link", { name: "Log in instead." }).click();
+	await expect(other).toHaveURL("/login");
+	await expect(other.getByLabel("Email")).toHaveValue(account.email);
+	await other.reload();
+	await expect(other.getByLabel("Email")).toHaveValue("");
+	await fresh.close();
+});
+
 test("a login with next goes back to that page", async ({ browser, page }) => {
 	const account = await onboardedUser(page);
 	const fresh = await browser.newContext({

@@ -11,12 +11,12 @@ test("sign up, onboard, use the shell, log out and log in with the keyboard alon
 	const account = newAccount();
 
 	await page.goto("/signup");
+	await tabTo(page, page.getByLabel("Your name"));
+	await page.keyboard.type(account.name);
 	await tabTo(page, page.getByLabel("Email"));
 	await page.keyboard.type(account.email);
 	await tabTo(page, page.getByLabel("Password", { exact: true }));
 	await page.keyboard.type(account.password);
-	await tabTo(page, page.getByLabel("Display name"));
-	await page.keyboard.type(account.name);
 	await page.keyboard.press("Enter");
 	await expect(page).toHaveURL("/onboarding");
 
@@ -85,9 +85,9 @@ test.describe("phone", () => {
 	test("More opens, moves and closes by keyboard", async ({ page }) => {
 		const account = newAccount();
 		await page.goto("/signup");
+		await page.getByLabel("Your name").fill(account.name);
 		await page.getByLabel("Email").fill(account.email);
 		await page.getByLabel("Password", { exact: true }).fill(account.password);
-		await page.getByLabel("Display name").fill(account.name);
 		await page.getByRole("button", { name: "Create account" }).click();
 		await page.getByRole("button", { name: "Start using Daybook" }).click();
 		await expect(page).toHaveURL("/transactions");

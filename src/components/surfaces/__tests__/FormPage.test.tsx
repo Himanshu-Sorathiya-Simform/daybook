@@ -45,7 +45,27 @@ describe("FormPage", () => {
 		expect(container.querySelectorAll("p")).toHaveLength(0);
 	});
 
-	test("adds the caller's classes to the column", () => {
+	test("the name sits in a top bar, outside the main landmark", () => {
+		render(<FormPage title="Log in">x</FormPage>);
+		const bar = screen.getByRole("banner");
+		expect(bar).toContainElement(screen.getByRole("link", { name: "Daybook" }));
+		expect(screen.getByRole("main")).not.toContainElement(bar);
+	});
+
+	test("holds the title and the form in one framed card", () => {
+		render(
+			<FormPage title="Log in">
+				<p>form</p>
+			</FormPage>,
+		);
+		const card = screen.getByText("form").parentElement!;
+		expect(card).toContainElement(
+			screen.getByRole("heading", { level: 1, name: "Log in" }),
+		);
+		expect(card).toHaveClass("border", "rounded-section", "max-w-105");
+	});
+
+	test("adds the caller's classes to the card", () => {
 		render(
 			<FormPage
 				title="Log in"
@@ -56,7 +76,7 @@ describe("FormPage", () => {
 		);
 		expect(screen.getByText("form").parentElement).toHaveClass(
 			"gap-8",
-			"max-w-sm",
+			"max-w-105",
 		);
 	});
 });
