@@ -1,18 +1,6 @@
-import { type Locator, type Page } from "@playwright/test";
-
 import { newAccount } from "./accounts";
 import { expect, test } from "./fixtures";
-
-/** Presses Tab until `target` has focus, as a keyboard user would; fails after `limit` steps
- * so a field the keyboard cannot reach fails the test. */
-async function tabTo(page: Page, target: Locator, limit = 15) {
-	for (let step = 0; step < limit; step++) {
-		await page.keyboard.press("Tab");
-		if (await target.evaluate((element) => element === document.activeElement))
-			return;
-	}
-	throw new Error(`Tab never reached ${target.toString()}`);
-}
+import { tabTo } from "./keyboard";
 
 test.use({ timezoneId: "Asia/Kolkata", locale: "en-US" });
 

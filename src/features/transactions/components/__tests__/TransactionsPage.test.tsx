@@ -120,11 +120,14 @@ const CHECK_B_SUMMARY = summary({ count: 4, spendingMinor: 622000 });
 const CHECK_B = "?from=2026-10-01&to=2026-10-31&cat=food";
 
 /** IntersectionObserver for jsdom: records what each observer watches, and `intersect` tells
- * the observers of matching elements that they came into view, as scrolling would. */
+ * the observers of matching elements that they came into view, as scrolling would. An element
+ * `stays` matches is reported in view as soon as it is watched, as a browser's observer
+ * reports an element's state when it starts watching it. */
 const observers = new Set<{
 	callback: IntersectionObserverCallback;
 	targets: Element[];
 }>();
+let stays: ((target: Element) => boolean) | null = null;
 class FakeObserver {
 	private entry: { callback: IntersectionObserverCallback; targets: Element[] };
 	constructor(callback: IntersectionObserverCallback) {
@@ -133,6 +136,17 @@ class FakeObserver {
 	}
 	observe(target: Element) {
 		this.entry.targets.push(target);
+		if (!stays?.(target)) return;
+		const { callback } = this.entry;
+		setTimeout(() => {
+			if (!observers.has(this.entry)) return;
+			act(() => {
+				callback(
+					[{ isIntersecting: true, target } as IntersectionObserverEntry],
+					{} as IntersectionObserver,
+				);
+			});
+		}, 0);
 	}
 	unobserve() {}
 	disconnect() {
@@ -144,6 +158,7 @@ class FakeObserver {
 }
 beforeEach(() => {
 	observers.clear();
+	stays = null;
 	vi.stubGlobal("IntersectionObserver", FakeObserver);
 	// The entry dialog's host reads the profile, and the dialog the payees.
 	route(network, "get", "/api/me", () => ok(meFor("u1")));
@@ -166,10 +181,19 @@ function intersect(match: (target: Element) => boolean) {
 				);
 	});
 }
-const scrollToEnd = () =>
-	intersect((target) => target.getAttribute("data-testid") === "loadMoreSentinel");
+/** The list's end, the area holding Load more, comes into view. */
+const scrollToEnd = () => intersect((target) => target.textContent === "Load more");
 const scrollToTop = () =>
 	intersect((target) => target.textContent === "Load earlier");
+/** The list's end, or its top, comes into view and stays there while pages load. */
+const scrollToEndAndStay = () => {
+	stays = (target) => target.textContent === "Load more";
+	scrollToEnd();
+};
+const scrollToTopAndStay = () => {
+	stays = (target) => target.textContent === "Load earlier";
+	scrollToTop();
+};
 
 /** Serves `/api/transactions` and its summary, and renders the page at `search`. */
 function renderPage(
@@ -830,6 +854,39 @@ describe("loading more (BR-F03-30, D-530)", () => {
 		expect(pathOf(lists[1]!.path).searchParams.get("cursor")).toBe("p1");
 	});
 
+	// BR-F03-30: each load watches the end afresh, so one still in view loads the next page.
+	test("while the end stays in view, each next page loads in turn", async () => {
+		const { lists } = renderPage("?sort=amount", { list: threePages() });
+		await grid();
+
+		scrollToEndAndStay();
+
+		await waitFor(() => expect(rowNames()).toHaveLength(120));
+		expect(
+			lists.map((each) => pathOf(each.path).searchParams.get("cursor")),
+		).toEqual([null, "p1", "p2"]);
+		expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+	});
+
+	// AC-F03-22, BR-F03-30: a page loaded at the top sets off nothing at the end, so it is never
+	// trimmed straight away; the end loads only as it comes into view.
+	test("loading an earlier page asks for no next page", async () => {
+		const { lists, user } = renderPage("?sort=amount", { list: threePages() });
+		await grid();
+		await user.click(screen.getByRole("button", { name: "Load more" }));
+		await waitFor(() => expect(rowNames()).toHaveLength(100));
+		const asked = lists.length;
+
+		scrollToTop();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		expect(
+			lists
+				.slice(asked)
+				.map((each) => pathOf(each.path).searchParams.get("cursor")),
+		).not.toContain("p2");
+	});
+
 	// AC-F03-64
 	test("Load more shows while there is a next page, loads it when pressed, and hides on the last", async () => {
 		const { user } = renderPage("?sort=amount", { list: threePages() });
@@ -1065,6 +1122,26 @@ describe("pages trimmed from the top (BR-F03-30, D-36)", () => {
 		scrollToTop();
 
 		await waitFor(() => expect(rowNames()[0]).toMatch(/^Payee 1,/));
+	});
+
+	// BR-F03-30: each load watches the top afresh, so one still in view loads the page before.
+	test("while the top stays in view, each trimmed page loads in turn, up to the newest", async () => {
+		const { user, lists } = renderPage("?sort=amount", { list: sevenPages() });
+		await grid();
+		await loadSix(user);
+		await user.click(screen.getByRole("button", { name: "Load more" }));
+		await waitFor(() => expect(rowNames()[0]).toMatch(/^Payee 5,/));
+		const before = lists.length;
+
+		scrollToTopAndStay();
+
+		await waitFor(() => expect(rowNames()[0]).toMatch(/^Payee 1,/));
+		expect(
+			lists
+				.slice(before)
+				.map((each) => pathOf(each.path).searchParams.get("cursor")),
+		).toEqual(["q2", "q1"]);
+		expect(screen.queryByRole("button", { name: "Load earlier" })).toBeNull();
 	});
 });
 

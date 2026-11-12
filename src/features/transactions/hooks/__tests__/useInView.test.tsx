@@ -41,13 +41,15 @@ function Probe({
 	active,
 	onVisible,
 	attach = true,
+	resetKey,
 }: {
 	active: boolean;
 	onVisible: () => void;
 	attach?: boolean;
+	resetKey?: unknown;
 }) {
 	const ref = useRef<HTMLDivElement>(null);
-	useInView(ref, active, onVisible);
+	useInView(ref, active, onVisible, resetKey);
 	return attach ? <div ref={ref}>Top</div> : null;
 }
 
@@ -164,5 +166,41 @@ describe("useInView (BR-F03-30)", () => {
 		expect(observers).toHaveLength(1);
 		expect(first).not.toHaveBeenCalled();
 		expect(second).toHaveBeenCalledOnce();
+	});
+
+	// BR-F03-30: after a page loads, an end still on screen must load again; an observer only
+	// calls back when its target's visibility changes, or when it starts watching.
+	test("a new reset key watches afresh, and the same key keeps the watcher", () => {
+		const onVisible = vi.fn();
+		const { rerender } = render(
+			<Probe
+				active
+				onVisible={onVisible}
+				resetKey={1}
+			/>,
+		);
+		expect(observers.filter((each) => each.live)).toHaveLength(1);
+
+		rerender(
+			<Probe
+				active
+				onVisible={onVisible}
+				resetKey={1}
+			/>,
+		);
+		expect(observers).toHaveLength(1);
+
+		rerender(
+			<Probe
+				active
+				onVisible={onVisible}
+				resetKey={2}
+			/>,
+		);
+		expect(observers).toHaveLength(2);
+		expect(observers[0]!.live).toBe(false);
+		expect(observers[1]!.live).toBe(true);
+		report(true);
+		expect(onVisible).toHaveBeenCalledOnce();
 	});
 });

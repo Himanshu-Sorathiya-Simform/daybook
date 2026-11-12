@@ -135,7 +135,12 @@ export function TransactionList({
 		if (hasPreviousPage && !isFetchingPreviousPage)
 			void query.fetchPreviousPage();
 	};
-	useInView(top, hasPreviousPage, loadEarlier);
+	// Each end is watched against the screen, afresh after every page load. React Aria's own
+	// load-more sentinel watches against the page's scroller, here the whole document, where it
+	// always counts as in view: it fired on every change and never on scrolling, so a page
+	// loaded at the top set off one at the end, which trimmed the top again.
+	useInView(top, hasPreviousPage, loadEarlier, data);
+	useInView(loadMore, hasNextPage, () => void loadNext(), data);
 
 	// Enter opens the selected row and Escape clears it (BR-F03-52). Both listen on the grid
 	// before the rows' own handlers, which take the keys for themselves: React Aria's row action
@@ -301,7 +306,6 @@ export function TransactionList({
 					);
 				})}
 				<AriaGridListLoadMoreItem
-					onLoadMore={() => void loadNext()}
 					isLoading={isFetchingNextPage}
 					className="flex h-12 items-center justify-center"
 				>

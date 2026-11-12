@@ -1,5 +1,5 @@
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { CurrencyCode } from "@/lib/currency";
 import {
@@ -19,6 +19,20 @@ type State = { filter: TransactionFilter; list: ListParams } & Interface;
 function single(params: URLSearchParams, name: string): string | null {
 	const values = params.getAll(name);
 	return values.length === 1 && values[0] !== "" ? (values[0] as string) : null;
+}
+
+/** The page's state as `params` hold it: the committed filter and list, and the interface
+ * parameters, with what the reader found invalid. */
+function stateOf(params: URLSearchParams, currency: CurrencyCode) {
+	const read = readFilterParams(params, { currency });
+	const state: State = {
+		filter: read.filter,
+		list: read.list,
+		view: single(params, "view"),
+		txn: single(params, "txn"),
+		isNew: params.get("new") === "1" && params.getAll("new").length === 1,
+	};
+	return { state, invalid: read.invalid };
 }
 
 /** The page's URL for a state: the filter and list in BR-F03-33's normalized order, then
@@ -46,25 +60,19 @@ function hrefOf(
  *   dialog and marking a view replace the current one (BR-F03-53, BR-F03-65,
  *   BR-F03-73). Each goes through the browser's history, which Next's router follows without
  *   asking the server again, so the page's prefetch runs only on a real page load. Each write
- *   starts from the last one, so two in one event, such as closing `new=1` and selecting the
- *   row it created, both land.
+ *   starts from the browser's URL, so two writes both land, such as closing `new=1` and
+ *   selecting the row it created, even with a render between them.
  */
 export function useTransactionsUrl(currency: CurrencyCode) {
 	const searchParams = useSearchParams();
 	const pathname = usePathname();
-	const params = new URLSearchParams(searchParams.toString());
-	const read = readFilterParams(params, { currency });
-	const current: State = {
-		filter: read.filter,
-		list: read.list,
-		view: single(params, "view"),
-		txn: single(params, "txn"),
-		isNew: params.get("new") === "1" && params.getAll("new").length === 1,
-	};
+	const { state: current, invalid } = stateOf(
+		new URLSearchParams(searchParams.toString()),
+		currency,
+	);
 	const [notice, setNotice] = useState(false);
 
-	const cleaned =
-		read.invalid.length > 0 ? hrefOf(pathname, current, currency) : null;
+	const cleaned = invalid.length > 0 ? hrefOf(pathname, current, currency) : null;
 
 	// The notice is set while rendering, React's pattern for state that follows what was
 	// read; only the URL, which lives outside React, is changed in an effect.
@@ -83,16 +91,15 @@ export function useTransactionsUrl(currency: CurrencyCode) {
 		};
 	}, [cleaned]);
 
-	// The state the next write starts from: the URL as last read, or as last written when a
-	// write has not been read back yet.
-	const latest = useRef(current);
-	useLayoutEffect(() => {
-		latest.current = current;
-	});
-
+	// Each write starts from the browser's URL, which every history call moves at once. The
+	// rendered URL can lag: Next's router takes a call in a render later, so a render in between
+	// would bring back what an earlier write removed.
 	const go = (mode: "push" | "replace", change: (state: State) => State) => {
-		const next = change(latest.current);
-		latest.current = next;
+		const { state } = stateOf(
+			new URLSearchParams(window.location.search),
+			currency,
+		);
+		const next = change(state);
 		const href = hrefOf(pathname, next, currency);
 		if (mode === "push") window.history.pushState(null, "", href);
 		else window.history.replaceState(null, "", href);

@@ -111,19 +111,24 @@ export type HistoryCall = { mode: "push" | "replace"; href: string };
  * Next's router seam for URL state: the search params and pathname contexts that
  * `useSearchParams` and `usePathname` read, and the browser's history calls, which Next
  * follows (its docs, "Using the native History API"). The history calls are recorded and
- * update the contexts, as Next's router would, without loading a page.
+ * update the contexts, as Next's router would, without loading a page. `window.location`
+ * follows each call at once, as a browser's does.
  *
  * With `late`, the history calls are heard only from the harness's own effect on, as in the
  * app: Next's router patches the history API in an effect of its own component, which runs
  * after the effects of the page inside it (`next/dist/client/components/app-router.js`).
+ *
+ * With `lag`, the router takes a call in only when `flush` runs, as Next's does a render later:
+ * until then the page renders with the URL as it was, while `window.location` already moved.
  */
 export function urlHarness(
 	start: string,
 	pathname = "/transactions",
-	{ late = false }: { late?: boolean } = {},
+	{ late = false, lag = false }: { late?: boolean; lag?: boolean } = {},
 ) {
 	const calls: HistoryCall[] = [];
 	let search = start;
+	let pending: string | null = null;
 	const listeners = new Set<() => void>();
 	const subscribe = (listener: () => void) => {
 		listeners.add(listener);
@@ -132,13 +137,25 @@ export function urlHarness(
 		};
 	};
 	const read = () => search;
+	const notify = () => {
+		for (const listener of listeners) listener();
+	};
+	// The browser's own history, which moves `window.location` in jsdom.
+	const replace = History.prototype.replaceState.bind(window.history);
+	replace(null, "", `${pathname}${start}`);
 	const record =
 		(mode: HistoryCall["mode"]) =>
 		(_state: unknown, _unused: string, href?: string | URL | null) => {
 			const text = String(href);
 			calls.push({ mode, href: text });
-			search = new URL(text, window.location.origin).search;
-			for (const listener of listeners) listener();
+			replace(null, "", text);
+			const next = new URL(text, window.location.origin).search;
+			if (lag) {
+				pending = next;
+				return;
+			}
+			search = next;
+			notify();
 		};
 	const listen = () => {
 		vi.spyOn(window.history, "pushState").mockImplementation(record("push"));
@@ -147,6 +164,14 @@ export function urlHarness(
 		);
 	};
 	if (!late) listen();
+
+	/** Lets the router take in the last history call, with `lag`. */
+	const flush = () => {
+		if (pending === null) return;
+		search = pending;
+		pending = null;
+		notify();
+	};
 
 	function Url({ children }: { children: ReactNode }) {
 		useEffect(() => {
@@ -161,7 +186,7 @@ export function urlHarness(
 		);
 	}
 
-	return { calls, Url };
+	return { calls, Url, flush };
 }
 
 /** Waits until a mutation's rendered state shows it ended: its promise settles before React

@@ -468,6 +468,32 @@ describe("the selected row and the dialog (BR-F03-53, BR-F03-73)", () => {
 		expect(result.current.txn).toBe("r1");
 	});
 
+	// Next's router renders a history call later: a render in between still shows the old URL,
+	// and a write after it must not bring back what the first one removed.
+	test("two writes with a render between them, before the router catches up, both land", async () => {
+		const { calls, Url, flush } = urlHarness(
+			`?view=${VIEW}&txn=${TXN}`,
+			"/transactions",
+			{ lag: true },
+		);
+		const { result, rerender } = renderHook(() => useTransactionsUrl("INR"), {
+			wrapper: Url,
+		});
+		await act(async () => {});
+
+		act(() => result.current.markView(null));
+		rerender();
+		act(() => result.current.select(null));
+
+		expect(calls.map((call) => call.href)).toEqual([
+			`/transactions?txn=${TXN}`,
+			"/transactions",
+		]);
+		act(() => flush());
+		expect(result.current.view).toBeNull();
+		expect(result.current.txn).toBeNull();
+	});
+
 	test("a filter and a selection in one event keep each other", async () => {
 		const { result, calls } = await renderUrl("?cat=food");
 		act(() => {

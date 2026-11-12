@@ -327,8 +327,11 @@ export function EntryDialog({
 		else onClose();
 	};
 
+	// It listens before the fields' own handlers: a category tile's label takes Enter, Ctrl or
+	// not, as a press of its own and stops it there.
 	useShortcut(SAVE_KEY, () => save("save"), {
 		enabled: isOpen && !confirming && conflict === null && !deleting,
+		capture: true,
 	});
 
 	/** A payee chosen from the list (BR-F03-45, D-89): it fills the payee, and its last category

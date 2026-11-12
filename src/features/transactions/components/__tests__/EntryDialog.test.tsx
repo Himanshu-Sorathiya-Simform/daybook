@@ -792,6 +792,19 @@ describe("Save (BR-F03-20, BR-F03-21)", () => {
 		expect(sent).toHaveLength(1);
 	});
 
+	// BR-F03-52: a tile's label takes Enter as a press of its own and stops it there.
+	test("Ctrl Enter saves from a category tile", async () => {
+		const sent = creates();
+		const { user, onClose } = renderDialog();
+
+		await fillValid(user);
+		expect(radio("Food")).toHaveFocus();
+		await user.keyboard("{Control>}{Enter}{/Control}");
+
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(sent).toHaveLength(1);
+	});
+
 	test("Enter alone in a field does not save", async () => {
 		const sent = creates();
 		const { user } = renderDialog();
