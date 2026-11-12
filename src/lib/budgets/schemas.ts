@@ -37,6 +37,7 @@ export const BUDGET_MESSAGES = {
 	stopRemovesEveryMonth:
 		"This would remove every month. Delete the Budget instead.",
 	id: TRANSACTION_MESSAGES.id,
+	idInFuture: TRANSACTION_MESSAGES.idInFuture,
 	month: "Use a month as YYYY-MM.",
 	scope: 'Send "month" as the scope of a one-month change.',
 	shape: "Send a change from a month, a change for one month, or a whole schedule.",

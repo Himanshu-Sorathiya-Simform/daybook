@@ -3,8 +3,14 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { parseOwnerEnv, parseServerEnv } from "../../src/server/env";
 import { createUser } from "../../src/server/db/__tests__/private-rows";
-import { GOLDEN_ALL, goldenRow } from "../golden";
-import { GOLDEN_M1_ROWS, loadGolden, type LoadedGolden } from "../load-golden";
+import { GOLDEN_ALL, GOLDEN_BUDGETS, GOLDEN_NOW, goldenRow } from "../golden";
+import {
+	GOLDEN_M1_ROWS,
+	loadGolden,
+	loadGoldenBudgets,
+	type LoadedBudget,
+	type LoadedGolden,
+} from "../load-golden";
 
 /** The golden loader (D-471), against a real database: two users each get their own copy. */
 
@@ -190,5 +196,55 @@ describe("ids", () => {
 		expect(GOLDEN_ALL.find((row) => row.golden === 12)?.id).toBe(
 			"0199a000-0000-7000-8000-000000000012",
 		);
+	});
+});
+
+describe("the golden Budgets", () => {
+	let firstBudgets: LoadedBudget[];
+	let secondBudgets: LoadedBudget[];
+
+	beforeAll(async () => {
+		firstBudgets = await loadGoldenBudgets(owner, first.userId);
+		secondBudgets = await loadGoldenBudgets(owner, second.userId);
+	});
+
+	test("load all four for the user, field for field, at the golden clock", async () => {
+		const rows = await asUser<Record<string, unknown>>(
+			first.userId,
+			`SELECT id, category, schedule, overrides, demo, version,
+			   created_at = '${GOLDEN_NOW}' AND updated_at = '${GOLDEN_NOW}' AS at_golden_clock
+			 FROM app.budgets ORDER BY id`,
+		);
+		expect(rows).toEqual(
+			firstBudgets.map(
+				({ id, category, schedule, overrides, demo, version }) => ({
+					id,
+					category,
+					schedule,
+					overrides,
+					demo,
+					version,
+					at_golden_clock: true,
+				}),
+			),
+		);
+		expect(rows.map((row) => row["category"])).toEqual(
+			GOLDEN_BUDGETS.map((budget) => budget.category),
+		);
+	});
+
+	test("give each load its own ids, visible only to its own user", async () => {
+		const firstIds = firstBudgets.map((budget) => budget.id);
+		const secondIds = secondBudgets.map((budget) => budget.id);
+		expect(firstIds.some((id) => secondIds.includes(id))).toBe(false);
+		const seen = await asUser<{ id: string }>(
+			second.userId,
+			"SELECT id FROM app.budgets",
+		);
+		expect(seen.map((row) => row.id).sort()).toEqual([...secondIds].sort());
+	});
+
+	test("leave the shared fixture's ids untouched", () => {
+		expect(GOLDEN_BUDGETS[0].id).toBe("0199a000-0000-7000-8004-000000000001");
 	});
 });
