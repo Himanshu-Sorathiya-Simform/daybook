@@ -12,6 +12,7 @@ import {
 	type ViewFilter,
 	viewNameSchema,
 } from "@/lib/transactions/views";
+import { VIEW_TEXT } from "./messages";
 
 /** The profile's today in its zone (TIME-5) and its currency, which views resolve against. */
 export type ViewContext = { today: string; currency: CurrencyCode };
@@ -48,6 +49,21 @@ export function selectedView(
 		}
 	}
 	return { kind: "all", edited: isEdited(ALL_TRANSACTIONS, current, context) };
+}
+
+/**
+ * The line under the bar, which the write button's `aria-describedby` points at: the offline
+ * reason while a write is on offer (BR-F03-63), or why Save as view is disabled at the view
+ * limit (BR-F03-67). Nothing otherwise.
+ */
+export function viewsNote(
+	selected: SelectedView,
+	{ isOffline, atLimit }: { isOffline: boolean; atLimit: boolean },
+): string | null {
+	const edited = selected.kind !== "waiting" && selected.edited;
+	if (isOffline && (edited || selected.kind === "saved")) return VIEW_TEXT.offline;
+	if (selected.kind === "all" && edited && atLimit) return VIEW_MESSAGES.limit;
+	return null;
 }
 
 /** Whether `id` names a view the loaded list lacks, so it leaves the URL (BR-F03-65). Until the

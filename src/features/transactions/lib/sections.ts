@@ -46,7 +46,7 @@ export function sectionsOf(
 			if (hidden.has(row.id)) continue;
 			const key = groupKeyOf(row, group);
 			const last = sections.at(-1);
-			if (last && last.key === key) last.rows.push(row);
+			if (last?.key === key) last.rows.push(row);
 			else sections.push({ key, total: totals.get(key) ?? null, rows: [row] });
 		}
 	}

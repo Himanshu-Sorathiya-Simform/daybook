@@ -46,10 +46,9 @@ export function TypeMenu({
 			{...(onOpenChange ? { onOpenChange } : {})}
 			{...(className ? { className } : {})}
 		>
-			<div
-				role="group"
+			<fieldset
 				aria-label="Type"
-				className="flex flex-col gap-0.5 px-1"
+				className="flex min-w-0 flex-col gap-0.5 px-1"
 			>
 				{FILTER_TYPES.map((type) => (
 					<Choice
@@ -61,7 +60,7 @@ export function TypeMenu({
 						countPending={countsPending}
 					/>
 				))}
-			</div>
+			</fieldset>
 		</FilterPopover>
 	);
 }

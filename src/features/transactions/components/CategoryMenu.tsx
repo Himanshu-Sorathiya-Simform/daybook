@@ -48,10 +48,9 @@ export function CategoryMenu({
 		onChange(next.length ? next : undefined);
 	};
 	const list = (label: string, categories: readonly CategoryKey[]) => (
-		<div
-			role="group"
+		<fieldset
 			aria-label={label}
-			className="flex flex-col gap-0.5 px-1"
+			className="flex min-w-0 flex-col gap-0.5 px-1"
 		>
 			{categories.map((category) => (
 				<Choice
@@ -63,7 +62,7 @@ export function CategoryMenu({
 					countPending={countsPending}
 				/>
 			))}
-		</div>
+		</fieldset>
 	);
 	return (
 		<FilterPopover

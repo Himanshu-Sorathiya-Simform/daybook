@@ -31,6 +31,7 @@ import type { SaveKind } from "../hooks/useEntryDialog";
 import { usePayees } from "../hooks/usePayees";
 import { conflictRows, keepMineLine } from "../lib/conflict";
 import {
+	calendarBounds,
 	categoryTiles,
 	changedFields,
 	chargeNotice,
@@ -54,7 +55,6 @@ import {
 	rowWindow,
 	SERVER_FIELDS,
 	tidyAmount,
-	windowStart,
 } from "../lib/entry";
 import type { PayeeItem } from "../lib/suggestions";
 import { TRANSACTIONS_TEXT } from "../lib/messages";
@@ -357,15 +357,7 @@ export function EntryDialog({
 		setExpanded(false);
 	};
 
-	// An edit's calendar offers the row's own window, and the stored date, which after a time
-	// zone change can sit a day outside it (D-238).
-	const [minDate, maxDate] =
-		ownWindow ?
-			[
-				start.date < ownWindow.firstOn ? start.date : ownWindow.firstOn,
-				start.date > ownWindow.lastOn ? start.date : ownWindow.lastOn,
-			]
-		:	[windowStart(today), today];
+	const { minDate, maxDate } = calendarBounds(start.date, ownWindow, today);
 
 	return (
 		<>
@@ -546,63 +538,57 @@ export function EntryDialog({
 								</dd>
 							</div>
 						</dl>
-					:	<>
-							<div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-2.5">
-								<form.Field name="date">
-									{(field) => (
-										<DatePicker
-											label="Date"
-											value={field.state.value}
-											onChange={(date) => {
-												field.handleChange(date);
-												clear("date");
-											}}
-											display={entryDateLabel(
-												field.state.value,
-												{
+					:	<div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-2.5">
+							<form.Field name="date">
+								{(field) => (
+									<DatePicker
+										label="Date"
+										value={field.state.value}
+										onChange={(date) => {
+											field.handleChange(date);
+											clear("date");
+										}}
+										display={entryDateLabel(field.state.value, {
+											today,
+											dateLocale: locale.dateLocale,
+										})}
+										today={today}
+										minValue={minDate}
+										maxValue={maxDate}
+										firstDayOfWeek={firstDayOfWeek}
+										note={
+											ownWindow ?
+												editCalendarNote(ownWindow, {
 													today,
 													dateLocale: locale.dateLocale,
-												},
-											)}
-											today={today}
-											minValue={minDate}
-											maxValue={maxDate}
-											firstDayOfWeek={firstDayOfWeek}
-											note={
-												ownWindow ?
-													editCalendarNote(ownWindow, {
-														today,
-														dateLocale:
-															locale.dateLocale,
-													})
-												:	ENTRY_TEXT.calendarNote
-											}
-											hint={
-												ownWindow ? undefined : (
-													ENTRY_TEXT.dateHint
-												)
-											}
-											error={messageOf(field)}
-											isDisabled={busy}
-										/>
-									)}
-								</form.Field>
-								<form.Field name="time">
-									{(field) => (
-										<TimeField
-											label="Time"
-											value={field.state.value}
-											onChange={(time) => {
-												field.handleChange(time);
-												clear("time");
-											}}
-											error={messageOf(field)}
-											isDisabled={busy}
-										/>
-									)}
-								</form.Field>
-							</div>
-						</>
+												})
+											:	ENTRY_TEXT.calendarNote
+										}
+										hint={
+											ownWindow ? undefined : (
+												ENTRY_TEXT.dateHint
+											)
+										}
+										error={messageOf(field)}
+										isDisabled={busy}
+									/>
+								)}
+							</form.Field>
+							<form.Field name="time">
+								{(field) => (
+									<TimeField
+										label="Time"
+										value={field.state.value}
+										onChange={(time) => {
+											field.handleChange(time);
+											clear("time");
+										}}
+										error={messageOf(field)}
+										isDisabled={busy}
+									/>
+								)}
+							</form.Field>
+						</div>
 					}
 					<form.Field name="description">
 						{(field) => (

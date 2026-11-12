@@ -9,6 +9,7 @@ import {
 	rowDisplay,
 	rowName,
 	rowWhen,
+	showLabel,
 	signedMinor,
 	transactionCount,
 } from "../labels";
@@ -578,5 +579,23 @@ describe("rowName (BR-F03-32)", () => {
 		expect(
 			rowName({ ...rowDisplay(ROW_25, "day", IN), status: "confirmed" }, IN),
 		).toBe("Swiggy, Food, 11:50 pm, −₹380.00");
+	});
+});
+
+describe("showLabel (BR-F03-39)", () => {
+	test("reads Show Transactions while the count is on its way", () => {
+		expect(showLabel(undefined)).toBe("Show Transactions");
+	});
+
+	test("reads No matches for a count of none", () => {
+		expect(showLabel(0)).toBe("No matches");
+	});
+
+	test.each([
+		[1, "Show 1 Transaction"],
+		[2, "Show 2 Transactions"],
+		[137, "Show 137 Transactions"],
+	])("a count of %i reads %s", (count, text) => {
+		expect(showLabel(count)).toBe(text);
 	});
 });

@@ -6,9 +6,8 @@ import { ApiRequestError } from "@/lib/api/client";
 import type { CurrencyCode } from "@/lib/currency";
 import type { ListParams, TransactionFilter } from "@/lib/transactions/url";
 import { TRANSACTIONS_TEXT } from "../lib/messages";
-import type { PanelSelection } from "../lib/panel";
+import { newerRow, type PanelSelection, rowInPages } from "../lib/panel";
 import { transactionOptions } from "../lib/queries";
-import type { TransactionAnswer } from "../lib/types";
 import { useTransactionList } from "./useTransactionList";
 
 type Options = {
@@ -39,16 +38,7 @@ export function useSelectedTransaction({
 }: Options): PanelSelection | null {
 	const pages = useTransactionList({ filter, list, currency });
 	const { data } = pages;
-	let inPages: TransactionAnswer | undefined;
-	if (id !== null && data) {
-		for (const page of data.pages) {
-			const found = page.items.find((item) => item.id === id);
-			if (found) {
-				inPages = { ...found, currency: page.currency };
-				break;
-			}
-		}
-	}
+	const inPages = id !== null && data ? rowInPages(data.pages, id) : undefined;
 	// Its own query always, so an edit's answer shows at once; asked for alone once the pages
 	// have answered without it, or failed.
 	const alone = useQuery({
@@ -56,12 +46,7 @@ export function useSelectedTransaction({
 		enabled: id !== null && (data !== undefined || pages.isError) && !inPages,
 	});
 	const loose = id !== null && alone.data?.id === id ? alone.data : undefined;
-	const row =
-		inPages && loose ?
-			loose.version > inPages.version ?
-				loose
-			:	inPages
-		:	(inPages ?? loose);
+	const row = newerRow(inPages, loose);
 
 	// The last id the panel showed, which tells a deep link apart from a row deleted elsewhere.
 	const seen = useRef<string | null>(null);

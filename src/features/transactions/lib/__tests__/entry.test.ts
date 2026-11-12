@@ -4,6 +4,7 @@ import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/lib/categories";
 import { isUuidV7, uuidV7Time } from "@/lib/ids";
 import { TRANSACTION_MESSAGES } from "@/lib/transactions/schemas";
 import {
+	calendarBounds,
 	categoryTiles,
 	changedFields,
 	chargeNotice,
@@ -162,6 +163,58 @@ describe("the entry window (BR-F03-08, TIME-7)", () => {
 
 	test("crosses a month and a year", () => {
 		expect(windowStart("2026-01-05")).toBe("2025-12-26");
+	});
+});
+
+describe("calendarBounds (BR-F03-08, BR-F03-11, D-238)", () => {
+	test("a new Transaction's calendar is today and the 10 days before", () => {
+		expect(calendarBounds("2026-11-02", null, "2026-11-02")).toEqual({
+			minDate: "2026-10-23",
+			maxDate: "2026-11-02",
+		});
+	});
+
+	test("an edit's calendar is the row's own window when the stored date is inside it", () => {
+		const window = { firstOn: "2026-10-06", lastOn: "2026-10-16" };
+		expect(calendarBounds("2026-10-10", window, "2026-11-02")).toEqual({
+			minDate: "2026-10-06",
+			maxDate: "2026-10-16",
+		});
+	});
+
+	test("the window's own ends count as inside it", () => {
+		const window = { firstOn: "2026-10-06", lastOn: "2026-10-16" };
+		expect(calendarBounds("2026-10-06", window, "2026-11-02")).toEqual({
+			minDate: "2026-10-06",
+			maxDate: "2026-10-16",
+		});
+		expect(calendarBounds("2026-10-16", window, "2026-11-02")).toEqual({
+			minDate: "2026-10-06",
+			maxDate: "2026-10-16",
+		});
+	});
+
+	test("a stored date a day before the window widens the start", () => {
+		const window = { firstOn: "2026-10-06", lastOn: "2026-10-16" };
+		expect(calendarBounds("2026-10-05", window, "2026-11-02")).toEqual({
+			minDate: "2026-10-05",
+			maxDate: "2026-10-16",
+		});
+	});
+
+	test("a stored date a day after the window widens the end", () => {
+		const window = { firstOn: "2026-10-06", lastOn: "2026-10-16" };
+		expect(calendarBounds("2026-10-17", window, "2026-11-02")).toEqual({
+			minDate: "2026-10-06",
+			maxDate: "2026-10-17",
+		});
+	});
+
+	test("an edit ignores today", () => {
+		const window = { firstOn: "2026-10-06", lastOn: "2026-10-16" };
+		expect(calendarBounds("2026-10-10", window, "2030-01-01")).toEqual(
+			calendarBounds("2026-10-10", window, "2026-11-02"),
+		);
 	});
 });
 

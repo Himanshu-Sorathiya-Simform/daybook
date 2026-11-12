@@ -217,6 +217,23 @@ export function windowStart(today: string): string {
 	return shiftDays(today, -WINDOW_DAYS);
 }
 
+/**
+ * The first and last day the calendar offers (BR-F03-08, BR-F03-11): a new Transaction's window
+ * ending today, or an edit's own window, widened to the stored date, which after a time zone
+ * change can sit a day outside it (D-238).
+ */
+export function calendarBounds(
+	storedDate: string,
+	window: EntryWindow | null,
+	today: string,
+): { minDate: string; maxDate: string } {
+	if (window === null) return { minDate: windowStart(today), maxDate: today };
+	return {
+		minDate: storedDate < window.firstOn ? storedDate : window.firstOn,
+		maxDate: storedDate > window.lastOn ? storedDate : window.lastOn,
+	};
+}
+
 /** The date button's words (BR-F03-75): "Today, 2 Nov", "Yesterday, 1 Nov", or F02's day
  * format, "Sat, 31 Oct". */
 export function entryDateLabel(
@@ -333,7 +350,7 @@ export function checkEntry(
 		fields.category = M.categoryRequired;
 	}
 	const today = todayIn(locale.timezone, now);
-	const dateMoved = edit === undefined || values.date !== edit.start.date;
+	const dateMoved = values.date !== edit?.start.date;
 	if (edit === undefined) {
 		if (values.date < windowStart(today) || values.date > today) {
 			fields.date = M.dateOutOfWindow;

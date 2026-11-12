@@ -11,6 +11,7 @@ import {
 	type TxnType,
 } from "@/lib/transactions/model";
 import type { GroupTotal } from "@/server/dal/transactions/list";
+import { FILTER_TEXT } from "./messages";
 
 /** How the profile formats dates, times and money (BR-F02-18, BR-F02-19), and its today
  * (TIME-5), which "Today" and "Yesterday" and the current year follow. */
@@ -23,14 +24,18 @@ export type LabelLocale = {
 };
 
 /** The types whose rows add to money free to spend, so they show a plus (D-231). */
-const PLUS_TYPES: readonly TxnType[] = ["income", "refund", "goal_withdrawal"];
+const PLUS_TYPES: ReadonlySet<TxnType> = new Set([
+	"income",
+	"refund",
+	"goal_withdrawal",
+]);
 
 /** A row's amount with D-231's sign: plus when money becomes free to spend. */
 export function signedMinor({
 	type,
 	amountMinor,
 }: Pick<Transaction, "type" | "amountMinor">): number {
-	return PLUS_TYPES.includes(type) ? amountMinor : -amountMinor;
+	return PLUS_TYPES.has(type) ? amountMinor : -amountMinor;
 }
 
 /** A day group's header (BR-F03-31, D-522): "Today", "Yesterday · Sun, 1 Nov", or F02's day
@@ -109,6 +114,14 @@ export function transactionCount(count: number): string {
 	return `${count} ${count === 1 ? "Transaction" : "Transactions"}`;
 }
 
+/** The filter sheet's apply button (BR-F03-39): "Show 12 Transactions", "No matches" for none,
+ * and "Show Transactions" while the count is on its way. */
+export function showLabel(count: number | undefined): string {
+	if (count === undefined) return "Show Transactions";
+	if (count === 0) return FILTER_TEXT.noMatches;
+	return `Show ${transactionCount(count)}`;
+}
+
 /** The polite announcement after a page loads (BR-F03-30, D-530): "Loaded 50 more
  * Transactions", or the short last page's own count. */
 export function loadedMessage(count: number): string {
@@ -126,11 +139,9 @@ export function rowDisplay(
 	locale: LabelLocale,
 ): Omit<TransactionRowProps, "density" | "className"> {
 	const goal = isGoalType(row.type);
+	const direction = row.type === "goal_contribution" ? "To" : "From";
 	const shown = {
-		title:
-			goal ?
-				`${row.type === "goal_contribution" ? "To" : "From"} Goal`
-			:	(row.payee ?? ""),
+		title: goal ? `${direction} Goal` : (row.payee ?? ""),
 		goal,
 		when: rowWhen(row, group, locale),
 		amountMinor: signedMinor(row),

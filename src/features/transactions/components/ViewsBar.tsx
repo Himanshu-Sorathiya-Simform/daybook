@@ -19,7 +19,6 @@ import {
 	ALL_TRANSACTIONS,
 	type SavedView,
 	VIEW_LIMIT,
-	VIEW_MESSAGES,
 	viewName,
 } from "@/lib/transactions/views";
 import { useCreateView } from "../hooks/useCreateView";
@@ -36,6 +35,7 @@ import {
 	selectedView,
 	type UrlState,
 	viewFields,
+	viewsNote,
 	viewUrl,
 } from "../lib/saved-views";
 import { readViewError } from "../lib/write-errors";
@@ -206,10 +206,7 @@ export function ViewsBar({
 	const selectedKey =
 		selected.kind === "all" ? ALL_TRANSACTIONS.id : (saved?.id ?? null);
 	const pills = [ALL_TRANSACTIONS, ...(items ?? [])];
-	const note =
-		isOffline && (edited || saved !== null) ? VIEW_TEXT.offline
-		: selected.kind === "all" && edited && atLimit ? VIEW_MESSAGES.limit
-		: null;
+	const note = viewsNote(selected, { isOffline, atLimit });
 	const describedBy = note === null ? {} : { "aria-describedby": noteId };
 	const busy = create.isPending || edit.isPending;
 

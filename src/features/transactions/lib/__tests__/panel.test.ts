@@ -10,12 +10,14 @@ import {
 	detailTitle,
 	historyLine,
 	historyTitle,
+	newerRow,
 	ordinal,
 	PANEL_TEXT,
+	rowInPages,
 	summaryHeading,
 	topPayees,
 } from "../panel";
-import { CHECK_A_SUMMARY, row } from "./fixtures";
+import { CHECK_A_SUMMARY, idOf, page, row } from "./fixtures";
 
 // The golden profile (IN, INR) on the golden clock's day (TST-3).
 const IN: LabelLocale = {
@@ -365,5 +367,64 @@ describe("historyTitle and historyLine (BR-F03-72)", () => {
 				IN,
 			),
 		).toBeNull();
+	});
+});
+
+describe("rowInPages (BR-F03-53)", () => {
+	const A = row({ id: idOf(1), payee: "Swiggy" });
+	const B = row({ id: idOf(2), payee: "Zomato" });
+
+	test("finds a row on the first page, with the page's currency", () => {
+		expect(rowInPages([page({ items: [A, B] })], idOf(2))).toEqual({
+			...B,
+			currency: "INR",
+		});
+	});
+
+	test("finds a row on a later page", () => {
+		const pages = [page({ items: [A] }), page({ items: [B] })];
+		expect(rowInPages(pages, idOf(2))?.payee).toBe("Zomato");
+	});
+
+	test("takes the currency from the page that holds the row", () => {
+		const pages = [
+			page({ items: [A], currency: "INR" }),
+			page({ items: [B], currency: "USD" }),
+		];
+		expect(rowInPages(pages, idOf(2))?.currency).toBe("USD");
+		expect(rowInPages(pages, idOf(1))?.currency).toBe("INR");
+	});
+
+	test("is undefined for an id no page holds, or for no pages", () => {
+		expect(rowInPages([page({ items: [A] })], idOf(9))).toBeUndefined();
+		expect(rowInPages([page()], idOf(1))).toBeUndefined();
+		expect(rowInPages([], idOf(1))).toBeUndefined();
+	});
+});
+
+describe("newerRow (BR-F03-73)", () => {
+	const OLD = row({ version: 1, payee: "Swiggy" });
+	const NEW = row({ version: 2, payee: "Swiggy Instamart" });
+
+	test("the row asked for alone wins when its version is higher", () => {
+		expect(newerRow(OLD, NEW)).toBe(NEW);
+	});
+
+	test("the row from the pages wins when its version is higher", () => {
+		expect(newerRow(NEW, OLD)).toBe(NEW);
+	});
+
+	test("the row from the pages wins on equal versions", () => {
+		const same = row({ version: 1, payee: "Other" });
+		expect(newerRow(OLD, same)).toBe(OLD);
+	});
+
+	test("takes the one there is when only one is", () => {
+		expect(newerRow(OLD, undefined)).toBe(OLD);
+		expect(newerRow(undefined, NEW)).toBe(NEW);
+	});
+
+	test("is undefined when neither is", () => {
+		expect(newerRow(undefined, undefined)).toBeUndefined();
 	});
 });

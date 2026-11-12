@@ -9,6 +9,7 @@ import type {
 	PayeeHistoryAnswer,
 	SummaryAnswer,
 	TransactionAnswer,
+	TransactionPageAnswer,
 } from "./types";
 
 /** F03 section 8's panel words. */
@@ -37,6 +38,29 @@ export type PanelSelection =
 	| { state: "shown"; row: TransactionAnswer }
 	| { state: "loading" }
 	| { state: "failed"; onRetry: () => void };
+
+/** The row `id` from the loaded pages, with its page's currency, or undefined when no loaded
+ * page holds it (BR-F03-53). */
+export function rowInPages(
+	pages: readonly TransactionPageAnswer[],
+	id: string,
+): TransactionAnswer | undefined {
+	for (const page of pages) {
+		const found = page.items.find((item) => item.id === id);
+		if (found) return { ...found, currency: page.currency };
+	}
+	return undefined;
+}
+
+/** Of the row from the pages and the row asked for alone, the one with the higher version, so
+ * an edit shows before the list has refetched (BR-F03-73); the one there is when only one is. */
+export function newerRow(
+	inPages: TransactionAnswer | undefined,
+	alone: TransactionAnswer | undefined,
+): TransactionAnswer | undefined {
+	if (inPages && alone) return alone.version > inPages.version ? alone : inPages;
+	return inPages ?? alone;
+}
 
 /** How many payees the summary lists of the 6 the summary answers (BR-F03-71, D-520). */
 const TOP_PAYEES = 4;

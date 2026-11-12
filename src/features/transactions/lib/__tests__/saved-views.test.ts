@@ -1,11 +1,13 @@
 import { describe, expect, test } from "vitest";
 
-import type { SavedView } from "@/lib/transactions/views";
+import { type SavedView, VIEW_MESSAGES } from "@/lib/transactions/views";
+import { VIEW_TEXT } from "../messages";
 import {
 	checkViewName,
 	isUnknownView,
 	selectedView,
 	viewFields,
+	viewsNote,
 	viewUrl,
 } from "../saved-views";
 
@@ -279,5 +281,71 @@ describe("checkViewName (BR-F03-63)", () => {
 			ok: true,
 			name: "Food",
 		});
+	});
+});
+
+describe("viewsNote (BR-F03-63, BR-F03-67)", () => {
+	const ONLINE = { isOffline: false, atLimit: false };
+	const OFFLINE = { isOffline: true, atLimit: false };
+	const LIMIT = { isOffline: false, atLimit: true };
+
+	test("a view id before the list has loaded has no note, offline or not", () => {
+		expect(viewsNote({ kind: "waiting" }, ONLINE)).toBeNull();
+		expect(viewsNote({ kind: "waiting" }, OFFLINE)).toBeNull();
+		expect(
+			viewsNote({ kind: "waiting" }, { isOffline: true, atLimit: true }),
+		).toBeNull();
+	});
+
+	test("online with nothing to explain has no note", () => {
+		expect(viewsNote({ kind: "all", edited: false }, ONLINE)).toBeNull();
+		expect(viewsNote({ kind: "all", edited: true }, ONLINE)).toBeNull();
+		expect(
+			viewsNote({ kind: "saved", view: FOOD, edited: false }, ONLINE),
+		).toBeNull();
+		expect(
+			viewsNote({ kind: "saved", view: FOOD, edited: true }, ONLINE),
+		).toBeNull();
+	});
+
+	test("offline, an edited All Transactions says to connect", () => {
+		expect(viewsNote({ kind: "all", edited: true }, OFFLINE)).toBe(
+			VIEW_TEXT.offline,
+		);
+	});
+
+	test("offline, a saved view says to connect, edited or not (its menu writes)", () => {
+		expect(
+			viewsNote({ kind: "saved", view: FOOD, edited: false }, OFFLINE),
+		).toBe(VIEW_TEXT.offline);
+		expect(viewsNote({ kind: "saved", view: FOOD, edited: true }, OFFLINE)).toBe(
+			VIEW_TEXT.offline,
+		);
+	});
+
+	test("offline, an unedited All Transactions offers no write, so no note", () => {
+		expect(viewsNote({ kind: "all", edited: false }, OFFLINE)).toBeNull();
+	});
+
+	test("an edited All Transactions at 20 views gives the limit", () => {
+		expect(viewsNote({ kind: "all", edited: true }, LIMIT)).toBe(
+			VIEW_MESSAGES.limit,
+		);
+	});
+
+	test("the limit shows only where Save as view does", () => {
+		expect(viewsNote({ kind: "all", edited: false }, LIMIT)).toBeNull();
+		expect(
+			viewsNote({ kind: "saved", view: FOOD, edited: true }, LIMIT),
+		).toBeNull();
+	});
+
+	test("offline wins over the limit", () => {
+		expect(
+			viewsNote(
+				{ kind: "all", edited: true },
+				{ isOffline: true, atLimit: true },
+			),
+		).toBe(VIEW_TEXT.offline);
 	});
 });

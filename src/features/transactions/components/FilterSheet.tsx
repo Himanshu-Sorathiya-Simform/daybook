@@ -36,8 +36,7 @@ import {
 	SOURCE_LABELS,
 	TYPE_LABELS,
 } from "../lib/filter-labels";
-import { transactionCount } from "../lib/labels";
-import { FILTER_TEXT } from "../lib/messages";
+import { showLabel } from "../lib/labels";
 import { transactionSummaryOptions } from "../lib/queries";
 import { PAGE_BREAKDOWNS } from "../lib/types";
 import { AmountBlock } from "./AmountBlock";
@@ -122,10 +121,6 @@ export function FilterSheet({
 	const counted = online && settled === draft ? summary.data?.count : undefined;
 	// While online, the count is on its way until the draft settles and its summary answers.
 	const counting = online && counted === undefined;
-	const showLabel =
-		counted === undefined ? "Show Transactions"
-		: counted === 0 ? FILTER_TEXT.noMatches
-		: `Show ${transactionCount(counted)}`;
 
 	const showCustom = custom || preset === "custom";
 	const dateOptions = [
@@ -180,7 +175,7 @@ export function FilterSheet({
 							}}
 							className="flex-[1.6] justify-center"
 						>
-							{showLabel}
+							{showLabel(counted)}
 						</Button>
 					</>
 				}
