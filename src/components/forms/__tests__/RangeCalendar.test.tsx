@@ -245,18 +245,6 @@ describe("choosing a range", () => {
 		expect(day("5 October 2026")).toHaveAttribute("data-selected", "true");
 	});
 
-	test("a second press ends it and reports both days", async () => {
-		const { user, onChange } = renderRange();
-
-		await user.click(day("5 October 2026"));
-		await user.click(day("20 October 2026"));
-
-		expect(onChange).toHaveBeenCalledExactlyOnceWith({
-			start: "2026-10-05",
-			end: "2026-10-20",
-		});
-	});
-
 	// AC-F03-65
 	test("ends pressed in reverse order report the earlier day first", async () => {
 		const { user, onChange } = renderRange();
@@ -270,28 +258,32 @@ describe("choosing a range", () => {
 		});
 	});
 
-	test("a range may span the two months", async () => {
+	test.each([
+		{
+			name: "a second press ends it and reports both days",
+			first: "5 October 2026",
+			second: "20 October 2026",
+			range: { start: "2026-10-05", end: "2026-10-20" },
+		},
+		{
+			name: "a range may span the two months",
+			first: "28 October 2026",
+			second: "2 November 2026",
+			range: { start: "2026-10-28", end: "2026-11-02" },
+		},
+		{
+			name: "the same day twice is a one-day range",
+			first: "5 October 2026",
+			second: "5 October 2026",
+			range: { start: "2026-10-05", end: "2026-10-05" },
+		},
+	])("$name", async ({ first, second, range }) => {
 		const { user, onChange } = renderRange();
 
-		await user.click(day("28 October 2026"));
-		await user.click(day("2 November 2026"));
+		await user.click(day(first));
+		await user.click(day(second));
 
-		expect(onChange).toHaveBeenCalledExactlyOnceWith({
-			start: "2026-10-28",
-			end: "2026-11-02",
-		});
-	});
-
-	test("the same day twice is a one-day range", async () => {
-		const { user, onChange } = renderRange();
-
-		await user.click(day("5 October 2026"));
-		await user.click(day("5 October 2026"));
-
-		expect(onChange).toHaveBeenCalledExactlyOnceWith({
-			start: "2026-10-05",
-			end: "2026-10-05",
-		});
+		expect(onChange).toHaveBeenCalledExactlyOnceWith(range);
 	});
 
 	test("a future day cannot start or end a range", async () => {

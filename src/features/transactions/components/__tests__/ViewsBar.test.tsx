@@ -205,16 +205,31 @@ describe("the bar (BR-F03-63, BR-F03-66, D-526)", () => {
 		).toEqual(["All Transactions", "Food last month", "Rent"]);
 	});
 
-	test("no view selects All Transactions", async () => {
-		renderBar("");
+	test.each([
+		{
+			name: "no view selects All Transactions",
+			search: "",
+			selected: ["All Transactions"],
+		},
+		{
+			name: "view=<id> selects that view, not edited on its own filter",
+			search: `?${CHECK_B}&view=${FOOD.id}`,
+			selected: ["Food last month"],
+		},
+		{
+			name: "All Transactions reads “· edited” with any filter",
+			search: "?q=swiggy",
+			selected: ["All Transactions · edited"],
+		},
+		{
+			name: "a list parameter alone is an edit too",
+			search: "?group=payee",
+			selected: ["All Transactions · edited"],
+		},
+	])("$name", async ({ search, selected }) => {
+		renderBar(search);
 		await loaded();
-		expect(checked()).toEqual(["All Transactions"]);
-	});
-
-	test("view=<id> selects that view, not edited on its own filter", async () => {
-		renderBar(`?${CHECK_B}&view=${FOOD.id}`);
-		await loaded();
-		expect(checked()).toEqual(["Food last month"]);
+		expect(checked()).toEqual(selected);
 	});
 
 	// AC-F03-50
@@ -222,18 +237,6 @@ describe("the bar (BR-F03-63, BR-F03-66, D-526)", () => {
 		renderBar(`?${CHECK_B}&type=expense&view=${FOOD.id}`);
 		await loaded();
 		expect(checked()).toEqual(["Food last month · edited"]);
-	});
-
-	test("All Transactions reads “· edited” with any filter", async () => {
-		renderBar("?q=swiggy");
-		await loaded();
-		expect(checked()).toEqual(["All Transactions · edited"]);
-	});
-
-	test("a list parameter alone is an edit too", async () => {
-		renderBar("?group=payee");
-		await loaded();
-		expect(checked()).toEqual(["All Transactions · edited"]);
 	});
 
 	test("only a selected saved view has the menu", async () => {

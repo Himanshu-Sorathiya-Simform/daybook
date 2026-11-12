@@ -1,8 +1,7 @@
 import { withDatabase } from "./db";
 
 /** An end-to-end account's email exactly as `newAccount` makes it. */
-const E2E_EMAIL =
-	"^e2e-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@daybook\\.test$";
+const E2E_EMAIL = String.raw`^e2e-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}@daybook\.test$`;
 
 /**
  * After a run, deletes every account the end-to-end tests signed up in the development

@@ -64,9 +64,11 @@ export async function expectHeader(
 /** Waits for the list's rows to read exactly `names`, top to bottom. */
 export async function expectRows(page: Page, names: RegExp[]): Promise<void> {
 	await expect(rows(page)).toHaveCount(names.length);
-	for (const [index, name] of names.entries()) {
-		await expect(rows(page).nth(index)).toHaveAccessibleName(name);
-	}
+	await Promise.all(
+		names.map((name, index) =>
+			expect(rows(page).nth(index)).toHaveAccessibleName(name),
+		),
+	);
 }
 
 /** The URL's query, as the page wrote it last. */

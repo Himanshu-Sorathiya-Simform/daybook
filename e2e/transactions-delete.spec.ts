@@ -63,6 +63,8 @@ async function deleteSwiggy(page: Page, given?: LoadedGolden) {
 test("Undo within 5 seconds brings the row back selected, and nothing is ever sent", async ({
 	page,
 }) => {
+	// The page's clock jumps past the 5-second window, so the test does not sit through it.
+	await page.clock.install();
 	const sent = deletesOf(page);
 	const { golden } = await deleteSwiggy(page);
 
@@ -72,7 +74,7 @@ test("Undo within 5 seconds brings the row back selected, and nothing is ever se
 
 	await expect(row(page, SWIGGY_24)).toBeVisible();
 	await expect(page).toHaveURL(new RegExp(`txn=${golden.id(24)}$`));
-	await page.waitForTimeout(7000);
+	await page.clock.fastForward(7000);
 	expect(sent).toEqual([]);
 });
 

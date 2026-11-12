@@ -22,7 +22,7 @@ describe("the email sign-up hands to login", () => {
 	test("an empty email counts as none, and is removed too", () => {
 		handOverEmail("   ");
 		expect(takeHandedEmail()).toBeNull();
-		expect(sessionStorage.length).toBe(0);
+		expect(sessionStorage).toHaveLength(0);
 	});
 
 	test("a later hand-over replaces the earlier one", () => {

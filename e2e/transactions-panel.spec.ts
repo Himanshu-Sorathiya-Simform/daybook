@@ -141,6 +141,8 @@ test.describe("docked, from 1180 px (BR-F03-70 to BR-F03-73)", () => {
 	test("Save with nothing changed closes the dialog and sends nothing", async ({
 		page,
 	}) => {
+		// The page's clock jumps ahead, so a request that was only delayed still shows.
+		await page.clock.install();
 		await userWithGolden(page, CHECK_B);
 		await selectSwiggy(page);
 		const edits = requestsTo(page, /^\/api\/transactions\/[0-9a-f-]{36}$/);
@@ -149,7 +151,7 @@ test.describe("docked, from 1180 px (BR-F03-70 to BR-F03-73)", () => {
 		await dialog.getByRole("button", { name: "Save" }).click();
 
 		await expect(dialog).toBeHidden();
-		await page.waitForTimeout(500);
+		await page.clock.fastForward(500);
 		expect(edits.filter((request) => request.startsWith("PATCH"))).toEqual([]);
 	});
 

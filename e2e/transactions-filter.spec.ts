@@ -59,6 +59,8 @@ test.describe("search (BR-F03-38)", () => {
 	}
 
 	test("a 2-letter search says why and asks for nothing", async ({ page }) => {
+		// The page's clock jumps past the search's wait, so the test does not sit through it.
+		await page.clock.install();
 		await userWithGolden(page);
 		await expect(list(page)).toBeVisible();
 		const lists = requestsTo(page, /^\/api\/transactions$/);
@@ -68,7 +70,7 @@ test.describe("search (BR-F03-38)", () => {
 		await expect(
 			page.getByText("Type at least 3 characters, or an amount."),
 		).toBeVisible();
-		await page.waitForTimeout(600);
+		await page.clock.fastForward(600);
 		expect(lists).toEqual([]);
 		expect(query(page)).toBe("");
 	});
@@ -133,6 +135,8 @@ test.describe("the filter controls (BR-F03-39)", () => {
 	});
 
 	test("Amount: a Min above Max says so and changes nothing", async ({ page }) => {
+		// The page's clock jumps past the filter's wait, so the test does not sit through it.
+		await page.clock.install();
 		await userWithGolden(page);
 		await control(page, "Amount").click();
 		const amount = page.getByRole("dialog", { name: "Amount" });
@@ -143,7 +147,7 @@ test.describe("the filter controls (BR-F03-39)", () => {
 		await expect(
 			amount.getByText("Choose a Min at or below Max."),
 		).toBeVisible();
-		await page.waitForTimeout(600);
+		await page.clock.fastForward(600);
 		expect(query(page)).toBe("");
 	});
 

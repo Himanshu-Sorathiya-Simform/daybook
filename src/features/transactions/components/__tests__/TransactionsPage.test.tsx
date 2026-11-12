@@ -1910,9 +1910,9 @@ describe("filters (BR-F03-39, D-523)", () => {
 		await user.click(menu("Type"));
 		await user.click(await screen.findByRole("checkbox", { name: /^Refund/ }));
 
-		await waitFor(() => expect(lists.length).toBe(before.lists + 1));
+		await waitFor(() => expect(lists).toHaveLength(before.lists + 1));
 		expect(requestOf(lists.at(-1)!)).toBe("/api/transactions?type=refund");
-		expect(summaries.length).toBe(before.summaries + 1);
+		expect(summaries).toHaveLength(before.summaries + 1);
 	});
 
 	test("check B shows its chips, and the trigger values", async () => {
