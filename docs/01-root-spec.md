@@ -586,6 +586,8 @@ Default messages for every code are in P2, section 8. A feature spec may add its
 | `/api/transactions/bulk-delete`                                                      | POST (Stretch)                                                  | F03          |
 | `/api/transaction-views`, `/api/transaction-views/[id]`                              | GET, POST, PATCH, DELETE (saved views)                          | F03          |
 | `/api/budgets`, `/api/budgets/[id]`                                                  | GET, POST, PATCH, DELETE                                        | F04          |
+| `/api/budgets/[id]/overrides/[month]`                                                | DELETE (one one-month limit)                                    | F04          |
+| `/api/budgets/history`, `/api/budgets/summary`                                       | GET                                                             | F04          |
 | `/api/subscriptions`, `/api/subscriptions/[id]`                                      | GET, POST, PATCH, DELETE                                        | F05          |
 | `/api/goals`, `/api/goals/[id]`                                                      | GET, POST, PATCH, DELETE                                        | F06          |
 | `/api/goals/editable`                                                                | PUT (choose editable Goals after a lapse)                       | F06          |
@@ -804,17 +806,17 @@ The core codes are below. The full registry, including the codes added for Stret
 
 Every spec is written before building starts (D-65). Building then follows the milestones.
 
-| Milestone              | Builds                                                                                                                                                                          | Specs                        |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| M0 Foundation          | Repo, CI, Neon roles, RLS, Better Auth, data access layer, `proxy.ts`, capability core, Sentry, SonarQube                                                                       | P2, P4, P3 (setup), F01      |
-| M1 Ledger              | Onboarding and profile, Transactions, list and filters, demo generator, scenario accounts                                                                                       | F02, F03, F15                |
-| M2 Planning            | Budgets, Subscriptions with catch-up, Goals                                                                                                                                     | F04, F05, F06                |
-| M3 Overview            | Investments and price catch-up, dashboard and layout, Analytics                                                                                                                 | F07, F08, F09                |
-| M4 Premium             | Stripe Elements, webhook, reconcile, entitlements, gating, Customer Portal                                                                                                      | F12                          |
-| M5 Offline             | PWA, persisted cache, write queue, sync panel, update flow, logout marker                                                                                                       | P1                           |
-| M6 Outputs             | Reports, insights, command palette and search                                                                                                                                   | F10, F11, F13                |
-| M7 Content and quality | Learn, performance budgets, accessibility pass, hardening                                                                                                                       | F14, P3                      |
-| M8 Extras (Stretch)    | Push, app badge, Learn tiers, search operators, weekday-by-hour heat map, bulk delete, export, drag-and-drop layout, promotion codes, one-month Budget override, session replay | Sections in the owning specs |
+| Milestone              | Builds                                                                                                                                               | Specs                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| M0 Foundation          | Repo, CI, Neon roles, RLS, Better Auth, data access layer, `proxy.ts`, capability core, Sentry, SonarQube                                            | P2, P4, P3 (setup), F01      |
+| M1 Ledger              | Onboarding and profile, Transactions, list and filters, demo generator, scenario accounts                                                            | F02, F03, F15                |
+| M2 Planning            | Budgets, Subscriptions with catch-up, Goals                                                                                                          | F04, F05, F06                |
+| M3 Overview            | Investments and price catch-up, dashboard and layout, Analytics                                                                                      | F07, F08, F09                |
+| M4 Premium             | Stripe Elements, webhook, reconcile, entitlements, gating, Customer Portal                                                                           | F12                          |
+| M5 Offline             | PWA, persisted cache, write queue, sync panel, update flow, logout marker                                                                            | P1                           |
+| M6 Outputs             | Reports, insights, command palette and search                                                                                                        | F10, F11, F13                |
+| M7 Content and quality | Learn, performance budgets, accessibility pass, hardening                                                                                            | F14, P3                      |
+| M8 Extras (Stretch)    | Push, app badge, Learn tiers, search operators, weekday-by-hour heat map, bulk delete, export, drag-and-drop layout, promotion codes, session replay | Sections in the owning specs |
 
 **Writing order.** One batch per milestone, each reviewed before the next:
 

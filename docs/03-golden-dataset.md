@@ -143,6 +143,40 @@ October shopping is 4,500.00 spent minus the 1,500.00 refund.
 - September keeps its 6,000.00 food limit even though the limit changed in October.
 - November inherits October's limits by carry-forward.
 - The pending 300.00 at Chai Point leaves November food at 8.4% and fires no alert.
+- October shopping at exactly 100.0% reads At limit; its state is `over`, so it counts as over.
+
+**Previous month** (each month view's `previous`)
+
+| Month     | Previous  | Budgeted spent | Limits    | Budgets | Over or at limit |
+| --------- | --------- | -------------- | --------- | ------- | ---------------- |
+| September | August    | 0.00           | 0.00      | 0       | 0                |
+| October   | September | 8,099.00       | 10,000.00 | 3       | 0                |
+| November  | October   | 13,168.00      | 11,000.00 | 4       | 3                |
+
+**The October list:** Needs attention holds entertainment (214.8%), food (124.4%), shopping (100.0%) and transportation (90.0%), 2,368.00 over in total. Food's top payees are BigBasket 2,900.00, Zomato 2,300.00 and Swiggy 1,020.00, over 4 Transactions.
+
+**History** (limit and spent per month)
+
+| Category       | Months        | Values                                                                                           |
+| -------------- | ------------- | ------------------------------------------------------------------------------------------------ |
+| food           | 6, to 2026-11 | Jun to Aug: no limit, 0.00; Sep 6,000.00, 5,050.00; Oct 5,000.00, 6,220.00; Nov 5,000.00, 420.00 |
+| transportation | 2, to 2026-10 | Sep: no limit, 450.00; Oct 2,000.00, 1,800.00                                                    |
+
+**Year summary for 2026** (overall utilization in tenths): January to August `null`; September 810; October 1197; November 38; December 0.
+
+**One-month limits** (each on its own fresh load of the dataset)
+
+| Change                                  | Result                                                                                                                                   |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| food 8,000.00 for 2026-10 only          | October food 6,220.00 of 8,000.00, 77.8%, On track; October overall 13,168.00 of 14,000.00, 94.1%, Nearing limit; other months unchanged |
+| then food 7,000.00 from 2026-09         | September 72.1%; October keeps 8,000.00 at 77.8%; November 6.0%                                                                          |
+| entertainment no limit for 2026-10 only | October overall 11,020.00 of 10,000.00, 110.2%, Over budget; unbudgeted 20,148.00 (housing, entertainment)                               |
+| food 5,000.00 for 2026-11 only          | Nothing stored: it equals the schedule                                                                                                   |
+
+**Change previews**
+
+- **Food 7,000.00 from 2026-09:** September 84.2% → 72.1% (Nearing limit → On track); October 124.4% → 88.9% (Over budget → Nearing limit); November 8.4% → 6.0%. It changes September and October 2026 and replaces the 5,000.00 entry from October 2026.
+- **Shopping 4,000.00 from 2023-11:** 37 months in 4 groups: November 2023 to August 2026 (34 months, no Budget → 4,000.00, no spending); September 2026 80.0% → 60.0%; October 2026 100.0% → 75.0%; November 2026 0.0%, no spending. Shopping gains a Budget in 34 months, and the 3,000.00 entry from September 2026 is replaced.
 
 ## Goals (as of 2 November)
 

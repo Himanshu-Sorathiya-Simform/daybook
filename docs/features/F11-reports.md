@@ -166,7 +166,7 @@ Investments are left out (D-121).
 - **Budget against actual:**
     - entertainment 2,148.00 of 1,000.00 (214.8%, Over budget);
     - food 6,220.00 of 5,000.00 (124.4%, Over budget);
-    - shopping 3,000.00 of 3,000.00 (100.0%, Over budget);
+    - shopping 3,000.00 of 3,000.00 (100.0%, At limit);
     - transportation 1,800.00 of 2,000.00 (90.0%, Nearing limit);
     - overall 13,168.00 of 11,000.00 (119.7%), with unbudgeted 18,000.00.
 - **Goals at 31 October:** Emergency fund 10,000.00 of 100,000.00 (10.0%); Vacation 5,000.00 of 30,000.00 (16.7%).

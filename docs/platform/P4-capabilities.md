@@ -95,7 +95,6 @@ Codes added when M8 starts (D-200). Until then they do not exist, and the featur
 | `search.operators`           | flag    | off     | Yes            | F13  |
 | `dashboard.dragAndDrop`      | flag    | off     | Yes            | F08  |
 | `transactions.bulkDelete`    | flag    | off     | Yes            | F03  |
-| `budgets.monthOverride`      | flag    | off     | Yes            | F04  |
 | `account.export`             | flag    | off     | Yes            | F01  |
 | `billing.promotionCodes`     | flag    | off     | Yes            | F12  |
 | `monitoring.sessionReplay`   | flag    | off     | Yes            | P3   |

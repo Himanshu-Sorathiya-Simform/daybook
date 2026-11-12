@@ -68,7 +68,8 @@ Six rule-based detectors compute them from the same confirmed figures as the das
 **The detectors** (D-56, D-332)
 
 - **BR-F10-04** **Budget threshold** (`budgetThreshold`, alert). For each category budgeted in M, F04's state decides (BR-F04-09):
-    - `over` (100.0% or more): critical, "Food is over budget: ₹6,220.00 of ₹5,000.00 (124.4%)."
+    - `over` above 100.0%: critical, "Food is over budget: ₹6,220.00 of ₹5,000.00 (124.4%)."
+    - `over` at exactly 100.0%, labeled At limit (BR-F04-09): critical, "Shopping is at its limit: ₹3,000.00 of ₹3,000.00 (100.0%)."
     - `warning` (80.0% to below 100.0%): warning, "Transportation has used 90.0% of its Budget: ₹1,800.00 of ₹2,000.00."
 
     The subject is `<category>.<state>`, so an insight dismissed at 80% returns as a new one when the category passes 100%. Action: "View Budgets" → `/budgets?month=M`.
@@ -187,6 +188,7 @@ The dashboard's top 5 are rows 1 to 5.
 | ----------------------- | ------------------------------------------------------------------------------------- |
 | Label                   | Simulated AI insights · not financial advice                                          |
 | Budget over             | Food is over budget: ₹6,220.00 of ₹5,000.00 (124.4%).                                 |
+| Budget at limit         | Shopping is at its limit: ₹3,000.00 of ₹3,000.00 (100.0%).                            |
 | Budget near             | Transportation has used 90.0% of its Budget: ₹1,800.00 of ₹2,000.00.                  |
 | Savings rate below zero | You spent more than you earned in October: net savings −₹2,000.00.                    |
 | Savings rate down       | Your savings rate fell to 63.3% from 71.1% in September (−7.8 points).                |
