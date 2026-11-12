@@ -6,6 +6,7 @@ import {
 	formatMoneyShort,
 	formatPercent,
 	moneyParts,
+	percentTenths,
 } from "@/lib/money";
 import type { CurrencyCode } from "@/lib/currency";
 
@@ -247,6 +248,61 @@ describe("moneyParts", () => {
 	test("refuses an amount that is not a safe integer", () => {
 		expect(() => moneyParts(1.5, "INR", IN)).toThrow(RangeError);
 		expect(() => moneyParts(NaN, "INR", IN)).toThrow(RangeError);
+	});
+});
+
+describe("percentTenths (MON-7, MON-8)", () => {
+	// F04 AC-F04-06's boundary.
+	test("rounds half away from zero", () => {
+		expect(percentTenths(239850, 300000)).toBe(800);
+		expect(percentTenths(239849, 300000)).toBe(799);
+		expect(percentTenths(-239850, 300000)).toBe(-800);
+		expect(percentTenths(-239849, 300000)).toBe(-799);
+	});
+
+	test("gives thirds to the nearest tenth", () => {
+		expect(percentTenths(1, 3)).toBe(333);
+		expect(percentTenths(2, 3)).toBe(667);
+		expect(percentTenths(-2, 3)).toBe(-667);
+	});
+
+	test("takes its sign from both numbers", () => {
+		expect(percentTenths(1, -4)).toBe(-250);
+		expect(percentTenths(-1, -4)).toBe(250);
+	});
+
+	test("is 0 for zero, and never −0", () => {
+		expect(percentTenths(0, 5)).toBe(0);
+		expect(Object.is(percentTenths(-1, 3000), 0)).toBe(true);
+		expect(Object.is(percentTenths(0, -5), 0)).toBe(true);
+	});
+
+	test("stays exact at MON-5's largest amount", () => {
+		expect(percentTenths(99999999999, 1)).toBe(99999999999000);
+		expect(percentTenths(99999999999, 99999999998)).toBe(1000);
+		expect(percentTenths(1, 99999999999)).toBe(0);
+	});
+
+	test("refuses a zero denominator and anything but whole numbers", () => {
+		expect(() => percentTenths(1, 0)).toThrow(RangeError);
+		expect(() => percentTenths(1.5, 3)).toThrow(RangeError);
+		expect(() => percentTenths(1, Number.NaN)).toThrow(RangeError);
+		expect(() => percentTenths(2 ** 53, 3)).toThrow(RangeError);
+	});
+
+	test("agrees with formatPercent", () => {
+		for (const [n, d] of [
+			[239850, 300000],
+			[-1, 3],
+			[622000, 500000],
+			[42000, 1100000],
+		] as const) {
+			const tenths = percentTenths(n, d);
+			const text = formatPercent(n, d, "en-US-u-nu-latn");
+			expect(text.replace("%", "").replace("−", "-")).toBe(
+				(tenths / 10).toFixed(1),
+			);
+		}
 	});
 });
 

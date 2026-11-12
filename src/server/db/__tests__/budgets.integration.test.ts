@@ -124,7 +124,7 @@ test("the golden food Budget inserts and reads back with its arrays as JSON", as
 
 test("a new row starts at version 1 and is not demo data", async () => {
 	const row = budget();
-	delete row.version;
+	delete row["version"];
 	const stored = await asUser(async (client) => {
 		await insert(client, row);
 		const result = await client.query<{ demo: boolean; version: number }>(
@@ -174,7 +174,7 @@ describe("one Budget per expense category (BR-F04-01)", () => {
 			};
 			const sameCategory = await conflict(budget());
 			const sameId = await conflict(
-				budget({ id: first.id, category: "shopping" }),
+				budget({ id: first["id"] as string, category: "shopping" }),
 			);
 			const total = await client.query<{ n: number }>(
 				"SELECT count(*)::int AS n FROM app.budgets",

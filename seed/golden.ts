@@ -1,3 +1,4 @@
+import type { BudgetRecord } from "@/lib/budgets/view";
 import type { CategoryKey } from "@/lib/categories";
 import type { CurrencyCode } from "@/lib/currency";
 import type { Source, TxnType } from "@/lib/transactions/model";
@@ -20,7 +21,8 @@ export const GOLDEN_PROFILE = {
 } as const;
 
 /** Fixed UUIDv7 ids, so the fixture loads at most once per database (BR-F15-26). The fourth
- * group names the kind: 8000 Transactions, 8001 Goals, 8002 Subscriptions, 8003 pending. */
+ * group names the kind: 8000 Transactions, 8001 Goals, 8002 Subscriptions, 8003 pending,
+ * 8004 Budgets. */
 const id = (kind: string, n: number) =>
 	`0199a000-0000-7000-${kind}-${String(n).padStart(12, "0")}`;
 
@@ -35,6 +37,46 @@ export const GOLDEN_SUBSCRIPTIONS = {
 	cultGym: { id: id("8002", 3), name: "Cult Gym" },
 	amazonPrime: { id: id("8002", 4), name: "Amazon Prime" },
 } as const;
+
+/** The golden Budgets (docs/03-golden-dataset.md, Setup). Food's limit changed once, so its
+ * version is 2. No golden Budget has a one-month limit. */
+export const GOLDEN_BUDGETS = [
+	{
+		id: id("8004", 1),
+		category: "food",
+		schedule: [
+			{ from: "2026-09", limitMinor: 600000 },
+			{ from: "2026-10", limitMinor: 500000 },
+		],
+		overrides: [],
+		version: 2,
+		demo: false,
+	},
+	{
+		id: id("8004", 2),
+		category: "shopping",
+		schedule: [{ from: "2026-09", limitMinor: 300000 }],
+		overrides: [],
+		version: 1,
+		demo: false,
+	},
+	{
+		id: id("8004", 3),
+		category: "entertainment",
+		schedule: [{ from: "2026-09", limitMinor: 100000 }],
+		overrides: [],
+		version: 1,
+		demo: false,
+	},
+	{
+		id: id("8004", 4),
+		category: "transportation",
+		schedule: [{ from: "2026-10", limitMinor: 200000 }],
+		overrides: [],
+		version: 1,
+		demo: false,
+	},
+] as const satisfies readonly BudgetRecord[];
 
 /** A golden Transaction in the API's shape (F03 section 3), plus its row number. */
 export type GoldenTransaction = {
