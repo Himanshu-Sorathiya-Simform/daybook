@@ -248,7 +248,7 @@ Both lists are stored as `jsonb` columns on the Budget's one row, so every write
 - **BR-F04-33** A restoring write puts a Budget back exactly as it was (D-561):
     - `PATCH { schedule, overrides, currency }` replaces both lists; `POST { id, category, schedule, overrides, currency }` creates a Budget with them.
     - The schedule must hold at least one entry with a limit, else 422. Months are valid `YYYY-MM` from 2000-01 to 2099-12 and are not range-checked (BR-F04-07), since they put back months that existed. Limits follow MON-5. One-month limits name distinct months.
-    - The server applies BR-F04-05 to the schedule and stores the one-month limits as sent, so a restored Budget equals the one it replaces.
+    - The server applies BR-F04-05 to the schedule and stores the one-month limits as sent, in month order (section 3), so a restored Budget equals the one it replaces.
 - **BR-F04-34** The month view (D-565) gives:
     - each budgeted row its `source` and `next` (section 3);
     - each unbudgeted category its `budgetId`, or `null` with no Budget record;
@@ -260,7 +260,7 @@ Both lists are stored as `jsonb` columns on the Budget's one row, so every write
 
     Both read through `budgetMonths`, so their figures match the month view.
 
-- **BR-F04-36** A write that leaves the schedule and one-month limits as they were returns 200 with the Budget and does not bump `version`. The `If-Match` check runs first, so a stale version is still 409.
+- **BR-F04-36** A write that leaves the schedule and one-month limits as they were returns 200 with the Budget and does not bump `version`. Checks of the body itself (its shape, `currency` and month range) come first; the `If-Match` check comes before any rule that reads the stored Budget, so a stale version is 409 even for a write that would change nothing, or a stop that would remove every month.
 
 ## 5. Calculations
 
@@ -441,7 +441,7 @@ None. Every Budget feature, one-month limits included, is on both plans (D-560);
 
 - `budgetMonth(tx, ctx, month)` returns the month view, in one statement.
 - `budgetMonths(tx, ctx, months)` returns several months' views, in one statement, for F09's Budget vs actual, the history and the year summary.
-- `previewChange(budget, change, spending, today)`, in `src/lib/budgets`, returns the months, groups and notes of BR-F04-26 and BR-F04-27.
+- `previewChange({ rules, change, spending, current })`, in `src/lib/budgets`, returns the months, groups and notes of BR-F04-26 and BR-F04-27.
 
 F08's widget, F09's chart, F10's threshold detector and F11's report all call the first two, so their figures cannot disagree.
 
@@ -564,7 +564,6 @@ Illustrative, an `inactive` entry, from golden September, where transportation s
 	"category": "transportation",
 	"status": "starts",
 	"from": "2026-10",
-	"restartsFrom": null,
 	"schedule": [{ "from": "2026-10", "limitMinor": 200000 }],
 	"overrides": [],
 	"version": 1,

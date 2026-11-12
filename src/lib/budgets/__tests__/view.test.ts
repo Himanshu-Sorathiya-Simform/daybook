@@ -8,7 +8,6 @@ import {
 	buildMonthView,
 	type CategorySpending,
 	type MonthView,
-	overallTenths,
 } from "../view";
 import { goldenBudget, goldenBudgets, goldenSpending } from "./golden";
 
@@ -491,38 +490,24 @@ describe("edges", () => {
 	});
 });
 
-describe("overallTenths, the year summary's figure (BR-F04-35)", () => {
-	// AC-F04-21: 2026 on golden.
-	test("golden 2026: January to August null, then 810, 1197, 38 and 0", () => {
-		const months = Array.from(
-			{ length: 12 },
-			(_, index) => `2026-${String(index + 1).padStart(2, "0")}`,
-		);
-		expect(
-			months.map((month) =>
-				overallTenths(goldenBudgets(), goldenSpending(month), month),
-			),
-		).toEqual([
-			null,
-			null,
-			null,
-			null,
-			null,
-			null,
-			null,
-			null,
-			810,
-			1197,
-			38,
-			0,
-		]);
-	});
-
-	test("agrees with the month view", () => {
-		for (const month of ["2026-09", "2026-10", "2026-11"]) {
-			expect(
-				overallTenths(goldenBudgets(), goldenSpending(month), month),
-			).toBe(view(month).overall.utilizationTenths);
-		}
-	});
+// AC-F04-21: the year summary reads each month view's overall utilization.
+test("golden 2026's overall utilization: January to August null, then 810, 1197, 38 and 0", () => {
+	const months = Array.from(
+		{ length: 12 },
+		(_, index) => `2026-${String(index + 1).padStart(2, "0")}`,
+	);
+	expect(months.map((month) => view(month).overall.utilizationTenths)).toEqual([
+		null,
+		null,
+		null,
+		null,
+		null,
+		null,
+		null,
+		null,
+		810,
+		1197,
+		38,
+		0,
+	]);
 });

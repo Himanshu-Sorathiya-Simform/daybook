@@ -7,5 +7,9 @@ import { requireProfile } from "@/server/dal/context";
 /** Each month of a year with its overall utilization, for the month grid (BR-F04-35). */
 export const GET = route({}, (ctx, tx, { query }) => {
 	const profiled = requireProfile(ctx);
-	return budgetYearSummary(tx, readSummaryQuery(query, monthOf(profiled.today)));
+	return budgetYearSummary(
+		tx,
+		profiled,
+		readSummaryQuery(query, monthOf(profiled.today)),
+	);
 });

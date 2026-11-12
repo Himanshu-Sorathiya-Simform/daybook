@@ -241,7 +241,14 @@ describe("budgetMonth (AC-F04-01, AC-F04-02)", () => {
 			utilizationTenths: 38,
 		});
 		expect(result.totalSpentMinor).toBe(1842000);
-		expect(result.previous).toMatchObject({ budgetCount: 4, overCount: 3 });
+		// AC-F04-19: October, At limit counted as over.
+		expect(result.previous).toEqual({
+			month: "2026-10",
+			limitMinor: 1100000,
+			spentMinor: 1316800,
+			budgetCount: 4,
+			overCount: 3,
+		});
 	});
 
 	// AC-F04-02
@@ -463,7 +470,7 @@ describe("budgetHistory (AC-F04-20)", () => {
 describe("budgetYearSummary (AC-F04-21)", () => {
 	test("2026: January to August null, then 810, 1197, 38 and 0, in one statement", async () => {
 		const { result, statements } = await read((tx) =>
-			budgetYearSummary(tx, 2026),
+			budgetYearSummary(tx, goldenContext(userId), 2026),
 		);
 		expect(statements).toBe(1);
 		expect(result).toEqual({
@@ -502,11 +509,15 @@ describe("budgetYearSummary (AC-F04-21)", () => {
 	});
 
 	test("2027 carries every limit forward with nothing spent; 2023 has no Budget", async () => {
-		const later = await read((tx) => budgetYearSummary(tx, 2027));
+		const later = await read((tx) =>
+			budgetYearSummary(tx, goldenContext(userId), 2027),
+		);
 		expect(later.result.months.map((month) => month.utilizationTenths)).toEqual(
 			Array.from({ length: 12 }, () => 0),
 		);
-		const earlier = await read((tx) => budgetYearSummary(tx, 2023));
+		const earlier = await read((tx) =>
+			budgetYearSummary(tx, goldenContext(userId), 2023),
+		);
 		expect(
 			earlier.result.months.map((month) => month.utilizationTenths),
 		).toEqual(Array.from({ length: 12 }, () => null));

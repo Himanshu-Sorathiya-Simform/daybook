@@ -369,18 +369,35 @@ describe("one month only (BR-F04-24, BR-F04-25)", () => {
 	});
 
 	// AC-F04-11
-	test("refuses a month outside the range, on month", async () => {
-		expect(
-			await refusal(
-				edit("food", {
-					month: "2023-10",
-					limitMinor: 1,
-					currency: "INR",
-					scope: "month",
-				}),
-			),
-		).toEqual(invalid({ month: RANGE }));
-	});
+	test.each(["2023-10", "2027-12"])(
+		"refuses %s, outside the range, on month",
+		async (month) => {
+			expect(
+				await refusal(
+					edit("food", {
+						month,
+						limitMinor: 1,
+						currency: "INR",
+						scope: "month",
+					}),
+				),
+			).toEqual(invalid({ month: RANGE }));
+		},
+	);
+
+	// AC-F04-11: both ends of the range take a one-month limit.
+	test.each(["2023-11", "2027-11"])(
+		"accepts %s, an end of the range",
+		async (month) => {
+			const { result } = await edit("food", {
+				month,
+				limitMinor: 1,
+				currency: "INR",
+				scope: "month",
+			});
+			expect(result.budget.overrides).toEqual([{ month, limitMinor: 1 }]);
+		},
+	);
 });
 
 describe("restoring (BR-F04-33)", () => {
@@ -494,8 +511,43 @@ describe("restoring (BR-F04-33)", () => {
 });
 
 describe("versions and refusals (BR-F04-23, BR-P2-21)", () => {
-	// AC-F04-09
+	// AC-F04-09: the Budget holds a one-month limit, so the 409 must carry it.
 	test("a stale If-Match is 409 with the current schedule and one-month limits", async () => {
+		const { result } = await as(async (tx) => {
+			await editBudget(tx, ctx(), ids["food"] as string, 2, {
+				month: "2026-10",
+				limitMinor: 800000,
+				currency: "INR",
+				scope: "month",
+			});
+			return refusal(
+				editBudget(tx, ctx(), ids["food"] as string, 2, {
+					from: "2026-12",
+					limitMinor: 1,
+					currency: "INR",
+				}),
+			);
+		});
+		expect(result).toEqual({
+			code: "version_conflict",
+			fields: {},
+			details: {
+				current: {
+					id: ids["food"],
+					category: "food",
+					schedule: FOOD,
+					overrides: [{ month: "2026-10", limitMinor: 800000 }],
+					version: 3,
+					demo: false,
+					createdAt: GOLDEN_NOW,
+					updatedAt: LATER,
+					currency: "INR",
+				},
+			},
+		});
+	});
+
+	test("a stale If-Match on golden food is 409 with it as stored", async () => {
 		expect(
 			await refusal(
 				edit(
@@ -504,20 +556,14 @@ describe("versions and refusals (BR-F04-23, BR-P2-21)", () => {
 					{ version: 1 },
 				),
 			),
-		).toEqual({
+		).toMatchObject({
 			code: "version_conflict",
-			fields: {},
 			details: {
 				current: {
 					id: ids["food"],
-					category: "food",
 					schedule: FOOD,
 					overrides: [],
 					version: 2,
-					demo: false,
-					createdAt: GOLDEN_NOW,
-					updatedAt: GOLDEN_NOW,
-					currency: "INR",
 				},
 			},
 		});

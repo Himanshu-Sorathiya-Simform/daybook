@@ -1,6 +1,5 @@
 import "server-only";
 import { type SQL, sql } from "drizzle-orm";
-import { limitIn } from "@/lib/budgets/model";
 import {
 	firstDayOf,
 	lastDayOf,
@@ -12,7 +11,6 @@ import {
 	buildMonthView,
 	type CategorySpending,
 	type MonthView,
-	overallTenths,
 } from "@/lib/budgets/view";
 import type { ExpenseCategory } from "@/lib/budgets/model";
 import { compareCodeUnits } from "@/lib/compare";
@@ -25,9 +23,7 @@ import { BUDGET_JSON, type Budget } from "./row";
 /** Category spending (TXN-5) per month: expenses minus refunds, by `occurred_on` (TIME-2). The
  * table holds confirmed rows only; pending ones live in the client's queue (TXN-6). Goal
  * Transactions have no category and are left out by type. */
-function spendingSql(first: Month, last: Month, category?: ExpenseCategory): SQL {
-	const oneCategory =
-		category === undefined ? sql`` : sql`AND category = ${category}`;
+function spendingSql(first: Month, last: Month): SQL {
 	return sql`(SELECT coalesce(json_agg(json_build_object(
 			'month', month, 'category', category, 'spentMinor', spent::text)), '[]'::json)
 		FROM (SELECT to_char(occurred_on, 'YYYY-MM') AS month, category,
@@ -35,7 +31,6 @@ function spendingSql(first: Month, last: Month, category?: ExpenseCategory): SQL
 			FROM app.transactions
 			WHERE type IN ('expense', 'refund')
 				AND occurred_on BETWEEN ${firstDayOf(first)}::date AND ${lastDayOf(last)}::date
-				${oneCategory}
 			GROUP BY 1, 2) AS s)`;
 }
 
@@ -71,10 +66,9 @@ async function readInputs(
 	tx: Tx,
 	first: Month,
 	last: Month,
-	category?: ExpenseCategory,
 ): Promise<{ budgets: Budget[]; spending: Map<Month, CategorySpending> }> {
 	const { rows } = await tx.execute<{ budgets: Budget[]; spending: SpendingJson }>(
-		sql`SELECT ${BUDGETS_SQL} AS budgets, ${spendingSql(first, last, category)} AS spending`,
+		sql`SELECT ${BUDGETS_SQL} AS budgets, ${spendingSql(first, last)} AS spending`,
 	);
 	// A SELECT without FROM always answers one row.
 	const [row] = rows as [{ budgets: Budget[]; spending: SpendingJson }];
@@ -126,25 +120,34 @@ export type BudgetHistory = {
 
 /**
  * `GET /api/budgets/history` (BR-F04-35): the `count` months ending at `to`, oldest first,
- * each with the category's limit (`null` without one) and its spending. A category with no
- * Budget record answers its spending with no limits. One statement.
+ * each with the category's limit (`null` without one) and its spending, read from the month
+ * views of `budgetMonths`, so they match the page. A category with no Budget record answers
+ * its spending with no limits. One statement.
  */
 export async function budgetHistory(
 	tx: Tx,
 	ctx: ProfiledContext,
 	{ category, to, count }: { category: ExpenseCategory; to: Month; count: number },
 ): Promise<BudgetHistory> {
-	const first = shiftMonth(to, 1 - count);
-	const { budgets, spending } = await readInputs(tx, first, to, category);
-	const budget = budgets.find((each) => each.category === category);
+	const views = await budgetMonths(
+		tx,
+		ctx,
+		monthsStarting(shiftMonth(to, 1 - count), count),
+	);
 	return {
 		category,
 		currency: ctx.profile.currency,
-		months: monthsStarting(first, count).map((month) => ({
-			month,
-			limitMinor: budget ? limitIn(budget, month) : null,
-			spentMinor: spending.get(month)?.[category] ?? 0,
-		})),
+		months: views.map((view) => {
+			const row = view.budgets.find((each) => each.category === category);
+			const unbudgeted = view.unbudgeted.find(
+				(each) => each.category === category,
+			);
+			return {
+				month: view.month,
+				limitMinor: row?.limitMinor ?? null,
+				spentMinor: row?.spentMinor ?? unbudgeted?.spentMinor ?? 0,
+			};
+		}),
 	};
 }
 
@@ -153,27 +156,20 @@ export type BudgetYearSummary = {
 	months: { month: Month; utilizationTenths: number | null }[];
 };
 
-/** `GET /api/budgets/summary` (BR-F04-35): each month of `year` with its overall utilization,
- * `null` in a month with no Budget, as the month view computes it. One statement. */
+/** `GET /api/budgets/summary` (BR-F04-35): each month of `year` with the overall utilization
+ * of its month view from `budgetMonths`, `null` in a month with no Budget. One statement. */
 export async function budgetYearSummary(
 	tx: Tx,
+	ctx: ProfiledContext,
 	year: number,
 ): Promise<BudgetYearSummary> {
 	const first = `${String(year).padStart(4, "0")}-01`;
-	const { budgets, spending } = await readInputs(
-		tx,
-		first,
-		`${first.slice(0, 4)}-12`,
-	);
+	const views = await budgetMonths(tx, ctx, monthsStarting(first, 12));
 	return {
 		year,
-		months: monthsStarting(first, 12).map((month) => ({
-			month,
-			utilizationTenths: overallTenths(
-				budgets,
-				spending.get(month) ?? {},
-				month,
-			),
+		months: views.map((view) => ({
+			month: view.month,
+			utilizationTenths: view.overall.utilizationTenths,
 		})),
 	};
 }

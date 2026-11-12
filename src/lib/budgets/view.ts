@@ -185,18 +185,3 @@ export function buildMonthView(input: {
 		},
 	};
 }
-
-/** The overall utilization of each month, or `null` in a month with no Budget (BR-F04-35):
- * the year summary's figure. */
-export function overallTenths(
-	budgets: readonly BudgetRecord[],
-	spending: CategorySpending,
-	month: Month,
-): number | null {
-	const rows = budgetRows(budgets, spending, month);
-	if (rows.length === 0) return null;
-	return utilizationTenths(
-		sum(rows.map((row) => row.spentMinor)),
-		sum(rows.map((row) => row.limitMinor)),
-	);
-}
