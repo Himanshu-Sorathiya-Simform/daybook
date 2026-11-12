@@ -270,6 +270,104 @@ describe("the one-month limits (BR-F04-24)", () => {
 	});
 });
 
+describe("each entry of the lists (D-563)", () => {
+	const scheduleOf = (...entries: unknown[]) => ({
+		schedule: JSON.stringify(entries),
+	});
+	const overridesOf = (...entries: unknown[]) => ({
+		overrides: JSON.stringify(entries),
+	});
+	const SCHEDULE = { code: CHECK, constraint: "budgets_schedule_entries" };
+	const OVERRIDES = { code: CHECK, constraint: "budgets_overrides_entries" };
+
+	test("take the golden entries, a stop, both ends of the limits and any month", async () => {
+		expect(
+			await refusal(
+				budget({
+					...scheduleOf(
+						{ from: "2000-01", limitMinor: 1 },
+						{ from: "2026-09", limitMinor: 600000 },
+						{ from: "2026-11", limitMinor: null },
+						{ from: "2099-12", limitMinor: 999999999999 },
+					),
+					...overridesOf(
+						{ month: "2026-10", limitMinor: 800000 },
+						{ month: "2026-12", limitMinor: null },
+						{ month: "0001-01", limitMinor: 999999999999 },
+					),
+				}),
+			),
+		).toBeNull();
+	});
+
+	test.each([
+		["a missing limit", { from: "2026-09" }],
+		["a missing month", { limitMinor: 600000 }],
+		["a third field", { from: "2026-09", limitMinor: 600000, note: "x" }],
+		["the other list's month field", { month: "2026-09", limitMinor: 600000 }],
+		["month 13", { from: "2026-13", limitMinor: 600000 }],
+		["month 00", { from: "2026-00", limitMinor: 600000 }],
+		["a one-digit month", { from: "2026-9", limitMinor: 600000 }],
+		["a full date", { from: "2026-09-01", limitMinor: 600000 }],
+		["a month as a number", { from: 202609, limitMinor: 600000 }],
+		["a month in an array", { from: ["2026-09"], limitMinor: 600000 }],
+		["a limit of zero", { from: "2026-09", limitMinor: 0 }],
+		["a negative limit", { from: "2026-09", limitMinor: -600000 }],
+		["a fractional limit", { from: "2026-09", limitMinor: 600000.5 }],
+		["a limit past the largest", { from: "2026-09", limitMinor: 1000000000000 }],
+		["a limit as text", { from: "2026-09", limitMinor: "600000" }],
+		["a limit in an array", { from: "2026-09", limitMinor: [600000] }],
+		["a limit of true", { from: "2026-09", limitMinor: true }],
+		["a limit in an object", { from: "2026-09", limitMinor: { minor: 600000 } }],
+		["a string", "2026-09"],
+		["a number", 600000],
+		["null", null],
+		["an array", ["2026-09", 600000]],
+		["an empty object", {}],
+	])("the schedule refuses %s", async (_name, entry) => {
+		expect(
+			await refusal(
+				budget(scheduleOf({ from: "2026-08", limitMinor: 1 }, entry)),
+			),
+		).toEqual(SCHEDULE);
+	});
+
+	test.each([
+		["a missing limit", { month: "2026-10" }],
+		["a third field", { month: "2026-10", limitMinor: 800000, from: "2026-10" }],
+		["the schedule's month field", { from: "2026-10", limitMinor: 800000 }],
+		["a bad month", { month: "2026-1", limitMinor: 800000 }],
+		["a limit of zero", { month: "2026-10", limitMinor: 0 }],
+		[
+			"a limit past the largest",
+			{ month: "2026-10", limitMinor: 1000000000000 },
+		],
+		["a limit in an array", { month: "2026-10", limitMinor: [800000] }],
+		["null", null],
+	])("the one-month limits refuse %s", async (_name, entry) => {
+		expect(await refusal(budget(overridesOf(entry)))).toEqual(OVERRIDES);
+	});
+
+	test("an entry that is wrong is refused wherever it sits in the list", async () => {
+		const good = { from: "2026-09", limitMinor: 600000 };
+		const bad = { from: "2026-10", limitMinor: 0 };
+		for (const entries of [
+			[bad, good],
+			[good, bad],
+			[good, bad, good],
+		]) {
+			expect(await refusal(budget(scheduleOf(...entries)))).toEqual(SCHEDULE);
+		}
+	});
+
+	test("a list that is not an array is the array check's to refuse", async () => {
+		expect(await refusal(budget({ overrides: "{}" }))).toEqual({
+			code: CHECK,
+			constraint: "budgets_overrides_array",
+		});
+	});
+});
+
 test("refuses a version below 1", async () => {
 	for (const version of [0, -1]) {
 		expect(await refusal(budget({ version }))).toEqual({

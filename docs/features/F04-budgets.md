@@ -41,7 +41,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 | `demo`                              | Loaded as demo data                                    | System            | F15                                                                                                                                                                    | `false`                                                                                      |
 | `version`, `createdAt`, `updatedAt` | P2                                                     | System            | Every change to `schedule` or `overrides` bumps `version`; a write that changes neither does not (BR-F04-36)                                                           |                                                                                              |
 
-Both lists are stored as `jsonb` columns on the Budget's one row, so every write replaces the record under one `version` (D-563).
+Both lists are stored as `jsonb` columns on the Budget's one row, so every write replaces the record under one `version` (D-563). The table also refuses any entry without exactly its two fields, a `YYYY-MM` month and a limit that is `null` or a whole number from 1 to 999,999,999,999, the largest MON-5 allows in any currency.
 
 **Month view** (computed, never stored), for month M:
 
