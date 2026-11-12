@@ -72,6 +72,20 @@ export const PRIVATE_ROWS: { [K in PrivateTable]: (userId: string) => Row } = {
 		group_by: "day",
 		version: 1,
 	}),
+	// The golden food Budget: 6,000.00 from 2026-09, then 5,000.00 from 2026-10.
+	budgets: (userId) => ({
+		id: randomUUID(),
+		user_id: userId,
+		created_at: GOLDEN_NOW,
+		updated_at: GOLDEN_NOW,
+		category: "food",
+		schedule: JSON.stringify([
+			{ from: "2026-09", limitMinor: 600000 },
+			{ from: "2026-10", limitMinor: 500000 },
+		]),
+		overrides: "[]",
+		version: 2,
+	}),
 };
 
 /** Inserts one row into `app.<table>`. Table and column names come from this file only. */

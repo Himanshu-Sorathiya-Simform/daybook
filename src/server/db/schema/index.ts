@@ -1,5 +1,6 @@
 import "server-only";
 import {
+	budgets,
 	categories,
 	currencies,
 	dailyPassMarkers,
@@ -28,5 +29,6 @@ export const ALL_TABLES = [
 	idempotencyRecords,
 	transactions,
 	transactionViews,
+	budgets,
 	dailyPassMarkers,
 ] as const;

@@ -275,6 +275,45 @@ export const transactionViews = appSchema.table(
 	],
 );
 
+/**
+ * One Budget per expense category (F04 section 3, BR-F04-01). The schedule and the one-month
+ * limits are JSON arrays on the one row, so every write replaces the record under one
+ * `version` (D-563). Their entries, order and normalization are the shared schemas' rules
+ * (BR-F04-05, BR-F04-25); the table only checks the shapes it can see. `category_kind` lets
+ * the category's foreign key refuse an income category, as Transactions do (D-466).
+ */
+export const budgets = appSchema.table(
+	"budgets",
+	{
+		...privateColumns(),
+		category: text("category").notNull(),
+		categoryKind: text("category_kind").generatedAlwaysAs(sql`'expense'`),
+		schedule: jsonb("schedule").notNull(),
+		overrides: jsonb("overrides").notNull(),
+		demo: boolean("demo").notNull().default(false),
+		version: integer("version").notNull().default(1),
+	},
+	(t) => [
+		unique("budgets_user_id_category_key").on(t.userId, t.category),
+		foreignKey({
+			name: "budgets_category_kind_fk",
+			columns: [t.category, t.categoryKind],
+			foreignColumns: [categories.key, categories.kind],
+		}),
+		// Compared with the empty array, not measured: a CHECK's conditions may run in any
+		// order, and `jsonb_array_length` raises an error on anything but an array.
+		check(
+			"budgets_schedule_array",
+			sql`jsonb_typeof(${t.schedule}) = 'array' AND ${t.schedule} <> '[]'::jsonb`,
+		),
+		check(
+			"budgets_overrides_array",
+			sql`jsonb_typeof(${t.overrides}) = 'array'`,
+		),
+		check("budgets_version_positive", sql`${t.version} >= 1`),
+	],
+);
+
 // --- System data: no user_id, no RLS; only the system role reads or writes (P2, section 3).
 
 /** One row per UTC day the global daily pass has run (BR-P2-27, D-437). Inserting the day's

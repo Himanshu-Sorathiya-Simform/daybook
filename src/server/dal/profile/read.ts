@@ -23,12 +23,13 @@ type ProfileRow = {
 	version: number;
 };
 
-/** Whether the currency may still change (BR-F02-14): the user has no Transactions. Budgets,
- * Subscriptions and Goals join the check with their tables (M2). RLS limits the count to the
- * user's own rows. */
+/** Whether the currency may still change (BR-F02-14): the user has no Transactions and no
+ * Budgets. Subscriptions and Goals join the check with their tables (M2). RLS limits the count
+ * to the user's own rows. */
 export async function currencyEditable(tx: Tx): Promise<boolean> {
 	const { rows } = await tx.execute<{ editable: boolean }>(
-		sql`SELECT NOT EXISTS (SELECT 1 FROM app.transactions) AS editable`,
+		sql`SELECT NOT EXISTS (SELECT 1 FROM app.transactions)
+			AND NOT EXISTS (SELECT 1 FROM app.budgets) AS editable`,
 	);
 	// A SELECT without FROM always answers one row.
 	return (rows as [{ editable: boolean }])[0].editable;

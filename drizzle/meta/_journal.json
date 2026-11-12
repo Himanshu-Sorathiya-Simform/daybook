@@ -43,6 +43,13 @@
       "when": 1793591291029,
       "tag": "0005_rate_limit",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794480850288,
+      "tag": "0006_budgets",
+      "breakpoints": true
     }
   ]
 }
