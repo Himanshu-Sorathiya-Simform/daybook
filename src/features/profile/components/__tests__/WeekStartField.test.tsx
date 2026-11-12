@@ -79,3 +79,21 @@ describe("WeekStartField (F02 section 6)", () => {
 		expect(onChange).not.toHaveBeenCalled();
 	});
 });
+
+// D-511
+describe("before a country", () => {
+	test("with no value, no day is chosen", () => {
+		render(
+			<WeekStartField
+				value={null}
+				onChange={vi.fn()}
+				isDisabled
+			/>,
+		);
+		for (const radio of within(group()).getAllByRole("radio")) {
+			expect(radio).not.toBeChecked();
+			expect(radio).toBeDisabled();
+		}
+		expect(screen.getByText(ONBOARDING_TEXT.weekStartHint)).toBeInTheDocument();
+	});
+});

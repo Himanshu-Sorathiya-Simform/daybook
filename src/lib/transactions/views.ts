@@ -209,7 +209,9 @@ export function viewFilterSchema(currency: CurrencyCode) {
 		});
 }
 
-const name = textSchema({
+/** A view's name (BR-F03-63): BR-F03-12's text rules, 1 to 40 characters, never "All
+ * Transactions". Uniqueness needs the user's other names, so the server's index checks it. */
+export const viewNameSchema = textSchema({
 	max: NAME_MAX,
 	messages: { required: V.nameRequired },
 }).refine((value) => typeof value !== "string" || lowercase(value) !== BUILT_IN, {
@@ -258,7 +260,7 @@ export function viewCreateSchema(currency: CurrencyCode) {
 				.string({ error: TRANSACTION_MESSAGES.id })
 				.refine(isUuidV7, { error: TRANSACTION_MESSAGES.id })
 				.transform((value) => value.toLowerCase()),
-			name,
+			name: viewNameSchema,
 			filter: viewFilterSchema(currency),
 			sort,
 			dir,
@@ -273,7 +275,7 @@ export function viewCreateSchema(currency: CurrencyCode) {
 export function viewEditSchema(currency: CurrencyCode) {
 	return z
 		.strictObject({
-			name: name.optional(),
+			name: viewNameSchema.optional(),
 			filter: viewFilterSchema(currency).optional(),
 			sort: sort.optional(),
 			dir: dir.optional(),

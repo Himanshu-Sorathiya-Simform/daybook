@@ -81,6 +81,31 @@ export function formatMoney(
 }
 
 /**
+ * An amount with its decimals only when it has a fractional part, for filter labels: `₹1,000`,
+ * `₹1,000.50`, `1.240 €` (BR-F03-39, BR-F03-74). Like `formatMoney`, the number reaches `Intl`
+ * as an exact decimal string.
+ */
+export function formatMoneyShort(
+	minor: number,
+	currency: CurrencyCode,
+	numberLocale: string,
+): string {
+	const exponent = currencyExponent(currency);
+	const magnitude = Math.abs(minor);
+	if (magnitude % 10 ** exponent !== 0) {
+		return formatMoney(minor, currency, numberLocale);
+	}
+	const whole = decimalString(magnitude, exponent).split(".")[0] as `${number}`;
+	const text = new Intl.NumberFormat(numberLocale, {
+		style: "currency",
+		currency,
+		minimumFractionDigits: 0,
+		maximumFractionDigits: 0,
+	}).format(whole);
+	return (minor < 0 ? MINUS : "") + text;
+}
+
+/**
  * A percentage with one decimal, computed from two integers and rounded half away from zero
  * once (MON-7, MON-8). A zero denominator gives "—".
  */

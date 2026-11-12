@@ -5,7 +5,8 @@ import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { useAppSession } from "@/hooks/useAppSession";
-import { ME_KEY, useMe } from "@/hooks/useMe";
+import { useMe } from "@/hooks/useMe";
+import { ME_KEY } from "@/lib/api/me";
 import { emitApiEvent } from "@/lib/api/events";
 import { AppProviders } from "../AppProviders";
 import { meFor, renderInApp, url } from "./helpers";

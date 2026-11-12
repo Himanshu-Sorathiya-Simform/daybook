@@ -186,6 +186,29 @@ describe("size", () => {
 	});
 });
 
+describe("fill", () => {
+	test("by default the group is as wide as its options, each as wide as its label", () => {
+		render(<Controlled />);
+
+		expect(screen.getByRole("radiogroup")).toHaveClass("inline-flex");
+		expect(screen.getByRole("radiogroup")).not.toHaveClass("w-full");
+		expect(segment("Pace")).not.toHaveClass("flex-1");
+		expect(segment("Pace").parentElement).not.toHaveClass("flex-1");
+	});
+
+	test("fill shares the full width equally, with each label centred", () => {
+		render(<Controlled fill />);
+
+		const group = screen.getByRole("radiogroup");
+		expect(group).toHaveClass("flex", "w-full");
+		expect(group).not.toHaveClass("inline-flex");
+		for (const name of ["Daily", "Pace", "Weekly"]) {
+			expect(segment(name)).toHaveClass("flex-1", "justify-center");
+			expect(segment(name).parentElement).toHaveClass("flex", "flex-1");
+		}
+	});
+});
+
 describe("choosing with the mouse", () => {
 	test("selects an option on click and reports its value once", async () => {
 		const user = userEvent.setup();
@@ -461,5 +484,35 @@ describe("aria-describedby", () => {
 		expect(screen.getByRole("radiogroup")).not.toHaveAttribute(
 			"aria-describedby",
 		);
+	});
+});
+
+describe("no value", () => {
+	test("chooses no option", () => {
+		render(
+			<Segmented
+				label="Strip view"
+				options={["Daily", "Pace"]}
+				value={null}
+				onChange={vi.fn()}
+			/>,
+		);
+		for (const radio of screen.getAllByRole("radio"))
+			expect(radio).not.toBeChecked();
+	});
+
+	test("a press still reports the choice", async () => {
+		const user = userEvent.setup();
+		const onChange = vi.fn();
+		render(
+			<Segmented
+				label="Strip view"
+				options={["Daily", "Pace"]}
+				value={null}
+				onChange={onChange}
+			/>,
+		);
+		await user.click(segment("Pace"));
+		expect(onChange).toHaveBeenCalledExactlyOnceWith("Pace");
 	});
 });

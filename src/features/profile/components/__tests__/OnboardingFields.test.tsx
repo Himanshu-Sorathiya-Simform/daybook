@@ -60,7 +60,7 @@ function profileRoute(respond: () => Response | Promise<Response>) {
 	return seen;
 }
 
-function setup(device: Device = KOLKATA) {
+function setup(device: Device | null = KOLKATA) {
 	const user = userEvent.setup();
 	const view = renderInApp(
 		<>
@@ -117,11 +117,11 @@ describe("pre-fill (BR-F02-03 to BR-F02-06)", () => {
 		);
 	});
 
-	test("with no guess, the country is empty, Start is disabled and the zone shows a dash", () => {
+	test("with no guess, the country is empty and Start is disabled", () => {
 		setup(NOWHERE);
 		expect(country()).toHaveValue("");
+		expect(country()).toHaveAttribute("placeholder", "Search countries");
 		expect(start()).toHaveAttribute("aria-disabled", "true");
-		expect(screen.getByText("—")).toBeInTheDocument();
 	});
 
 	test("every field has F02's helper text", () => {
@@ -276,6 +276,225 @@ describe("choosing the country (BR-F02-07, D-511)", () => {
 	});
 });
 
+const zone = () => screen.getByRole("button", { name: /Time zone/ });
+const preview = () => screen.getByRole("region", { name: "Preview" });
+
+// D-511
+describe("before a country is chosen", () => {
+	test("currency and time zone are disabled and say to choose a country first", () => {
+		setup(NOWHERE);
+		for (const field of [currency(), zone()]) {
+			expect(field).toHaveTextContent("Choose a country first");
+			expect(field).toBeDisabled();
+		}
+		expect(currency()).not.toHaveTextContent("US dollar");
+		expect(zone()).not.toHaveTextContent("UTC");
+	});
+
+	test("no week start is chosen, and none can be", async () => {
+		const { user } = setup(NOWHERE);
+		const radios = within(weekStart()).getAllByRole("radio");
+		for (const radio of radios) {
+			expect(radio).not.toBeChecked();
+			expect(radio).toBeDisabled();
+		}
+		await user.click(radios[0]!);
+		expect(radios[0]).not.toBeChecked();
+	});
+
+	test("Start says why it waits, and stays reachable by keyboard", async () => {
+		const { user } = setup(NOWHERE);
+		expect(start()).toHaveAccessibleDescription("Choose your country first.");
+		await user.click(start());
+		start().focus();
+		expect(start()).toHaveFocus();
+	});
+
+	test("pressing Start asks for the country there, and sends nothing", async () => {
+		const seen = profileRoute(() => answer());
+		const { user, navigate } = setup(NOWHERE);
+		await user.click(start());
+		expect(country()).toHaveAccessibleDescription(
+			PROFILE_MESSAGES.countryRequired,
+		);
+		expect(country()).toHaveAttribute("aria-invalid", "true");
+		await waitFor(() => expect(country()).toHaveFocus());
+		expect(seen).toHaveLength(0);
+		expect(navigate).not.toHaveBeenCalled();
+	});
+
+	test("pressing Start by keyboard asks for the country too", async () => {
+		const { user } = setup(NOWHERE);
+		start().focus();
+		await user.keyboard("{Enter}");
+		expect(
+			await screen.findByText(PROFILE_MESSAGES.countryRequired),
+		).toBeInTheDocument();
+	});
+
+	test("choosing a country takes the message away and opens every field", async () => {
+		const { user } = setup(NOWHERE);
+		await user.click(start());
+		await screen.findByText(PROFILE_MESSAGES.countryRequired);
+		await chooseCountry(user, "Germ", "Germany");
+		expect(
+			screen.queryByText(PROFILE_MESSAGES.countryRequired),
+		).not.toBeInTheDocument();
+		expect(currency()).toHaveTextContent("Euro (EUR)");
+		expect(currency()).not.toBeDisabled();
+		expect(zone()).not.toBeDisabled();
+		expect(
+			within(weekStart()).getByRole("radio", { name: "Monday" }),
+		).toBeChecked();
+		expect(start()).not.toHaveAttribute("aria-disabled");
+		expect(start()).not.toHaveAccessibleDescription();
+	});
+
+	test("text that matches no country says so once focus leaves", async () => {
+		const { user } = setup(NOWHERE);
+		await user.type(country(), "Atlantis");
+		await user.tab();
+		expect(country()).toHaveAccessibleDescription(
+			PROFILE_MESSAGES.countryUnknown,
+		);
+		expect(country()).toHaveValue("");
+	});
+
+	test("the same goes when the list was open as focus left", async () => {
+		const { user } = setup(NOWHERE);
+		await user.type(country(), "Kuwai");
+		expect(screen.getByRole("option", { name: "Kuwait" })).toBeInTheDocument();
+		await user.type(country(), "tz");
+		await user.tab();
+		expect(
+			await screen.findByText(PROFILE_MESSAGES.countryUnknown),
+		).toBeInTheDocument();
+	});
+
+	test("typing again takes that message away", async () => {
+		const { user } = setup(NOWHERE);
+		await user.type(country(), "Atlantis");
+		await user.tab();
+		await screen.findByText(PROFILE_MESSAGES.countryUnknown);
+		await user.type(country(), "I");
+		expect(
+			screen.queryByText(PROFILE_MESSAGES.countryUnknown),
+		).not.toBeInTheDocument();
+	});
+
+	test("once read, typed text is forgotten: passing through the box later keeps Start's message", async () => {
+		const { user } = setup(NOWHERE);
+		await user.type(country(), "Atlantis");
+		await user.tab();
+		await screen.findByText(PROFILE_MESSAGES.countryUnknown);
+		start().focus();
+		await user.keyboard("{Enter}");
+		await waitFor(() => expect(country()).toHaveFocus());
+		await user.tab();
+		expect(country()).toHaveAccessibleDescription(
+			PROFILE_MESSAGES.countryRequired,
+		);
+	});
+
+	test("leaving an empty box says nothing", async () => {
+		const { user } = setup(NOWHERE);
+		await user.click(country());
+		await user.tab();
+		expect(
+			screen.queryByText(PROFILE_MESSAGES.countryUnknown),
+		).not.toBeInTheDocument();
+		expect(country()).toHaveAccessibleDescription(ONBOARDING_TEXT.countryHint);
+	});
+
+	test("with a country chosen, unmatched text goes back to it and says nothing", async () => {
+		const { user } = setup();
+		await user.clear(country());
+		await user.type(country(), "Atlantis");
+		await user.tab();
+		expect(country()).toHaveValue("India");
+		expect(
+			screen.queryByText(PROFILE_MESSAGES.countryUnknown),
+		).not.toBeInTheDocument();
+	});
+});
+
+describe("while the page loads (F02 section 6)", () => {
+	test("every field is disabled, the country box says it is loading", () => {
+		setup(null);
+		expect(country()).toBeDisabled();
+		expect(country()).toHaveValue("");
+		expect(country()).toHaveAttribute("placeholder", "Loading countries…");
+		expect(currency()).toBeDisabled();
+		expect(currency()).not.toHaveTextContent("Choose a country first");
+		expect(zone()).toBeDisabled();
+		for (const radio of within(weekStart()).getAllByRole("radio"))
+			expect(radio).toBeDisabled();
+	});
+
+	test("Start waits for the countries, and a press asks for nothing", async () => {
+		const { user } = setup(null);
+		expect(start()).toHaveAttribute("aria-disabled", "true");
+		expect(start()).toHaveAccessibleDescription(
+			"Loading countries and time zones.",
+		);
+		await user.click(start());
+		expect(
+			screen.queryByText(PROFILE_MESSAGES.countryRequired),
+		).not.toBeInTheDocument();
+	});
+
+	test("the Preview is a busy outline", () => {
+		setup(null);
+		expect(preview().querySelector('[aria-busy="true"]')).not.toBeNull();
+		expect(
+			within(preview()).queryByText(ONBOARDING_TEXT.preview.empty),
+		).not.toBeInTheDocument();
+	});
+});
+
+// D-511
+describe("the Preview", () => {
+	test("shows India's formats with the choices", () => {
+		setup();
+		expect(within(preview()).getByText("₹1,00,000.00")).toBeInTheDocument();
+		expect(within(preview()).getByText("−₹1,240.50")).toBeInTheDocument();
+		expect(within(preview()).getByText("63.3%")).toBeInTheDocument();
+		expect(within(preview()).getByText("Mon, 2 Nov")).toBeInTheDocument();
+		expect(within(preview()).getByText("12:00 pm")).toBeInTheDocument();
+		expect(
+			within(preview()).getByText("Kolkata time (GMT+05:30)"),
+		).toBeInTheDocument();
+	});
+
+	test("follows a new country and the choices made after it", async () => {
+		const { user } = setup();
+		await chooseCountry(user, "Germ", "Germany");
+		expect(within(preview()).getByText("100.000,00 €")).toBeInTheDocument();
+		expect(
+			within(preview()).getByText("Berlin time (GMT+01:00)"),
+		).toBeInTheDocument();
+		const days = () =>
+			within(preview())
+				.getAllByRole("listitem")
+				.map((day) => day.textContent);
+		// Germany writes dates as en-DE: English words, German order.
+		expect(days()[0]).toBe("Mon2");
+		await user.click(within(weekStart()).getByRole("radio", { name: "Sunday" }));
+		expect(days()[0]).toBe("Sun1");
+		await user.click(currency());
+		await user.click(screen.getByRole("option", { name: "Japanese yen (JPY)" }));
+		expect(within(preview()).getByText("100.000 ¥")).toBeInTheDocument();
+	});
+
+	test("before a country, says what it will show", () => {
+		setup(NOWHERE);
+		expect(
+			within(preview()).getByText(ONBOARDING_TEXT.preview.empty),
+		).toBeInTheDocument();
+		expect(within(preview()).queryByRole("list")).not.toBeInTheDocument();
+	});
+});
+
 describe("submitting (flow 7.1)", () => {
 	test("sends the four choices with a UUIDv7 key, then opens /transactions (D-241)", async () => {
 		const seen = profileRoute(() => answer());
@@ -421,14 +640,18 @@ describe("submitting (flow 7.1)", () => {
 				),
 		],
 	])(
-		"%s shows F02's error line and the form can be sent again",
+		"%s shows F02's error line at the top, with focus, and the form can be sent again",
 		async (_name, respond) => {
 			profileRoute(respond);
 			const { user } = setup();
 			await user.click(start());
-			expect(await screen.findByRole("alert")).toHaveTextContent(
-				ONBOARDING_TEXT.failed,
-			);
+			const alert = await screen.findByRole("alert");
+			expect(alert).toHaveTextContent(ONBOARDING_TEXT.failed);
+			await waitFor(() => expect(alert).toHaveFocus());
+			expect(
+				alert.compareDocumentPosition(country())
+					& Node.DOCUMENT_POSITION_FOLLOWING,
+			).toBeTruthy();
 			expect(country()).not.toBeDisabled();
 		},
 	);
@@ -485,6 +708,17 @@ describe("offline (BR-F02-10)", () => {
 		act(() => container.querySelector("form")!.requestSubmit());
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		expect(seen).toHaveLength(0);
+	});
+
+	// D-511
+	test("Start says to connect, before asking for a country, and a press asks for nothing", async () => {
+		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+		const { user } = setup(NOWHERE);
+		expect(start()).toHaveAccessibleDescription("Connect to finish setup.");
+		await user.click(start());
+		expect(
+			screen.queryByText(PROFILE_MESSAGES.countryRequired),
+		).not.toBeInTheDocument();
 	});
 
 	test("comes back when the connection does", () => {

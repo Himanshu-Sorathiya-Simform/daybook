@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vite
 import { renderInApp } from "@/components/app/__tests__/helpers";
 import { clearLogoutMarker, hasLogoutMarker } from "@/lib/logout-marker";
 import { LoginForm } from "../LoginForm";
+import { handOverEmail, takeHandedEmail } from "../../lib/email-handoff";
 import { AUTH_MESSAGES } from "../../lib/messages";
 import {
 	authNetwork,
@@ -20,6 +21,7 @@ beforeAll(() => authNetwork.listen({ onUnhandledFrame: "error" }));
 afterEach(() => {
 	authNetwork.resetHandlers();
 	clearLogoutMarker();
+	sessionStorage.clear();
 	vi.restoreAllMocks();
 });
 afterAll(() => authNetwork.close());
@@ -111,17 +113,33 @@ describe("Forgot your password? (BR-F01-29)", () => {
 });
 
 describe("after an expired session", () => {
-	test("says so above the form with expired=1", () => {
+	test("says so above the fields with expired=1", () => {
 		setup({ expired: true });
-		expect(screen.getByText(AUTH_MESSAGES.expired)).toHaveAttribute(
-			"role",
-			"status",
-		);
+		const note = screen.getByRole("status");
+		expect(note).toHaveTextContent(AUTH_MESSAGES.expired);
+		expect(
+			note.compareDocumentPosition(email()) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
 	});
 
 	test("says nothing otherwise", () => {
 		setup();
 		expect(screen.queryByText(AUTH_MESSAGES.expired)).not.toBeInTheDocument();
+	});
+});
+
+// BR-F01-31, D-510
+describe("the email sign-up hands over", () => {
+	test("fills the email, once: the next visit starts empty", async () => {
+		handOverEmail("asha@example.com");
+		setup();
+		await waitFor(() => expect(email()).toHaveValue("asha@example.com"));
+		expect(takeHandedEmail()).toBeNull();
+	});
+
+	test("without one, the email starts empty", () => {
+		setup();
+		expect(email()).toHaveValue("");
 	});
 });
 
@@ -202,14 +220,18 @@ describe("submitting (flow 7.2)", () => {
 
 describe("refusals (F01 section 8)", () => {
 	// BR-F01-07, AC-F01-04
-	test("a wrong email or password reads the same, above the button, and keeps the email", async () => {
+	test("a wrong email or password reads the same, at the top with focus, and keeps the email", async () => {
 		route("post", SIGN_IN, () => refusal("INVALID_EMAIL_OR_PASSWORD", 401));
 		const { user, navigate } = setup();
 		await fill(user);
 		await user.click(submit());
-		expect(await screen.findByRole("alert")).toHaveTextContent(
-			AUTH_MESSAGES.wrongCredentials,
-		);
+		const alert = await screen.findByRole("alert");
+		expect(alert).toHaveTextContent(AUTH_MESSAGES.wrongCredentials);
+		await waitFor(() => expect(alert).toHaveFocus());
+		expect(
+			alert.compareDocumentPosition(email())
+				& Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
 		expect(email()).toHaveValue("asha@example.com");
 		expect(email()).not.toHaveAttribute("aria-invalid", "true");
 		expect(navigate).not.toHaveBeenCalled();

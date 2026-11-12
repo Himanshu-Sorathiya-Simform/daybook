@@ -10,32 +10,36 @@ export type LandingProps = {
 };
 
 /** The landing page for a logged-out visitor (BR-F01-27): the name, the line, Sign up and Log
- * in. The Learn posts section waits for F14 (D-503). */
+ * in, left-aligned on a wide column. The Learn posts section waits for F14 (D-503). */
 export function Landing({ deleted = false }: Readonly<LandingProps>) {
 	return (
 		<>
 			{deleted && <Banner kind="info">Your account was deleted.</Banner>}
-			<main className="bg-page flex min-h-dvh flex-col items-center justify-center gap-8 px-4 py-16 text-center">
-				<div className="flex max-w-xl flex-col gap-3">
-					<h1 className="text-readout text-ink">Daybook</h1>
-					<p className="text-heading text-ink-2 font-medium">
-						{LANDING_LINE}
-					</p>
-				</div>
-				<div className="flex w-full max-w-xs flex-col gap-3 sm:max-w-none sm:flex-row sm:justify-center">
-					<ButtonLink
-						href="/signup"
-						size="lg"
-					>
-						Sign up
-					</ButtonLink>
-					<ButtonLink
-						href="/login"
-						variant="secondary"
-						size="lg"
-					>
-						Log in
-					</ButtonLink>
+			<main className="bg-page flex min-h-dvh justify-center px-4 pt-24 pb-16 md:px-8 md:pt-36">
+				<div className="flex w-full max-w-240 flex-col gap-8">
+					<div className="flex flex-col gap-4">
+						<h1 className="text-readout text-ink font-bold tracking-tight">
+							Daybook
+						</h1>
+						<p className="text-heading text-ink-2 max-w-md font-normal">
+							{LANDING_LINE}
+						</p>
+					</div>
+					<div className="flex flex-wrap gap-2.5">
+						<ButtonLink
+							href="/signup"
+							size="lg"
+						>
+							Sign up
+						</ButtonLink>
+						<ButtonLink
+							href="/login"
+							variant="secondary"
+							size="lg"
+						>
+							Log in
+						</ButtonLink>
+					</div>
 				</div>
 			</main>
 		</>

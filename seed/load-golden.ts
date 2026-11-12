@@ -29,26 +29,25 @@ export type LoadedGolden = {
 	golden(id: string): number;
 };
 
-/** The golden id with its first 48 bits, the UUIDv7 timestamp, replaced by `prefix`. Ids are
- * unique across users, so each load needs its own; one prefix per load keeps the rows' id
- * order, which breaks ties in every list order (BR-F03-29). */
-function reId(id: string, prefix: string): string {
+/** The id with its first 48 bits, the UUIDv7 timestamp, replaced by `prefix`. Ids are unique
+ * across users, so each load needs its own; one prefix per load keeps the rows' id order, which
+ * breaks ties in every list order (BR-F03-29). */
+export function reId(id: string, prefix: string): string {
 	return `${prefix.slice(0, 8)}-${prefix.slice(8, 12)}${id.slice(13)}`;
 }
 
-/**
- * Loads the golden profile and the M1 golden Transactions for `userId` (D-471), as
- * `docs/03-golden-dataset.md` shows them on 2 November, in two statements. `client` must be
- * able to write any user's rows: the owner in tests, the system role in the seed script.
- * Ids get a fresh prefix per load, so every test user can hold its own copy.
- */
-export async function loadGolden(
+/** A fresh id prefix for one load: 12 hex digits. */
+export const loadPrefix = () => randomBytes(6).toString("hex");
+
+/** The profile a load writes: golden's India unless `today` moves its last catch-up. */
+type ProfileFields = { today?: string };
+
+/** Inserts `userId`'s profile as golden's (D-471): India, rupees, Kolkata, weeks from Monday. */
+export async function insertProfile(
 	client: ClientBase,
 	userId: string,
-): Promise<LoadedGolden> {
-	const prefix = randomBytes(6).toString("hex");
-	const rows = GOLDEN_M1_ROWS.map((row) => ({ ...row, id: reId(row.id, prefix) }));
-
+	{ today = GOLDEN_TODAY }: ProfileFields = {},
+): Promise<void> {
 	await client.query(
 		`INSERT INTO app.profile
 		   (id, user_id, created_at, updated_at, country, currency, timezone, week_start, last_catch_up_on, version)
@@ -61,10 +60,18 @@ export async function loadGolden(
 			GOLDEN_PROFILE.currency,
 			GOLDEN_PROFILE.timezone,
 			GOLDEN_PROFILE.weekStart,
-			GOLDEN_TODAY,
+			today,
 		],
 	);
-	// One statement for every row; `pg` sends the rows as JSON text.
+}
+
+/** Inserts `rows` as `userId`'s Transactions in one statement; `pg` sends them as JSON text.
+ * The golden row number, when a row has one, is not stored. */
+export async function insertTransactions(
+	client: ClientBase,
+	userId: string,
+	rows: readonly Omit<GoldenTransaction, "golden">[],
+): Promise<void> {
 	await client.query(
 		`INSERT INTO app.transactions
 		   (id, user_id, created_at, updated_at, type, amount_minor, occurred_at, occurred_on,
@@ -77,6 +84,23 @@ export async function loadGolden(
 		   note text, source text, demo boolean, version integer)`,
 		[userId, JSON.stringify(rows)],
 	);
+}
+
+/**
+ * Loads the golden profile and the M1 golden Transactions for `userId` (D-471), as
+ * `docs/03-golden-dataset.md` shows them on 2 November, in two statements. `client` must be
+ * able to write any user's rows: the owner in tests, the system role in the seed script and
+ * the end-to-end tests. Ids get a fresh prefix per load, so every test user can hold its own
+ * copy.
+ */
+export async function loadGolden(
+	client: ClientBase,
+	userId: string,
+): Promise<LoadedGolden> {
+	const prefix = loadPrefix();
+	const rows = GOLDEN_M1_ROWS.map((row) => ({ ...row, id: reId(row.id, prefix) }));
+	await insertProfile(client, userId);
+	await insertTransactions(client, userId, rows);
 
 	const byNumber = new Map(rows.map((row) => [row.golden, row.id]));
 	const byId = new Map(rows.map((row) => [row.id, row.golden]));

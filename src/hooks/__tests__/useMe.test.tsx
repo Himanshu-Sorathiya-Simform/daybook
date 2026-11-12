@@ -4,7 +4,8 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
-import { isMeKey, ME_KEY, ME_STALE_MS, useMe } from "../useMe";
+import { useMe } from "../useMe";
+import { ME_KEY } from "@/lib/api/me";
 import { meFor, renderInApp, url } from "@/components/app/__tests__/helpers";
 
 const network = setupServer();
@@ -40,10 +41,6 @@ describe("useMe (BR-P4-12)", () => {
 		const { queryClient } = renderInApp(<MeView />);
 		expect(await screen.findByText("user u1")).toBeInTheDocument();
 		expect(queryClient.getQueryData(ME_KEY)).toEqual(meFor("u1"));
-	});
-
-	test("stays fresh for 60 seconds", () => {
-		expect(ME_STALE_MS).toBe(60_000);
 	});
 
 	test("two components share one request", async () => {
@@ -102,17 +99,5 @@ describe("useMe (BR-P4-12)", () => {
 		);
 		renderInApp(<MeView />);
 		expect(await screen.findByText("error internal")).toBeInTheDocument();
-	});
-});
-
-describe("isMeKey", () => {
-	test.each([
-		[["me"], true],
-		[["me", "extra"], true],
-		[["profile"], false],
-		[[], false],
-		[[{ me: true }], false],
-	])("%j is %s", (key, expected) => {
-		expect(isMeKey(key)).toBe(expected);
 	});
 });

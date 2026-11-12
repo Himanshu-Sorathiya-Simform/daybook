@@ -183,6 +183,8 @@ People create a Daybook account with an email and password, log in and out on an
     - Autocomplete: the email is `email`, the login password `current-password`, the sign-up password `new-password` and the display name `name`.
     - The password's toggle reads "Show password" or "Hide password" and keeps what was typed.
     - "Forgot your password?" shows BR-F01-29's note under the link.
+    - A refusal of the whole form shows at the top of the form, under the title, and takes focus; a field's refusal shows under that field.
+    - "Log in instead." in BR-F01-05's message links to `/login` and carries the typed email there through `sessionStorage`. The login form fills its email from it once and removes it.
     - Success opens the destination with a full page load, so the app starts fresh for the user who signed in.
 
 ## 5. Calculations
@@ -193,9 +195,11 @@ None.
 
 **`/` landing (logged out).** Name, line, Log in, Sign up, latest posts. With `deleted=1`, a notice: "Your account was deleted."
 
-**`/signup`.** Email, password with strength meter and show/hide toggle, display name, Create account, and a link "Already have an account? Log in".
+**`/signup`.** Title "Create your account". "Your name" (the display name), with the hint "Shown in Daybook. You can change it later in Settings."; email; password with the hint "At least 12 characters.", the strength meter and the show/hide toggle; Create account, with the line "Next, you'll confirm your country, currency, time zone and week start." under it; and a link "Already have an account? Log in". The name comes first, so the strength meter already has the name and email to count against the password (BR-F01-04).
 
-**`/login`.** Email, password with show/hide toggle, Log in, "Forgot your password?", and a link "New here? Create an account". With `expired=1`, a note above the form: "Your session has expired. Log in to continue."
+**`/login`.** Title "Log in". Email, password with show/hide toggle, "Forgot your password?", Log in, and a link "New here? Create an account". With `expired=1`, a note above the fields: "Your session has expired. Log in to continue."
+
+Sign-up and login sit in one framed card under a top bar holding the name, which links to `/`. Notes and refusals of the whole form are boxes with an icon: the offline and expired notes on a soft fill, a refusal on the negative fill.
 
 **Logout confirmation (only when items are still waiting after any replay attempt).** Title "3 changes have not been saved". Body "Logging out deletes them." Buttons: Cancel, Delete and log out. The same dialog serves online and offline logout (root 5.3).
 

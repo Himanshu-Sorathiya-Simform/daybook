@@ -21,6 +21,14 @@ export const AUTH_MESSAGES = {
 		"Password reset by email is not available in this demo. Ask the developer to reset it.",
 } as const;
 
+/** F01 section 6's hints and lines on the sign-up screen. */
+export const SIGN_UP_TEXT = {
+	nameHint: "Shown in Daybook. You can change it later in Settings.",
+	passwordHint: "At least 12 characters.",
+	nextStep:
+		"Next, you'll confirm your country, currency, time zone and week start.",
+} as const;
+
 export type AuthField = "email" | "password" | "name";
 
 /** Where a refusal shows: under one field, or above the form. */

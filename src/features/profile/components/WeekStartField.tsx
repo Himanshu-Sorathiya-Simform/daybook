@@ -9,7 +9,8 @@ import { ONBOARDING_TEXT } from "../lib/messages";
 import { WEEK_START_OPTIONS } from "../lib/options";
 
 export type WeekStartFieldProps = {
-	value: WeekStart;
+	/** `null` before a country is chosen: no day is chosen, and the field is disabled. */
+	value: WeekStart | null;
 	onChange: (weekStart: WeekStart) => void;
 	error?: string | undefined;
 	isDisabled?: boolean;

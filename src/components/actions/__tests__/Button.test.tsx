@@ -183,6 +183,13 @@ describe("icon and shortcut", () => {
 		expect(onPress).not.toHaveBeenCalled();
 	});
 
+	test("the key cap stays out of the button's name", () => {
+		render(<Button shortcut="N">Add Transaction</Button>);
+
+		expect(screen.getByRole("button")).toHaveAccessibleName("Add Transaction");
+		expect(document.querySelector("kbd")).toHaveAttribute("aria-hidden", "true");
+	});
+
 	test("has no key cap without a shortcut", () => {
 		render(<Button>Add</Button>);
 
@@ -679,5 +686,65 @@ describe("buttonClasses", () => {
 		);
 		const button = screen.getByRole("button", { name: "Save" });
 		for (const name of classes.split(" ")) expect(button).toHaveClass(name);
+	});
+});
+
+describe("onDisabledPress", () => {
+	test("a disabled button answers a press with it, by mouse and by keyboard", async () => {
+		const user = userEvent.setup();
+		const onDisabledPress = vi.fn();
+		const onPress = vi.fn();
+		render(
+			<Button
+				isDisabled
+				onPress={onPress}
+				onDisabledPress={onDisabledPress}
+			>
+				Start
+			</Button>,
+		);
+		await user.click(screen.getByRole("button", { name: "Start" }));
+		screen.getByRole("button", { name: "Start" }).focus();
+		await user.keyboard("{Enter}");
+		expect(onDisabledPress).toHaveBeenCalledTimes(2);
+		expect(onPress).not.toHaveBeenCalled();
+	});
+
+	test("stays disabled to assistive technology, and never submits", async () => {
+		const user = userEvent.setup();
+		const onSubmit = vi.fn((event: SubmitEvent) => event.preventDefault());
+		render(
+			<form onSubmit={(event) => onSubmit(event.nativeEvent as SubmitEvent)}>
+				<Button
+					type="submit"
+					isDisabled
+					onDisabledPress={vi.fn()}
+				>
+					Start
+				</Button>
+			</form>,
+		);
+		const button = screen.getByRole("button", { name: "Start" });
+		expect(button).toHaveAttribute("aria-disabled", "true");
+		expect(button).toHaveAttribute("type", "button");
+		await user.click(button);
+		expect(onSubmit).not.toHaveBeenCalled();
+	});
+
+	test("an enabled button ignores it and presses as usual", async () => {
+		const user = userEvent.setup();
+		const onDisabledPress = vi.fn();
+		const onPress = vi.fn();
+		render(
+			<Button
+				onPress={onPress}
+				onDisabledPress={onDisabledPress}
+			>
+				Start
+			</Button>,
+		);
+		await user.click(screen.getByRole("button", { name: "Start" }));
+		expect(onPress).toHaveBeenCalledOnce();
+		expect(onDisabledPress).not.toHaveBeenCalled();
 	});
 });

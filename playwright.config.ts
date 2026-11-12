@@ -19,6 +19,8 @@ export default defineConfig({
 	// Some tests sign up and log in several times, each a few seconds against Neon.
 	timeout: 90_000,
 	use: { baseURL: ORIGIN },
+	// Deletes every account the tests signed up once the run ends (TST-6).
+	globalTeardown: "./e2e/global-teardown.ts",
 	projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 	webServer: {
 		command: "pnpm build && pnpm start",

@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { isIsoDate, monthsBefore, shiftDays, todayIn, utcDate } from "../time";
+import {
+	daysInRange,
+	isIsoDate,
+	monthsBefore,
+	shiftDays,
+	todayIn,
+	utcDate,
+} from "../time";
 
 // The golden clock (TST-3): 2026-11-02T12:00:00+05:30.
 const GOLDEN = new Date("2026-11-02T06:30:00.000Z");
@@ -29,6 +36,30 @@ test("a zone behind UTC is still on the previous day", () => {
 	expect(todayIn("America/New_York", new Date("2026-11-02T03:00:00.000Z"))).toBe(
 		"2026-11-01",
 	);
+});
+
+// 1 November 2026 is Los Angeles's daylight-saving end: 01:00 to 02:00 happens twice, so the
+// day has 25 hours, and its midnight moves from 07:00 to 08:00 UTC.
+describe("todayIn across Los Angeles's daylight-saving end", () => {
+	const LA = "America/Los_Angeles";
+
+	test.each([
+		["2026-11-01T07:00:00.000Z", "2026-11-01", "midnight, in PDT"],
+		["2026-11-01T08:30:00.000Z", "2026-11-01", "the first 01:30, in PDT"],
+		["2026-11-01T09:30:00.000Z", "2026-11-01", "the second 01:30, in PST"],
+		[
+			"2026-11-02T07:59:59.999Z",
+			"2026-11-01",
+			"23:59 in PST, an hour later in UTC",
+		],
+		["2026-11-02T08:00:00.000Z", "2026-11-02", "the next midnight, in PST"],
+	])("%s is %s: %s", (instant, expected) => {
+		expect(todayIn(LA, new Date(instant))).toBe(expected);
+	});
+
+	test("the day before keeps its PDT midnight", () => {
+		expect(todayIn(LA, new Date("2026-11-01T06:59:59.999Z"))).toBe("2026-10-31");
+	});
 });
 
 test("utcDate is the date in UTC", () => {
@@ -85,6 +116,23 @@ describe("shiftDays", () => {
 		["2026-11-01", 1, "2026-11-02"],
 	])("%s moved %i days is %s", (date, days, expected) => {
 		expect(shiftDays(date, days)).toBe(expected);
+	});
+});
+
+describe("daysInRange", () => {
+	test.each([
+		["2026-10-05", "2026-10-20", 16],
+		["2026-10-05", "2026-10-05", 1],
+		["2026-10-01", "2026-10-31", 31],
+		["2026-02-01", "2026-02-28", 28],
+		["2028-02-01", "2028-02-29", 29],
+		["2025-12-31", "2026-01-01", 2],
+		["2026-01-01", "2026-12-31", 365],
+		// Daylight-saving changes never touch a calendar-date count.
+		["2026-03-28", "2026-03-30", 3],
+		["2026-10-24", "2026-10-26", 3],
+	])("from %s to %s counts %i days, both ends included", (from, to, days) => {
+		expect(daysInRange(from, to)).toBe(days);
 	});
 });
 

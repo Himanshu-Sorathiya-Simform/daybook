@@ -235,6 +235,26 @@ describe("the create body (BR-F03-63, BR-F03-64)", () => {
 			});
 		});
 
+		test("checks amounts against the dinar's three decimals", () => {
+			const dinar = viewCreateSchema("KWD");
+			expect(
+				errors(dinar, {
+					...FOOD_LAST_MONTH,
+					filter: { minMinor: 1, maxMinor: 999999999999 },
+					currency: "KWD",
+				}),
+			).toEqual({});
+			expect(
+				errors(dinar, {
+					...FOOD_LAST_MONTH,
+					filter: { maxMinor: 1000000000000 },
+					currency: "KWD",
+				}),
+			).toEqual({
+				"filter.maxMinor": "The largest amount is 999,999,999.999.",
+			});
+		});
+
 		test("accepts amounts equal at both ends, and a short numeric search", () => {
 			expect(
 				filterErrors(
@@ -384,7 +404,6 @@ describe("the edit body (BR-F03-68, BR-F03-69)", () => {
 	});
 });
 
-// AC-F03-49
 describe("the delete body", () => {
 	test("accepts an empty body", () => {
 		expect(viewDeleteSchema.parse({})).toEqual({});
@@ -397,6 +416,7 @@ describe("the delete body", () => {
 	});
 });
 
+// AC-F03-49
 describe("dates in a view (D-453)", () => {
 	test("on 2026-11-02, October's dates are saved as last_month", () => {
 		expect(
@@ -576,13 +596,13 @@ describe("isEdited (BR-F03-66)", () => {
 
 // AC-F03-51
 describe("viewName (BR-F03-67)", () => {
-	test("joins the chip labels", () => {
-		expect(viewName(["Food", "Last month"], [])).toBe("Food, Last month");
+	test("joins the chip labels in their order", () => {
+		expect(viewName(["Last month", "Food"], [])).toBe("Last month, Food");
 	});
 
 	test("adds 2 when the name is taken, comparing without case", () => {
-		expect(viewName(["Food", "Last month"], ["food, last month"])).toBe(
-			"Food, Last month 2",
+		expect(viewName(["Last month", "Food"], ["last month, food"])).toBe(
+			"Last month, Food 2",
 		);
 	});
 

@@ -238,6 +238,29 @@ describe("filters", () => {
 		});
 	});
 
+	// F03 section 8's API-only messages, in the answer the client reads.
+	test.each([
+		[
+			"a preset and dates together",
+			{ range: "last_month", from: "2026-10-01", to: "2026-10-31" },
+			"filter.range",
+			"Send a preset or dates, not both.",
+		],
+		[
+			"minMinor above maxMinor",
+			{ minMinor: 90000, maxMinor: 50000 },
+			"filter.minMinor",
+			"The lowest amount can't be above the highest.",
+		],
+	])("%s gets its message", async (_name, filter, path, message) => {
+		const { status, body } = await post(
+			shared,
+			viewBody({ filter, currency: "INR" }),
+		);
+		expect(status).toBe(422);
+		expect(errorOf(body).fields).toEqual({ [path]: message });
+	});
+
 	// AC-F03-48, D-492: the unknown key itself, in the answer the client reads.
 	test("an unknown key such as month gets 422 on filter.month", async () => {
 		const { status, body } = await post(

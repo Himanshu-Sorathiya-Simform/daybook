@@ -10,6 +10,7 @@ import {
 	type SwitchFieldProps as AriaSwitchFieldProps,
 } from "react-aria-components";
 
+import { Skeleton } from "@/components/feedback/Skeleton";
 import { cn } from "@/lib/cn";
 
 export type ChoiceProps = Omit<
@@ -23,6 +24,8 @@ export type ChoiceProps = Omit<
 	description?: string;
 	/** A facet count at the end of the row, so empty options show before the user picks. */
 	count?: number;
+	/** Holds the count's place with a placeholder while the counts load. */
+	countPending?: boolean;
 	/** Classes for the root element. */
 	className?: string;
 };
@@ -36,6 +39,7 @@ export function Choice({
 	label,
 	description,
 	count,
+	countPending = false,
 	className,
 	...rest
 }: Readonly<ChoiceProps>) {
@@ -46,6 +50,7 @@ export function Choice({
 			{count !== undefined && (
 				<span className="figures text-caption text-ink-2">{count}</span>
 			)}
+			{count === undefined && countPending && <Skeleton className="h-3 w-4" />}
 		</>
 	);
 	const note = description && (

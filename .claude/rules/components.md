@@ -26,7 +26,7 @@ Shared components live in `src/components`; a feature's own live in `src/feature
 
 - Interactive behavior comes from `react-aria-components` (D-168). Never hand-roll focus handling, keyboard support or ARIA attributes that it already provides. Components with no behavior of their own (badge, section, banner) stay plain markup.
 - Import every `react-aria-components` name, types included, with an `Aria` prefix: `import { Button as AriaButton, type ButtonProps as AriaButtonProps } from "react-aria-components"`. It keeps our `Button` and React Aria's apart, and shows at a glance which part brings the behavior.
-- Don't write a React Aria component from memory. Read its types in `node_modules/react-aria-components/dist/types/src/<Name>.d.ts` for props and render props. For its parts and structure, ask me to paste its docs page, and name the component you need.
+- Don't write a React Aria component from memory. Read its types in `node_modules/react-aria-components/dist/types/src/<Name>.d.ts` for props and render props. The types list its parts too; when behaviour is still unclear, read its source in `node_modules`. Ask me to paste a docs page only when both leave a real question, and name that one page and the question.
 - Style with Tailwind classes from our tokens: `bg-page`, `text-ink-2`, `rounded-control`, `text-body`, `figures` on every amount. Never a hex value, a `--text-*` variable or a spacing override (D-387).
 - No inline `style`, except a value computed at run time, such as a bar's width.
 - Icons are named imports from `lucide-react` (D-170), for example `import { Plus } from "lucide-react"`. Never `import *`, and never a lookup by name string. A component that shows an icon takes it as a prop typed `LucideIcon`: `icon={Plus}` (D-392).

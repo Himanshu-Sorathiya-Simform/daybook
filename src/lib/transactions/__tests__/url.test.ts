@@ -46,6 +46,16 @@ describe("normalizing a filter URL (BR-F03-33, BR-F03-34)", () => {
 		expect(normalize("q=12")).toEqual({ query: "q=12", invalid: [] });
 	});
 
+	// AC-F03-15: the 3-character minimum counts code points, so 2 emoji (4 UTF-16 units) are
+	// still too short, and 3 are enough.
+	test("counts a search's characters as code points", () => {
+		expect(normalize(`q=${encodeURIComponent("🍕🍕")}`)).toEqual({
+			query: "",
+			invalid: ["q"],
+		});
+		expect(normalize(`q=${encodeURIComponent("🍕🍕🍕")}`).invalid).toEqual([]);
+	});
+
 	test.each([
 		["type=refund,expense&cat=shopping", "type=expense,refund&cat=shopping"],
 		[

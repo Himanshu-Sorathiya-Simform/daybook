@@ -301,6 +301,8 @@ export const transactionCreateSchema = z
 		}),
 	);
 export type TransactionCreateBody = z.output<typeof transactionCreateSchema>;
+/** What a client sends, before the schema fills its defaults. */
+export type TransactionCreateInput = z.input<typeof transactionCreateSchema>;
 
 /**
  * `PATCH /api/transactions/[id]`: only the fields that changed (BR-F03-23). The date and time
@@ -340,6 +342,8 @@ export const transactionEditSchema = z
 		checkAmountAndDate(body, ctx);
 	});
 export type TransactionEditBody = z.output<typeof transactionEditSchema>;
+/** What a client sends, before the schema fills its defaults. */
+export type TransactionEditInput = z.input<typeof transactionEditSchema>;
 
 /**
  * `DELETE /api/transactions/[id]`: `{}`, or a charge's cached `{ subscriptionId, dueOn }` as a
@@ -357,3 +361,5 @@ export const transactionDeleteSchema = z
 		}
 	});
 export type TransactionDeleteBody = z.output<typeof transactionDeleteSchema>;
+/** What a client sends, before the schema fills its defaults. */
+export type TransactionDeleteInput = z.input<typeof transactionDeleteSchema>;

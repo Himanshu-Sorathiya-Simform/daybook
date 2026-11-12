@@ -37,7 +37,8 @@ export type SelectProps = Omit<
 	& Omit<FieldProps, "children" | "className"> & {
 		/** Plain strings and numbers are used as both the value and the label. */
 		options: Array<SelectOption | string | number>;
-		value: string | number;
+		/** The chosen option, or `null` with none: the trigger then shows `placeholder`. */
+		value: string | number | null;
 		onChange: (value: string | number) => void;
 		/** `md` is 44px, for forms; `sm` is 36px, for toolbars and inside pickers. */
 		size?: "sm" | "md";

@@ -11,8 +11,15 @@ describe("OfflineNote", () => {
 		);
 	});
 
+	test("shows the offline icon in a soft box", () => {
+		render(<OfflineNote>x</OfflineNote>);
+		const note = screen.getByRole("status");
+		expect(note).toHaveClass("bg-soft");
+		expect(note.querySelector("svg")).toHaveClass("lucide-cloud-off");
+	});
+
 	test("takes the caller's classes last", () => {
 		render(<OfflineNote className="mb-2">x</OfflineNote>);
-		expect(screen.getByRole("status")).toHaveClass("text-ink-2", "mb-2");
+		expect(screen.getByRole("status")).toHaveClass("bg-soft", "mb-2");
 	});
 });

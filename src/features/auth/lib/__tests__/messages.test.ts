@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { AUTH_MESSAGES, authFailure } from "../messages";
+import { AUTH_MESSAGES, authFailure, SIGN_UP_TEXT } from "../messages";
 
 describe("AUTH_MESSAGES (F01 section 8, D-510)", () => {
 	test("holds F01's exact wording", () => {
@@ -24,6 +24,17 @@ describe("AUTH_MESSAGES (F01 section 8, D-510)", () => {
 			expired: "Your session has expired. Log in to continue.",
 			forgotPassword:
 				"Password reset by email is not available in this demo. Ask the developer to reset it.",
+		});
+	});
+});
+
+describe("SIGN_UP_TEXT (F01 section 6)", () => {
+	test("holds the sign-up screen's hints and line", () => {
+		expect(SIGN_UP_TEXT).toEqual({
+			nameHint: "Shown in Daybook. You can change it later in Settings.",
+			passwordHint: "At least 12 characters.",
+			nextStep:
+				"Next, you'll confirm your country, currency, time zone and week start.",
 		});
 	});
 });

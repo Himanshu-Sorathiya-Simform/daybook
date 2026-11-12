@@ -15,6 +15,7 @@ describe("TimeZoneField (F02 section 6, D-511)", () => {
 				value="America/Chicago"
 				onChange={vi.fn()}
 				at={NOW}
+				placeholder={ONBOARDING_TEXT.chooseCountryFirst}
 			/>,
 		);
 		expect(screen.getByRole("button", { name: /Time zone/ })).toHaveTextContent(
@@ -31,6 +32,7 @@ describe("TimeZoneField (F02 section 6, D-511)", () => {
 				value="Europe/Berlin"
 				onChange={onChange}
 				at={NOW}
+				placeholder={ONBOARDING_TEXT.chooseCountryFirst}
 			/>,
 		);
 		await user.click(screen.getByRole("button", { name: /Time zone/ }));
@@ -45,6 +47,7 @@ describe("TimeZoneField (F02 section 6, D-511)", () => {
 				value="Asia/Kolkata"
 				onChange={vi.fn()}
 				at={NOW}
+				placeholder={ONBOARDING_TEXT.chooseCountryFirst}
 			/>,
 		);
 		expect(screen.getByText("Kolkata (GMT+05:30)")).toBeInTheDocument();
@@ -52,16 +55,39 @@ describe("TimeZoneField (F02 section 6, D-511)", () => {
 		expect(screen.getByText(ONBOARDING_TEXT.timezoneHint)).toBeInTheDocument();
 	});
 
-	test("before a country, a dash", () => {
+	// D-511: nothing to choose until there is a country.
+	test("before a country, a disabled list says to choose a country first", async () => {
+		const user = userEvent.setup();
 		render(
 			<TimeZoneField
 				country={null}
 				value="UTC"
 				onChange={vi.fn()}
 				at={NOW}
+				placeholder={ONBOARDING_TEXT.chooseCountryFirst}
 			/>,
 		);
-		expect(screen.getByText("—")).toBeInTheDocument();
+		const trigger = screen.getByRole("button", { name: /Time zone/ });
+		expect(trigger).toHaveTextContent("Choose a country first");
+		expect(trigger).not.toHaveTextContent("UTC");
+		expect(trigger).toBeDisabled();
+		await user.click(trigger);
+		expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+	});
+
+	test("while the page loads, the list is empty", () => {
+		render(
+			<TimeZoneField
+				country={null}
+				value="UTC"
+				onChange={vi.fn()}
+				at={NOW}
+				placeholder=""
+			/>,
+		);
+		expect(screen.getByRole("button", { name: /Time zone/ })).toHaveTextContent(
+			/^$/,
+		);
 	});
 
 	test("an error replaces the hint, in the list and in the text", () => {
@@ -71,6 +97,7 @@ describe("TimeZoneField (F02 section 6, D-511)", () => {
 				value="Asia/Kolkata"
 				onChange={vi.fn()}
 				at={NOW}
+				placeholder={ONBOARDING_TEXT.chooseCountryFirst}
 				error="Choose a time zone in your country."
 			/>,
 		);
@@ -86,6 +113,7 @@ describe("TimeZoneField (F02 section 6, D-511)", () => {
 				value="America/New_York"
 				onChange={vi.fn()}
 				at={NOW}
+				placeholder={ONBOARDING_TEXT.chooseCountryFirst}
 				error="Choose a time zone in your country."
 			/>,
 		);
@@ -102,6 +130,7 @@ describe("TimeZoneField (F02 section 6, D-511)", () => {
 				value="America/New_York"
 				onChange={vi.fn()}
 				at={NOW}
+				placeholder={ONBOARDING_TEXT.chooseCountryFirst}
 				isDisabled
 			/>,
 		);

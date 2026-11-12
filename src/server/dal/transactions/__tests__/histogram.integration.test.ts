@@ -195,6 +195,32 @@ describe("a type and a category together (BR-F03-60)", () => {
 	});
 });
 
+// AC-F03-41 in a currency with no decimals: 1 minor unit is 1 yen, so a search for 1250 reads
+// as 1,250 yen, while an Indian profile reads it as 1,250.00 rupees.
+describe("Japanese yen, no decimals", () => {
+	test("a search for 1250 finds the 1,250 yen row, and the 1,250.00 rupee row in India", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "Yen Row",
+				amountMinor: 1250,
+				occurredOn: "2026-11-02",
+			});
+			await addExpense(tx, golden.userId, {
+				payee: "Rupee Row",
+				amountMinor: 125000,
+				occurredOn: "2026-11-02",
+			});
+			const histogramIn = (currency: "JPY" | "INR") =>
+				amountHistogram(tx, goldenContext(golden.userId, { currency }), {
+					q: "1250",
+				});
+			return { jpy: await histogramIn("JPY"), inr: await histogramIn("INR") };
+		});
+		expect(result.jpy).toEqual({ edges: [1250, 1600], counts: [1] });
+		expect(result.inr).toEqual({ edges: [125000, 160000], counts: [1] });
+	});
+});
+
 describe("Kuwaiti dinars, three decimals", () => {
 	// The edges are in minor units of any currency, so 1.250 dinars is 1,250 fils, which is on
 	// the series; 0.001 is 1.

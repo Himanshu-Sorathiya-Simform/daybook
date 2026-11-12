@@ -19,10 +19,14 @@ export type ButtonProps = Omit<
 	size?: "sm" | "md" | "lg";
 	/** A lucide icon shown before the label, as the component: `icon={Plus}`. */
 	icon?: LucideIcon;
-	/** A keyboard shortcut shown as a key cap, for example "N". It only displays the key. */
+	/** A keyboard shortcut shown as a key cap, for example "N". It only displays the key, and
+	 * is hidden from screen readers so the button's name stays its label. */
 	shortcut?: string;
 	/** Why the button is disabled, or what it does. Shown under it and read with it. */
 	description?: string;
+	/** What a press does while the button is disabled, for a button that answers with the
+	 * reason, as onboarding's Start does before a country is chosen. It never submits. */
+	onDisabledPress?: () => void;
 	children?: ReactNode;
 	/** Classes for the root element: the button, or the wrapper when there is a `description`. */
 	className?: string;
@@ -72,6 +76,7 @@ export function Button({
 	isDisabled = false,
 	type = "button",
 	"aria-describedby": describedBy,
+	onDisabledPress,
 	onPress,
 	onPressStart,
 	onPressEnd,
@@ -88,7 +93,8 @@ export function Button({
 		.filter(Boolean)
 		.join(" ");
 	if (describedByIds) ariaProps["aria-describedby"] = describedByIds;
-	// A disabled button hears none of its press handlers.
+	// A disabled button hears none of its press handlers, only `onDisabledPress`.
+	if (isDisabled && onDisabledPress) ariaProps.onPress = onDisabledPress;
 	if (!isDisabled) {
 		Object.assign(ariaProps, {
 			onPress,
@@ -120,7 +126,10 @@ export function Button({
 			:	Icon && <Icon className="size-3.75 shrink-0" />}
 			{children}
 			{shortcut && (
-				<kbd className="rounded-kbd text-small border border-current px-1.25 font-sans opacity-85">
+				<kbd
+					aria-hidden="true"
+					className="rounded-kbd text-small border border-current px-1.25 font-sans opacity-85"
+				>
 					{shortcut}
 				</kbd>
 			)}

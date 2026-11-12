@@ -1,6 +1,8 @@
 import "server-only";
 import { sql } from "drizzle-orm";
+import type { CurrencyCode } from "@/lib/currency";
 import type { SavedView } from "@/lib/transactions/views";
+import type { ProfiledContext } from "../context";
 import type { Tx } from "../with-user";
 import { VIEW_JSON } from "./row";
 
@@ -11,4 +13,15 @@ export async function listViews(tx: Tx): Promise<SavedView[]> {
 		sql`SELECT ${VIEW_JSON} AS view FROM app.transaction_views ORDER BY created_at, id`,
 	);
 	return rows.map(({ view }) => view);
+}
+
+export type ViewsAnswer = { items: SavedView[]; currency: CurrencyCode };
+
+/** `GET /api/transaction-views`'s answer: the views and the profile currency. The route and the
+ * Transactions page's server prefetch both call it (STATE-5). */
+export async function viewsAnswer(
+	tx: Tx,
+	ctx: ProfiledContext,
+): Promise<ViewsAnswer> {
+	return { items: await listViews(tx), currency: ctx.profile.currency };
 }

@@ -18,6 +18,23 @@ describe("ONBOARDING_TEXT (F02 sections 6 and 8, D-511)", () => {
 			noCountries: "No countries match.",
 			offline: "You are offline. Connect to finish setup.",
 			failed: "We couldn't save your setup. Try again.",
+			countryPlaceholder: "Search countries",
+			loadingPlaceholder: "Loading countries…",
+			chooseCountryFirst: "Choose a country first",
+			blocked: {
+				country: "Choose your country first.",
+				offline: "Connect to finish setup.",
+				loading: "Loading countries and time zones.",
+			},
+			logOut: "Log out",
+			preview: {
+				title: "Preview",
+				intro: "How Daybook will show amounts and dates.",
+				empty: "Choose your country to see how amounts and dates will look.",
+				amounts: "Amounts",
+				today: "Today",
+				week: "This week",
+			},
 		});
 	});
 });

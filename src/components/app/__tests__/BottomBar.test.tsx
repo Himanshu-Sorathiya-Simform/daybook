@@ -7,16 +7,25 @@ import { BottomBar, type BottomBarProps } from "../BottomBar";
 
 function renderBar(props: Partial<BottomBarProps> = {}) {
 	const navigate = vi.fn();
+	const onAdd = vi.fn();
 	render(
 		<AriaRouterProvider navigate={navigate}>
 			<BottomBar
 				pathname="/transactions"
+				onAdd={onAdd}
 				{...props}
 			/>
 		</AriaRouterProvider>,
 	);
-	return { nav: screen.getByRole("navigation", { name: "Main" }), navigate };
+	return {
+		nav: screen.getByRole("navigation", { name: "Main" }),
+		navigate,
+		onAdd,
+	};
 }
+
+const add = (nav: HTMLElement) =>
+	within(nav).getByRole("button", { name: "Add Transaction" });
 
 const more = (nav: HTMLElement) => within(nav).getByRole("button", { name: "More" });
 
@@ -26,13 +35,43 @@ describe("BottomBar (root section 4, D-512)", () => {
 		expect(nav).toHaveClass("fixed", "bottom-0", "h-(--bottom-bar-height)");
 	});
 
-	// D-504: Add arrives with F03's interface.
-	test("holds Dashboard, Transactions, Budgets and More, in that order, without Add", () => {
+	// D-548: Add arrives with F03's interface.
+	test("holds Dashboard, Transactions, Add, Budgets and More, in that order, in 5 columns", () => {
 		const { nav } = renderBar();
 		expect(
-			[...nav.querySelectorAll("a, button")].map((item) => item.textContent),
-		).toEqual(["Dashboard", "Transactions", "Budgets", "More"]);
-		expect(within(nav).queryByRole("button", { name: /Add/ })).toBeNull();
+			[...nav.querySelectorAll("a, button")].map(
+				(item) => item.getAttribute("aria-label") ?? item.textContent,
+			),
+		).toEqual([
+			"Dashboard",
+			"Transactions",
+			"Add Transaction",
+			"Budgets",
+			"More",
+		]);
+		expect(nav).toHaveClass("grid-cols-5");
+	});
+
+	test("Add is a round button in the accent colour, with an icon only", () => {
+		const { nav } = renderBar();
+		const button = add(nav);
+		expect(button).toHaveClass("rounded-full", "bg-accent", "size-12");
+		expect(button).toHaveTextContent("");
+		expect(button.querySelector("svg")).toHaveAttribute("aria-hidden", "true");
+	});
+
+	test("Add opens the entry dialog, by press or keyboard", async () => {
+		const user = userEvent.setup();
+		const { nav, onAdd } = renderBar();
+		await user.click(add(nav));
+		add(nav).focus();
+		await user.keyboard("{Enter}");
+		expect(onAdd).toHaveBeenCalledTimes(2);
+	});
+
+	test("Add is never the current item", () => {
+		const { nav } = renderBar({ pathname: "/transactions" });
+		expect(add(nav)).not.toHaveAttribute("aria-current");
 	});
 
 	test("the three links open their routes", () => {
@@ -46,7 +85,7 @@ describe("BottomBar (root section 4, D-512)", () => {
 
 	test("each item shows a decorative icon above its label", () => {
 		const { nav } = renderBar();
-		for (const item of nav.querySelectorAll("a, button")) {
+		for (const item of nav.querySelectorAll("a, button:not([aria-label])")) {
 			expect(item.firstElementChild?.tagName.toLowerCase()).toBe("svg");
 			expect(item.firstElementChild).toHaveAttribute("aria-hidden", "true");
 		}
@@ -54,8 +93,10 @@ describe("BottomBar (root section 4, D-512)", () => {
 
 	test("every item is at least the touch target high", () => {
 		const { nav } = renderBar();
-		for (const item of nav.querySelectorAll("a, button"))
+		for (const item of nav.querySelectorAll("a, button:not([aria-label])"))
 			expect(item).toHaveClass("min-h-(--target-min)");
+		// Add is 48px round, above the 44px target.
+		expect(add(nav)).toHaveClass("size-12");
 	});
 
 	test("marks the current link as the page, in the accent colour", () => {

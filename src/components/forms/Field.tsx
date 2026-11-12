@@ -13,8 +13,9 @@ export type FieldProps = {
 	/** The visible label. Every Daybook field has one; a placeholder is never the label. */
 	label: string;
 	hint?: string | undefined;
-	/** The field's error. It replaces the hint and is read out with the control. */
-	error?: string | undefined;
+	/** The field's error. It replaces the hint and is read out with the control. Usually text;
+	 * it may hold a link that answers it, such as sign-up's "Log in instead.". */
+	error?: ReactNode;
 	optional?: boolean | undefined;
 	/** A running count shown at the end of the label row, for example "31 / 500". */
 	counter?: string | undefined;

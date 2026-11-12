@@ -337,6 +337,76 @@ describe("look", () => {
 	});
 });
 
+describe("size and placeholder", () => {
+	test("the large box is the default, with the sign at heading size", () => {
+		render(
+			<AmountInput
+				label="Amount"
+				currency="INR"
+				numberLocale={IN}
+			/>,
+		);
+		const input = screen.getByRole("textbox", { name: "Amount" });
+
+		expect(input.parentElement).not.toHaveClass("h-9.5");
+		expect(input.previousElementSibling).toHaveClass("text-heading");
+		expect(input).not.toHaveClass("text-body");
+	});
+
+	test("the medium box is 38px, 44px on phones, with body text at 16px on touch screens", () => {
+		render(
+			<AmountInput
+				label="Min"
+				currency="INR"
+				numberLocale={IN}
+				size="md"
+			/>,
+		);
+		const input = screen.getByRole("textbox", { name: "Min" });
+
+		expect(input.parentElement).toHaveClass("h-9.5", "max-md:h-11");
+		expect(input.parentElement).not.toHaveClass("h-14");
+		expect(input).toHaveClass(
+			"figures",
+			"text-body",
+			"pointer-coarse:text-base",
+		);
+		expect(input).not.toHaveClass("text-figure");
+		expect(input.previousElementSibling).toHaveClass("text-body");
+		expect(input.previousElementSibling).toHaveTextContent("₹");
+	});
+
+	test("shows the placeholder while empty", () => {
+		render(
+			<AmountInput
+				label="Min"
+				currency="INR"
+				numberLocale={IN}
+				placeholder="Any"
+			/>,
+		);
+
+		expect(screen.getByRole("textbox", { name: "Min" })).toHaveAttribute(
+			"placeholder",
+			"Any",
+		);
+	});
+
+	test("has no placeholder unless given one", () => {
+		render(
+			<AmountInput
+				label="Amount"
+				currency="INR"
+				numberLocale={IN}
+			/>,
+		);
+
+		expect(screen.getByRole("textbox", { name: "Amount" })).not.toHaveAttribute(
+			"placeholder",
+		);
+	});
+});
+
 describe("className", () => {
 	test("goes on the root element", () => {
 		const { container } = render(

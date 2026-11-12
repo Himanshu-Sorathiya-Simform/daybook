@@ -5,7 +5,6 @@ import { useState } from "react";
 import { useDevice } from "../hooks/useDevice";
 import type { Device } from "../lib/onboarding";
 import { OnboardingFields } from "./OnboardingFields";
-import { OnboardingLoading } from "./OnboardingLoading";
 
 export type OnboardingFormProps = {
 	/** For tests; the page reads the browser's own. */
@@ -16,8 +15,8 @@ export type OnboardingFormProps = {
 
 /**
  * Onboarding (F02 flow 7.1). The pre-fill needs the browser's zone and language, which the
- * server cannot know, so the server draws a busy outline and the browser draws the form (F02
- * section 6, loading).
+ * server cannot know, so the server draws the form disabled, as it loads, and the browser
+ * draws it again, pre-filled, once it knows them (F02 section 6, loading).
  */
 export function OnboardingForm({
 	device: given,
@@ -26,9 +25,9 @@ export function OnboardingForm({
 	const browser = useDevice();
 	const [at] = useState(() => now ?? new Date());
 	const device = given ?? browser;
-	if (!device) return <OnboardingLoading />;
 	return (
 		<OnboardingFields
+			key={device ? "ready" : "loading"}
 			device={device}
 			at={at}
 		/>

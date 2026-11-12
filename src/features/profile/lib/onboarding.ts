@@ -23,8 +23,9 @@ const NOTHING_PICKED: Picked = {
 	weekStart: false,
 };
 
-/** Before a country is known, the other fields hold US defaults; they are re-derived the moment
- * a country is chosen, and Start stays disabled until then (F02 section 6). */
+/** Before a country is known, the other fields hold US defaults, which the form never shows:
+ * they are re-derived the moment a country is chosen, and the fields stay disabled until then
+ * (F02 section 6, D-511). */
 const NO_COUNTRY: OnboardingValues = {
 	country: null,
 	currency: "USD",
@@ -33,9 +34,9 @@ const NO_COUNTRY: OnboardingValues = {
 };
 
 /** The form when the page opens (BR-F02-03 to BR-F02-06, D-208): the device's country and
- * its defaults, else an empty country. */
-export function startState(device: Device): OnboardingState {
-	const guess = prefill(device);
+ * its defaults, else an empty country. `null` while the page cannot yet know the device. */
+export function startState(device: Device | null): OnboardingState {
+	const guess = device && prefill(device);
 	return {
 		values: guess ? { ...guess } : NO_COUNTRY,
 		picked: NOTHING_PICKED,

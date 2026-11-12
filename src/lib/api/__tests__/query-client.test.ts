@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { ApiRequestError } from "../client";
 import {
 	createQueryClient,
+	DEFAULT_STALE_MS,
 	MAX_QUERY_RETRIES,
 	shouldRetryQuery,
 } from "../query-client";
@@ -60,6 +61,13 @@ describe("createQueryClient", () => {
 		const defaults = client.getDefaultOptions();
 		expect(defaults.queries?.retry).toBe(shouldRetryQuery);
 		expect(defaults.mutations?.retry).toBe(false);
+	});
+
+	test("an answer stays fresh for 30 seconds unless a query sets its own", () => {
+		expect(DEFAULT_STALE_MS).toBe(30_000);
+		expect(createQueryClient().getDefaultOptions().queries?.staleTime).toBe(
+			30_000,
+		);
 	});
 
 	test("makes a new client each time, so no two pages share a cache", () => {

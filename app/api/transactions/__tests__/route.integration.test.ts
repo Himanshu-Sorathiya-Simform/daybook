@@ -252,6 +252,24 @@ describe("isolation (SEC-2)", () => {
 		expect(theirs).toHaveLength(22);
 		expect(mine.filter((id) => theirs.includes(id))).toEqual([]);
 	});
+
+	// AC-F03-38: a cursor holds a sort key and an id, never a user, so another user's cursor
+	// only pages through the caller's own rows.
+	test("a cursor made for one user, sent by another, answers only the sender's rows", async () => {
+		const mine = pageOf((await list("limit=5")).body);
+		const theirIds = new Set(
+			pageOf((await list("", other.cookie)).body).items.map((item) => item.id),
+		);
+		const { status, body } = await list(
+			`limit=50&cursor=${encodeURIComponent(mine.nextCursor!)}`,
+			other.cookie,
+		);
+		expect(status).toBe(200);
+		const page = pageOf(body);
+		expect(page.items.length).toBeGreaterThan(0);
+		expect(page.items.every((item) => theirIds.has(item.id))).toBe(true);
+		expect(page.currency).toBe("USD");
+	});
 });
 
 // T3: the query's edges (F03 section 11, D-478, D-458, D-500).

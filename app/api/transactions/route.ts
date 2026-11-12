@@ -1,22 +1,15 @@
 import { transactionCreateSchema } from "@/lib/transactions/schemas";
 import { reply, route } from "@/server/api/route";
 import { requireProfile } from "@/server/dal/context";
+import { listAnswer } from "@/server/dal/transactions/answers";
 import { createTransaction } from "@/server/dal/transactions/create";
-import { listTransactions } from "@/server/dal/transactions/list";
 import { readListQuery } from "@/server/dal/transactions/query";
 
 /** The Transactions list (F03 section 11): one page, its group totals and order fingerprint,
  * and the profile currency (API-6). */
-export const GET = route({}, async (ctx, tx, { query }) => {
+export const GET = route({}, (ctx, tx, { query }) => {
 	const profiled = requireProfile(ctx);
-	const { currency } = profiled.profile;
-	const { filter, list, limit, cursor } = readListQuery(query, currency);
-	const page = await listTransactions(tx, profiled, filter, {
-		...list,
-		limit,
-		cursor,
-	});
-	return { ...page, currency };
+	return listAnswer(tx, profiled, readListQuery(query, profiled.profile.currency));
 });
 
 /** Creates a Transaction (F03 section 11, BR-F03-20): 201 with the row and the profile

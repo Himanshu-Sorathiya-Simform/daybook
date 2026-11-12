@@ -14,12 +14,16 @@ export function shouldRetryQuery(failureCount: number, error: unknown): boolean 
 	return error.status === 429 || (error.status !== null && error.status >= 500);
 }
 
+/** How long an answer stays fresh unless its factory sets its own (STATE-5, D-527): long
+ * enough that a read the server prefetched is not requested again when the page hydrates. */
+export const DEFAULT_STALE_MS = 30_000;
+
 /** The app's query client. Mutations never retry by themselves (D-507): a retry is the user's
  * choice, sent again with the same `Idempotency-Key`. */
 export function createQueryClient(): QueryClient {
 	return new QueryClient({
 		defaultOptions: {
-			queries: { retry: shouldRetryQuery },
+			queries: { retry: shouldRetryQuery, staleTime: DEFAULT_STALE_MS },
 			mutations: { retry: false },
 		},
 	});

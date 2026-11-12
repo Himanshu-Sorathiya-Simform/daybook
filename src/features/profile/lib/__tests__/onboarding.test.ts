@@ -22,6 +22,17 @@ function pick<F extends keyof Picked>(
 }
 
 describe("startState (BR-F02-03 to BR-F02-06)", () => {
+	// D-511: before the browser is known, nothing is guessed and nothing is picked.
+	test("with no device yet, the country is empty and nothing counts as picked", () => {
+		const state = startState(null);
+		expect(state.values.country).toBeNull();
+		expect(state.picked).toEqual({
+			currency: false,
+			timezone: false,
+			weekStart: false,
+		});
+	});
+
 	// AC-F02-01
 	test("Asia/Calcutta with en-US pre-fills IN, INR, Asia/Kolkata, Sunday", () => {
 		expect(
