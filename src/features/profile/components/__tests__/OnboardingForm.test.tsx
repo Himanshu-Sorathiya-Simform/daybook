@@ -14,14 +14,18 @@ afterEach(() => {
 });
 
 describe("OnboardingForm (F02 section 6)", () => {
-	test("on the server, before the browser is known, it is a busy outline", () => {
+	test("on the server, before the browser is known, the form shows disabled, loading", () => {
 		const html = renderToString(
 			<AppProviders navigate={vi.fn()}>
 				<OnboardingForm />
 			</AppProviders>,
 		);
+		expect(html).toContain('placeholder="Loading countries…"');
+		expect(html).toContain("Loading countries and time zones.");
 		expect(html).toContain('aria-busy="true"');
-		expect(html).not.toContain("Start using Daybook");
+		// Nothing is guessed yet: no country and no zone.
+		expect(html).not.toContain(`value="India"`);
+		expect(html).not.toContain("GMT+");
 	});
 
 	test("in the browser, it reads the device and shows the form", () => {

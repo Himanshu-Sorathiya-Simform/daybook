@@ -12,7 +12,9 @@ export type SegmentedOption = string | { value: string; label: string };
 
 export type SegmentedProps = {
 	options: SegmentedOption[];
-	value: string;
+	/** The chosen option, or `null` while nothing can be chosen yet, such as onboarding's week
+	 * start before a country. */
+	value: string | null;
 	onChange: (value: string) => void;
 	/** The group's accessible name. It is a radio group, so it always needs one. */
 	label: string;
@@ -35,8 +37,8 @@ const sizes = {
 
 /**
  * A choice of two to five options that stay visible: Daily or Pace, the transaction type. It is a
- * radio group, so one option is always chosen, Tab lands on the chosen one, and the arrow keys
- * move and choose.
+ * radio group, so once a value is given one option is always chosen, Tab lands on the chosen
+ * one, and the arrow keys move and choose.
  */
 export function Segmented({
 	options,

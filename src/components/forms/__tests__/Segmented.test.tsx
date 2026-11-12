@@ -486,3 +486,33 @@ describe("aria-describedby", () => {
 		);
 	});
 });
+
+describe("no value", () => {
+	test("chooses no option", () => {
+		render(
+			<Segmented
+				label="Strip view"
+				options={["Daily", "Pace"]}
+				value={null}
+				onChange={vi.fn()}
+			/>,
+		);
+		for (const radio of screen.getAllByRole("radio"))
+			expect(radio).not.toBeChecked();
+	});
+
+	test("a press still reports the choice", async () => {
+		const user = userEvent.setup();
+		const onChange = vi.fn();
+		render(
+			<Segmented
+				label="Strip view"
+				options={["Daily", "Pace"]}
+				value={null}
+				onChange={onChange}
+			/>,
+		);
+		await user.click(segment("Pace"));
+		expect(onChange).toHaveBeenCalledExactlyOnceWith("Pace");
+	});
+});

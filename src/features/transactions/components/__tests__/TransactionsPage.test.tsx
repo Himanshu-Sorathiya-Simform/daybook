@@ -861,7 +861,8 @@ describe("loading more (BR-F03-30, D-530)", () => {
 
 		scrollToEndAndStay();
 
-		await waitFor(() => expect(rowNames()).toHaveLength(120));
+		// Two loads in a row: more time than one, for full runs under coverage.
+		await waitFor(() => expect(rowNames()).toHaveLength(120), { timeout: 3000 });
 		expect(
 			lists.map((each) => pathOf(each.path).searchParams.get("cursor")),
 		).toEqual([null, "p1", "p2"]);
@@ -1135,7 +1136,10 @@ describe("pages trimmed from the top (BR-F03-30, D-36)", () => {
 
 		scrollToTopAndStay();
 
-		await waitFor(() => expect(rowNames()[0]).toMatch(/^Payee 1,/));
+		// Two loads in a row: more time than one, for full runs under coverage.
+		await waitFor(() => expect(rowNames()[0]).toMatch(/^Payee 1,/), {
+			timeout: 3000,
+		});
 		expect(
 			lists
 				.slice(before)

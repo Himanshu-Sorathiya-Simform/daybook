@@ -24,6 +24,9 @@ export type ButtonProps = Omit<
 	shortcut?: string;
 	/** Why the button is disabled, or what it does. Shown under it and read with it. */
 	description?: string;
+	/** What a press does while the button is disabled, for a button that answers with the
+	 * reason, as onboarding's Start does before a country is chosen. It never submits. */
+	onDisabledPress?: () => void;
 	children?: ReactNode;
 	/** Classes for the root element: the button, or the wrapper when there is a `description`. */
 	className?: string;
@@ -73,6 +76,7 @@ export function Button({
 	isDisabled = false,
 	type = "button",
 	"aria-describedby": describedBy,
+	onDisabledPress,
 	onPress,
 	onPressStart,
 	onPressEnd,
@@ -89,7 +93,8 @@ export function Button({
 		.filter(Boolean)
 		.join(" ");
 	if (describedByIds) ariaProps["aria-describedby"] = describedByIds;
-	// A disabled button hears none of its press handlers.
+	// A disabled button hears none of its press handlers, only `onDisabledPress`.
+	if (isDisabled && onDisabledPress) ariaProps.onPress = onDisabledPress;
 	if (!isDisabled) {
 		Object.assign(ariaProps, {
 			onPress,

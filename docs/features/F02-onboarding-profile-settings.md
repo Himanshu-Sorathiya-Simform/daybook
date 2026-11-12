@@ -252,7 +252,7 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
 
 ## 6. Screens and states
 
-**`/onboarding`.** Title "Set up Daybook"; line "Four quick choices. We filled in our best guesses."
+**`/onboarding`.** Title "Set up Daybook"; line "Four quick choices. We filled in our best guesses." The top bar holds the name, which does not link home, then the user's email and Log out. Log out is F01's logout; it is the only way off the page (BR-F02-01). The four fields sit on the left; on the right, or below on a narrow screen, the Preview.
 
 | Field          | Control                                                                                                                                                            | Helper text                                                                             |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
@@ -261,7 +261,17 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
 | Time zone      | Select of the country's zones in `zone.tab` order; plain text when the country has one zone, its label with the offset, for example "Kolkata (GMT+05:30)" (D-511)  | Decides what "today" is and how times are shown. You can change it later.               |
 | Week starts on | Segmented control: Monday, Sunday, Saturday                                                                                                                        | Used in weekly charts and calendars.                                                    |
 
-Button: "Start using Daybook".
+Before a country is chosen, currency, time zone and week start are disabled and empty, and the currency and time zone read "Choose a country first". Text that matches no country, left while no country is chosen, gets "Choose a country from the list."
+
+**Preview.** Titled "Preview", with the line "How Daybook will show amounts and dates.", it shows what the four choices give, changing as they change:
+
+- **Amounts:** 1,00,000 in the chosen currency, formatted with the country's `numberLocale` (BR-F02-18), the whole part large; then a negative amount (−1,240.50, or −1,240 in JPY) and 63.3%.
+- **Today:** today's date and the time now in the chosen zone, in the country's `dateLocale` (BR-F02-19), then the zone as "Kolkata time (GMT+05:30)".
+- **This week:** the seven days of the current week from the chosen week start, today outlined.
+
+Before a country is chosen it reads "Choose your country to see how amounts and dates will look."
+
+Button: "Start using Daybook". While it cannot be used it stays focusable and says why under it: "Choose your country first.", "Connect to finish setup." or "Loading countries and time zones." Pressed with no country, Country shows "Choose your country." and takes focus.
 
 **Settings → Profile.** Email (read-only); the Name form; the Region and time form (BR-F02-11).
 
@@ -269,15 +279,15 @@ Button: "Start using Daybook".
 
 **Header notice.** The device-time-zone notice (BR-F02-20).
 
-| State            | Onboarding                                                                    | Profile                                                             | Appearance |
-| ---------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------- |
-| Loading          | Fields disabled while the geo module loads; submit shows a spinner            | Form skeleton                                                       | n/a        |
-| Empty            | Country empty when it cannot be guessed; Start is disabled until it is chosen | n/a                                                                 | n/a        |
-| Error            | Field messages (section 8); "We couldn't save your setup. Try again."         | Field messages; "Your changes weren't saved. Try again."            | n/a        |
-| Offline          | Form disabled: "You are offline. Connect to finish setup."                    | Values from `/api/me`, read-only: "Connect to change your profile." | Works      |
-| Pending          | n/a                                                                           | Currency change disabled while queued items wait (BR-F02-15)        | n/a        |
-| Locked (Premium) | n/a                                                                           | n/a                                                                 | n/a        |
-| Read-only        | n/a                                                                           | Country always; currency per BR-F02-14                              | n/a        |
+| State            | Onboarding                                                                                                                               | Profile                                                             | Appearance |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | ---------- |
+| Loading          | Fields disabled while the geo module loads, the country box reading "Loading countries…", the Preview an outline; submit shows a spinner | Form skeleton                                                       | n/a        |
+| Empty            | Country empty when it cannot be guessed; the other fields and Start are disabled until it is chosen                                      | n/a                                                                 | n/a        |
+| Error            | Field messages (section 8); "We couldn't save your setup. Try again." at the top, taking focus                                           | Field messages; "Your changes weren't saved. Try again."            | n/a        |
+| Offline          | Form disabled: "You are offline. Connect to finish setup."                                                                               | Values from `/api/me`, read-only: "Connect to change your profile." | Works      |
+| Pending          | n/a                                                                                                                                      | Currency change disabled while queued items wait (BR-F02-15)        | n/a        |
+| Locked (Premium) | n/a                                                                                                                                      | n/a                                                                 | n/a        |
+| Read-only        | n/a                                                                                                                                      | Country always; currency per BR-F02-14                              | n/a        |
 
 ## 7. Flows
 

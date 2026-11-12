@@ -713,3 +713,40 @@ describe("many options", () => {
 		expect(screen.getAllByRole("option")).toHaveLength(1);
 	});
 });
+
+describe("no value", () => {
+	test("shows the placeholder, and no option is chosen", async () => {
+		const user = userEvent.setup();
+		render(
+			<Select
+				label="Unit"
+				options={units}
+				value={null}
+				placeholder="Choose a unit first"
+				onChange={vi.fn()}
+			/>,
+		);
+		const trigger = screen.getByRole("button", { name: /Unit/ });
+		expect(trigger).toHaveTextContent("Choose a unit first");
+		await user.click(trigger);
+		for (const option of screen.getAllByRole("option"))
+			expect(option).toHaveAttribute("aria-selected", "false");
+	});
+
+	test("choosing an option still reports it", async () => {
+		const user = userEvent.setup();
+		const onChange = vi.fn();
+		render(
+			<Select
+				label="Unit"
+				options={units}
+				value={null}
+				placeholder="Choose"
+				onChange={onChange}
+			/>,
+		);
+		await user.click(screen.getByRole("button", { name: /Unit/ }));
+		await user.click(screen.getByRole("option", { name: "months" }));
+		expect(onChange).toHaveBeenCalledExactlyOnceWith("month");
+	});
+});
