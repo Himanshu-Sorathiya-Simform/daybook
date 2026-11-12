@@ -69,10 +69,9 @@ export function normalizeSchedule(
 	const sorted = [...schedule].sort((a, b) => compareCodeUnits(a.from, b.from));
 	const result: ScheduleEntry[] = [];
 	for (const entry of sorted) {
-		const previous = result[result.length - 1];
+		const previous = result.at(-1);
 		if (previous === undefined && entry.limitMinor === null) continue;
-		if (previous !== undefined && previous.limitMinor === entry.limitMinor)
-			continue;
+		if (previous?.limitMinor === entry.limitMinor) continue;
 		result.push({ from: entry.from, limitMinor: entry.limitMinor });
 	}
 	return result;

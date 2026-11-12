@@ -92,10 +92,9 @@ function listedMonths(change: BudgetChange, current: Month): Month[] {
 function groupMonths(months: readonly PreviewMonth[]): PreviewGroup[] {
 	const groups: PreviewGroup[] = [];
 	for (const { month, ...rest } of months) {
-		const last = groups[groups.length - 1];
+		const last = groups.at(-1);
 		if (
-			last
-			&& last.oldLimitMinor === rest.oldLimitMinor
+			last?.oldLimitMinor === rest.oldLimitMinor
 			&& last.newLimitMinor === rest.newLimitMinor
 			&& last.spentMinor === rest.spentMinor
 		) {
@@ -110,6 +109,50 @@ function groupMonths(months: readonly PreviewMonth[]): PreviewGroup[] {
 
 const tenthsOf = (spent: number, limit: number | null) =>
 	limit === null ? null : utilizationTenths(spent, limit);
+
+/** BR-F04-27's notes for a change, in the order the spec lists them. `hasRecord` is whether the
+ * category has a Budget record; `replaced` and `keptOverrides` are empty for one month. */
+function previewNotes(input: {
+	change: BudgetChange;
+	hasRecord: boolean;
+	months: readonly PreviewMonth[];
+	replaced: ScheduleEntry[];
+	keptOverrides: readonly MonthLimit[];
+	spending: (month: Month) => number;
+	current: Month;
+}): PreviewNote[] {
+	const { change, months, replaced, keptOverrides, current } = input;
+	const onward = change.scope === "from";
+	const stop = change.limitMinor === null;
+	const notes: PreviewNote[] = [];
+	if (onward && stop) {
+		notes.push({
+			kind: "stopKeepsEarlier",
+			movesToUnbudgeted: input.spending(change.month) !== 0,
+		});
+	}
+	if (!onward) notes.push({ kind: "oneMonth", month: change.month });
+	const retroactive = months
+		.filter((each) => each.changed && each.month < current)
+		.map((each) => each.month);
+	if (onward && retroactive.length > 0) {
+		notes.push({ kind: "retroactive", months: retroactive });
+	}
+	const gains = months.filter(
+		(each) => each.oldLimitMinor === null && each.newLimitMinor !== null,
+	).length;
+	if (input.hasRecord && !stop && gains > 0) {
+		notes.push({ kind: "gains", count: gains });
+	}
+	if (replaced.length > 0) notes.push({ kind: "replaces", entries: replaced });
+	if (keptOverrides.length > 0) {
+		notes.push({
+			kind: "keeps",
+			months: keptOverrides.map((each) => each.month),
+		});
+	}
+	return notes;
+}
 
 /**
  * What a change does to every month it touches (BR-F04-26, BR-F04-27, D-564). `rules` is the
@@ -164,34 +207,15 @@ export function previewChange(input: {
 		onward ? base.overrides.filter((each) => each.month >= change.month) : [];
 	// From a month onward, the last listed month is M or the current month, whichever is later.
 	const tailMonth = shiftMonth(change.month > current ? change.month : current, 1);
-
-	const notes: PreviewNote[] = [];
-	if (onward && stop) {
-		notes.push({
-			kind: "stopKeepsEarlier",
-			movesToUnbudgeted: spending(change.month) !== 0,
-		});
-	}
-	if (!onward) notes.push({ kind: "oneMonth", month: change.month });
-	const retroactive = months
-		.filter((each) => each.changed && each.month < current)
-		.map((each) => each.month);
-	if (onward && retroactive.length > 0) {
-		notes.push({ kind: "retroactive", months: retroactive });
-	}
-	const gains = months.filter(
-		(each) => each.oldLimitMinor === null && each.newLimitMinor !== null,
-	).length;
-	if (input.rules !== null && !stop && gains > 0) {
-		notes.push({ kind: "gains", count: gains });
-	}
-	if (replaced.length > 0) notes.push({ kind: "replaces", entries: replaced });
-	if (keptOverrides.length > 0) {
-		notes.push({
-			kind: "keeps",
-			months: keptOverrides.map((each) => each.month),
-		});
-	}
+	const notes = previewNotes({
+		change,
+		hasRecord: input.rules !== null,
+		months,
+		replaced,
+		keptOverrides,
+		spending,
+		current,
+	});
 
 	return {
 		blocked: false,

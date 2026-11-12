@@ -264,6 +264,40 @@ export type BudgetEditBody =
 	  }
 	| ({ kind: "restore"; currency: CurrencyCode } & BudgetRules);
 
+/** The fields of `PATCH /api/budgets/[id]`, before `budgetEditSchema` checks which are sent. */
+const editFields = z.strictObject({
+	from: month.optional(),
+	month: month.optional(),
+	scope: z.literal("month", { error: M.scope }).optional(),
+	limitMinor: limit.nullable().optional(),
+	currency: currency.optional(),
+	schedule: z.array(scheduleEntry, { error: M.shape }).optional(),
+	overrides: z.array(monthLimit, { error: M.shape }).optional(),
+});
+type EditFields = z.output<typeof editFields>;
+
+/** Each of `fields` the body sends, though its kind of change does not take it. */
+function refuseFields(
+	ctx: z.RefinementCtx,
+	body: EditFields,
+	fields: (keyof EditFields)[],
+) {
+	for (const field of fields) {
+		if (body[field] !== undefined) addIssue(ctx, [field], M.notWithScope);
+	}
+}
+
+/** A restoring edit: both lists and the currency, none of the other kinds' fields. */
+function checkEditRestore(ctx: z.RefinementCtx, body: EditFields) {
+	if (body.schedule === undefined) addIssue(ctx, ["schedule"], M.shape);
+	if (body.overrides === undefined) addIssue(ctx, ["overrides"], M.shape);
+	if (body.currency === undefined)
+		addIssue(ctx, ["currency"], M.currencyWithLimit);
+	refuseFields(ctx, body, ["from", "month", "scope", "limitMinor"]);
+	checkRestore(ctx, body.schedule, body.overrides);
+	checkLimits(ctx, body.currency, restoreLimits(body));
+}
+
 /**
  * `PATCH /api/budgets/[id]` (F04 section 11, D-561), one of:
  * - `{ from, limitMinor, currency }`: from a month onward (BR-F04-03, BR-F04-04);
@@ -274,37 +308,16 @@ export type BudgetEditBody =
  * shape are refused, never dropped. The month range, the stop that removes every month and
  * the currency match need the stored row or the request and stay on the server.
  */
-export const budgetEditSchema = z
-	.strictObject({
-		from: month.optional(),
-		month: month.optional(),
-		scope: z.literal("month", { error: M.scope }).optional(),
-		limitMinor: limit.nullable().optional(),
-		currency: currency.optional(),
-		schedule: z.array(scheduleEntry, { error: M.shape }).optional(),
-		overrides: z.array(monthLimit, { error: M.shape }).optional(),
-	})
+export const budgetEditSchema = editFields
 	.superRefine((body, ctx) => {
-		const foreign = (fields: (keyof typeof body)[]) => {
-			for (const field of fields) {
-				if (body[field] !== undefined)
-					addIssue(ctx, [field], M.notWithScope);
-			}
-		};
 		if (body.schedule !== undefined || body.overrides !== undefined) {
-			if (body.schedule === undefined) addIssue(ctx, ["schedule"], M.shape);
-			if (body.overrides === undefined) addIssue(ctx, ["overrides"], M.shape);
-			if (body.currency === undefined)
-				addIssue(ctx, ["currency"], M.currencyWithLimit);
-			foreign(["from", "month", "scope", "limitMinor"]);
-			checkRestore(ctx, body.schedule, body.overrides);
-			checkLimits(ctx, body.currency, restoreLimits(body));
+			checkEditRestore(ctx, body);
 			return;
 		}
 		if (body.scope !== undefined || body.month !== undefined) {
 			if (body.scope === undefined) addIssue(ctx, ["scope"], M.scope);
 			if (body.month === undefined) addIssue(ctx, ["month"], M.month);
-			foreign(["from"]);
+			refuseFields(ctx, body, ["from"]);
 		} else if (body.from === undefined) {
 			addIssue(ctx, [], M.shape);
 			return;

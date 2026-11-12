@@ -24,9 +24,10 @@ export async function getBudget(
 	id: string,
 	{ lock = false }: { lock?: boolean } = {},
 ): Promise<Budget | null> {
+	const forUpdate = lock ? sql`FOR UPDATE` : sql``;
 	const { rows } = await tx.execute<{ budget: Budget }>(
 		sql`SELECT ${BUDGET_JSON} AS budget FROM app.budgets WHERE id = ${id}::uuid
-		${lock ? sql`FOR UPDATE` : sql``}`,
+		${forUpdate}`,
 	);
 	return rows[0]?.budget ?? null;
 }

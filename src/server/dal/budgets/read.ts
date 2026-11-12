@@ -57,7 +57,7 @@ function bySpendingMonth(rows: SpendingJson): Map<Month, CategorySpending> {
 /** The earliest and latest of `months`. */
 function span(months: readonly Month[]): { first: Month; last: Month } {
 	const sorted = [...months].sort(compareCodeUnits);
-	return { first: sorted[0] as Month, last: sorted[sorted.length - 1] as Month };
+	return { first: sorted[0] as Month, last: sorted.at(-1) as Month };
 }
 
 /** The user's Budgets and the spending of every month from `first` to `last`, in one

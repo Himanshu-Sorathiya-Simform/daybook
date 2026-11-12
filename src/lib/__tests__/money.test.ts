@@ -299,7 +299,7 @@ describe("percentTenths (MON-7, MON-8)", () => {
 		] as const) {
 			const tenths = percentTenths(n, d);
 			const text = formatPercent(n, d, "en-US-u-nu-latn");
-			expect(text.replace("%", "").replace("−", "-")).toBe(
+			expect(text.replaceAll("%", "").replaceAll("−", "-")).toBe(
 				(tenths / 10).toFixed(1),
 			);
 		}

@@ -39,8 +39,7 @@ async function lockedAt(
 	currency: CurrencyCode,
 ): Promise<Budget> {
 	const budget = await getBudget(tx, id, { lock: true });
-	if (!budget || budget.version !== version)
-		throw budgetMismatch(budget, currency);
+	if (budget?.version !== version) throw budgetMismatch(budget, currency);
 	return budget;
 }
 
