@@ -9,7 +9,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 | Milestone  | M2. Before M5, writes are online only, with F03's stand-ins: Save disabled offline, and a failed save keeps the dialog open (D-241)                                                                                                                 |
 | Plan       | Free and Premium, with no gating; one-month limits included (D-560)                                                                                                                                                                                 |
 | Depends on | [F03](F03-transactions.md) (category spending, summary, drill-down), [F02](F02-onboarding-profile-settings.md) (month, locale), [P2](../platform/P2-data-access-and-security.md); P1 (write queue, from M5); F08, F09, F10, F11 read Budget figures |
-| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-560 to D-566                                                                                                                                            |
+| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-553, D-560 to D-567                                                                                                                              |
 
 ## 1. User stories
 
@@ -139,16 +139,17 @@ Both lists are stored as `jsonb` columns on the Budget's one row, so every write
 - **BR-F04-16** A Budget row shows:
     - the category's icon, label and color (CAT-4), and a Pending sync badge when one applies (BR-F04-12);
     - a headline in the state's color: "Over by 1,220.00", or "950.00 left";
-    - a bar: filled to the utilization within the first 62.5% of its width, the overflow past the limit drawn in the over color up to 160%, a tick at the limit, and, in the current month, a marker at today's share of the month;
+    - a bar: filled to the utilization within the first 62.5% of its width, the overflow past the limit drawn in the over color up to 160%, a tick at the limit, and, in the current month, a marker at today's share of the month. Like every bar and chart on the page (the overview's bar, Last 6 months, the preview strip), it is drawn in SVG or CSS, not ECharts, as the dashboard's Budget bars are (D-249, D-281);
     - "6,220.00 of 5,000.00 · 124.4% · Over budget", the state as text, never by color alone;
     - any pending annotation;
     - the limit's source: "5,000.00 from Oct 2026", or "One-month limit for Oct 2026", followed by the next schedule entry when there is one: ", then 7,000.00 from Dec 2026" or ", then stops from Dec 2026".
-- **BR-F04-17** Selecting a row (pointer, Enter or Space) selects it and shows it in the panel (BR-F04-30); selecting it again clears the selection. The panel's "See 4 Transactions" opens `/transactions?from=<first day of M>&to=<last day of M>&cat=<c>` (D-111), whose header Out equals the row's spent.
+- **BR-F04-17** Selecting a row (pointer, Enter or Space) selects it and shows it in the panel (BR-F04-30); selecting it again clears the selection. On a change of month the selection stays while its category appears in the new month, in any group, the collapsed Not active group included; otherwise it clears (D-249). Golden: Food selected in October stays selected in September; housing selected in October clears in August, where it has neither spending nor a Budget record. The panel's "See 4 Transactions" opens `/transactions?from=<first day of M>&to=<last day of M>&cat=<c>` (D-111), whose header Out equals the row's spent.
 - **BR-F04-18** The Table view shows the same month as a TanStack Table (D-171):
     - **Columns:** Category, Limit, Spent, Remaining, Utilization, State; sorted by pressing a heading (Category and State ascending first, the figures descending first; pressing again reverses), with `aria-sort`;
     - **Caption:** "October 2026. Select a column heading to sort.";
     - **Rows:** each budgeted category, a "Budgeted total" row with the overall state, and a row per unbudgeted category with "—" for Limit, Remaining and Utilization and the State "Not budgeted";
     - **Selection:** a row selects its category like a list row.
+    - **The state filter** (BR-F04-31) applies here too: only the budgeted rows in that state show, the Budgeted total row stays as the month's total, and the Not budgeted rows hide. With no rows in that state, the table gives way to BR-F04-31's empty text (D-249).
 
     It is also the accessible alternative to the bars (NFR-5). In a month with no Budget, the list shows instead.
 
@@ -156,7 +157,7 @@ Both lists are stored as `jsonb` columns on the Budget's one row, so every write
 
 - **BR-F04-19** Add a Budget asks for:
     - **Category:** a radio group of tiles for every expense category with no limit in M, each showing "450.00 in Sep" when it has spending in M.
-    - **Monthly limit:** typed with F03's amount rules (BR-F03-04).
+    - **Monthly limit:** typed with F03's amount rules (BR-F03-04). Once a category is chosen, its hint reads as Change limit's does (BR-F04-20): "Spent 450.00 in September and 0.00 in August." for the viewed month and the one before.
     - **For how long** (BR-F04-20), only when the chosen category has a Budget record. A category without one always applies from a month (D-560).
     - **Apply from** or **Month:** a month (BR-F04-28).
 
@@ -171,7 +172,16 @@ Both lists are stored as `jsonb` columns on the Budget's one row, so every write
 **Writes**
 
 - **BR-F04-22** Every Budget write takes the profile lock first (D-213, SRV-7). Requests that send a limit carry `currency`, so a restoring write always does; a mismatch is 422 `currency_mismatch`. Budgets are offline-writable from M5 (D-46). Their queued items replay one by one, each with the version the previous one returned (D-269). They are never merged, except that a create and a later delete of the same queued Budget cancel out (D-265).
-- **BR-F04-23** `PATCH` and `DELETE` need `If-Match`. A version conflict opens the conflict view (OFF-7), showing both schedules and both sets of one-month limits.
+- **BR-F04-23** `PATCH` and `DELETE` need `If-Match`. A 409 `version_conflict` opens the conflict view (OFF-7, BR-P1-26, D-567), whichever write met it: a dialog's save, a delete, Remove in the limit history or Undo.
+    - **Title:** "This Budget changed on another device", with "Your version and the saved one are side by side, with the differences marked."
+    - **The table:** columns "Month", "Yours" and "Saved now", one row per month that holds a schedule entry or a one-month limit in either version, newest first. A cell reads as the limit history words it (BR-F04-30): "5,000.00 from Oct 2026", "Stopped from Nov 2026", "8,000.00 in Oct 2026 only" or "No limit in Oct 2026 only", one per line when a month holds both kinds, or "None". A row that reads differently is tinted and marked "Differs", so color is never the only sign.
+    - **Yours:** the change over the Budget as the user opened it (BR-P1-26). After Undo, the Budget as Undo puts it back; for a delete, the Budget as the user opened it.
+    - **What Keep mine saves:** a line below the table names the change, for example "Keep mine applies your change, 7,000.00 from December 2026, to the saved Budget." (or "8,000.00 for October 2026 only", "the stop from November 2026", "no limit for October 2026 only", "the removal of the one-month limit for October 2026"); after Undo, "Keep mine puts the Budget back as it was before your change." A delete's view has none.
+    - **Keep mine** ("Delete anyway" for a delete) resends the same write with `If-Match` set to the saved version, under a new `Idempotency-Key`. Another 409 shows the newer version. Any other refusal closes the view and shows where the write started: in the dialog, or in the notice for Remove and Undo (BR-F04-29).
+    - **Keep theirs** ("Keep it" for a delete) sends nothing, shows the saved Budget everywhere, and closes the view and its dialog; an Undo notice clears.
+    - **Closing the view without a choice** goes back to the dialog with what was typed. From Remove or Undo, nothing is sent and the notice stays.
+
+    Online saves and, from M5, queued replays use the same view.
 
 **One-month limits** (D-560)
 
@@ -210,6 +220,8 @@ Both lists are stored as `jsonb` columns on the Budget's one row, so every write
 - **BR-F04-29** After each confirmed write, an inline notice with Undo confirms it, never a toast:
     - **Texts:** "Food Budget added: 3,000.00 from November 2026.", "Food limit is now 7,000.00 from September 2026.", "Food limit is 8,000.00 for October 2026 only.", "Entertainment Budget stops from November 2026. Earlier months keep their limits.", "Entertainment has no limit for October 2026 only.", "One-month limit for October 2026 removed." and "Food Budget deleted.".
     - **Where:** in the panel when the changed Budget is selected, otherwise above the list with a Dismiss button. After a delete it is always above the list.
+    - **Selection:** after a confirmed write other than a delete, the changed Budget becomes the selection when the panel is docked or a Budget is already selected (an open drawer then shows it), so its notice shows in the panel. With the drawer closed and nothing selected, nothing is selected and no drawer opens. A delete clears the selection (D-562).
+    - **A failed Undo or Remove:** nothing changes, and the notice reads the failure instead, with Dismiss: "The Budget could not be saved. Check your connection and try again." or "This Budget was deleted on another device." (section 8). A Remove that fails shows this notice above the list, or in the panel when its Budget is selected.
     - **How long:** until Undo, Dismiss, the next write, or a change of month.
     - **What Undo sends:**
         - after a create sent as `POST`, `DELETE` with the version it returned; an Add sent as `PATCH` (BR-F04-19) counts as a change;
@@ -236,7 +248,7 @@ Both lists are stored as `jsonb` columns on the Budget's one row, so every write
         5. **"Limit history"**, for a Budget record, newest first: each schedule entry ("5,000.00 from Oct 2026", "Stopped from Nov 2026") and each one-month limit ("8,000.00 in Oct 2026 only", "No limit in Oct 2026 only", with "One month" and Remove). The item that decides M's limit is bold, with "In force in October". A pending change shows first (M5). The list ends with "No Budget before Sep 2026".
         6. **"Where it went in October"**, when M has spending: the top 3 payees by net spending, each with its avatar and amount, then "See 4 Transactions" (BR-F04-17). The data is F03's `GET /api/transactions/summary` with `by=payee`, `cat`, `from` and `to`; its `count` gives the number.
         7. **Actions:** for a Budget, Change limit, Stop and Delete; for Not budgeted, Add a Budget or Change limit as BR-F04-15 says; for Not active, Change limit and Delete. A hint below reads "L to change limit · Up and down arrows move · Esc to close" ("L to change limit" only for a Budget).
-- **BR-F04-31** Pressing a state count filters the list to that state, with At limit and Over budget kept apart. A chip "Showing Over budget" with a remove button and a "Show all" link appear above the list, and the Not budgeted and Not active groups hide. With no rows: "No Budgets are over budget in October 2026." (or "are at their limit", "are nearing their limit", "are on track") with Show all Budgets. Pressing the count again, or changing the month, clears the filter.
+- **BR-F04-31** Pressing a state count filters the list to that state, with At limit and Over budget kept apart. A chip "Showing Over budget" with a remove button and a "Show all" link appear above the list, and the Not budgeted and Not active groups hide. With no rows: "No Budgets are over budget in October 2026." (or "are at their limit", "are nearing their limit", "are on track") with Show all Budgets. Pressing the count again, or changing the month, clears the filter. The Table view follows the same filter (BR-F04-18).
 - **BR-F04-32** Keyboard on the page, outside text fields and dialogs and without modifier keys:
     - Up and Down move the selection through the visible rows in list order and focus the row;
     - Escape clears the selection and closes the month grid;
@@ -403,7 +415,8 @@ Below 700 px the dialogs open as sheets with 44 px targets.
 | Delete            | Confirmation                        | Delete the Food Budget? Every month, including past ones, loses its Food limit.                  |
 | Save              | Network failure before M5           | The Budget could not be saved. Check your connection and try again. Your changes are still here. |
 | Delete            | Network failure before M5           | The Budget could not be deleted. Check your connection and try again.                            |
-| Any write         | `version_conflict`                  | This Budget was changed on another device. (Conflict view)                                       |
+| Any write         | `version_conflict`                  | This Budget changed on another device (the conflict view's title, BR-F04-23)                     |
+| Undo, Remove      | Network failure before M5           | The Budget could not be saved. Check your connection and try again. (In the notice)              |
 | Any write         | `not_found`                         | This Budget was deleted on another device.                                                       |
 | Page              | Load failure                        | Budgets could not be loaded. Check your connection, then try again. Your Budgets are safe.       |
 | Month link        | Invalid or out-of-range `month`     | Some filters in this link weren't valid and were removed.                                        |
@@ -497,10 +510,15 @@ F08's widget, F09's chart, F10's threshold detector and F11's report all call th
 - **AC-F04-22** (unit) `previewChange` returns section 5's retroactive and long changes: their months, groups, state texts and notes.
 - **AC-F04-23** (unit) Labels: 1000 tenths reads At limit, 1001 Over budget, 999 Nearing limit; At limit counts in `overCount`.
 - **AC-F04-24** (integration) A `PATCH` that changes nothing returns 200 and keeps `version`; the same `PATCH` with a stale `If-Match` returns 409.
-- **AC-F04-25** (client integration, MSW) Undo after a create sends `DELETE` with version 1; after a change, a restoring `PATCH` with the version the change returned; after a delete, a restoring `POST` with a new id. A 409 opens the conflict view.
-- **AC-F04-26** (client integration) The state counts filter the list and show BR-F04-31's chip and empty text; changing the month clears the filter.
+- **AC-F04-25** (client integration, MSW) Undo after a create sends `DELETE` with version 1; after a change, a restoring `PATCH` with the version the change returned; after a delete, a restoring `POST` with a new id. A 409 opens the conflict view (AC-F04-30); a network failure leaves the Budget as it is and the notice reads "The Budget could not be saved. Check your connection and try again."
+- **AC-F04-26** (client integration) The state counts filter the list and show BR-F04-31's chip and empty text; changing the month clears the filter. In the Table view, on golden October, Over budget shows entertainment and food with the Budgeted total row (13,168.00 of 11,000.00) and no housing row; On track shows the empty text.
 - **AC-F04-27** (integration) With golden food's schedule changed to `[{ 2026-09, 6,000.00 }, { 2026-11, null }, { 2027-02, 4,000.00 }]`, December 2026 lists food as Not active with `status: "stopped"`, `from: "2026-11"` and `restartsFrom: "2027-02"`.
 - **AC-F04-28** (integration) A restoring write with an entry from 2001-01 is accepted; one whose one-month limits repeat a month returns 422; any write whose `currency` differs from the profile's returns 422 `currency_mismatch`.
+- **AC-F04-29** (client integration) Selection on golden October:
+    - with the panel docked, changing Food's limit selects Food and shows its notice in the panel; deleting it clears the selection and shows the notice above the list;
+    - below 1180 px with nothing selected, the same change opens no drawer and shows the notice above the list;
+    - Food selected in October stays selected in September; housing selected in October clears in August.
+- **AC-F04-30** (client integration, MSW) Changing golden food to 7,000.00 from 2026-12 meets 409 with `details.current` whose schedule adds `{ 2026-11, 5,500.00 }`. The view titled "This Budget changed on another device" shows a Nov 2026 row marked "Differs" ("None" against "5,500.00 from Nov 2026") and a Dec 2026 row marked "Differs" ("7,000.00 from Dec 2026" against "None"), and the line "Keep mine applies your change, 7,000.00 from December 2026, to the saved Budget.". Keep mine resends the `PATCH` with the saved version in `If-Match` and a new `Idempotency-Key`; Keep theirs sends nothing and the November row reads 5,500.00. The same 409 on Undo shows "Keep mine puts the Budget back as it was before your change.", and on a delete "Delete anyway" and "Keep it".
 
 ## 15. Illustrations
 
