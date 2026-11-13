@@ -10,6 +10,7 @@ import {
 	tableFeatures,
 	useTable,
 } from "@tanstack/react-table";
+import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 import {
 	Cell as AriaCell,
@@ -33,7 +34,7 @@ import { categoryLabel } from "@/lib/categories";
 import { cn } from "@/lib/cn";
 import { compareCodeUnits } from "@/lib/compare";
 import { formatMoney } from "@/lib/money";
-import { useRowArrows } from "../hooks/useRowArrows";
+import { type RowArrows, useRowArrows } from "../hooks/useRowArrows";
 import {
 	type Formats,
 	percentOf,
@@ -55,6 +56,9 @@ export type BudgetTableProps = {
 	/** The selected category, or `null` (BR-F04-17). */
 	selected: ExpenseCategory | null;
 	onSelect: (category: ExpenseCategory | null) => void;
+	/** What Up and Down do: select beside the docked panel, else only move focus, and nothing
+	 * while the drawer is open (BR-F04-32, D-571). */
+	arrows?: RowArrows;
 	className?: string;
 };
 
@@ -122,15 +126,45 @@ const FIGURES = new Set([
 	"utilizationTenths",
 ]);
 
+/** A focus ring inside its own box, rounded, so the table's scroll box never clips it. The
+ * base style's ring outside the box is turned off. */
+const RING_INSIDE =
+	"outline-none focus-visible:rounded-control focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus";
+
+/** A focused row's ring, drawn on its cells: top and bottom on each, and the ends on the
+ * first and last, which round the row's corners. */
+const ROW_RING = [
+	"group-focus-visible:shadow-[inset_0_2px_var(--color-focus),inset_0_-2px_var(--color-focus)]",
+	"group-focus-visible:first:shadow-[inset_2px_0_var(--color-focus),inset_0_2px_var(--color-focus),inset_0_-2px_var(--color-focus)]",
+	"group-focus-visible:last:shadow-[inset_-2px_0_var(--color-focus),inset_0_2px_var(--color-focus),inset_0_-2px_var(--color-focus)]",
+];
+
 const cellClass = (id: string) =>
 	cn(
-		"focus-visible:focus-ring px-2.5 py-2.75 whitespace-nowrap outline-none",
+		"px-2.5 py-2.75 whitespace-nowrap",
+		RING_INSIDE,
+		ROW_RING,
 		FIGURES.has(id) && "text-right",
+	);
+
+/** A selectable row's cell: the row's hover and selection colour, with rounded ends like a
+ * list row. */
+const rowCellClass = (id: string) =>
+	cn(
+		cellClass(id),
+		"first:rounded-l-control last:rounded-r-control group-hover:bg-soft group-selected:bg-accent-soft transition-colors duration-(--dur-fast) ease-out",
 	);
 
 const TOTAL = "total";
 
 const totalClass = (id: string) => cn(cellClass(id), "border-line-strong border-t");
+
+/** Each heading shows it sorts: an up-down mark, or the arrow of its direction. */
+const SORT_ICONS = {
+	none: ChevronsUpDown,
+	ascending: ArrowUp,
+	descending: ArrowDown,
+} as const;
 
 /**
  * The month as a table (BR-F04-18, D-171, D-570), the accessible alternative to the bars: a React
@@ -140,7 +174,8 @@ const totalClass = (id: string) => cn(cellClass(id), "border-line-strong border-
  *   what it lacks. Sorting reorders the Budgets only; the total and Not budgeted rows stay
  *   below them.
  * - **Sorting:** pressing a heading sorts by it, Category and State ascending first, the
- *   figures descending first; pressing it again reverses. `aria-sort` says which.
+ *   figures descending first; pressing it again reverses, and a third time brings back the
+ *   month's order. Each heading shows it sorts; `aria-sort` says how.
  * - **Selection:** a row selects its category like a list row, and again clears it; the total
  *   row selects nothing. Up and Down move the selection through the rows shown (BR-F04-32).
  * - **Filter** (BR-F04-31): only the Budgets in that state, the total kept, Not budgeted
@@ -153,6 +188,7 @@ export function BudgetTable({
 	onFilterChange,
 	selected,
 	onSelect,
+	arrows = "select",
 	className,
 }: Readonly<BudgetTableProps>) {
 	const captionId = useId();
@@ -167,6 +203,7 @@ export function BudgetTable({
 			view.budgets
 		:	view.budgets.filter((row) => stateLabel(row.utilizationTenths) === filter);
 	const unbudgeted = filter === null ? view.unbudgeted : [];
+	// A third press on a heading removes its sort: the month's order is back.
 	const table = useTable({
 		features,
 		columns,
@@ -174,7 +211,6 @@ export function BudgetTable({
 		getRowId: (row) => row.category,
 		state: { sorting },
 		onSortingChange: setSorting,
-		enableSortingRemoval: false,
 		enableMultiSort: false,
 	});
 	const rows = table.getRowModel().rows;
@@ -184,7 +220,7 @@ export function BudgetTable({
 		...rows.map((row) => `budget:${row.id}`),
 		...unbudgeted.map((row) => `unbudgeted:${row.category}`),
 	];
-	useRowArrows({ holder, ids, selected, onSelect });
+	useRowArrows({ holder, ids, selected, onSelect, mode: arrows });
 
 	const overall = {
 		limitMinor: view.overall.limitMinor,
@@ -228,8 +264,7 @@ export function BudgetTable({
 		}
 	};
 
-	const rowClass =
-		"hover:bg-soft selected:bg-accent-soft focus-visible:focus-ring cursor-pointer outline-none transition-colors duration-(--dur-fast) ease-out";
+	const rowClass = "group cursor-pointer outline-none";
 
 	return (
 		<Section className={cn("px-5 pt-1 pb-3.5 max-md:px-4", className)}>
@@ -279,7 +314,8 @@ export function BudgetTable({
 								>
 							).toggleSorting()
 						}
-						className="text-body figures w-full min-w-160 border-collapse"
+						// Separate borders, so cells can round their corners.
+						className="text-body figures w-full min-w-160 border-separate border-spacing-0"
 					>
 						<AriaTableHeader>
 							{table.getFlatHeaders().map((header) => (
@@ -290,28 +326,37 @@ export function BudgetTable({
 									isRowHeader={header.column.id === "category"}
 									className={({ sortDirection }) =>
 										cn(
-											"border-line-strong text-label focus-visible:focus-ring cursor-pointer border-b px-2.5 py-2 font-semibold whitespace-nowrap outline-none",
+											"border-line-strong text-label cursor-pointer border-b px-2.5 py-2 font-semibold whitespace-nowrap",
+											RING_INSIDE,
 											FIGURES.has(header.column.id) ?
 												"text-right"
 											:	"text-left",
 											sortDirection ? "text-accent" : (
-												"text-ink-2"
+												"text-ink-2 hover:text-ink"
 											),
 										)
 									}
 								>
-									{({ sortDirection }) => (
-										<>
-											<table.FlexRender header={header} />
-											{sortDirection && (
-												<span aria-hidden="true">
-													{sortDirection === "ascending" ?
-														" ↑"
-													:	" ↓"}
-												</span>
-											)}
-										</>
-									)}
+									{({ sortDirection }) => {
+										const Icon =
+											SORT_ICONS[sortDirection ?? "none"];
+										return (
+											<span className="inline-flex items-center gap-1">
+												<table.FlexRender header={header} />
+												<Icon
+													aria-hidden="true"
+													data-sort-icon={
+														sortDirection ?? "none"
+													}
+													className={cn(
+														"size-3.5 shrink-0",
+														!sortDirection
+															&& "text-ink-3",
+													)}
+												/>
+											</span>
+										);
+									}}
 								</AriaColumn>
 							))}
 						</AriaTableHeader>
@@ -326,7 +371,7 @@ export function BudgetTable({
 										<AriaCell
 											key={cell.id}
 											className={cn(
-												cellClass(cell.column.id),
+												rowCellClass(cell.column.id),
 												cell.column.id === "category"
 													&& "font-semibold",
 											)}
@@ -341,7 +386,7 @@ export function BudgetTable({
 							))}
 							<AriaRow
 								id={TOTAL}
-								className="focus-visible:focus-ring font-bold outline-none"
+								className="group font-bold outline-none"
 							>
 								<AriaCell className={totalClass("category")}>
 									{TABLE_TEXT.total}
@@ -381,30 +426,30 @@ export function BudgetTable({
 									id={`unbudgeted:${row.category}`}
 									className={cn(rowClass, "text-ink-2")}
 								>
-									<AriaCell className={cellClass("category")}>
+									<AriaCell className={rowCellClass("category")}>
 										<CategoryTag
 											category={row.category}
 											// Block-level, so it centres in the cell like the figures beside it.
 											className="flex"
 										/>
 									</AriaCell>
-									<AriaCell className={cellClass("limitMinor")}>
+									<AriaCell className={rowCellClass("limitMinor")}>
 										{TABLE_TEXT.none}
 									</AriaCell>
-									<AriaCell className={cellClass("spentMinor")}>
+									<AriaCell className={rowCellClass("spentMinor")}>
 										{money(row.spentMinor)}
 									</AriaCell>
 									<AriaCell
-										className={cellClass("remainingMinor")}
+										className={rowCellClass("remainingMinor")}
 									>
 										{TABLE_TEXT.none}
 									</AriaCell>
 									<AriaCell
-										className={cellClass("utilizationTenths")}
+										className={rowCellClass("utilizationTenths")}
 									>
 										{TABLE_TEXT.none}
 									</AriaCell>
-									<AriaCell className={cellClass("state")}>
+									<AriaCell className={rowCellClass("state")}>
 										{TABLE_TEXT.notBudgeted}
 									</AriaCell>
 								</AriaRow>

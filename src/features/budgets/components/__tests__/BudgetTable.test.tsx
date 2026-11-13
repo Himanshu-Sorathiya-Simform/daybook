@@ -45,6 +45,7 @@ function Host({
 					setSelected(next);
 				}}
 				{...(props.className ? { className: props.className } : {})}
+				{...(props.arrows ? { arrows: props.arrows } : {})}
 			/>
 			<input aria-label="Search" />
 		</>
@@ -363,12 +364,25 @@ describe("sorting (BR-F04-18)", () => {
 		]);
 	});
 
-	test("a third press reverses once more; the sort is never removed", async () => {
+	test("a third press brings back the month's order, and a fourth starts again", async () => {
 		const { user } = renderTable({ view: OCTOBER });
 		await user.click(heading("Spent"));
 		await user.click(heading("Spent"));
 		await user.click(heading("Spent"));
+		expect(heading("Spent")).toHaveAttribute("aria-sort", "none");
+		expect(order()).toEqual(MONTH_ORDER);
+		await user.click(heading("Spent"));
 		expect(heading("Spent")).toHaveAttribute("aria-sort", "descending");
+	});
+
+	test("Category's third press brings the month's order back too", async () => {
+		const { user } = renderTable({ view: OCTOBER });
+		await user.click(heading("Category"));
+		await user.click(heading("Category"));
+		expect(heading("Category")).toHaveAttribute("aria-sort", "descending");
+		await user.click(heading("Category"));
+		expect(heading("Category")).toHaveAttribute("aria-sort", "none");
+		expect(order()).toEqual(MONTH_ORDER);
 	});
 
 	test("one heading at a time: another starts at its own first direction", async () => {
@@ -383,22 +397,40 @@ describe("sorting (BR-F04-18)", () => {
 		expect(heading("Category")).toHaveAttribute("aria-sort", "none");
 	});
 
-	test("the sorted heading is marked in colour and with an arrow hidden from screen readers", async () => {
+	test("every heading shows it can sort: an up-down mark, faint, hidden from screen readers", () => {
+		renderTable({ view: OCTOBER });
+		for (const cell of within(grid()).getAllByRole("columnheader")) {
+			const icon = cell.querySelector("svg") as SVGElement;
+			expect(icon).toHaveAttribute("data-sort-icon", "none");
+			expect(icon).toHaveClass("lucide-chevrons-up-down", "text-ink-3");
+			expect(icon).toHaveAttribute("aria-hidden", "true");
+			expect(cell).toHaveClass(
+				"cursor-pointer",
+				"text-ink-2",
+				"hover:text-ink",
+			);
+		}
+		expect(heading("Spent")).toHaveAccessibleName("Spent");
+	});
+
+	test("the sorted heading turns accent with the arrow of its direction; the others keep the mark", async () => {
 		const { user } = renderTable({ view: OCTOBER });
-		expect(heading("Spent")).toHaveClass("text-ink-2");
-		expect(heading("Spent")).toHaveTextContent(/^Spent$/);
+		const icon = (name: string) =>
+			heading(name).querySelector("svg") as SVGElement;
 		await user.click(heading("Spent"));
 		expect(heading("Spent")).toHaveClass("text-accent");
-		expect(within(heading("Spent")).getByText("↓")).toHaveAttribute(
-			"aria-hidden",
-			"true",
-		);
+		expect(heading("Spent")).not.toHaveClass("hover:text-ink");
+		expect(icon("Spent")).toHaveAttribute("data-sort-icon", "descending");
+		expect(icon("Spent")).toHaveClass("lucide-arrow-down");
+		expect(icon("Spent")).not.toHaveClass("text-ink-3");
 		await user.click(heading("Spent"));
-		expect(within(heading("Spent")).getByText("↑")).toHaveAttribute(
-			"aria-hidden",
-			"true",
-		);
+		expect(icon("Spent")).toHaveAttribute("data-sort-icon", "ascending");
+		expect(icon("Spent")).toHaveClass("lucide-arrow-up");
+		expect(icon("Limit")).toHaveAttribute("data-sort-icon", "none");
 		expect(heading("Limit")).toHaveClass("text-ink-2");
+		await user.click(heading("Spent"));
+		expect(icon("Spent")).toHaveAttribute("data-sort-icon", "none");
+		expect(heading("Spent")).toHaveClass("text-ink-2");
 	});
 
 	test("Enter on a focused heading sorts too", async () => {
@@ -430,7 +462,9 @@ describe("selection (BR-F04-17)", () => {
 		await user.click(within(rowOf("budget:food")).getByText("Food"));
 		expect(onSelect).toHaveBeenLastCalledWith("food");
 		expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "true");
-		expect(rowOf("budget:food")).toHaveClass("selected:bg-accent-soft");
+		expect(cellsOf(rowOf("budget:food"))[0]).toHaveClass(
+			"group-selected:bg-accent-soft",
+		);
 		await user.click(within(rowOf("budget:food")).getByText("Food"));
 		expect(onSelect).toHaveBeenLastCalledWith(null);
 		expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "false");
@@ -547,6 +581,41 @@ describe("Up and Down (BR-F04-32)", () => {
 		expect(rowOf("budget:food")).toHaveFocus();
 	});
 
+	test("Up from the first row reaches the headings, without changing the selection", async () => {
+		const onSelect = vi.fn();
+		const { user } = renderTable({ view: OCTOBER, onSelect });
+		rowOf("budget:entertainment").focus();
+		await user.keyboard("{ArrowUp}");
+		expect(document.activeElement).toHaveAttribute("role", "columnheader");
+		expect(onSelect).not.toHaveBeenCalled();
+	});
+
+	test("so a keyboard alone can sort: Up to the headings, Right along them, Enter", async () => {
+		const { user } = renderTable({ view: OCTOBER });
+		rowOf("budget:entertainment").focus();
+		await user.keyboard("{ArrowUp}");
+		const headings = within(grid()).getAllByRole("columnheader");
+		const from = headings.indexOf(document.activeElement as HTMLElement);
+		for (let at = from; at < 2; at++) await user.keyboard("{ArrowRight}");
+		for (let at = from; at > 2; at--) await user.keyboard("{ArrowLeft}");
+		expect(heading("Spent")).toHaveFocus();
+		await user.keyboard("{Enter}");
+		expect(heading("Spent")).toHaveAttribute("aria-sort", "descending");
+	});
+
+	test("Up on a heading stays there; Down from a heading selects the first row shown", async () => {
+		const onSelect = vi.fn();
+		const { user } = renderTable({ view: OCTOBER, start: "shopping", onSelect });
+		await user.click(heading("Spent"));
+		await user.keyboard("{ArrowUp}");
+		expect(heading("Spent")).toHaveFocus();
+		expect(onSelect).not.toHaveBeenCalled();
+		await user.keyboard("{ArrowDown}");
+		// Sorted by Spent: food first.
+		expect(onSelect).toHaveBeenLastCalledWith("food");
+		expect(rowOf("budget:food")).toHaveFocus();
+	});
+
 	test("the ends stay put", async () => {
 		const { user } = renderTable({ view: OCTOBER, start: "entertainment" });
 		await user.click(screen.getByRole("button", { name: "Before" }));
@@ -580,6 +649,43 @@ describe("Up and Down (BR-F04-32)", () => {
 		rowOf("budget:entertainment").focus();
 		await user.keyboard("fs");
 		expect(rowOf("budget:entertainment")).toHaveFocus();
+	});
+});
+
+describe("Up and Down below 1180 px (BR-F04-32, D-571)", () => {
+	test("in the focus mode they move focus through the rows without selecting", async () => {
+		const onSelect = vi.fn();
+		const { user } = renderTable({ view: OCTOBER, arrows: "focus", onSelect });
+		await user.click(screen.getByRole("button", { name: "Before" }));
+		await user.keyboard("{ArrowDown}");
+		expect(rowOf("budget:entertainment")).toHaveFocus();
+		await user.keyboard("{ArrowDown}");
+		expect(rowOf("budget:food")).toHaveFocus();
+		await user.keyboard("{ArrowUp}");
+		expect(rowOf("budget:entertainment")).toHaveFocus();
+		expect(onSelect).not.toHaveBeenCalled();
+		expect(rowOf("budget:entertainment")).toHaveAttribute(
+			"aria-selected",
+			"false",
+		);
+	});
+
+	test("in the focus mode Enter still selects", async () => {
+		const onSelect = vi.fn();
+		const { user } = renderTable({ view: OCTOBER, arrows: "focus", onSelect });
+		await user.click(screen.getByRole("button", { name: "Before" }));
+		await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+		expect(onSelect).toHaveBeenCalledExactlyOnceWith("food");
+	});
+
+	test("off, while the drawer is open, they do nothing", async () => {
+		const onSelect = vi.fn();
+		const { user } = renderTable({ view: OCTOBER, arrows: "off", onSelect });
+		const before = screen.getByRole("button", { name: "Before" });
+		await user.click(before);
+		await user.keyboard("{ArrowDown}");
+		expect(before).toHaveFocus();
+		expect(onSelect).not.toHaveBeenCalled();
 	});
 });
 
@@ -653,6 +759,62 @@ describe("other formats", () => {
 });
 
 describe("look", () => {
+	const RING = [
+		"outline-none",
+		"focus-visible:outline-2",
+		"focus-visible:-outline-offset-2",
+		"focus-visible:outline-solid",
+		"focus-visible:outline-focus",
+		"focus-visible:rounded-control",
+	];
+
+	test("headings and cells draw their focus ring inside, rounded, so the scroll box can't clip it", () => {
+		renderTable({ view: OCTOBER });
+		expect(heading("Spent")).toHaveClass(...RING);
+		for (const key of ["budget:food", "total", "unbudgeted:housing"]) {
+			for (const cell of cellsOf(rowOf(key)))
+				expect(cell).toHaveClass(...RING);
+		}
+	});
+
+	test("a focused row's ring is drawn on its cells, closed at both ends; the row draws none", () => {
+		renderTable({ view: OCTOBER });
+		for (const key of ["budget:food", "total", "unbudgeted:housing"]) {
+			expect(rowOf(key)).toHaveClass("group", "outline-none");
+			expect(rowOf(key)).not.toHaveClass("focus-visible:focus-ring");
+			for (const cell of cellsOf(rowOf(key))) {
+				expect(cell).toHaveClass(
+					"group-focus-visible:shadow-[inset_0_2px_var(--color-focus),inset_0_-2px_var(--color-focus)]",
+					"group-focus-visible:first:shadow-[inset_2px_0_var(--color-focus),inset_0_2px_var(--color-focus),inset_0_-2px_var(--color-focus)]",
+					"group-focus-visible:last:shadow-[inset_-2px_0_var(--color-focus),inset_0_2px_var(--color-focus),inset_0_-2px_var(--color-focus)]",
+				);
+			}
+		}
+	});
+
+	test("a selectable row's cells carry its hover and selection colour, with rounded ends", () => {
+		renderTable({ view: OCTOBER });
+		for (const key of ["budget:food", "unbudgeted:housing"]) {
+			for (const cell of cellsOf(rowOf(key))) {
+				expect(cell).toHaveClass(
+					"group-hover:bg-soft",
+					"group-selected:bg-accent-soft",
+					"first:rounded-l-control",
+					"last:rounded-r-control",
+				);
+			}
+		}
+		for (const cell of cellsOf(rowOf("total"))) {
+			expect(cell).not.toHaveClass("group-hover:bg-soft");
+			expect(cell).toHaveClass("border-t", "border-line-strong");
+		}
+	});
+
+	test("the table keeps separate borders, so its cells can round", () => {
+		renderTable({ view: OCTOBER });
+		expect(grid()).toHaveClass("border-separate", "border-spacing-0");
+	});
+
 	test("a category sits as a block in its cell, centred like the figures", () => {
 		renderTable({ view: OCTOBER });
 		for (const key of ["budget:food", "unbudgeted:housing"]) {

@@ -17,8 +17,10 @@ import { useBudgetsUrl } from "../hooks/useBudgetsUrl";
 import { useBudgetsView } from "../hooks/useBudgetsView";
 import { dayOfMonth } from "../lib/labels";
 import { emptyTitle, offlineAction, offlineBody, PAGE_TEXT } from "../lib/messages";
+import { subjectOf } from "../lib/panel";
 import type { BudgetMonthAnswer, BudgetsLocale } from "../lib/types";
 import { BudgetList } from "./BudgetList";
+import { BudgetPanel } from "./BudgetPanel";
 import { BudgetsHeader } from "./BudgetsHeader";
 import { BudgetsOverview } from "./BudgetsOverview";
 import { BudgetsSkeleton } from "./BudgetsSkeleton";
@@ -31,8 +33,12 @@ export type BudgetsPageProps = {
 	onAdd?: (category?: ExpenseCategory) => void;
 	/** Opens Change limit for a category with a Budget record. */
 	onChangeLimit?: (category: ExpenseCategory) => void;
+	/** Opens Stop budgeting for a category's Budget. */
+	onStop?: (category: ExpenseCategory) => void;
 	/** Opens Delete for a category's Budget. */
 	onDelete?: (category: ExpenseCategory) => void;
+	/** Removes a one-month limit from a category's Budget (BR-F04-25). */
+	onRemoveMonthLimit?: (category: ExpenseCategory, month: Month) => void;
 	className?: string;
 };
 
@@ -40,6 +46,9 @@ const nothing = () => {};
 
 /** From here up, List or Table shows in the header (BR-F04-14, D-512). */
 const WIDE = "(min-width: 48rem)";
+
+/** From here up the panel docks beside the list (BR-F04-30); the `dock` breakpoint. */
+const DOCKED = "(min-width: 1180px)";
 
 /** Whether `category` shows anywhere in the month: as a Budget, Not budgeted or Not active. */
 function shows(view: BudgetMonthAnswer, category: ExpenseCategory): boolean {
@@ -62,12 +71,18 @@ function shows(view: BudgetMonthAnswer, category: ExpenseCategory): boolean {
  *   new one, and clears otherwise. Escape clears it (BR-F04-32).
  * - **The view** (BR-F04-14, BR-F04-18, D-570): the remembered Table shows only from 768 px,
  *   where its switch is, and for a month with a Budget; otherwise the list.
+ * - **The panel** (BR-F04-30): beside the list from 1180 px, where Up and Down select; below,
+ *   a drawer while a category is selected, where they only move focus, and nothing while the
+ *   drawer is open (D-571). It is left out in the error, offline-other-month and new-user
+ *   states. L opens Change limit for a selection with a Budget record (BR-F04-32).
  */
 export function BudgetsPage({
 	locale,
 	onAdd = nothing,
 	onChangeLimit = nothing,
+	onStop = nothing,
 	onDelete = nothing,
+	onRemoveMonthLimit = nothing,
 	className,
 }: Readonly<BudgetsPageProps>) {
 	const current = monthOf(locale.today);
@@ -75,6 +90,8 @@ export function BudgetsPage({
 	const online = useOnline();
 	const [view, setView] = useBudgetsView();
 	const wide = useMediaQuery(WIDE, false);
+	// The server can't know the width: it renders the docked panel, which CSS hides below 1180 px.
+	const docked = useMediaQuery(DOCKED, true);
 	const query = useBudgetMonth(url.month);
 	const [filterIn, setFilterIn] = useState<{
 		month: Month;
@@ -103,6 +120,26 @@ export function BudgetsPage({
 	});
 
 	const offOther = !online && url.month !== current;
+	const failed = !data && (query.isError || query.fetchStatus === "paused");
+	const isNewUser =
+		data !== undefined
+		&& [data.budgets, data.unbudgeted, data.inactive].every(
+			(group) => group.length === 0,
+		);
+	const showPanel = !offOther && !failed && !isNewUser;
+	const drawerOpen = showPanel && !docked && selected !== null;
+	const arrows =
+		docked ? "select"
+		: drawerOpen ? "off"
+		: "focus";
+	const record =
+		!offOther && data && selected !== null ?
+			(subjectOf(data, selected)?.record ?? null)
+		:	null;
+	// It is on only while the selection has a record.
+	useShortcut("L", () => onChangeLimit(selected as ExpenseCategory), {
+		enabled: record !== null,
+	});
 	const asOf =
 		!online && query.dataUpdatedAt > 0 ?
 			`as of ${formatTime(new Date(query.dataUpdatedAt), locale)}`
@@ -141,6 +178,7 @@ export function BudgetsPage({
 						onFilterChange={setFilter}
 						selected={selected}
 						onSelect={setSelected}
+						arrows={arrows}
 					/>
 				:	(hasBudgets || hasOthers) && (
 						<BudgetList
@@ -153,6 +191,7 @@ export function BudgetsPage({
 							onFilterChange={setFilter}
 							selected={selected}
 							onSelect={setSelected}
+							arrows={arrows}
 							onAdd={onAdd}
 							onChangeLimit={onChangeLimit}
 							onDelete={onDelete}
@@ -179,7 +218,7 @@ export function BudgetsPage({
 			);
 		}
 		if (data) return month(data);
-		if (query.isError || query.fetchStatus === "paused") {
+		if (failed) {
 			return (
 				<Section>
 					<EmptyState
@@ -197,32 +236,51 @@ export function BudgetsPage({
 	return (
 		<div
 			className={cn(
-				"flex flex-col gap-4 px-8 py-7 max-md:px-4 max-md:py-5",
+				showPanel
+					&& "dock:grid dock:grid-cols-[minmax(0,1fr)_minmax(20rem,25rem)] dock:items-start gap-5",
+				"px-8 py-7 max-md:px-4 max-md:py-5",
 				className,
 			)}
 		>
-			<BudgetsHeader
-				month={url.month}
-				current={current}
-				dateLocale={dateLocale}
-				numberLocale={locale.numberLocale}
-				asOf={asOf}
-				onMonthChange={url.setMonth}
-				view={view}
-				onViewChange={setView}
-				onAdd={() => onAdd()}
-			/>
-			{url.notice && (
-				<Banner
-					kind="info"
-					action={PAGE_TEXT.dismiss}
-					className="rounded-section border"
-					onAction={url.dismissNotice}
-				>
-					{PAGE_TEXT.invalidLink}
-				</Banner>
+			<div className="flex min-w-0 flex-col gap-4">
+				<BudgetsHeader
+					month={url.month}
+					current={current}
+					dateLocale={dateLocale}
+					numberLocale={locale.numberLocale}
+					asOf={asOf}
+					onMonthChange={url.setMonth}
+					view={view}
+					onViewChange={setView}
+					onAdd={() => onAdd()}
+				/>
+				{url.notice && (
+					<Banner
+						kind="info"
+						action={PAGE_TEXT.dismiss}
+						className="rounded-section border"
+						onAction={url.dismissNotice}
+					>
+						{PAGE_TEXT.invalidLink}
+					</Banner>
+				)}
+				{body()}
+			</div>
+			{showPanel && (
+				<BudgetPanel
+					isDocked={docked}
+					month={url.month}
+					view={data}
+					selected={selected}
+					formats={locale}
+					onClose={() => setSelected(null)}
+					onAdd={onAdd}
+					onChangeLimit={onChangeLimit}
+					onStop={onStop}
+					onDelete={onDelete}
+					onRemoveMonthLimit={onRemoveMonthLimit}
+				/>
 			)}
-			{body()}
 		</div>
 	);
 }

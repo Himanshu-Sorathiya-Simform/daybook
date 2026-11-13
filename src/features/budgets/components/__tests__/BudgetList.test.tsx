@@ -48,6 +48,7 @@ function Host({
 				onAdd={props.onAdd ?? vi.fn()}
 				onChangeLimit={props.onChangeLimit ?? vi.fn()}
 				onDelete={props.onDelete ?? vi.fn()}
+				{...(props.arrows ? { arrows: props.arrows } : {})}
 			/>
 			<input aria-label="Search" />
 		</>
@@ -534,6 +535,43 @@ describe("Up and Down (BR-F04-32)", () => {
 		onSelect.mockClear();
 		await user.keyboard("s");
 		expect(rowOf("budget:shopping")).not.toHaveFocus();
+	});
+});
+
+describe("Up and Down below 1180 px (BR-F04-32, D-571)", () => {
+	test("in the focus mode they move focus through the rows without selecting", async () => {
+		const onSelect = vi.fn();
+		const { user } = renderList({ view: OCTOBER, arrows: "focus", onSelect });
+		await user.click(screen.getByRole("button", { name: "Before" }));
+		await user.keyboard("{ArrowDown}");
+		expect(rowOf("budget:entertainment")).toHaveFocus();
+		await user.keyboard("{ArrowDown}");
+		expect(rowOf("budget:food")).toHaveFocus();
+		await user.keyboard("{ArrowUp}");
+		expect(rowOf("budget:entertainment")).toHaveFocus();
+		expect(onSelect).not.toHaveBeenCalled();
+		expect(rowOf("budget:entertainment")).toHaveAttribute(
+			"aria-selected",
+			"false",
+		);
+	});
+
+	test("in the focus mode Enter still selects", async () => {
+		const onSelect = vi.fn();
+		const { user } = renderList({ view: OCTOBER, arrows: "focus", onSelect });
+		await user.click(screen.getByRole("button", { name: "Before" }));
+		await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+		expect(onSelect).toHaveBeenCalledExactlyOnceWith("food");
+	});
+
+	test("off, while the drawer is open, they do nothing", async () => {
+		const onSelect = vi.fn();
+		const { user } = renderList({ view: OCTOBER, arrows: "off", onSelect });
+		const before = screen.getByRole("button", { name: "Before" });
+		await user.click(before);
+		await user.keyboard("{ArrowDown}");
+		expect(before).toHaveFocus();
+		expect(onSelect).not.toHaveBeenCalled();
 	});
 });
 

@@ -1,5 +1,12 @@
 import { onlineManager } from "@tanstack/react-query";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import {
+	act,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -15,6 +22,7 @@ import {
 } from "vitest";
 
 import { AppProviders } from "@/components/app/AppProviders";
+import type { ExpenseCategory } from "@/lib/budgets/model";
 import type { Month } from "@/lib/budgets/months";
 import {
 	ok,
@@ -25,7 +33,11 @@ import {
 } from "../../hooks/__tests__/helpers";
 import { resetUnsavedView, VIEW_KEY } from "../../hooks/useBudgetsView";
 import { budgetKeys } from "../../lib/keys";
-import { monthAnswer } from "../../lib/__tests__/fixtures";
+import {
+	historyAnswer,
+	monthAnswer,
+	payeeSummary,
+} from "../../lib/__tests__/fixtures";
 import type { BudgetMonthAnswer, BudgetsLocale } from "../../lib/types";
 import { BudgetsPage } from "../BudgetsPage";
 
@@ -37,6 +49,17 @@ beforeEach(() => {
 	route(network, "get", "/api/budgets/summary", ({ path }) =>
 		ok({ year: Number(path.slice(-4)), months: [] }),
 	);
+	// The panel reads a selection's last 6 months and its payees.
+	route(network, "get", "/api/budgets/history", ({ path }) => {
+		const query = new URL(path, "http://x").searchParams;
+		return ok(
+			historyAnswer(
+				query.get("category") as ExpenseCategory,
+				query.get("to") as Month,
+			),
+		);
+	});
+	route(network, "get", "/api/transactions/summary", () => ok(payeeSummary()));
 });
 afterEach(() => {
 	network.resetHandlers();
@@ -45,8 +68,24 @@ afterEach(() => {
 	vi.restoreAllMocks();
 	resetUnsavedView();
 	window.localStorage.clear();
+	// @ts-expect-error jsdom has none; some tests set one.
+	delete window.matchMedia;
 });
 afterAll(() => network.close());
+
+/** A window's width: jsdom has no `matchMedia`, which the page reads as a narrow window, with
+ * the panel as a drawer. `wide` is 768 px up, where List or Table shows; `docked` is 1180 px
+ * up, where the panel docks. */
+function media({ wide = false, docked = false }) {
+	window.matchMedia = vi.fn((query: string) => ({
+		matches:
+			(wide && query === "(min-width: 48rem)")
+			|| (docked && query === "(min-width: 1180px)"),
+		media: query,
+		addEventListener: () => {},
+		removeEventListener: () => {},
+	})) as unknown as typeof window.matchMedia;
+}
 
 // The golden profile on the golden clock's day (TST-3).
 const IN: BudgetsLocale = {
@@ -76,10 +115,12 @@ function renderPage(
 		months = (month: Month) => ok(monthAnswer(month)),
 		seed,
 		onAdd,
+		onChangeLimit,
 	}: {
-		months?: (month: Month) => Response;
+		months?: (month: Month) => Response | Promise<Response>;
 		seed?: BudgetMonthAnswer;
 		onAdd?: () => void;
+		onChangeLimit?: (category: ExpenseCategory) => void;
 	} = {},
 ) {
 	const reads = route(network, "get", "/api/budgets", ({ path }) =>
@@ -97,6 +138,7 @@ function renderPage(
 				<BudgetsPage
 					locale={IN}
 					{...(onAdd ? { onAdd } : {})}
+					{...(onChangeLimit ? { onChangeLimit } : {})}
 				/>
 			</Url>
 		</AppProviders>,
@@ -269,21 +311,9 @@ describe("List or Table (BR-F04-14)", () => {
 });
 
 describe("the Table view (BR-F04-18, D-570)", () => {
-	afterEach(() => {
-		// @ts-expect-error jsdom has none; these tests set one.
-		delete window.matchMedia;
-	});
-
-	/** A window at least 768 px wide, where List or Table shows. jsdom has no `matchMedia`,
-	 * which the page reads as narrower. */
-	function wide(matches = true) {
-		window.matchMedia = vi.fn((query: string) => ({
-			matches: matches && query === "(min-width: 48rem)",
-			media: query,
-			addEventListener: () => {},
-			removeEventListener: () => {},
-		})) as unknown as typeof window.matchMedia;
-	}
+	/** A window at least 1180 px wide, where List or Table shows and the panel docks; or, with
+	 * `false`, a phone's. */
+	const wide = (matches = true) => media({ wide: matches, docked: matches });
 
 	const table = () =>
 		screen.queryByRole("grid", { name: /Select a column heading to sort/ });
@@ -722,6 +752,7 @@ describe("the state filter on the page (BR-F04-31)", () => {
 });
 
 describe("the selection across months (BR-F04-17, D-249)", () => {
+	beforeEach(() => media({ wide: true, docked: true }));
 	const rowOf = (key: string) =>
 		document.querySelector<HTMLElement>(
 			`[role="row"][data-key="${key}"]`,
@@ -778,5 +809,325 @@ describe("the selection across months (BR-F04-17, D-249)", () => {
 			"true",
 		);
 		expect(rowOf("budget:entertainment")).toHaveFocus();
+	});
+});
+
+describe("the panel (BR-F04-30, D-571)", () => {
+	const rowOf = (key: string) =>
+		document.querySelector<HTMLElement>(
+			`[role="row"][data-key="${key}"]`,
+		) as HTMLElement;
+	const panel = () =>
+		screen.queryByRole("complementary", { name: "Budget details" });
+	const drawer = () => screen.queryByRole("dialog", { name: "Budget details" });
+
+	describe("docked, from 1180 px", () => {
+		beforeEach(() => media({ wide: true, docked: true }));
+
+		test("beside the list, the month's summary", async () => {
+			const { container } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			expect(panel()).toBeVisible();
+			expect(
+				within(panel() as HTMLElement).getByRole("region", {
+					name: "Compared with September",
+				}),
+			).toBeVisible();
+			expect(container.firstElementChild).toHaveClass("dock:grid");
+		});
+
+		test("while the month loads, the panel has the summary's shape for that month", async () => {
+			renderPage("?month=2026-10");
+			const loading = within(panel() as HTMLElement);
+			expect(
+				loading.getByRole("heading", { level: 2, name: "October 2026" }),
+			).toBeVisible();
+			expect(
+				loading.getByRole("region", { name: "Compared with September" }),
+			).not.toHaveTextContent("₹");
+			await screen.findByText("Needs attention · 4");
+			expect(
+				within(panel() as HTMLElement).getByRole("region", {
+					name: "Compared with September",
+				}),
+			).toHaveTextContent("₹13,168.00");
+		});
+
+		test("with a selection, a month that is still loading keeps the selection's shape", async () => {
+			let release = () => {};
+			const held = new Promise<void>((resolve) => (release = resolve));
+			const { user } = renderPage("?month=2026-10", {
+				months: async (month) => {
+					if (month === "2026-11") await held;
+					return ok(monthAnswer(month));
+				},
+			});
+			await screen.findByText("Needs attention · 4");
+			await user.click(rowOf("budget:food"));
+			await user.click(monthButton("Next month"));
+			const loading = panel() as HTMLElement;
+			expect(within(loading).getByText("Food")).toBeVisible();
+			expect(
+				within(loading).queryByRole("heading", { level: 2 }),
+			).not.toBeInTheDocument();
+			release();
+			expect(
+				await within(loading).findByRole("heading", {
+					level: 2,
+					name: "Budget",
+				}),
+			).toBeVisible();
+		});
+
+		test("selecting a row shows it; selecting it again goes back to the summary", async () => {
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await user.click(rowOf("budget:food"));
+			const details = panel() as HTMLElement;
+			expect(
+				within(details).getByRole("heading", { level: 2, name: "Budget" }),
+			).toBeVisible();
+			expect(
+				await within(details).findByRole("link", {
+					name: "See 4 Transactions",
+				}),
+			).toHaveAttribute(
+				"href",
+				"/transactions?from=2026-10-01&to=2026-10-31&cat=food",
+			);
+			await user.click(rowOf("budget:food"));
+			expect(
+				within(details).getByRole("region", {
+					name: "Compared with September",
+				}),
+			).toBeVisible();
+		});
+
+		test("Close details clears the selection", async () => {
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await user.click(rowOf("budget:food"));
+			await user.click(screen.getByRole("button", { name: "Close details" }));
+			expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "false");
+			expect(
+				screen.getByRole("region", { name: "Compared with September" }),
+			).toBeVisible();
+		});
+
+		// BR-F04-32
+		test("Up and Down select, and the panel follows", async () => {
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await user.click(
+				screen.getByRole("heading", { level: 1, name: "Budgets" }),
+			);
+			await user.keyboard("{ArrowDown}{ArrowDown}");
+			expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "true");
+			expect(
+				await within(panel() as HTMLElement).findByRole("region", {
+					name: "Where it went in October",
+				}),
+			).toBeVisible();
+		});
+
+		test("Not budgeted September transportation shows as Not budgeted with its history", async () => {
+			const { user } = renderPage("?month=2026-09");
+			await screen.findByText("Not budgeted · 3");
+			await user.click(rowOf("unbudgeted:transportation"));
+			expect(
+				within(panel() as HTMLElement).getByRole("heading", {
+					level: 2,
+					name: "Not budgeted",
+				}),
+			).toBeVisible();
+			expect(
+				screen.getByRole("region", { name: "Limit history" }),
+			).toBeVisible();
+			await screen.findByRole("region", { name: "Last 6 months" });
+		});
+	});
+
+	describe("left out", () => {
+		beforeEach(() => media({ wide: true, docked: true }));
+
+		test("in the error state", async () => {
+			const { container } = renderPage("?month=2026-10", {
+				months: () => refuse(500, "internal"),
+			});
+			await screen.findByText("Budgets could not be loaded.");
+			expect(panel()).not.toBeInTheDocument();
+			expect(container.firstElementChild).not.toHaveClass("dock:grid");
+		});
+
+		test("for a new user", async () => {
+			renderPage("?month=2026-08", {
+				months: (month) => ok(nothing(month)),
+			});
+			await screen.findByText("No Budgets for August 2026.");
+			expect(panel()).not.toBeInTheDocument();
+		});
+
+		test("offline in another month", async () => {
+			renderPage("?month=2026-10", { seed: monthAnswer("2026-10") });
+			goOffline();
+			expect(
+				await screen.findByText(
+					"You're offline. This month isn't saved on this device.",
+				),
+			).toBeVisible();
+			expect(panel()).not.toBeInTheDocument();
+		});
+
+		test("a month with no Budget but other rows keeps it", async () => {
+			renderPage("?month=2026-08", {
+				months: (month) => ok(monthAnswer(month)),
+			});
+			await screen.findByText("No Budgets for August 2026.");
+			expect(panel()).toBeVisible();
+		});
+	});
+
+	describe("a drawer, below 1180 px", () => {
+		beforeEach(() => media({ wide: true }));
+
+		test("no panel shows until a row is selected, and a click opens the drawer", async () => {
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			expect(panel()).not.toBeInTheDocument();
+			expect(drawer()).not.toBeInTheDocument();
+			await user.click(rowOf("budget:food"));
+			const open = await screen.findByRole("dialog", {
+				name: "Budget details",
+			});
+			expect(open).toHaveTextContent("L to change limit · Esc to close");
+			await within(open).findByRole("region", { name: "Last 6 months" });
+		});
+
+		test("Escape closes it and clears the selection", async () => {
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await user.click(rowOf("budget:food"));
+			await screen.findByRole("dialog", { name: "Budget details" });
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(drawer()).not.toBeInTheDocument());
+			expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "false");
+		});
+
+		test("opened from the keyboard, it gives focus back to the row when it closes", async () => {
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await user.click(
+				screen.getByRole("heading", { level: 1, name: "Budgets" }),
+			);
+			await user.keyboard("{ArrowDown}{ArrowDown}{Enter}");
+			const open = await screen.findByRole("dialog", {
+				name: "Budget details",
+			});
+			await user.click(
+				within(open).getByRole("button", { name: "Close details" }),
+			);
+			await waitFor(() => expect(drawer()).not.toBeInTheDocument());
+			expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "false");
+			await waitFor(() => expect(rowOf("budget:food")).toHaveFocus());
+		});
+
+		// BR-F04-32, D-571
+		test("Down only moves focus; Enter selects and opens the drawer", async () => {
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await user.click(
+				screen.getByRole("heading", { level: 1, name: "Budgets" }),
+			);
+			await user.keyboard("{ArrowDown}{ArrowDown}");
+			expect(rowOf("budget:food")).toHaveFocus();
+			expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "false");
+			expect(drawer()).not.toBeInTheDocument();
+			await user.keyboard("{Enter}");
+			expect(
+				await screen.findByRole("dialog", { name: "Budget details" }),
+			).toBeVisible();
+			expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "true");
+		});
+
+		// D-571
+		test("while the drawer is open, Up and Down leave the selection alone", async () => {
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await user.click(rowOf("budget:food"));
+			const open = await screen.findByRole("dialog", {
+				name: "Budget details",
+			});
+			await within(open).findByRole("region", { name: "Last 6 months" });
+			await user.keyboard("{ArrowDown}{ArrowDown}");
+			expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "true");
+			expect(open.contains(document.activeElement)).toBe(true);
+			// The keys stay the drawer's own, so it can scroll with them.
+			expect(
+				fireEvent.keyDown(document.activeElement as Element, {
+					key: "ArrowDown",
+				}),
+			).toBe(true);
+		});
+	});
+
+	describe("L opens Change limit (BR-F04-32)", () => {
+		beforeEach(() => media({ wide: true, docked: true }));
+
+		test("for a selected Budget", async () => {
+			const onChangeLimit = vi.fn();
+			const { user } = renderPage("?month=2026-10", { onChangeLimit });
+			await screen.findByText("Needs attention · 4");
+			await user.click(rowOf("budget:food"));
+			await user.click(
+				screen.getByRole("heading", { level: 1, name: "Budgets" }),
+			);
+			await user.keyboard("l");
+			expect(onChangeLimit).toHaveBeenCalledExactlyOnceWith("food");
+			await screen.findByRole("region", { name: "Last 6 months" });
+		});
+
+		test("for a Not budgeted category with a Budget record: September transportation", async () => {
+			const onChangeLimit = vi.fn();
+			const { user } = renderPage("?month=2026-09", { onChangeLimit });
+			await screen.findByText("Not budgeted · 3");
+			await user.click(rowOf("unbudgeted:transportation"));
+			await user.click(
+				screen.getByRole("heading", { level: 1, name: "Budgets" }),
+			);
+			await user.keyboard("L");
+			expect(onChangeLimit).toHaveBeenCalledExactlyOnceWith("transportation");
+			await screen.findByRole("region", { name: "Last 6 months" });
+		});
+
+		test("not for a category with no Budget record, nor with nothing selected", async () => {
+			const onChangeLimit = vi.fn();
+			const { user } = renderPage("?month=2026-09", { onChangeLimit });
+			await screen.findByText("Not budgeted · 3");
+			await user.click(
+				screen.getByRole("heading", { level: 1, name: "Budgets" }),
+			);
+			await user.keyboard("l");
+			await user.click(rowOf("unbudgeted:health"));
+			await user.click(
+				screen.getByRole("heading", { level: 1, name: "Budgets" }),
+			);
+			await user.keyboard("l");
+			expect(onChangeLimit).not.toHaveBeenCalled();
+			await screen.findByRole("region", { name: "Last 6 months" });
+		});
+
+		test("from inside the drawer", async () => {
+			media({ wide: true });
+			const onChangeLimit = vi.fn();
+			const { user } = renderPage("?month=2026-10", { onChangeLimit });
+			await screen.findByText("Needs attention · 4");
+			await user.click(rowOf("budget:food"));
+			const open = await screen.findByRole("dialog", {
+				name: "Budget details",
+			});
+			await within(open).findByRole("region", { name: "Last 6 months" });
+			await user.keyboard("l");
+			expect(onChangeLimit).toHaveBeenCalledExactlyOnceWith("food");
+		});
 	});
 });

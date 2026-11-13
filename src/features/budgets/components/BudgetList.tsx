@@ -21,7 +21,7 @@ import {
 } from "@/lib/budgets/model";
 import { cn } from "@/lib/cn";
 import { formatMoney } from "@/lib/money";
-import { useRowArrows } from "../hooks/useRowArrows";
+import { type RowArrows, useRowArrows } from "../hooks/useRowArrows";
 import {
 	attentionFigure,
 	type Formats,
@@ -49,6 +49,9 @@ export type BudgetListProps = {
 	/** The selected category, or `null` (BR-F04-17). */
 	selected: ExpenseCategory | null;
 	onSelect: (category: ExpenseCategory | null) => void;
+	/** What Up and Down do: select beside the docked panel, else only move focus, and nothing
+	 * while the drawer is open (BR-F04-32, D-571). */
+	arrows?: RowArrows;
 	/** Add a Budget for a Not budgeted category with no Budget record. */
 	onAdd: (category: ExpenseCategory) => void;
 	/** Change limit for a category with a Budget record. */
@@ -77,6 +80,7 @@ export function BudgetList({
 	onFilterChange,
 	selected,
 	onSelect,
+	arrows = "select",
 	onAdd,
 	onChangeLimit,
 	onDelete,
@@ -105,7 +109,7 @@ export function BudgetList({
 	const inactiveIds = inactive.map((row) => `inactive:${row.category}`);
 	const shown = [...mainIds, ...(expanded ? inactiveIds : [])];
 
-	useRowArrows({ holder, ids: shown, selected, onSelect });
+	useRowArrows({ holder, ids: shown, selected, onSelect, mode: arrows });
 
 	const sectionOf = (
 		key: string,

@@ -1,5 +1,5 @@
-import type { ExpenseCategory } from "@/lib/budgets/model";
-import type { Month } from "@/lib/budgets/months";
+import { type ExpenseCategory, limitIn } from "@/lib/budgets/model";
+import { type Month, monthsStarting } from "@/lib/budgets/months";
 import { buildMonthView } from "@/lib/budgets/view";
 import {
 	goldenBudget,
@@ -7,7 +7,12 @@ import {
 	goldenSpending,
 } from "@/lib/budgets/__tests__/golden";
 import { shiftMonth } from "@/lib/budgets/months";
-import type { BudgetAnswer, BudgetMonthAnswer, PayeeSummaryAnswer } from "../types";
+import type {
+	BudgetAnswer,
+	BudgetHistoryAnswer,
+	BudgetMonthAnswer,
+	PayeeSummaryAnswer,
+} from "../types";
 
 /** A golden Budget as the API answers it, with `changes` over it. */
 export function budgetAnswer(
@@ -58,5 +63,24 @@ export function payeeSummary(
 		],
 		currency: "INR",
 		...changes,
+	};
+}
+
+/** Golden's history of `category` over `months` months ending at `to`, as
+ * `GET /api/budgets/history` answers it (BR-F04-35). */
+export function historyAnswer(
+	category: ExpenseCategory,
+	to: Month,
+	months = 6,
+): BudgetHistoryAnswer {
+	const budget = goldenBudgets().find((each) => each.category === category);
+	return {
+		category,
+		currency: "INR",
+		months: monthsStarting(shiftMonth(to, 1 - months), months).map((month) => ({
+			month,
+			limitMinor: budget ? limitIn(budget, month) : null,
+			spentMinor: goldenSpending(month)[category] ?? 0,
+		})),
 	};
 }
