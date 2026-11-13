@@ -32,6 +32,8 @@ const KEYS = {
 	views: viewKeys.list(),
 	me: ME_KEY,
 	profile: [QUERY_ROOTS.profile],
+	budgetMonth: [QUERY_ROOTS.budgets, "month", "2026-10"],
+	budgetHistory: [QUERY_ROOTS.budgets, "history", "food", "2026-10", 6],
 } as const;
 
 type Name = keyof typeof KEYS;
@@ -202,6 +204,21 @@ describe("refreshAfterTransactionWrite (F03 section 12, STATE-5)", () => {
 		expect(settled).toBe(true);
 		expect(queryClient.getQueryData(KEYS.list)).toEqual({ refetched: true });
 	});
+
+	// F04 section 12
+	test.each([
+		{ kind: "create", row: WRITTEN },
+		{ kind: "edit", row: WRITTEN },
+		{ kind: "delete", id: idOf(24) },
+	] as const)(
+		"a $kind refetches the Budgets reads, whose spending it moves",
+		async (write) => {
+			const { queryClient, fetched } = seeded();
+			await refreshAfterTransactionWrite(queryClient, write);
+			expect(fetched.get("budgetMonth")).toBe(1);
+			expect(fetched.get("budgetHistory")).toBe(1);
+		},
+	);
 
 	test("an unwatched read is marked stale, to refetch when next shown", async () => {
 		const queryClient = createQueryClient();
