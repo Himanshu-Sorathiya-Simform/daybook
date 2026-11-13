@@ -3,8 +3,10 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
 	formatDayHeader,
 	formatFullDay,
+	formatMonth,
 	formatShortDate,
 	formatTime,
+	formatYear,
 } from "../date-format";
 
 const IN = { dateLocale: "en-IN", today: "2026-11-02" };
@@ -176,4 +178,57 @@ describe("formatTime (BR-F02-19)", () => {
 			expect(formatTime("2026-10-31T18:20:00.000Z", KOLKATA)).toBe("11:50 pm");
 		},
 	);
+});
+
+describe("formatMonth (BR-F02-19)", () => {
+	const IN_LOCALE = { dateLocale: "en-IN" };
+
+	test("each style for October 2026 in en-IN", () => {
+		expect(formatMonth("2026-10", IN_LOCALE)).toBe("October 2026");
+		expect(formatMonth("2026-10", IN_LOCALE, "long")).toBe("October 2026");
+		expect(formatMonth("2026-10", IN_LOCALE, "short")).toBe("Oct 2026");
+		expect(formatMonth("2026-10", IN_LOCALE, "name")).toBe("October");
+		expect(formatMonth("2026-10", IN_LOCALE, "shortName")).toBe("Oct");
+	});
+
+	test("the locale's own words: en-IN shortens September to Sept, en-US to Sep", () => {
+		expect(formatMonth("2026-09", IN_LOCALE, "short")).toBe("Sept 2026");
+		expect(formatMonth("2026-09", { dateLocale: "en-US" }, "short")).toBe(
+			"Sep 2026",
+		);
+	});
+
+	test("other locales order and name the parts their own way", () => {
+		expect(formatMonth("2026-10", { dateLocale: "de-DE" })).toBe("Oktober 2026");
+		expect(formatMonth("2026-10", { dateLocale: "ja-JP" })).toBe("2026年10月");
+	});
+
+	test.each([
+		["2026-01", "January 2026"],
+		["2026-12", "December 2026"],
+		["2023-11", "November 2023"],
+		["2027-11", "November 2027"],
+	])("%s reads %s", (month, text) => {
+		expect(formatMonth(month, IN_LOCALE)).toBe(text);
+	});
+
+	test.each(["America/Los_Angeles", "Pacific/Kiritimati", "UTC"])(
+		"no device zone moves a month, here %s",
+		(zone) => {
+			vi.stubEnv("TZ", zone);
+			expect(formatMonth("2026-01", IN_LOCALE)).toBe("January 2026");
+			expect(formatMonth("2026-12", IN_LOCALE)).toBe("December 2026");
+		},
+	);
+});
+
+describe("formatYear", () => {
+	test("in the locale's own way", () => {
+		expect(formatYear(2026, { dateLocale: "en-IN" })).toBe("2026");
+		expect(formatYear(2026, { dateLocale: "ja-JP" })).toBe("2026年");
+	});
+
+	test("a year with fewer than four digits keeps its own number", () => {
+		expect(formatYear(999, { dateLocale: "en-IN" })).toBe("999");
+	});
 });

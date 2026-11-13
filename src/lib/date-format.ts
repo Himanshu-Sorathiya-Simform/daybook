@@ -69,3 +69,40 @@ export function formatTime(
 		timeZone: timezone,
 	}).format(new Date(instant));
 }
+
+/** How a month reads: F02's Month "October 2026", the short "Oct 2026", the name alone
+ * "October", or the short name "Oct" (`en-IN`). */
+export type MonthStyle = "long" | "short" | "name" | "shortName";
+
+const MONTH_OPTIONS: Record<MonthStyle, Intl.DateTimeFormatOptions> = {
+	long: { month: "long", year: "numeric" },
+	short: { month: "short", year: "numeric" },
+	name: { month: "long" },
+	shortName: { month: "short" },
+};
+
+/**
+ * A `YYYY-MM` month in `dateLocale` (BR-F02-19), formatted at mid-month in UTC so no time zone
+ * moves it. The words are the locale's own: `en-IN` shortens September to "Sept".
+ */
+export function formatMonth(
+	month: string,
+	{ dateLocale }: { dateLocale: string },
+	style: MonthStyle = "long",
+): string {
+	return new Intl.DateTimeFormat(dateLocale, {
+		...MONTH_OPTIONS[style],
+		timeZone: "UTC",
+	}).format(asInstant(`${month}-15`));
+}
+
+/** A year in `dateLocale`, "2026", or "2026年" for `ja-JP`. */
+export function formatYear(
+	year: number,
+	{ dateLocale }: { dateLocale: string },
+): string {
+	return new Intl.DateTimeFormat(dateLocale, {
+		year: "numeric",
+		timeZone: "UTC",
+	}).format(asInstant(`${String(year).padStart(4, "0")}-07-01`));
+}
