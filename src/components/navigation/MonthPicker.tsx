@@ -30,9 +30,10 @@ export type MonthPickerProps = {
 	 * page does (BR-F04-32). */
 	isGridOpen?: boolean;
 	onGridOpenChange?: (isOpen: boolean) => void;
-	/** Fills its row: the month takes the room between the arrows, outlined, as on a phone
-	 * (BR-F04-14). */
-	stretch?: boolean;
+	/** Fills its row: the month takes the room between the arrows, outlined, with 44px arrows
+	 * (BR-F04-14). `"phone"` does so only below 768px (D-512), where every arrow is 44px
+	 * already, so one control serves both layouts. */
+	stretch?: boolean | "phone";
 	className?: string;
 };
 
@@ -64,7 +65,10 @@ export function MonthPicker({
 			className={cn(
 				"rounded-control text-body text-ink hover:bg-soft h-9 cursor-pointer px-2.5 font-semibold whitespace-nowrap transition-colors duration-(--dur-fast) ease-out max-md:min-h-11",
 				"aria-expanded:bg-accent-soft",
-				stretch && "border-edge bg-page min-w-0 flex-1 truncate border",
+				stretch === true
+					&& "border-edge bg-page min-w-0 flex-1 truncate border",
+				stretch === "phone"
+					&& "max-md:border-edge max-md:bg-page max-md:min-w-0 max-md:flex-1 max-md:truncate max-md:border",
 			)}
 		>
 			{label}
@@ -74,7 +78,8 @@ export function MonthPicker({
 		<div
 			className={cn(
 				"items-center gap-1.5",
-				stretch ? "flex w-full" : "inline-flex",
+				stretch === true ? "flex w-full" : "inline-flex",
+				stretch === "phone" && "max-md:flex max-md:w-full",
 				className,
 			)}
 		>
@@ -82,7 +87,7 @@ export function MonthPicker({
 				icon={ChevronLeft}
 				label="Previous month"
 				isDisabled={!canPrev}
-				{...(stretch ? { size: "lg" as const } : {})}
+				{...(stretch === true ? { size: "lg" as const } : {})}
 				{...(onPrev ? { onPress: onPrev } : {})}
 			/>
 			{grid === undefined ?
@@ -115,7 +120,7 @@ export function MonthPicker({
 				icon={ChevronRight}
 				label="Next month"
 				isDisabled={!canNext}
-				{...(stretch ? { size: "lg" as const } : {})}
+				{...(stretch === true ? { size: "lg" as const } : {})}
 				{...(onNext ? { onPress: onNext } : {})}
 			/>
 		</div>

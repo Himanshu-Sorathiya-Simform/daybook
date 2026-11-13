@@ -33,6 +33,8 @@ export type MonthGridProps = {
 	figures?: Partial<Record<Month, string>>;
 	/** The grid's name, "Months". The year shown is added to it. */
 	label?: string;
+	/** Called with the year the arrows move to, for a page that loads that year's figures. */
+	onYearChange?: (year: number) => void;
 	/** Puts focus on the chosen month, or the first one that can be chosen, when it mounts. */
 	autoFocus?: boolean;
 	className?: string;
@@ -43,8 +45,8 @@ const yearOf = (month: Month) => Number(month.slice(0, 4));
 /**
  * A year of months to choose one from (BR-F04-14, BR-F04-28): the year with Previous year and
  * Next year, then twelve months in four columns. It is a React Aria list box in grid layout, so
- * it is one Tab stop, the arrow keys move in two dimensions, Home and End go to the ends, and
- * Enter, Space or a press chooses. Months outside the range are disabled and skipped. The
+ * it is one Tab stop, the arrow keys move in two dimensions, Home and End go to the ends,
+ * Enter, Space or a press chooses, and Escape is left to whatever holds the grid. Months outside the range are disabled and skipped. The
  * chosen month takes the accent outline and is announced as selected; the current month is
  * bold and named "this month". Each month's name, figure included, is read in full: "October
  * 2026, 119.7%".
@@ -57,6 +59,7 @@ export function MonthGrid({
 	dateLocale,
 	figures,
 	label = "Months",
+	onYearChange,
 	autoFocus = false,
 	className,
 }: Readonly<MonthGridProps>) {
@@ -66,6 +69,10 @@ export function MonthGrid({
 	const locale = { dateLocale };
 	const canPrev = year > yearOf(range.first);
 	const canNext = year < yearOf(range.last);
+	const showYear = (next: number) => {
+		setYear(next);
+		onYearChange?.(next);
+	};
 
 	return (
 		<div className={cn("flex flex-col gap-2", className)}>
@@ -76,7 +83,7 @@ export function MonthGrid({
 					variant="plain"
 					size="sm"
 					isDisabled={!canPrev}
-					onPress={() => setYear(year - 1)}
+					onPress={() => showYear(year - 1)}
 				/>
 				<span
 					id={headingId}
@@ -90,7 +97,7 @@ export function MonthGrid({
 					variant="plain"
 					size="sm"
 					isDisabled={!canNext}
-					onPress={() => setYear(year + 1)}
+					onPress={() => showYear(year + 1)}
 				/>
 			</div>
 			<AriaListBox
@@ -98,6 +105,9 @@ export function MonthGrid({
 				aria-describedby={headingId}
 				layout="grid"
 				selectionMode="single"
+				// Escape would clear the selection, which reads as a choice; it belongs to the
+				// popover or dialog holding the grid.
+				escapeKeyBehavior="none"
 				selectedKeys={months.includes(value) ? [value] : []}
 				disabledKeys={months.filter((month) => !inRange(month, range))}
 				onSelectionChange={(keys) => {

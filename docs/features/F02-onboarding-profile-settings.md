@@ -11,7 +11,7 @@ Later, the user changes their name, time zone and week start in Settings. They c
 | Milestone  | M1                                                                                                                                                                                                                                                                     |
 | Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                  |
 | Depends on | [F01](F01-auth-and-account.md) (sign-up, display name through `/update-user`), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md) (`/api/me`); F07 (portfolio seeding, from M3), F08 (dashboard settings page), F12 (billing page) |
-| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452, D-506, D-508, D-511, D-517, D-537                                                                                                                                            |
+| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452, D-506, D-508, D-511, D-517, D-537, D-568                                                                                                                                     |
 
 ## 1. User stories
 
@@ -194,15 +194,18 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
 
 - **BR-F02-19** Dates and times use `dateLocale`, the profile time zone (TIME-4) and fixed `Intl` option sets. The date fields, time fields and calendars get `dateLocale` too, and calendars start their weeks on the profile's week start. A calendar outlines today in the profile time zone (TIME-5); React Aria's spoken "Today" follows the device's zone, which differs only around midnight when the zones differ (D-537):
 
-    | Use             | Options                                                                                                   | `en-IN` example      |
-    | --------------- | --------------------------------------------------------------------------------------------------------- | -------------------- |
-    | List day header | `{ weekday: 'short', day: 'numeric', month: 'short' }`, adding `year: 'numeric'` outside the current year | Sat, 31 Oct          |
-    | Full date       | `{ day: 'numeric', month: 'short', year: 'numeric' }`                                                     | 31 Oct 2026          |
-    | Time            | `{ hour: 'numeric', minute: '2-digit' }`, in the locale's hour cycle                                      | 11:40 am             |
-    | Month           | `{ month: 'long', year: 'numeric' }`                                                                      | October 2026         |
-    | Short date      | `{ day: 'numeric', month: 'short' }`, adding `year: 'numeric'` outside the current year                   | 5 Nov                |
-    | Date and time   | The full date and the time, joined by `, `                                                                | 2 Nov 2026, 12:00 pm |
-    | Quarter         | `Q` and the quarter's number, a space, then the year from `Intl` (not localized further)                  | Q4 2026              |
+    | Use              | Options                                                                                                         | `en-IN` example      |
+    | ---------------- | --------------------------------------------------------------------------------------------------------------- | -------------------- |
+    | List day header  | `{ weekday: 'short', day: 'numeric', month: 'short' }`, adding `year: 'numeric'` outside the current year       | Sat, 31 Oct          |
+    | Full date        | `{ day: 'numeric', month: 'short', year: 'numeric' }`                                                           | 31 Oct 2026          |
+    | Time             | `{ hour: 'numeric', minute: '2-digit' }`, in the locale's hour cycle                                            | 11:40 am             |
+    | Month            | `{ month: 'long', year: 'numeric' }`                                                                            | October 2026         |
+    | Short month      | `{ month: 'short', year: 'numeric' }`; the locale's own short names, so `en-IN` writes September "Sept" (D-568) | Oct 2026             |
+    | Month name       | `{ month: 'long' }`                                                                                             | October              |
+    | Short month name | `{ month: 'short' }`                                                                                            | Oct                  |
+    | Short date       | `{ day: 'numeric', month: 'short' }`, adding `year: 'numeric'` outside the current year                         | 5 Nov                |
+    | Date and time    | The full date and the time, joined by `, `                                                                      | 2 Nov 2026, 12:00 pm |
+    | Quarter          | `Q` and the quarter's number, a space, then the year from `Intl` (not localized further)                        | Q4 2026              |
 
 **Device-time-zone notice**
 

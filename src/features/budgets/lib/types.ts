@@ -15,3 +15,13 @@ export type BudgetAnswer = Budget & { currency: CurrencyCode };
 /** F03's summary for one category and month with `by=payee`, which the panel's "Where it
  * went" reads (BR-F04-30). */
 export type PayeeSummaryAnswer = SummaryAnswer;
+
+/** The profile's formats and its today, from the server render (TIME-5): what every figure,
+ * month and time on the page is written with. */
+export type BudgetsLocale = {
+	today: string;
+	currency: CurrencyCode;
+	numberLocale: string;
+	dateLocale: string;
+	timezone: string;
+};

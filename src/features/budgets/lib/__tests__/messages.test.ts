@@ -1,6 +1,14 @@
 import { describe, expect, test } from "vitest";
 
-import { BUDGETS_TEXT, budgetExistsMessage } from "../messages";
+import {
+	BUDGETS_TEXT,
+	budgetExistsMessage,
+	emptyTitle,
+	monthLabel,
+	offlineAction,
+	offlineBody,
+	PAGE_TEXT,
+} from "../messages";
 
 describe("the page's own messages (F04 section 8)", () => {
 	test("each reads as section 8 writes it", () => {
@@ -30,5 +38,41 @@ describe("the page's own messages (F04 section 8)", () => {
 		],
 	])("budget_exists names the category: %s", (label, text) => {
 		expect(budgetExistsMessage(label)).toBe(text);
+	});
+});
+
+describe("the page's words (BR-F04-14, section 6, section 8)", () => {
+	test("each reads as the spec writes it", () => {
+		expect(PAGE_TEXT).toEqual({
+			title: "Budgets",
+			add: "Add a Budget",
+			viewLabel: "Show Budgets as",
+			list: "List",
+			table: "Table",
+			gridLabel: "Choose a month",
+			gridCaption: "Figures: overall use of the month's limits",
+			thisMonth: "This month",
+			invalidLink: "Some filters in this link weren't valid and were removed.",
+			dismiss: "Dismiss",
+			loadFailed: "Budgets could not be loaded.",
+			loadFailedBody:
+				"Check your connection, then try again. Your Budgets are safe.",
+			retry: "Retry",
+			emptyBody: "Budgets apply from the month you choose.",
+			offlineTitle: "You're offline. This month isn't saved on this device.",
+		});
+	});
+
+	test("the current month reads to date; any other month reads as itself", () => {
+		expect(monthLabel("November 2026", true)).toBe("November 2026 · to date");
+		expect(monthLabel("October 2026", false)).toBe("October 2026");
+	});
+
+	test("the empty and offline messages name their months", () => {
+		expect(emptyTitle("September 2026")).toBe("No Budgets for September 2026.");
+		expect(offlineBody("November 2026")).toBe(
+			"Only November 2026 is kept for offline use.",
+		);
+		expect(offlineAction("November")).toBe("Go to November");
 	});
 });

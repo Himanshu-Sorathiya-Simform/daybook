@@ -210,6 +210,28 @@ describe("choosing", () => {
 		expect(onChange).toHaveBeenLastCalledWith("2026-12");
 	});
 
+	test("Escape on a month chooses nothing, and leaves Escape to what holds the grid", async () => {
+		const user = userEvent.setup();
+		const onKeyDown = vi.fn();
+		const onChange = vi.fn();
+		render(
+			<div onKeyDown={(event) => onKeyDown(event.key)}>
+				<MonthGrid
+					value="2026-10"
+					onChange={onChange}
+					range={RANGE}
+					current="2026-11"
+					dateLocale="en-IN"
+					autoFocus
+				/>
+			</div>,
+		);
+		await user.keyboard("{Escape}");
+		expect(onChange).not.toHaveBeenCalled();
+		expect(onKeyDown).toHaveBeenCalledWith("Escape");
+		expect(month("October 2026")).toHaveAttribute("aria-selected", "true");
+	});
+
 	test("moving with the arrows chooses nothing by itself", async () => {
 		const user = userEvent.setup();
 		const { onChange } = renderGrid({ autoFocus: true });
@@ -346,6 +368,16 @@ describe("moving between years", () => {
 		await user.click(screen.getByRole("button", { name: "Next year" }));
 		await user.click(screen.getByRole("button", { name: "Previous year" }));
 		expect(month("October 2026")).toHaveAttribute("aria-selected", "true");
+	});
+
+	test("reports each year the arrows move to, and none when an arrow is disabled", async () => {
+		const user = userEvent.setup();
+		const onYearChange = vi.fn();
+		renderGrid({ value: "2024-05", onYearChange });
+		await user.click(screen.getByRole("button", { name: "Previous year" }));
+		await user.click(screen.getByRole("button", { name: "Previous year" }));
+		await user.click(screen.getByRole("button", { name: "Next year" }));
+		expect(onYearChange.mock.calls).toEqual([[2023], [2024]]);
 	});
 
 	test("the current month is named only in its own year", async () => {

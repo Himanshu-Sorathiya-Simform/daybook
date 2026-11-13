@@ -9,7 +9,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 | Milestone  | M2. Before M5, writes are online only, with F03's stand-ins: Save disabled offline, and a failed save keeps the dialog open (D-241)                                                                                                                 |
 | Plan       | Free and Premium, with no gating; one-month limits included (D-560)                                                                                                                                                                                 |
 | Depends on | [F03](F03-transactions.md) (category spending, summary, drill-down), [F02](F02-onboarding-profile-settings.md) (month, locale), [P2](../platform/P2-data-access-and-security.md); P1 (write queue, from M5); F08, F09, F10, F11 read Budget figures |
-| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-553, D-560 to D-567                                                                                                                              |
+| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-569                                                                                                                |
 
 ## 1. User stories
 
@@ -70,6 +70,8 @@ Both lists are stored as `jsonb` columns on the Budget's one row, so every write
 
 ## 4. Business rules
 
+Examples in this spec write amounts without the currency symbol and months as `en-US` does ("Sep 2026"). The page writes both in the profile's formats (BR-F02-19), so `en-IN` reads "₹6,000.00 from Sept 2026" (D-568).
+
 **The schedule**
 
 - **BR-F04-01** Each expense category has at most one Budget record (D-33).
@@ -119,7 +121,7 @@ Both lists are stored as `jsonb` columns on the Budget's one row, so every write
     3. **"Show Budgets as":** List or Table, remembered on the device (`daybook.budgets.view`).
     4. **Add a Budget.**
 
-    Below 700 px, Add a Budget is an icon button and the month control moves to its own row with 44 px targets.
+    Below 768 px, the phone layout (D-512), Add a Budget is an icon button and the month control moves to its own row with 44 px targets.
 
 - **BR-F04-15** Below the header, top to bottom:
     1. **The overview**, when M has at least one Budget:
@@ -232,7 +234,7 @@ Both lists are stored as `jsonb` columns on the Budget's one row, so every write
 
 **The panel** (D-249)
 
-- **BR-F04-30** From 1180 px the panel is docked beside the list. Below that it is a drawer over a scrim, 420 px wide (the full width below 700 px), opened by a selection and closed by Close details, the scrim or Escape. It is hidden in the error, offline-other-month and new-user states (section 6).
+- **BR-F04-30** From 1180 px the panel is docked beside the list. Below that it is a drawer over a scrim, 420 px wide (the full width below 768 px), opened by a selection and closed by Close details, the scrim or Escape. It is hidden in the error, offline-other-month and new-user states (section 6).
     - **With no selection (docked only), a summary:** "This month" and the month; "Compared with September", three rows each with a note:
         - "Budgeted spending" 13,168.00, "5,069.00 more than September";
         - "Limits" 11,000.00, "1,000.00 more than September · 4 Budgets, 3 in September" (the Budget counts only when they differ);
@@ -344,20 +346,20 @@ Formulas: section 3 and BR-F04-08 to BR-F04-11. Every figure below is from [03-g
 
 **`/budgets?month=YYYY-MM`.** BR-F04-14 to BR-F04-18 and BR-F04-30 to BR-F04-31. Dialogs: BR-F04-19 to BR-F04-21 and BR-F04-28 to BR-F04-29.
 
-| State            | What the user sees                                                                                                                                                                                                                         |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Loading          | A skeleton overview, three skeleton rows, and a skeleton panel                                                                                                                                                                             |
-| Empty            | No Budget in M: "No Budgets for September 2026." and "Budgets apply from the month you choose." with Add a Budget, in place of the overview. The Not budgeted and Not active groups still show                                             |
-| New user         | No Budget record and no spending in M: only that message and Add a Budget; no panel                                                                                                                                                        |
-| Filtered empty   | BR-F04-31                                                                                                                                                                                                                                  |
-| Error            | "Budgets could not be loaded." and "Check your connection, then try again. Your Budgets are safe." with Retry; no panel                                                                                                                    |
-| Offline          | The cached current month with "as of 14:05". Other months: "You're offline. This month isn't saved on this device." and "Only November 2026 is kept for offline use." with "Go to November"; no panel. Before M5, Save is disabled (D-241) |
-| Save fails       | Before M5: the dialog stays open with "The Budget could not be saved. Check your connection and try again. Your changes are still here."; a delete: "The Budget could not be deleted. Check your connection and try again."                |
-| Pending          | From M5: BR-F04-12                                                                                                                                                                                                                         |
-| Locked (Premium) | None: Budgets have no gating (section 9)                                                                                                                                                                                                   |
-| Read-only        | None: demo Budgets are editable like any other                                                                                                                                                                                             |
+| State            | What the user sees                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Loading          | A skeleton overview, three skeleton rows, and a skeleton panel                                                                                                                                                                                                                                                                                                     |
+| Empty            | No Budget in M: "No Budgets for September 2026." and "Budgets apply from the month you choose." with Add a Budget, in place of the overview. The Not budgeted and Not active groups still show                                                                                                                                                                     |
+| New user         | No Budget record and no spending in M: only that message and Add a Budget; no panel                                                                                                                                                                                                                                                                                |
+| Filtered empty   | BR-F04-31                                                                                                                                                                                                                                                                                                                                                          |
+| Error            | "Budgets could not be loaded." and "Check your connection, then try again. Your Budgets are safe." with Retry; no panel                                                                                                                                                                                                                                            |
+| Offline          | The cached current month with "as of 14:05". Other months: "You're offline. This month isn't saved on this device." and "Only November 2026 is kept for offline use." with "Go to November"; no panel. Before M5, Save is disabled (D-241). Before M5, Undo and Remove are tried at once and fail with the notice's message, never held for the connection (D-569) |
+| Save fails       | Before M5: the dialog stays open with "The Budget could not be saved. Check your connection and try again. Your changes are still here."; a delete: "The Budget could not be deleted. Check your connection and try again."                                                                                                                                        |
+| Pending          | From M5: BR-F04-12                                                                                                                                                                                                                                                                                                                                                 |
+| Locked (Premium) | None: Budgets have no gating (section 9)                                                                                                                                                                                                                                                                                                                           |
+| Read-only        | None: demo Budgets are editable like any other                                                                                                                                                                                                                                                                                                                     |
 
-Below 700 px the dialogs open as sheets with 44 px targets.
+Below 768 px the dialogs open as sheets with 44 px targets (D-400, D-512).
 
 ## 7. Flows
 
@@ -417,7 +419,8 @@ Below 700 px the dialogs open as sheets with 44 px targets.
 | Delete            | Network failure before M5           | The Budget could not be deleted. Check your connection and try again.                            |
 | Any write         | `version_conflict`                  | This Budget changed on another device (the conflict view's title, BR-F04-23)                     |
 | Undo, Remove      | Network failure before M5           | The Budget could not be saved. Check your connection and try again. (In the notice)              |
-| Any write         | `not_found`                         | This Budget was deleted on another device.                                                       |
+| Any other write   | `not_found`                         | This Budget was deleted on another device.                                                       |
+| Delete            | `not_found`                         | None: the Budget is gone either way, so the delete counts as done (D-569)                        |
 | Page              | Load failure                        | Budgets could not be loaded. Check your connection, then try again. Your Budgets are safe.       |
 | Month link        | Invalid or out-of-range `month`     | Some filters in this link weren't valid and were removed.                                        |
 | Filtered list     | No rows in the chosen state         | No Budgets are over budget in October 2026.                                                      |
@@ -460,7 +463,7 @@ F08's widget, F09's chart, F10's threshold detector and F11's report all call th
 
 ## 12. Cross-feature effects
 
-- **A confirmed Budget write** invalidates the Budgets month views, history and year summary, the whole dashboard prefix (F08, D-295), Analytics (F09), Insights (F10) and the demo status (F15).
+- **A confirmed Budget write** invalidates the Budgets month views, history and year summary, the whole dashboard prefix (F08, D-295), Analytics (F09), Insights (F10) and the demo status (F15). A write that changes the number of Budgets also invalidates the profile, whose currency lock counts them (BR-F02-14). The write settles once the page's own reads have refetched, so its notice never sits beside the figures from before it (D-569).
 - **A confirmed Transaction write** invalidates the Budgets views, history and year summary for its months (F03, section 12).
 - **F08** shows the top 5 Budgets by utilization; **F09** charts budget against actual (Premium); **F10** raises the 80% and 100% insights; **F11** reports budget against actual. One-month limits count wherever a month's limit does.
 - **F01 reset and F15 removal** delete Budgets.

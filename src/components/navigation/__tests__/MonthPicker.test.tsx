@@ -643,6 +643,32 @@ describe("stretched, as on a phone (BR-F04-14)", () => {
 		);
 	});
 
+	test("stretched for phones only, it does so below 768px and sits inline above", () => {
+		const { container } = render(
+			<MonthPicker
+				label="October 2026"
+				stretch="phone"
+			/>,
+		);
+		expect(container.firstElementChild).toHaveClass(
+			"inline-flex",
+			"max-md:flex",
+			"max-md:w-full",
+		);
+		expect(container.firstElementChild).not.toHaveClass("w-full");
+		const month = screen.getByRole("button", { name: "October 2026" });
+		expect(month).toHaveClass(
+			"max-md:flex-1",
+			"max-md:border",
+			"max-md:border-edge",
+		);
+		expect(month).not.toHaveClass("flex-1", "border");
+		expect(screen.getByRole("button", { name: "Previous month" })).toHaveClass(
+			"size-9",
+			"max-md:size-11",
+		);
+	});
+
 	test("not stretched, it sits inline with 36px arrows and no outline on the month", () => {
 		render(<MonthPicker label="October 2026" />);
 		expect(screen.getByRole("button", { name: "Previous month" })).toHaveClass(
