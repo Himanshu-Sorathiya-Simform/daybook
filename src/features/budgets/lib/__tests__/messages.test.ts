@@ -36,6 +36,14 @@ describe("the page's own messages (F04 section 8)", () => {
 			"Personal care",
 			"A Personal care Budget already exists. We opened it so you can change it.",
 		],
+		[
+			"Entertainment",
+			"An Entertainment Budget already exists. We opened it so you can change it.",
+		],
+		[
+			"Other",
+			"An Other Budget already exists. We opened it so you can change it.",
+		],
 	])("budget_exists names the category: %s", (label, text) => {
 		expect(budgetExistsMessage(label)).toBe(text);
 	});

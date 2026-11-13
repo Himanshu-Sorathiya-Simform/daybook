@@ -575,6 +575,27 @@ describe("Up and Down below 1180 px (BR-F04-32, D-571)", () => {
 	});
 });
 
+describe("the row buttons (D-573)", () => {
+	test("Not budgeted and Not active rows' buttons stand apart from the row on hover", async () => {
+		const { user } = renderList({ view: SEPTEMBER });
+		await user.click(
+			screen.getByRole("button", { name: "Not active this month · 1" }),
+		);
+		const buttons = [
+			...within(rowOf("unbudgeted:health")).getAllByRole("button"),
+			...within(rowOf("inactive:transportation")).getAllByRole("button"),
+		];
+		expect(buttons.map((button) => button.textContent)).toEqual([
+			"Add a Budget",
+			"Change limit",
+			"Delete",
+		]);
+		for (const button of buttons) {
+			expect(button).toHaveClass("not-aria-disabled:hover:bg-page");
+		}
+	});
+});
+
 describe("Escape inside the list (BR-F04-32)", () => {
 	test("clears the selection", async () => {
 		const onSelect = vi.fn();

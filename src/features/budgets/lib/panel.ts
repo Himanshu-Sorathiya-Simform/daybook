@@ -106,11 +106,29 @@ export function ofLimit(limitMinor: number, f: Formats): string {
 	return `of ${money(limitMinor, f)}`;
 }
 
-/** The hint under a selection's actions: "L to change limit" only for a Budget, "Up and down
- * arrows move" only in the docked panel, since the drawer holds focus (BR-F04-30, D-571). */
-export function detailHint(kind: PanelSubject["kind"], isDocked: boolean): string {
+/** Which keys act on a selection, as its buttons do (BR-F04-32, D-573): L changes the limit
+ * of any Budget record, S stops a Budget, and Delete deletes a Budget or a Not active one. */
+export function selectionKeys(subject: PanelSubject): {
+	changeLimit: boolean;
+	stop: boolean;
+	remove: boolean;
+} {
+	return {
+		changeLimit: subject.record !== null,
+		stop: subject.kind === "budget",
+		remove: subject.kind !== "unbudgeted",
+	};
+}
+
+/** The hint under a selection's actions, naming only the keys that act on it: "L to change
+ * limit · S to stop · Delete to delete", then "Up and down arrows move" only in the docked
+ * panel, since the drawer holds focus, and "Esc to close" (BR-F04-30, D-571, D-573). */
+export function detailHint(subject: PanelSubject, isDocked: boolean): string {
+	const keys = selectionKeys(subject);
 	return [
-		kind === "budget" && "L to change limit",
+		keys.changeLimit && "L to change limit",
+		keys.stop && "S to stop",
+		keys.remove && "Delete to delete",
 		isDocked && "Up and down arrows move",
 		"Esc to close",
 	]

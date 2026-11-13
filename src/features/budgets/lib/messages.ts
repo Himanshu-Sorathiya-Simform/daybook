@@ -11,9 +11,11 @@ export const BUDGETS_TEXT = {
 	deletedElsewhere: "This Budget was deleted on another device.",
 } as const;
 
-/** "A Shopping Budget already exists. We opened it so you can change it." (flow 7.1). */
+/** "A Shopping Budget already exists. We opened it so you can change it." (flow 7.1), with
+ * "An" before a vowel: "An Entertainment Budget …". */
 export function budgetExistsMessage(categoryLabel: string): string {
-	return `A ${categoryLabel} Budget already exists. We opened it so you can change it.`;
+	const article = /^[AEIOU]/i.test(categoryLabel) ? "An" : "A";
+	return `${article} ${categoryLabel} Budget already exists. We opened it so you can change it.`;
 }
 
 /** The page's own words (BR-F04-14, section 6, section 8). */

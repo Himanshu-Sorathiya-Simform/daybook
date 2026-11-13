@@ -185,7 +185,7 @@ describe("BudgetPanelDetail: a Budget (BR-F04-30)", () => {
 		expect(onDelete).toHaveBeenCalledOnce();
 		expect(
 			screen.getByText(
-				"L to change limit · Up and down arrows move · Esc to close",
+				"L to change limit · S to stop · Delete to delete · Up and down arrows move · Esc to close",
 			),
 		).toBeVisible();
 		await screen.findByRole("region", { name: "Last 6 months" });
@@ -195,7 +195,11 @@ describe("BudgetPanelDetail: a Budget (BR-F04-30)", () => {
 	test("in the drawer the hint leaves out the arrows", async () => {
 		serve();
 		renderDetail("food", "2026-10", { isDocked: false });
-		expect(screen.getByText("L to change limit · Esc to close")).toBeVisible();
+		expect(
+			screen.getByText(
+				"L to change limit · S to stop · Delete to delete · Esc to close",
+			),
+		).toBeVisible();
 		await screen.findByRole("region", { name: "Last 6 months" });
 	});
 
@@ -298,7 +302,9 @@ describe("BudgetPanelDetail: Not budgeted and Not active (BR-F04-30)", () => {
 		await user.click(screen.getByRole("button", { name: "Delete" }));
 		expect(onDelete).toHaveBeenCalledOnce();
 		expect(
-			screen.getByText("Up and down arrows move · Esc to close"),
+			screen.getByText(
+				"L to change limit · Delete to delete · Up and down arrows move · Esc to close",
+			),
 		).toBeVisible();
 		await screen.findByRole("region", { name: "Last 6 months" });
 		// With no spending in the month, Where it went is left out.

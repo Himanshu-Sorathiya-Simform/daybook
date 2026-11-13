@@ -9,6 +9,7 @@ import { Button } from "@/components/actions/Button";
 import { FormAlert } from "@/components/feedback/FormAlert";
 import { OfflineNote } from "@/components/feedback/OfflineNote";
 import { AmountInput } from "@/components/forms/AmountInput";
+import { CategoryTiles } from "@/components/forms/CategoryTiles";
 import { DatePicker } from "@/components/forms/DatePicker";
 import { Segmented } from "@/components/forms/Segmented";
 import { TextInput } from "@/components/forms/TextInput";
@@ -61,7 +62,6 @@ import { TRANSACTIONS_TEXT } from "../lib/messages";
 import { refreshAfterTransactionWrite } from "../lib/refresh";
 import type { TransactionAnswer } from "../lib/types";
 import { readWriteError } from "../lib/write-errors";
-import { CategoryTiles } from "./CategoryTiles";
 import { ConflictDialog } from "./ConflictDialog";
 import { PayeeField } from "./PayeeField";
 

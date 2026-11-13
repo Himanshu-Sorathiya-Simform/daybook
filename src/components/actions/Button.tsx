@@ -13,8 +13,10 @@ export type ButtonProps = Omit<
 	AriaButtonProps,
 	"children" | "className" | "style"
 > & {
-	/** `primary` is the one main action in a region; `danger` is for Delete, kept away from Save. */
-	variant?: "primary" | "secondary" | "ghost" | "danger";
+	/** `primary` is the one main action in a region; `danger` is for Delete, kept away from Save.
+	 * `row` is a ghost button inside a row that tints on hover or selection: on hover it takes
+	 * the page colour and an edge, so it stands apart from the row's own tint. */
+	variant?: "primary" | "secondary" | "ghost" | "danger" | "row";
 	/** On phones every size grows to the 44px touch target. */
 	size?: "sm" | "md" | "lg";
 	/** A lucide icon shown before the label, as the component: `icon={Plus}`. */
@@ -38,6 +40,7 @@ const variants = {
 	secondary: "border-line-strong bg-page text-ink not-aria-disabled:hover:bg-soft",
 	ghost: "border-transparent bg-transparent text-accent not-aria-disabled:hover:bg-soft",
 	danger: "border-neg bg-page text-neg not-aria-disabled:hover:bg-soft",
+	row: "border-transparent bg-transparent text-accent not-aria-disabled:hover:border-line-strong not-aria-disabled:hover:bg-page",
 };
 
 const sizes = {

@@ -201,7 +201,7 @@ export function BudgetList({
 										actions={
 											<Button
 												size="sm"
-												variant="ghost"
+												variant="row"
 												onPress={() =>
 													row.budgetId === null ?
 														onAdd(row.category)
@@ -261,7 +261,7 @@ export function BudgetList({
 											<>
 												<Button
 													size="sm"
-													variant="ghost"
+													variant="row"
 													onPress={() =>
 														onChangeLimit(row.category)
 													}
@@ -270,7 +270,7 @@ export function BudgetList({
 												</Button>
 												<Button
 													size="sm"
-													variant="ghost"
+													variant="row"
 													onPress={() =>
 														onDelete(row.category)
 													}

@@ -9,7 +9,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 | Milestone  | M2. Before M5, writes are online only, with F03's stand-ins: Save disabled offline, and a failed save keeps the dialog open (D-241)                                                                                                                 |
 | Plan       | Free and Premium, with no gating; one-month limits included (D-560)                                                                                                                                                                                 |
 | Depends on | [F03](F03-transactions.md) (category spending, summary, drill-down), [F02](F02-onboarding-profile-settings.md) (month, locale), [P2](../platform/P2-data-access-and-security.md); P1 (write queue, from M5); F08, F09, F10, F11 read Budget figures |
-| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-571                                                                                                                |
+| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-573                                                                                                                |
 
 ## 1. User stories
 
@@ -167,7 +167,7 @@ Examples in this spec write amounts without the currency symbol and months as `e
 
 - **BR-F04-20** Change limit, titled "Change the Food limit", asks for:
     - **New limit:** filled in with the limit in force in the viewed month, else in the current month, else the latest limit in the schedule. Its hint reads "Spent 6,220.00 in October and 5,050.00 in September." for the viewed month and the one before.
-    - **For how long:** "From a month onward" ("Carries on until you change it") or "One month only" ("December 2026 goes back to 5,000.00", or "December 2026 has no Budget again"), naming the month after the chosen one and the limit it has, its own one-month limit included.
+    - **For how long:** "From a month onward" ("Carries on until you change it") or "One month only" ("December goes back to 5,000.00", or "December has no Budget again"), naming the month after the chosen one, with its year only when it is not the current year (BR-F04-28), and the limit it has, its own one-month limit included.
     - **Apply from**, or **Month** for one month only (BR-F04-28).
 - **BR-F04-21** Stop budgeting, titled "Stop budgeting Food", asks For how long (as BR-F04-20) and "Stop from", or "Month" for one month only. From a month onward at or before the first entry, the dialog shows "This would remove every month. Delete the Budget instead." and its button becomes "Delete Budget instead", which opens the Delete confirmation (BR-F04-04, BR-F04-06).
 
@@ -249,12 +249,12 @@ Examples in this spec write amounts without the currency symbol and months as `e
         4. **"Last 6 months"** ending at M: a bar per month with a dashed line at that month's limit and the spending above it in the over color, captioned "Dashed line: the limit in force that month. Red: spent above it." when any month has a limit; "View as table" switches to a table of Month, Limit ("No Budget" when none), Spent and Used, and "View as chart" back.
         5. **"Limit history"**, for a Budget record, newest first: each schedule entry ("5,000.00 from Oct 2026", "Stopped from Nov 2026") and each one-month limit ("8,000.00 in Oct 2026 only", "No limit in Oct 2026 only", with "One month" and Remove). The item that decides M's limit is bold, with "In force in October". A pending change shows first (M5). The list ends with "No Budget before Sep 2026".
         6. **"Where it went in October"**, when M has spending: the top 3 payees by net spending, each with its avatar and amount, then "See 4 Transactions" (BR-F04-17). The data is F03's `GET /api/transactions/summary` with `by=payee`, `cat`, `from` and `to`; its `count` gives the number.
-        7. **Actions:** for a Budget, Change limit, Stop and Delete; for Not budgeted, Add a Budget or Change limit as BR-F04-15 says; for Not active, Change limit and Delete. A hint below reads "L to change limit · Up and down arrows move · Esc to close" ("L to change limit" only for a Budget, "Up and down arrows move" only in the docked panel, D-571).
+        7. **Actions:** for a Budget, Change limit, Stop and Delete; for Not budgeted, Add a Budget or Change limit as BR-F04-15 says; for Not active, Change limit and Delete. A hint below names the keys that act on the selection: "L to change limit · S to stop · Delete to delete · Up and down arrows move · Esc to close", with "L to change limit" for a Budget record, "S to stop" for a Budget, "Delete to delete" for a Budget or a Not active one, and "Up and down arrows move" only in the docked panel (D-571, D-573).
 - **BR-F04-31** Pressing a state count filters the list to that state, with At limit and Over budget kept apart. A chip "Showing Over budget" with a remove button and a "Show all" link appear above the list, and the Not budgeted and Not active groups hide. With no rows: "No Budgets are over budget in October 2026." (or "are at their limit", "are nearing their limit", "are on track") with Show all Budgets. Pressing the count again, or changing the month, clears the filter. The Table view follows the same filter (BR-F04-18).
 - **BR-F04-32** Keyboard on the page, outside text fields and dialogs and without modifier keys:
     - from 1180 px, Up and Down move the selection through the visible rows in the order shown, the table's sort included, and focus the row; below 1180 px they only move focus through the same rows, Enter, Space or a click selects, and while the drawer is open they do nothing (D-571);
     - Escape clears the selection and closes the month grid;
-    - L opens Change limit for a selected row with a Budget record;
+    - L opens Change limit for a selected row with a Budget record; S opens Stop budgeting for a selected Budget; Delete or Backspace opens the Delete confirmation for a selected Budget or Not active one, as the panel's buttons offer them (D-573);
     - N opens a new Transaction (F03).
 
 **Server**
@@ -380,7 +380,7 @@ Below 768 px the dialogs open as sheets with 44 px targets (D-400, D-512).
 
 **7.3 One month only**
 
-1. On October, the user selects Food, then Change limit, types 8,000, chooses One month only and keeps "October (viewing)". The option reads "November goes back to 5,000.00".
+1. On October, the user selects Food, then Change limit, types 8,000, chooses One month only and picks "October (viewing)", since the month starts at the current month (BR-F04-07). The option reads "November goes back to 5,000.00".
 2. The preview shows September (Unchanged), October (5,000.00 → 8,000.00, "124.4% Over budget → 77.8% · On track") and November (Back to the schedule).
 3. `PATCH { month: "2026-10", limitMinor: 800000, currency, scope: "month" }`; the panel shows "Food limit is 8,000.00 for October 2026 only." with Undo, and the limit history gains "8,000.00 in Oct 2026 only".
 4. Remove on that history item sends `DELETE /api/budgets/[id]/overrides/2026-10`.

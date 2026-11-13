@@ -34,6 +34,7 @@ import {
 import { resetUnsavedView, VIEW_KEY } from "../../hooks/useBudgetsView";
 import { budgetKeys } from "../../lib/keys";
 import {
+	budgetAnswer,
 	historyAnswer,
 	monthAnswer,
 	payeeSummary,
@@ -114,13 +115,11 @@ function renderPage(
 	{
 		months = (month: Month) => ok(monthAnswer(month)),
 		seed,
-		onAdd,
-		onChangeLimit,
+		onRemoveMonthLimit,
 	}: {
 		months?: (month: Month) => Response | Promise<Response>;
 		seed?: BudgetMonthAnswer;
-		onAdd?: () => void;
-		onChangeLimit?: (category: ExpenseCategory) => void;
+		onRemoveMonthLimit?: (category: ExpenseCategory, month: Month) => void;
 	} = {},
 ) {
 	const reads = route(network, "get", "/api/budgets", ({ path }) =>
@@ -137,8 +136,7 @@ function renderPage(
 			<Url>
 				<BudgetsPage
 					locale={IN}
-					{...(onAdd ? { onAdd } : {})}
-					{...(onChangeLimit ? { onChangeLimit } : {})}
+					{...(onRemoveMonthLimit ? { onRemoveMonthLimit } : {})}
 				/>
 			</Url>
 		</AppProviders>,
@@ -254,26 +252,43 @@ describe("the header (BR-F04-14)", () => {
 		expect(calls).toEqual([]);
 	});
 
-	test("Add a Budget, either button, calls the page's Add", async () => {
-		const onAdd = vi.fn();
-		const { user } = renderPage("?month=2026-10", { onAdd });
-		for (const button of screen.getAllByRole("button", {
-			name: "Add a Budget",
-		})) {
-			await user.click(button);
+	test("Add a Budget, either button, opens Add a Budget", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		for (const at of [0, 1]) {
+			await user.click(
+				screen.getAllByRole("button", { name: "Add a Budget" })[
+					at
+				] as HTMLElement,
+			);
+			const dialog = await screen.findByRole("dialog", {
+				name: "Add a Budget",
+			});
+			await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+			await waitFor(() =>
+				expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+			);
 		}
-		expect(onAdd).toHaveBeenCalledTimes(2);
 	});
 
-	test("Add a Budget does nothing harmful before the page has a dialog to open", async () => {
-		const { user } = renderPage("?month=2026-10");
+	test("pressed before the month loads, Add a Budget opens once it has", async () => {
+		let release = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
+		const { user } = renderPage("?month=2026-10", {
+			months: async (month) => {
+				await held;
+				return ok(monthAnswer(month));
+			},
+		});
 		await user.click(
 			screen.getAllByRole("button", {
 				name: "Add a Budget",
 			})[0] as HTMLElement,
 		);
+		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+		release();
 		expect(
-			screen.getByRole("heading", { level: 1, name: "Budgets" }),
+			await screen.findByRole("dialog", { name: "Add a Budget" }),
 		).toBeVisible();
 	});
 
@@ -519,10 +534,8 @@ describe("the page's states (section 6)", () => {
 
 	// F04 section 5: golden August has no Budget and no spending.
 	test("a new user's month shows only the message and Add a Budget", async () => {
-		const onAdd = vi.fn();
 		const { user } = renderPage("?month=2026-08", {
 			months: (month) => ok(nothing(month)),
-			onAdd,
 		});
 		expect(await screen.findByText("No Budgets for August 2026.")).toBeVisible();
 		expect(
@@ -531,7 +544,9 @@ describe("the page's states (section 6)", () => {
 		const adds = screen.getAllByRole("button", { name: "Add a Budget" });
 		expect(adds).toHaveLength(3);
 		await user.click(adds[2] as HTMLElement);
-		expect(onAdd).toHaveBeenCalledOnce();
+		expect(
+			await screen.findByRole("dialog", { name: "Add a Budget" }),
+		).toBeVisible();
 	});
 
 	// F04 section 5: golden September has spending but transportation starts in October;
@@ -694,27 +709,35 @@ describe("the overview and the list (BR-F04-15)", () => {
 		).toBeVisible();
 	});
 
-	test("Add a Budget on a Not budgeted row asks for that category", async () => {
-		const onAdd = vi.fn();
-		const { user } = renderPage("?month=2026-10", { onAdd });
+	test("Add a Budget on a Not budgeted row opens Add with that category chosen", async () => {
+		const { user } = renderPage("?month=2026-10");
 		await screen.findByText("Not budgeted · 1");
 		await user.click(
 			within(rowOf("unbudgeted:housing")).getByRole("button", {
 				name: "Add a Budget",
 			}),
 		);
-		expect(onAdd).toHaveBeenCalledWith("housing");
+		const dialog = await screen.findByRole("dialog", { name: "Add a Budget" });
+		expect(
+			within(dialog).getByRole("radio", { name: /^Housing/ }),
+		).toBeChecked();
 	});
 
-	test("the header's Add a Budget asks for no category", async () => {
-		const onAdd = vi.fn();
-		const { user } = renderPage("?month=2026-10", { onAdd });
+	test("the header's Add a Budget opens Add with no category chosen", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
 		await user.click(
 			screen.getAllByRole("button", {
 				name: "Add a Budget",
 			})[0] as HTMLElement,
 		);
-		expect(onAdd).toHaveBeenCalledWith();
+		const dialog = await screen.findByRole("dialog", { name: "Add a Budget" });
+		const tiles = within(
+			within(dialog).getByRole("radiogroup", { name: "Category" }),
+		).getAllByRole("radio");
+		expect(tiles.every((tile) => !(tile as HTMLInputElement).checked)).toBe(
+			true,
+		);
 	});
 });
 
@@ -999,7 +1022,9 @@ describe("the panel (BR-F04-30, D-571)", () => {
 			const open = await screen.findByRole("dialog", {
 				name: "Budget details",
 			});
-			expect(open).toHaveTextContent("L to change limit · Esc to close");
+			expect(open).toHaveTextContent(
+				"L to change limit · S to stop · Delete to delete · Esc to close",
+			);
 			await within(open).findByRole("region", { name: "Last 6 months" });
 		});
 
@@ -1074,34 +1099,35 @@ describe("the panel (BR-F04-30, D-571)", () => {
 		beforeEach(() => media({ wide: true, docked: true }));
 
 		test("for a selected Budget", async () => {
-			const onChangeLimit = vi.fn();
-			const { user } = renderPage("?month=2026-10", { onChangeLimit });
+			const { user } = renderPage("?month=2026-10");
 			await screen.findByText("Needs attention · 4");
 			await user.click(rowOf("budget:food"));
 			await user.click(
 				screen.getByRole("heading", { level: 1, name: "Budgets" }),
 			);
 			await user.keyboard("l");
-			expect(onChangeLimit).toHaveBeenCalledExactlyOnceWith("food");
-			await screen.findByRole("region", { name: "Last 6 months" });
+			expect(
+				await screen.findByRole("dialog", { name: "Change the Food limit" }),
+			).toBeVisible();
 		});
 
 		test("for a Not budgeted category with a Budget record: September transportation", async () => {
-			const onChangeLimit = vi.fn();
-			const { user } = renderPage("?month=2026-09", { onChangeLimit });
+			const { user } = renderPage("?month=2026-09");
 			await screen.findByText("Not budgeted · 3");
 			await user.click(rowOf("unbudgeted:transportation"));
 			await user.click(
 				screen.getByRole("heading", { level: 1, name: "Budgets" }),
 			);
 			await user.keyboard("L");
-			expect(onChangeLimit).toHaveBeenCalledExactlyOnceWith("transportation");
-			await screen.findByRole("region", { name: "Last 6 months" });
+			expect(
+				await screen.findByRole("dialog", {
+					name: "Change the Transportation limit",
+				}),
+			).toBeVisible();
 		});
 
 		test("not for a category with no Budget record, nor with nothing selected", async () => {
-			const onChangeLimit = vi.fn();
-			const { user } = renderPage("?month=2026-09", { onChangeLimit });
+			const { user } = renderPage("?month=2026-09");
 			await screen.findByText("Not budgeted · 3");
 			await user.click(
 				screen.getByRole("heading", { level: 1, name: "Budgets" }),
@@ -1112,14 +1138,13 @@ describe("the panel (BR-F04-30, D-571)", () => {
 				screen.getByRole("heading", { level: 1, name: "Budgets" }),
 			);
 			await user.keyboard("l");
-			expect(onChangeLimit).not.toHaveBeenCalled();
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 			await screen.findByRole("region", { name: "Last 6 months" });
 		});
 
 		test("from inside the drawer", async () => {
 			media({ wide: true });
-			const onChangeLimit = vi.fn();
-			const { user } = renderPage("?month=2026-10", { onChangeLimit });
+			const { user } = renderPage("?month=2026-10");
 			await screen.findByText("Needs attention · 4");
 			await user.click(rowOf("budget:food"));
 			const open = await screen.findByRole("dialog", {
@@ -1127,7 +1152,318 @@ describe("the panel (BR-F04-30, D-571)", () => {
 			});
 			await within(open).findByRole("region", { name: "Last 6 months" });
 			await user.keyboard("l");
-			expect(onChangeLimit).toHaveBeenCalledExactlyOnceWith("food");
+			expect(
+				await screen.findByRole("dialog", { name: "Change the Food limit" }),
+			).toBeVisible();
 		});
+	});
+});
+
+describe("the dialogs (BR-F04-19 to BR-F04-21, BR-F04-06)", () => {
+	beforeEach(() => media({ wide: true, docked: true }));
+
+	const rowOf = (key: string) =>
+		document.querySelector<HTMLElement>(
+			`[role="row"][data-key="${key}"]`,
+		) as HTMLElement;
+	const panelButton = (name: string) =>
+		within(
+			screen.getByRole("complementary", { name: "Budget details" }),
+		).getByRole("button", { name });
+
+	test("the panel's Change limit, Stop and Delete open their dialogs for the selection", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		await user.click(rowOf("budget:food"));
+		for (const [name, title] of [
+			["Change limit", "Change the Food limit"],
+			["Stop", "Stop budgeting Food"],
+		] as const) {
+			await user.click(panelButton(name));
+			const dialog = await screen.findByRole("dialog", { name: title });
+			await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+			await waitFor(() =>
+				expect(
+					screen.queryByRole("dialog", { name: title }),
+				).not.toBeInTheDocument(),
+			);
+		}
+		await user.click(panelButton("Delete"));
+		expect(
+			await screen.findByRole("alertdialog", {
+				name: "Delete the Food Budget?",
+			}),
+		).toBeVisible();
+	});
+
+	test("a Not active row's Change limit and Delete open for its Budget", async () => {
+		const { user } = renderPage("?month=2026-09");
+		await screen.findByText("Not budgeted · 3");
+		await user.click(
+			screen.getByRole("button", { name: "Not active this month · 1" }),
+		);
+		const row = rowOf("inactive:transportation");
+		await user.click(within(row).getByRole("button", { name: "Change limit" }));
+		const dialog = await screen.findByRole("dialog", {
+			name: "Change the Transportation limit",
+		});
+		expect(within(dialog).getByRole("textbox")).toHaveValue("2,000.00");
+		await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+		await waitFor(() =>
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+		);
+		await user.click(
+			within(rowOf("inactive:transportation")).getByRole("button", {
+				name: "Delete",
+			}),
+		);
+		expect(
+			await screen.findByRole("alertdialog", {
+				name: "Delete the Transportation Budget?",
+			}),
+		).toBeVisible();
+	});
+
+	test("Stop that would remove every month turns into the Delete confirmation", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		await user.click(rowOf("budget:food"));
+		await user.click(panelButton("Stop"));
+		const dialog = await screen.findByRole("dialog", {
+			name: "Stop budgeting Food",
+		});
+		await user.click(within(dialog).getByRole("radio", { name: "Other month" }));
+		await user.click(screen.getByRole("option", { name: /September/ }));
+		await user.click(
+			within(dialog).getByRole("button", { name: "Delete Budget instead" }),
+		);
+		expect(
+			await screen.findByRole("alertdialog", {
+				name: "Delete the Food Budget?",
+			}),
+		).toBeVisible();
+		expect(
+			screen.queryByRole("dialog", { name: "Stop budgeting Food" }),
+		).not.toBeInTheDocument();
+	});
+
+	test("a confirmed change closes the dialog and the month is read again", async () => {
+		const patches = route(network, "patch", "/api/budgets/:id", () =>
+			ok(budgetAnswer("food", { version: 2 })),
+		);
+		const { user, reads } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		const before = reads.length;
+		await user.click(rowOf("budget:food"));
+		await user.click(panelButton("Change limit"));
+		const dialog = await screen.findByRole("dialog", {
+			name: "Change the Food limit",
+		});
+		const box = within(dialog).getByRole("textbox");
+		await user.clear(box);
+		await user.type(box, "7000");
+		await user.click(
+			within(dialog).getByRole("button", { name: "Change from November" }),
+		);
+		await waitFor(() =>
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+		);
+		expect(patches).toHaveLength(1);
+		expect(reads.length).toBeGreaterThan(before);
+	});
+
+	test("a confirmed delete closes the confirmation", async () => {
+		const deletes = route(
+			network,
+			"delete",
+			"/api/budgets/:id",
+			() => new HttpResponse(null, { status: 204 }),
+		);
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		await user.click(rowOf("budget:food"));
+		await user.click(panelButton("Delete"));
+		const confirm = await screen.findByRole("alertdialog");
+		await user.click(
+			within(confirm).getByRole("button", { name: "Delete Budget" }),
+		);
+		await waitFor(() =>
+			expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+		);
+		expect(deletes).toHaveLength(1);
+	});
+
+	test("while a dialog is open, the page's Up, Down and L rest", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		await user.click(rowOf("budget:food"));
+		await user.click(panelButton("Stop"));
+		const dialog = await screen.findByRole("dialog", {
+			name: "Stop budgeting Food",
+		});
+		within(dialog)
+			.getByRole("radio", { name: /^From a month onward/ })
+			.focus();
+		await user.keyboard("{ArrowDown}");
+		expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "true");
+		// Nor from the dialog itself, which no widget claims the keys of.
+		act(() => dialog.focus());
+		await user.keyboard("{ArrowDown}{ArrowUp}{ArrowUp}");
+		expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "true");
+		await user.keyboard("l");
+		expect(screen.getAllByRole("dialog")).toHaveLength(1);
+		expect(
+			screen.queryByRole("dialog", { name: "Change the Food limit" }),
+		).not.toBeInTheDocument();
+	});
+
+	test("Add a Budget on a month with no Budget, from the empty message", async () => {
+		const { user } = renderPage("?month=2026-08");
+		expect(await screen.findByText("No Budgets for August 2026.")).toBeVisible();
+		const adds = screen.getAllByRole("button", { name: "Add a Budget" });
+		await user.click(adds.at(-1) as HTMLElement);
+		expect(
+			await screen.findByRole("dialog", { name: "Add a Budget" }),
+		).toBeVisible();
+	});
+});
+
+describe("Remove in the limit history (BR-F04-25)", () => {
+	beforeEach(() => media({ wide: true, docked: true }));
+
+	/** Golden October with food's 7,000.00 for December 2026 only. */
+	const withMonthLimit = (month: Month) => {
+		const view = monthAnswer(month);
+		return {
+			...view,
+			budgets: view.budgets.map((row) =>
+				row.category === "food" ?
+					{ ...row, overrides: [{ month: "2026-12", limitMinor: 700000 }] }
+				:	row,
+			),
+		};
+	};
+	const food = () =>
+		document.querySelector(
+			'[role="row"][data-key="budget:food"]',
+		) as HTMLElement;
+	const remove = () =>
+		screen.getByRole("button", { name: "Remove ₹7,000.00 in Dec 2026 only" });
+
+	test("reaches the page with the category and the month", async () => {
+		const onRemoveMonthLimit = vi.fn();
+		const { user } = renderPage("?month=2026-10", {
+			months: (month) => ok(withMonthLimit(month)),
+			onRemoveMonthLimit,
+		});
+		await screen.findByText("Needs attention · 4");
+		await user.click(food());
+		await user.click(remove());
+		expect(onRemoveMonthLimit).toHaveBeenCalledExactlyOnceWith(
+			"food",
+			"2026-12",
+		);
+	});
+
+	test("without a handler yet, it does nothing", async () => {
+		const { user } = renderPage("?month=2026-10", {
+			months: (month) => ok(withMonthLimit(month)),
+		});
+		await screen.findByText("Needs attention · 4");
+		await user.click(food());
+		await user.click(remove());
+		expect(screen.getByRole("region", { name: "Limit history" })).toBeVisible();
+	});
+});
+
+describe("S and Delete (BR-F04-32, D-573)", () => {
+	beforeEach(() => media({ wide: true, docked: true }));
+
+	const rowOf = (key: string) =>
+		document.querySelector<HTMLElement>(
+			`[role="row"][data-key="${key}"]`,
+		) as HTMLElement;
+
+	test("with a Budget's row focused, S opens Stop budgeting", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		await user.click(rowOf("budget:food"));
+		expect(rowOf("budget:food")).toHaveFocus();
+		await user.keyboard("s");
+		expect(
+			await screen.findByRole("dialog", { name: "Stop budgeting Food" }),
+		).toBeVisible();
+	});
+
+	test.each(["{Delete}", "{Backspace}"])(
+		"%s opens the Delete confirmation for a Budget",
+		async (key) => {
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await user.click(rowOf("budget:food"));
+			await user.keyboard(key);
+			expect(
+				await screen.findByRole("alertdialog", {
+					name: "Delete the Food Budget?",
+				}),
+			).toBeVisible();
+		},
+	);
+
+	// August: transportation is Not active alone, with no spending.
+	test("a Not active Budget: Delete opens its confirmation, S does nothing", async () => {
+		const { user } = renderPage("?month=2026-08");
+		await screen.findByText("No Budgets for August 2026.");
+		await user.click(
+			screen.getByRole("button", { name: /^Not active this month/ }),
+		);
+		await user.click(rowOf("inactive:transportation"));
+		await user.keyboard("s");
+		expect(
+			screen.queryByRole("dialog", { name: /^Stop/ }),
+		).not.toBeInTheDocument();
+		await user.keyboard("{Delete}");
+		expect(
+			await screen.findByRole("alertdialog", {
+				name: "Delete the Transportation Budget?",
+			}),
+		).toBeVisible();
+	});
+
+	test("a Not budgeted category: neither key acts", async () => {
+		const { user } = renderPage("?month=2026-09");
+		await screen.findByText("Not budgeted · 3");
+		await user.click(rowOf("unbudgeted:transportation"));
+		await user.keyboard("s{Delete}{Backspace}");
+		expect(
+			screen.queryByRole("dialog", { name: /^Stop/ }),
+		).not.toBeInTheDocument();
+		expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+		await screen.findByRole("region", { name: "Last 6 months" });
+	});
+
+	test("nothing selected: neither key acts", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		await user.click(screen.getByRole("heading", { level: 1, name: "Budgets" }));
+		await user.keyboard("s{Delete}");
+		expect(
+			screen.queryByRole("dialog", { name: /^Stop/ }),
+		).not.toBeInTheDocument();
+		expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+	});
+
+	test("while a dialog is open they rest", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		await user.click(rowOf("budget:food"));
+		await user.keyboard("l");
+		const dialog = await screen.findByRole("dialog", {
+			name: "Change the Food limit",
+		});
+		act(() => dialog.focus());
+		await user.keyboard("s{Delete}");
+		expect(screen.getAllByRole("dialog")).toHaveLength(1);
+		expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
 	});
 });

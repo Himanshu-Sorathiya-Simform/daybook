@@ -189,7 +189,9 @@ describe("BudgetPanel as a drawer, below 1180 px (BR-F04-30)", () => {
 		renderPanel({ isDocked: false, selected: "food" });
 		const drawer = await screen.findByRole("dialog", { name: "Budget details" });
 		expect(drawer).toBeVisible();
-		expect(drawer).toHaveTextContent("L to change limit · Esc to close");
+		expect(drawer).toHaveTextContent(
+			"L to change limit · S to stop · Delete to delete · Esc to close",
+		);
 		await screen.findByRole("region", { name: "Last 6 months" });
 	});
 

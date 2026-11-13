@@ -269,7 +269,7 @@ export function BudgetPanelDetail({
 			<div className="flex flex-wrap gap-2">{actions()}</div>
 			{subject ?
 				<p className="text-caption text-ink-3">
-					{detailHint(subject.kind, isDocked)}
+					{detailHint(subject, isDocked)}
 				</p>
 			:	<LineSkeleton
 					size="caption"

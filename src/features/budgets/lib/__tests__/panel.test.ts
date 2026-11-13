@@ -1,13 +1,15 @@
 import { describe, expect, test } from "vitest";
 
 import { goldenBudget } from "@/lib/budgets/__tests__/golden";
-import type { BudgetRules } from "@/lib/budgets/model";
+import type { BudgetRules, ExpenseCategory } from "@/lib/budgets/model";
 import type { Formats } from "../labels";
 import {
 	chartLabel,
 	comparedWith,
 	compareRows,
 	detailHint,
+	type PanelSubject,
+	selectionKeys,
 	historyItems,
 	inForceText,
 	limitsIn,
@@ -92,19 +94,71 @@ describe("the selection's words (BR-F04-30)", () => {
 		expect(ofLimit(500000, IN)).toBe("of ₹5,000.00");
 	});
 
+	const subject = (month: string, category: ExpenseCategory) =>
+		subjectOf(monthAnswer(month), category) as PanelSubject;
+
 	test.each([
 		[
-			"budget",
+			"October food, a Budget",
+			"2026-10",
+			"food",
+			true,
+			"L to change limit · S to stop · Delete to delete · Up and down arrows move · Esc to close",
+		],
+		[
+			"October food in the drawer",
+			"2026-10",
+			"food",
+			false,
+			"L to change limit · S to stop · Delete to delete · Esc to close",
+		],
+		[
+			"September health, Not budgeted with no record",
+			"2026-09",
+			"health",
+			true,
+			"Up and down arrows move · Esc to close",
+		],
+		[
+			"September transportation, Not budgeted with a record",
+			"2026-09",
+			"transportation",
 			true,
 			"L to change limit · Up and down arrows move · Esc to close",
 		],
-		["budget", false, "L to change limit · Esc to close"],
-		["unbudgeted", true, "Up and down arrows move · Esc to close"],
-		["inactive", true, "Up and down arrows move · Esc to close"],
-		["inactive", false, "Esc to close"],
-	] as const)("the hint for %s, docked %s (D-571)", (kind, docked, hint) => {
-		expect(detailHint(kind, docked)).toBe(hint);
-	});
+		[
+			"August transportation, Not active, in the drawer",
+			"2026-08",
+			"transportation",
+			false,
+			"L to change limit · Delete to delete · Esc to close",
+		],
+	] as const)(
+		"the hint for %s (D-571, D-573)",
+		(_, month, category, docked, hint) => {
+			expect(detailHint(subject(month, category), docked)).toBe(hint);
+		},
+	);
+
+	test.each([
+		["2026-10", "food", { changeLimit: true, stop: true, remove: true }],
+		["2026-09", "health", { changeLimit: false, stop: false, remove: false }],
+		[
+			"2026-09",
+			"transportation",
+			{ changeLimit: true, stop: false, remove: false },
+		],
+		[
+			"2026-08",
+			"transportation",
+			{ changeLimit: true, stop: false, remove: true },
+		],
+	] as const)(
+		"the keys for %s %s act as its buttons do (D-573)",
+		(month, category, keys) => {
+			expect(selectionKeys(subject(month, category))).toEqual(keys);
+		},
+	);
 
 	test("the panel's fixed words", () => {
 		expect(PANEL_TEXT.label).toBe("Budget details");

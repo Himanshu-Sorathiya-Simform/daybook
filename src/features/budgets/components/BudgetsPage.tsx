@@ -9,6 +9,7 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useOnline } from "@/hooks/useOnline";
 import { useShortcut } from "@/hooks/useShortcut";
 import type { ExpenseCategory, StateLabel } from "@/lib/budgets/model";
+import type { BudgetRecord } from "@/lib/budgets/view";
 import { type Month, monthOf } from "@/lib/budgets/months";
 import { cn } from "@/lib/cn";
 import { formatMonth, formatTime } from "@/lib/date-format";
@@ -17,32 +18,33 @@ import { useBudgetsUrl } from "../hooks/useBudgetsUrl";
 import { useBudgetsView } from "../hooks/useBudgetsView";
 import { dayOfMonth } from "../lib/labels";
 import { emptyTitle, offlineAction, offlineBody, PAGE_TEXT } from "../lib/messages";
-import { subjectOf } from "../lib/panel";
+import { type DialogKind, recordIn } from "../lib/dialog";
+import { selectionKeys, subjectOf } from "../lib/panel";
 import type { BudgetMonthAnswer, BudgetsLocale } from "../lib/types";
+import { BudgetDialog } from "./BudgetDialog";
 import { BudgetList } from "./BudgetList";
 import { BudgetPanel } from "./BudgetPanel";
 import { BudgetsHeader } from "./BudgetsHeader";
 import { BudgetsOverview } from "./BudgetsOverview";
 import { BudgetsSkeleton } from "./BudgetsSkeleton";
 import { BudgetTable } from "./BudgetTable";
+import { DeleteBudgetDialog } from "./DeleteBudgetDialog";
 
 export type BudgetsPageProps = {
 	/** The profile's formats and its today, from the server render (TIME-5). */
 	locale: BudgetsLocale;
-	/** Opens Add a Budget, for a category when one is given. */
-	onAdd?: (category?: ExpenseCategory) => void;
-	/** Opens Change limit for a category with a Budget record. */
-	onChangeLimit?: (category: ExpenseCategory) => void;
-	/** Opens Stop budgeting for a category's Budget. */
-	onStop?: (category: ExpenseCategory) => void;
-	/** Opens Delete for a category's Budget. */
-	onDelete?: (category: ExpenseCategory) => void;
 	/** Removes a one-month limit from a category's Budget (BR-F04-25). */
 	onRemoveMonthLimit?: (category: ExpenseCategory, month: Month) => void;
 	className?: string;
 };
 
 const nothing = () => {};
+
+/** The dialog open over the page: Add, Change limit or Stop, or Delete's confirmation with the
+ * Budget it deletes. `opened` starts each one afresh. */
+type OpenDialog =
+	| { kind: DialogKind; category: ExpenseCategory | null; opened: number }
+	| { kind: "delete"; record: BudgetRecord; opened: number };
 
 /** From here up, List or Table shows in the header (BR-F04-14, D-512). */
 const WIDE = "(min-width: 48rem)";
@@ -74,14 +76,14 @@ function shows(view: BudgetMonthAnswer, category: ExpenseCategory): boolean {
  * - **The panel** (BR-F04-30): beside the list from 1180 px, where Up and Down select; below,
  *   a drawer while a category is selected, where they only move focus, and nothing while the
  *   drawer is open (D-571). It is left out in the error, offline-other-month and new-user
- *   states. L opens Change limit for a selection with a Budget record (BR-F04-32).
+ *   states. L opens Change limit for a selection with a Budget record, S Stop budgeting for a
+ *   Budget, and Delete or Backspace the Delete confirmation for a Budget or a Not active one
+ *   (BR-F04-32, D-573).
+ * - **The dialogs** (BR-F04-19 to BR-F04-21, BR-F04-06) open from the header, the empty
+ *   message, the rows, the panel and L, over the page; while one is open the page's keys rest.
  */
 export function BudgetsPage({
 	locale,
-	onAdd = nothing,
-	onChangeLimit = nothing,
-	onStop = nothing,
-	onDelete = nothing,
 	onRemoveMonthLimit = nothing,
 	className,
 }: Readonly<BudgetsPageProps>) {
@@ -98,6 +100,8 @@ export function BudgetsPage({
 		state: StateLabel;
 	} | null>(null);
 	const [selected, setSelected] = useState<ExpenseCategory | null>(null);
+	const [dialog, setDialog] = useState<OpenDialog | null>(null);
+	const [isDialogOpen, setDialogOpen] = useState(false);
 	const { dateLocale } = locale;
 	const data = query.data;
 
@@ -119,6 +123,25 @@ export function BudgetsPage({
 		ignoreDefaultPrevented: true,
 	});
 
+	const open = (next: OpenDialog) => {
+		setDialog(next);
+		setDialogOpen(true);
+	};
+	const opened = (dialog?.opened ?? 0) + 1;
+	const onAdd = (category?: ExpenseCategory) =>
+		open({ kind: "add", category: category ?? null, opened });
+	const onChangeLimit = (category: ExpenseCategory) =>
+		open({ kind: "change", category, opened });
+	const onStop = (category: ExpenseCategory) =>
+		open({ kind: "stop", category, opened });
+	// Delete is offered only for a Budget record in the month shown.
+	const onDelete = (category: ExpenseCategory) =>
+		open({
+			kind: "delete",
+			record: recordIn(data as BudgetMonthAnswer, category) as BudgetRecord,
+			opened,
+		});
+
 	const offOther = !online && url.month !== current;
 	const failed = !data && (query.isError || query.fetchStatus === "paused");
 	const isNewUser =
@@ -129,16 +152,28 @@ export function BudgetsPage({
 	const showPanel = !offOther && !failed && !isNewUser;
 	const drawerOpen = showPanel && !docked && selected !== null;
 	const arrows =
-		docked ? "select"
-		: drawerOpen ? "off"
+		isDialogOpen || drawerOpen ? "off"
+		: docked ? "select"
 		: "focus";
-	const record =
-		!offOther && data && selected !== null ?
-			(subjectOf(data, selected)?.record ?? null)
-		:	null;
+	const subject =
+		!offOther && data && selected !== null ? subjectOf(data, selected) : null;
+	// The keys act as the selection's buttons do, and rest while a dialog is open (D-573).
+	const keys =
+		subject && !isDialogOpen ?
+			selectionKeys(subject)
+		:	{ changeLimit: false, stop: false, remove: false };
 	// It is on only while the selection has a record.
 	useShortcut("L", () => onChangeLimit(selected as ExpenseCategory), {
-		enabled: record !== null,
+		enabled: keys.changeLimit,
+	});
+	useShortcut("S", () => onStop(selected as ExpenseCategory), {
+		enabled: keys.stop,
+	});
+	useShortcut("Delete", () => onDelete(selected as ExpenseCategory), {
+		enabled: keys.remove,
+	});
+	useShortcut("Backspace", () => onDelete(selected as ExpenseCategory), {
+		enabled: keys.remove,
 	});
 	const asOf =
 		!online && query.dataUpdatedAt > 0 ?
@@ -279,6 +314,29 @@ export function BudgetsPage({
 					onStop={onStop}
 					onDelete={onDelete}
 					onRemoveMonthLimit={onRemoveMonthLimit}
+				/>
+			)}
+			{dialog?.kind === "delete" && (
+				<DeleteBudgetDialog
+					key={dialog.opened}
+					isOpen={isDialogOpen}
+					record={dialog.record}
+					formats={locale}
+					onClose={() => setDialogOpen(false)}
+				/>
+			)}
+			{dialog && dialog.kind !== "delete" && data && (
+				<BudgetDialog
+					key={dialog.opened}
+					isOpen={isDialogOpen}
+					kind={dialog.kind}
+					category={dialog.category}
+					view={data}
+					locale={locale}
+					onClose={() => setDialogOpen(false)}
+					onDeleteInstead={(found) =>
+						open({ kind: "delete", record: found, opened })
+					}
 				/>
 			)}
 		</div>
