@@ -9,7 +9,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 | Milestone  | M2. Before M5, writes are online only, with F03's stand-ins: Save disabled offline, and a failed save keeps the dialog open (D-241)                                                                                                                 |
 | Plan       | Free and Premium, with no gating; one-month limits included (D-560)                                                                                                                                                                                 |
 | Depends on | [F03](F03-transactions.md) (category spending, summary, drill-down), [F02](F02-onboarding-profile-settings.md) (month, locale), [P2](../platform/P2-data-access-and-security.md); P1 (write queue, from M5); F08, F09, F10, F11 read Budget figures |
-| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-569                                                                                                                |
+| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-570                                                                                                                |
 
 ## 1. User stories
 
@@ -121,7 +121,7 @@ Examples in this spec write amounts without the currency symbol and months as `e
     3. **"Show Budgets as":** List or Table, remembered on the device (`daybook.budgets.view`).
     4. **Add a Budget.**
 
-    Below 768 px, the phone layout (D-512), Add a Budget is an icon button and the month control moves to its own row with 44 px targets.
+    Below 768 px, the phone layout (D-512), Add a Budget is an icon button, List or Table leaves the header and the list shows (D-570), and the month control moves to its own row with 44 px targets.
 
 - **BR-F04-15** Below the header, top to bottom:
     1. **The overview**, when M has at least one Budget:
@@ -149,8 +149,8 @@ Examples in this spec write amounts without the currency symbol and months as `e
 - **BR-F04-18** The Table view shows the same month as a TanStack Table (D-171):
     - **Columns:** Category, Limit, Spent, Remaining, Utilization, State; sorted by pressing a heading (Category and State ascending first, the figures descending first; pressing again reverses), with `aria-sort`;
     - **Caption:** "October 2026. Select a column heading to sort.";
-    - **Rows:** each budgeted category, a "Budgeted total" row with the overall state, and a row per unbudgeted category with "—" for Limit, Remaining and Utilization and the State "Not budgeted";
-    - **Selection:** a row selects its category like a list row.
+    - **Rows:** each budgeted category, in the list's order (BR-F04-15) until a heading is pressed, a "Budgeted total" row with the overall state, and a row per unbudgeted category with "—" for Limit, Remaining and Utilization and the State "Not budgeted". A sort reorders only the budgeted rows; the Budgeted total and Not budgeted rows stay below them, and the sort holds across months (D-570);
+    - **Selection:** a row selects its category like a list row; the Budgeted total row selects nothing.
     - **The state filter** (BR-F04-31) applies here too: only the budgeted rows in that state show, the Budgeted total row stays as the month's total, and the Not budgeted rows hide. With no rows in that state, the table gives way to BR-F04-31's empty text (D-249).
 
     It is also the accessible alternative to the bars (NFR-5). In a month with no Budget, the list shows instead.
@@ -252,7 +252,7 @@ Examples in this spec write amounts without the currency symbol and months as `e
         7. **Actions:** for a Budget, Change limit, Stop and Delete; for Not budgeted, Add a Budget or Change limit as BR-F04-15 says; for Not active, Change limit and Delete. A hint below reads "L to change limit · Up and down arrows move · Esc to close" ("L to change limit" only for a Budget).
 - **BR-F04-31** Pressing a state count filters the list to that state, with At limit and Over budget kept apart. A chip "Showing Over budget" with a remove button and a "Show all" link appear above the list, and the Not budgeted and Not active groups hide. With no rows: "No Budgets are over budget in October 2026." (or "are at their limit", "are nearing their limit", "are on track") with Show all Budgets. Pressing the count again, or changing the month, clears the filter. The Table view follows the same filter (BR-F04-18).
 - **BR-F04-32** Keyboard on the page, outside text fields and dialogs and without modifier keys:
-    - Up and Down move the selection through the visible rows in list order and focus the row;
+    - Up and Down move the selection through the visible rows in the order shown, the table's sort included, and focus the row;
     - Escape clears the selection and closes the month grid;
     - L opens Change limit for a selected row with a Budget record;
     - N opens a new Transaction (F03).

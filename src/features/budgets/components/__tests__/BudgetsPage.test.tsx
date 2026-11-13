@@ -268,6 +268,150 @@ describe("List or Table (BR-F04-14)", () => {
 	});
 });
 
+describe("the Table view (BR-F04-18, D-570)", () => {
+	afterEach(() => {
+		// @ts-expect-error jsdom has none; these tests set one.
+		delete window.matchMedia;
+	});
+
+	/** A window at least 768 px wide, where List or Table shows. jsdom has no `matchMedia`,
+	 * which the page reads as narrower. */
+	function wide(matches = true) {
+		window.matchMedia = vi.fn((query: string) => ({
+			matches: matches && query === "(min-width: 48rem)",
+			media: query,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+		})) as unknown as typeof window.matchMedia;
+	}
+
+	const table = () =>
+		screen.queryByRole("grid", { name: /Select a column heading to sort/ });
+	const rowOf = (key: string) =>
+		document.querySelector<HTMLElement>(
+			`[role="row"][data-key="${key}"]`,
+		) as HTMLElement;
+
+	test("choosing Table shows the month as a table, under the overview", async () => {
+		wide();
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		await user.click(screen.getByRole("radio", { name: "Table" }));
+		expect(
+			screen.getByRole("grid", {
+				name: "October 2026. Select a column heading to sort.",
+			}),
+		).toBeVisible();
+		expect(screen.queryByText("Needs attention · 4")).not.toBeInTheDocument();
+		expect(screen.getByText("Budgeted spending in October")).toBeVisible();
+	});
+
+	test("a remembered Table shows on the next visit, and List brings the list back", async () => {
+		wide();
+		window.localStorage.setItem(VIEW_KEY, "table");
+		const { user } = renderPage("?month=2026-10");
+		await waitFor(() => expect(table()).toBeVisible());
+		await user.click(screen.getByRole("radio", { name: "List" }));
+		expect(table()).not.toBeInTheDocument();
+		expect(screen.getByText("Needs attention · 4")).toBeVisible();
+	});
+
+	test("below 768 px, where the switch is hidden, a remembered Table shows the list", async () => {
+		wide(false);
+		window.localStorage.setItem(VIEW_KEY, "table");
+		renderPage("?month=2026-10");
+		expect(await screen.findByText("Needs attention · 4")).toBeVisible();
+		expect(table()).not.toBeInTheDocument();
+	});
+
+	test("a month with no Budget shows the list instead, with its Not budgeted rows", async () => {
+		wide();
+		window.localStorage.setItem(VIEW_KEY, "table");
+		renderPage("?month=2026-10", {
+			months: (month) =>
+				ok({
+					...monthAnswer(month),
+					overall: {
+						limitMinor: 0,
+						spentMinor: 0,
+						utilizationTenths: null,
+						state: null,
+					},
+					budgets: [],
+					inactive: [],
+				}),
+		});
+		expect(await screen.findByText("Not budgeted · 1")).toBeVisible();
+		expect(table()).not.toBeInTheDocument();
+	});
+
+	// AC-F04-26
+	test("the counts filter the table: Over budget keeps the total and hides housing; On track gives the empty text", async () => {
+		wide();
+		window.localStorage.setItem(VIEW_KEY, "table");
+		const { user } = renderPage("?month=2026-10");
+		await waitFor(() => expect(table()).toBeVisible());
+		await user.click(screen.getByRole("button", { name: /^Over budget/ }));
+		expect(rowOf("budget:entertainment")).toBeVisible();
+		expect(rowOf("budget:food")).toBeVisible();
+		expect(rowOf("total")).toHaveTextContent("₹13,168.00");
+		expect(rowOf("total")).toHaveTextContent("₹11,000.00");
+		expect(rowOf("unbudgeted:housing")).toBeNull();
+		expect(rowOf("budget:shopping")).toBeNull();
+		await user.click(screen.getByRole("button", { name: /^On track/ }));
+		expect(
+			screen.getByText("No Budgets are on track in October 2026."),
+		).toBeVisible();
+		expect(table()).not.toBeInTheDocument();
+	});
+
+	test("the filter and the selection carry over between List and Table", async () => {
+		wide();
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		await user.click(rowOf("budget:food"));
+		await user.click(screen.getByRole("button", { name: /^Over budget/ }));
+		await user.click(screen.getByRole("radio", { name: "Table" }));
+		expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "true");
+		expect(rowOf("budget:shopping")).toBeNull();
+		expect(screen.getByText("Showing")).toBeVisible();
+		await user.click(screen.getByRole("radio", { name: "List" }));
+		expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "true");
+		expect(screen.getByText("Needs attention · 2")).toBeVisible();
+	});
+
+	// AC-F04-29
+	test("a selection in the table stays across months while its category shows", async () => {
+		wide();
+		window.localStorage.setItem(VIEW_KEY, "table");
+		const { user } = renderPage("?month=2026-10");
+		await waitFor(() => expect(table()).toBeVisible());
+		await user.click(rowOf("budget:food"));
+		await user.click(monthButton("Previous month"));
+		expect(
+			await screen.findByRole("grid", {
+				name: "September 2026. Select a column heading to sort.",
+			}),
+		).toBeVisible();
+		expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "true");
+	});
+
+	// BR-F04-32
+	test("Down on the page selects the table's first row", async () => {
+		wide();
+		window.localStorage.setItem(VIEW_KEY, "table");
+		const { user } = renderPage("?month=2026-10");
+		await waitFor(() => expect(table()).toBeVisible());
+		await user.click(screen.getByRole("heading", { level: 1, name: "Budgets" }));
+		await user.keyboard("{ArrowDown}");
+		expect(rowOf("budget:entertainment")).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		expect(rowOf("budget:entertainment")).toHaveFocus();
+	});
+});
+
 describe("the invalid-link notice (FIL-5, D-566)", () => {
 	test("a month outside the range shows the current month with the notice, and cleans the URL", async () => {
 		const { calls } = renderPage("?month=2030-01");

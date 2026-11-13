@@ -9,27 +9,21 @@ import {
 	GridList as AriaGridList,
 	GridListHeader as AriaGridListHeader,
 	GridListSection as AriaGridListSection,
-	type Key as AriaKey,
-	type Selection as AriaSelection,
 } from "react-aria-components";
 
 import { Button } from "@/components/actions/Button";
 import { GroupHeader } from "@/components/data/GroupHeader";
-import { EmptyState } from "@/components/feedback/EmptyState";
-import { FilterChips } from "@/components/forms/FilterChips";
 import { Section } from "@/components/surfaces/Section";
-import { useShortcut } from "@/hooks/useShortcut";
 import {
 	type ExpenseCategory,
-	STATE_LABELS,
 	type StateLabel,
 	stateLabel,
 } from "@/lib/budgets/model";
 import { cn } from "@/lib/cn";
 import { formatMoney } from "@/lib/money";
+import { useRowArrows } from "../hooks/useRowArrows";
 import {
 	attentionFigure,
-	filterEmptyText,
 	type Formats,
 	groupLabel,
 	inactiveText,
@@ -38,8 +32,10 @@ import {
 	noLimitCaption,
 } from "../lib/labels";
 import { PAGE_TEXT } from "../lib/messages";
+import { pickedIn, selectedIn } from "../lib/rows";
 import type { BudgetMonthAnswer } from "../lib/types";
 import { BudgetListItem } from "./BudgetListItem";
+import { BudgetsFilter } from "./BudgetsFilter";
 import { SideListItem } from "./SideListItem";
 
 export type BudgetListProps = {
@@ -60,21 +56,6 @@ export type BudgetListProps = {
 	/** Delete a Not active Budget. */
 	onDelete: (category: ExpenseCategory) => void;
 	className?: string;
-};
-
-/** A row's id holds its group and category, "budget:food", so a category can sit under Not
- * budgeted and Not active at once. */
-const categoryOf = (id: string) => id.slice(id.indexOf(":") + 1) as ExpenseCategory;
-
-/** The ids among `ids` that show `selected`, for a list's selected keys. */
-const selectedIn = (ids: readonly string[], selected: ExpenseCategory | null) =>
-	selected === null ? [] : ids.filter((id) => categoryOf(id) === selected);
-
-/** The category a list's selection change chose, or `null` for a cleared selection. Single
- * selection never reports "all". */
-const pickedIn = (keys: AriaSelection) => {
-	const [key] = keys as Set<AriaKey>;
-	return key === undefined ? null : categoryOf(String(key));
 };
 
 /**
@@ -124,35 +105,7 @@ export function BudgetList({
 	const inactiveIds = inactive.map((row) => `inactive:${row.category}`);
 	const shown = [...mainIds, ...(expanded ? inactiveIds : [])];
 
-	/** Moves the selection one row on from the focused row, else the selected one, else to the
-	 * first row, and focuses it (BR-F04-32). */
-	const move = (step: 1 | -1) => {
-		const focused = (
-			document.activeElement as HTMLElement | null
-		)?.closest<HTMLElement>("[data-key]");
-		let at =
-			focused && holder?.contains(focused) ?
-				// The row was found by its `data-key`.
-				shown.indexOf(focused.dataset["key"] as string)
-			:	-1;
-		if (at < 0 && selected !== null) {
-			at = shown.findIndex((id) => categoryOf(id) === selected);
-		}
-		const next = at < 0 ? 0 : Math.min(Math.max(at + step, 0), shown.length - 1);
-		const id = shown[next] as string;
-		onSelect(categoryOf(id));
-		holder
-			?.querySelector<HTMLElement>(`[data-key="${CSS.escape(id)}"]`)
-			?.focus();
-	};
-	const keys = { enabled: shown.length > 0 };
-	// Inside the lists, ahead of React Aria's own arrow keys, which only move focus.
-	const inside = { ...keys, target: holder, capture: true, ignoreInputs: false };
-	useShortcut("ArrowDown", () => move(1), inside);
-	useShortcut("ArrowUp", () => move(-1), inside);
-	// Anywhere else on the page, outside text fields and other widgets.
-	useShortcut("ArrowDown", () => move(1), keys);
-	useShortcut("ArrowUp", () => move(-1), keys);
+	useRowArrows({ holder, ids: shown, selected, onSelect });
 
 	const sectionOf = (
 		key: string,
@@ -178,24 +131,12 @@ export function BudgetList({
 	return (
 		<Section className={cn("px-5 pt-1 pb-3 max-md:px-4", className)}>
 			{filter !== null && (
-				<div className="flex flex-wrap items-center gap-2 pt-3">
-					<span className="text-label text-ink-2">
-						{LIST_TEXT.showing}
-					</span>
-					<FilterChips
-						label={LIST_TEXT.showing}
-						chips={[{ id: filter, label: STATE_LABELS[filter] }]}
-						onRemove={() => onFilterChange(null)}
-						onClearAll={() => onFilterChange(null)}
-						clearAllLabel={LIST_TEXT.showAll}
-					/>
-				</div>
-			)}
-			{filter !== null && rows.length === 0 && (
-				<EmptyState
-					title={filterEmptyText(filter, view.month, formats)}
-					action={LIST_TEXT.showAllBudgets}
-					onAction={() => onFilterChange(null)}
+				<BudgetsFilter
+					filter={filter}
+					isEmpty={rows.length === 0}
+					month={view.month}
+					formats={formats}
+					onFilterChange={onFilterChange}
 				/>
 			)}
 			<div ref={setHolder}>

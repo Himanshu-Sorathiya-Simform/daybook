@@ -10,6 +10,8 @@ import {
 	inactiveText,
 	leftFigure,
 	LIST_TEXT,
+	TABLE_TEXT,
+	tableCaption,
 	noLimitCaption,
 	overviewFigures,
 	overviewLabel,
@@ -322,6 +324,29 @@ describe("other words", () => {
 			changeLimit: "Change limit",
 			delete: "Delete",
 			totalSpending: "Total spending",
+		});
+	});
+
+	test("the table's caption names the month in the profile's format (BR-F04-18)", () => {
+		expect(tableCaption("2026-10", IN)).toBe(
+			"October 2026. Select a column heading to sort.",
+		);
+		expect(tableCaption("2026-09", { ...IN, dateLocale: "de-DE" })).toBe(
+			"September 2026. Select a column heading to sort.",
+		);
+	});
+
+	test("the table's words (BR-F04-18)", () => {
+		expect(TABLE_TEXT).toEqual({
+			category: "Category",
+			limit: "Limit",
+			spent: "Spent",
+			remaining: "Remaining",
+			utilization: "Utilization",
+			state: "State",
+			total: "Budgeted total",
+			notBudgeted: "Not budgeted",
+			none: "—",
 		});
 	});
 });

@@ -205,3 +205,21 @@ export const LIST_TEXT = {
 	delete: "Delete",
 	totalSpending: "Total spending",
 } as const;
+
+/** The table's caption: "October 2026. Select a column heading to sort." (BR-F04-18). */
+export function tableCaption(month: Month, f: Formats): string {
+	return `${long(month, f)}. Select a column heading to sort.`;
+}
+
+/** The table's own words (BR-F04-18). */
+export const TABLE_TEXT = {
+	category: "Category",
+	limit: "Limit",
+	spent: "Spent",
+	remaining: "Remaining",
+	utilization: "Utilization",
+	state: "State",
+	total: "Budgeted total",
+	notBudgeted: "Not budgeted",
+	none: "—",
+} as const;

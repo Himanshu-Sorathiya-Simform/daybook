@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Banner } from "@/components/feedback/Banner";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Section } from "@/components/surfaces/Section";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useOnline } from "@/hooks/useOnline";
 import { useShortcut } from "@/hooks/useShortcut";
 import type { ExpenseCategory, StateLabel } from "@/lib/budgets/model";
@@ -21,6 +22,7 @@ import { BudgetList } from "./BudgetList";
 import { BudgetsHeader } from "./BudgetsHeader";
 import { BudgetsOverview } from "./BudgetsOverview";
 import { BudgetsSkeleton } from "./BudgetsSkeleton";
+import { BudgetTable } from "./BudgetTable";
 
 export type BudgetsPageProps = {
 	/** The profile's formats and its today, from the server render (TIME-5). */
@@ -35,6 +37,9 @@ export type BudgetsPageProps = {
 };
 
 const nothing = () => {};
+
+/** From here up, List or Table shows in the header (BR-F04-14, D-512). */
+const WIDE = "(min-width: 48rem)";
 
 /** Whether `category` shows anywhere in the month: as a Budget, Not budgeted or Not active. */
 function shows(view: BudgetMonthAnswer, category: ExpenseCategory): boolean {
@@ -55,6 +60,8 @@ function shows(view: BudgetMonthAnswer, category: ExpenseCategory): boolean {
  *   Back included, clears it.
  * - **The selection** (BR-F04-17, D-249) stays across months while its category shows in the
  *   new one, and clears otherwise. Escape clears it (BR-F04-32).
+ * - **The view** (BR-F04-14, BR-F04-18, D-570): the remembered Table shows only from 768 px,
+ *   where its switch is, and for a month with a Budget; otherwise the list.
  */
 export function BudgetsPage({
 	locale,
@@ -67,6 +74,7 @@ export function BudgetsPage({
 	const url = useBudgetsUrl(current);
 	const online = useOnline();
 	const [view, setView] = useBudgetsView();
+	const wide = useMediaQuery(WIDE, false);
 	const query = useBudgetMonth(url.month);
 	const [filterIn, setFilterIn] = useState<{
 		month: Month;
@@ -125,22 +133,32 @@ export function BudgetsPage({
 						/>
 					</Section>
 				}
-				{(hasBudgets || hasOthers) && (
-					<BudgetList
+				{hasBudgets && wide && view === "table" ?
+					<BudgetTable
 						view={shown}
 						formats={locale}
-						todayShare={
-							isCurrent ? dayOfMonth(locale.today).share : null
-						}
 						filter={filter}
 						onFilterChange={setFilter}
 						selected={selected}
 						onSelect={setSelected}
-						onAdd={onAdd}
-						onChangeLimit={onChangeLimit}
-						onDelete={onDelete}
 					/>
-				)}
+				:	(hasBudgets || hasOthers) && (
+						<BudgetList
+							view={shown}
+							formats={locale}
+							todayShare={
+								isCurrent ? dayOfMonth(locale.today).share : null
+							}
+							filter={filter}
+							onFilterChange={setFilter}
+							selected={selected}
+							onSelect={setSelected}
+							onAdd={onAdd}
+							onChangeLimit={onChangeLimit}
+							onDelete={onDelete}
+						/>
+					)
+				}
 			</>
 		);
 	};
