@@ -524,6 +524,25 @@ describe("GET /api/profile (BR-F02-26)", () => {
 		).toBe(false);
 	});
 
+	test("a Budget alone fixes the currency (BR-F02-14)", async () => {
+		const who = await newUser("profile-get-budget");
+		await post(who, INDIA);
+		await owner.query(
+			`INSERT INTO app.budgets (id, user_id, category, schedule, overrides, created_at, updated_at)
+			 VALUES ($1, $2, 'food', $3, '[]', $4, $4)`,
+			[
+				randomUUIDv7(),
+				who.id,
+				JSON.stringify([{ from: "2026-11", limitMinor: 500000 }]),
+				GOLDEN_NOW,
+			],
+		);
+		expect(
+			((await read(who)).body as { data: { currencyEditable: boolean } }).data
+				.currencyEditable,
+		).toBe(false);
+	});
+
 	test("counts only the user's own Transactions", async () => {
 		await goldenUser("profile-get-rich-neighbour");
 		const who = await newUser("profile-get-own");

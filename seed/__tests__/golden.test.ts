@@ -1,7 +1,10 @@
 import { describe, expect, test } from "vitest";
 
+import { isUuidV7 } from "@/lib/ids";
+
 import {
 	GOLDEN_ALL,
+	GOLDEN_BUDGETS,
 	GOLDEN_GOALS,
 	GOLDEN_NOW,
 	GOLDEN_PENDING_P1,
@@ -219,5 +222,62 @@ test("P1 is Chai Point, 300.00 food at 11:40 on 2 November", () => {
 		amountMinor: 30000,
 		occurredOn: "2026-11-02",
 		occurredAt: "2026-11-02T06:10:00Z",
+	});
+});
+
+// docs/03-golden-dataset.md, Setup: the Budgets table.
+describe("the golden Budgets", () => {
+	test("are food, shopping, entertainment and transportation, with their limits", () => {
+		expect(
+			GOLDEN_BUDGETS.map(({ category, schedule, overrides }) => ({
+				category,
+				schedule,
+				overrides,
+			})),
+		).toEqual([
+			{
+				category: "food",
+				schedule: [
+					{ from: "2026-09", limitMinor: 600000 },
+					{ from: "2026-10", limitMinor: 500000 },
+				],
+				overrides: [],
+			},
+			{
+				category: "shopping",
+				schedule: [{ from: "2026-09", limitMinor: 300000 }],
+				overrides: [],
+			},
+			{
+				category: "entertainment",
+				schedule: [{ from: "2026-09", limitMinor: 100000 }],
+				overrides: [],
+			},
+			{
+				category: "transportation",
+				schedule: [{ from: "2026-10", limitMinor: 200000 }],
+				overrides: [],
+			},
+		]);
+	});
+
+	test("food's one change makes it version 2; the rest are version 1, none demo", () => {
+		expect(
+			GOLDEN_BUDGETS.map((budget) => [budget.version, budget.demo]),
+		).toEqual([
+			[2, false],
+			[1, false],
+			[1, false],
+			[1, false],
+		]);
+	});
+
+	test("have distinct UUIDv7 ids of their own kind, 8004", () => {
+		const ids = GOLDEN_BUDGETS.map((budget) => budget.id);
+		expect(new Set(ids).size).toBe(4);
+		for (const id of ids) {
+			expect(isUuidV7(id)).toBe(true);
+			expect(id.split("-")[3]).toBe("8004");
+		}
 	});
 });

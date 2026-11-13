@@ -106,6 +106,25 @@ export function formatMoneyShort(
 }
 
 /**
+ * `numerator ÷ denominator` in tenths of a percent, from two integers, rounded half away from
+ * zero once (MON-7, MON-8): 239850 of 300000 is 800, and −1 of 3 is −333. The denominator is
+ * not zero.
+ */
+export function percentTenths(numerator: number, denominator: number): number {
+	if (!Number.isSafeInteger(numerator) || !Number.isSafeInteger(denominator)) {
+		throw new RangeError("A percentage needs two whole numbers.");
+	}
+	if (denominator === 0) throw new RangeError("A percentage needs a denominator.");
+	// BigInt keeps the division exact; the target is below ES2020, so no `2000n` literals.
+	const [two, thousand] = [BigInt(2), BigInt(1000)];
+	const n = BigInt(Math.abs(numerator));
+	const d = BigInt(Math.abs(denominator));
+	const tenths = Number((n * two * thousand + d) / (two * d));
+	// A result that rounds to zero is 0, never −0.
+	return tenths !== 0 && numerator < 0 !== denominator < 0 ? -tenths : tenths;
+}
+
+/**
  * A percentage with one decimal, computed from two integers and rounded half away from zero
  * once (MON-7, MON-8). A zero denominator gives "—".
  */
@@ -119,15 +138,11 @@ export function formatPercent(
 		throw new RangeError("A percentage needs two whole numbers.");
 	}
 	if (denominator === 0) return "—";
-	// BigInt keeps the division exact; the target is below ES2020, so no `2000n` literals.
-	const [zero, two, thousand] = [BigInt(0), BigInt(2), BigInt(1000)];
-	const n = BigInt(Math.abs(numerator));
-	const d = BigInt(Math.abs(denominator));
-	// Tenths of a percent: round(n / d * 1000), half away from zero.
-	const tenths = (n * two * thousand + d) / (two * d);
-	const negative = tenths > zero && numerator < 0 !== denominator < 0;
+	const signed = percentTenths(numerator, denominator);
+	const tenths = Math.abs(signed);
+	const negative = signed < 0;
 	const ratio =
-		`${tenths / thousand}.${String(tenths % thousand).padStart(3, "0")}` as `${number}`;
+		`${Math.trunc(tenths / 1000)}.${String(tenths % 1000).padStart(3, "0")}` as `${number}`;
 	const text = new Intl.NumberFormat(numberLocale, {
 		style: "percent",
 		minimumFractionDigits: 1,
@@ -135,5 +150,5 @@ export function formatPercent(
 		signDisplay: "never",
 	}).format(ratio);
 	if (negative) return MINUS + text;
-	return signDisplay === "always" && tenths > zero ? "+" + text : text;
+	return signDisplay === "always" && tenths > 0 ? "+" + text : text;
 }

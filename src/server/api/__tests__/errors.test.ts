@@ -44,6 +44,7 @@ describe("ERRORS", () => {
 		["currency_mismatch", 422],
 		["date_out_of_window", 422],
 		["limit_reached", 422],
+		["budget_exists", 409],
 		["rate_limited", 429],
 		["internal", 500],
 		["timeout", 503],
@@ -51,8 +52,15 @@ describe("ERRORS", () => {
 		expect(ERRORS[code].status).toBe(status);
 	});
 
-	test("holds exactly the twenty codes of P2, section 8, and F03's date_out_of_window and limit_reached", () => {
-		expect(Object.keys(ERRORS)).toHaveLength(22);
+	test("holds exactly the twenty codes of P2, section 8, F03's date_out_of_window and limit_reached, and F04's budget_exists", () => {
+		expect(Object.keys(ERRORS)).toHaveLength(23);
+	});
+
+	// F04 section 11's error code.
+	test("budget_exists reads as F04 says", () => {
+		expect(ERRORS.budget_exists.message).toBe(
+			"A Budget for this category already exists.",
+		);
 	});
 
 	test("gives every code a message that ends with a full stop", () => {

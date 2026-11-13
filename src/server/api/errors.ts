@@ -72,6 +72,11 @@ export const ERRORS = {
 		status: 422,
 		message: "You have 20 views. Delete one to save another.",
 	},
+	// F04: a second Budget for an expense category (BR-F04-01, D-246).
+	budget_exists: {
+		status: 409,
+		message: "A Budget for this category already exists.",
+	},
 	rate_limited: {
 		status: 429,
 		message: "Too many attempts. Wait a few seconds and try again.",

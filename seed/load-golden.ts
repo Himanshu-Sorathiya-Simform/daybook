@@ -5,6 +5,7 @@ import { isGoalType } from "@/lib/transactions/model";
 
 import {
 	GOLDEN_ALL,
+	GOLDEN_BUDGETS,
 	GOLDEN_NOW,
 	GOLDEN_PROFILE,
 	GOLDEN_TODAY,
@@ -120,4 +121,42 @@ export async function loadGolden(
 			return n;
 		},
 	};
+}
+
+/** A Budget as a load writes it: the golden shape with this load's id. */
+export type LoadedBudget = (typeof GOLDEN_BUDGETS)[number] & { id: string };
+
+/** Inserts `budgets` as `userId`'s Budgets in one statement, recorded at the golden clock. */
+export async function insertBudgets(
+	client: ClientBase,
+	userId: string,
+	budgets: readonly LoadedBudget[],
+): Promise<void> {
+	await client.query(
+		`INSERT INTO app.budgets
+		   (id, user_id, created_at, updated_at, category, schedule, overrides, demo, version)
+		 SELECT r.id, $1, $2, $2, r.category, r.schedule, r.overrides, r.demo, r.version
+		 FROM jsonb_to_recordset($3::jsonb) AS r(
+		   id uuid, category text, schedule jsonb, overrides jsonb, demo boolean, version integer)`,
+		[userId, GOLDEN_NOW, JSON.stringify(budgets)],
+	);
+}
+
+/**
+ * Loads the four golden Budgets for `userId` (docs/03-golden-dataset.md, Setup), who already
+ * has the golden profile, in one statement. Kept apart from `loadGolden` until the Budgets page
+ * needs them in every load, so the Transactions tests' data stays as it was. Returns the
+ * loaded Budgets with this load's ids.
+ */
+export async function loadGoldenBudgets(
+	client: ClientBase,
+	userId: string,
+): Promise<LoadedBudget[]> {
+	const prefix = loadPrefix();
+	const budgets = GOLDEN_BUDGETS.map((budget) => ({
+		...budget,
+		id: reId(budget.id, prefix),
+	}));
+	await insertBudgets(client, userId, budgets);
+	return budgets;
 }
