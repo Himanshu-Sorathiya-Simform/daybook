@@ -477,3 +477,162 @@ describe("offline (section 10)", () => {
 		).not.toBeInTheDocument();
 	});
 });
+
+describe("the overview and the list (BR-F04-15)", () => {
+	const rowOf = (key: string) =>
+		document.querySelector<HTMLElement>(
+			`[role="row"][data-key="${key}"]`,
+		) as HTMLElement;
+
+	// F04 section 5: the October page.
+	test("golden October shows the overview, then Needs attention and Not budgeted", async () => {
+		renderPage("?month=2026-10");
+		expect(
+			await screen.findByText("Budgeted spending in October"),
+		).toBeVisible();
+		expect(screen.getByText("Needs attention · 4")).toBeVisible();
+		expect(screen.getByText("Not budgeted · 1")).toBeVisible();
+		expect(screen.queryByText(/^Blue: day/)).not.toBeInTheDocument();
+		expect(document.querySelector('[data-part="today"]')).toBeNull();
+	});
+
+	// The golden clock's day 2 of November.
+	test("the current month marks today in the overview and on each bar", async () => {
+		renderPage("", { seed: monthAnswer("2026-11") });
+		expect(await screen.findByText("Blue: day 2 of 30")).toBeVisible();
+		expect(
+			rowOf("budget:food").querySelector('[data-part="today"]'),
+		).not.toBeNull();
+	});
+
+	// Section 6: golden September with no limits still has spending and a record.
+	test("a month with no Budget shows the message, with Not budgeted and Not active under it", async () => {
+		renderPage("?month=2026-09", {
+			months: (month) => ok({ ...monthAnswer(month), budgets: [] }),
+		});
+		expect(
+			await screen.findByText("No Budgets for September 2026."),
+		).toBeVisible();
+		expect(screen.queryByText(/^Budgeted spending/)).not.toBeInTheDocument();
+		expect(screen.getByText("Not budgeted · 3")).toBeVisible();
+		expect(
+			screen.getByRole("button", { name: "Not active this month · 1" }),
+		).toBeVisible();
+	});
+
+	test("Add a Budget on a Not budgeted row asks for that category", async () => {
+		const onAdd = vi.fn();
+		const { user } = renderPage("?month=2026-10", { onAdd });
+		await screen.findByText("Not budgeted · 1");
+		await user.click(
+			within(rowOf("unbudgeted:housing")).getByRole("button", {
+				name: "Add a Budget",
+			}),
+		);
+		expect(onAdd).toHaveBeenCalledWith("housing");
+	});
+
+	test("the header's Add a Budget asks for no category", async () => {
+		const onAdd = vi.fn();
+		const { user } = renderPage("?month=2026-10", { onAdd });
+		await user.click(
+			screen.getAllByRole("button", {
+				name: "Add a Budget",
+			})[0] as HTMLElement,
+		);
+		expect(onAdd).toHaveBeenCalledWith();
+	});
+});
+
+describe("the state filter on the page (BR-F04-31)", () => {
+	// AC-F04-26
+	test("a count filters the list, and changing the month clears it", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await user.click(
+			await screen.findByRole("button", { name: /^Over budget/ }),
+		);
+		expect(screen.getByText("Showing")).toBeVisible();
+		expect(screen.getByText("Needs attention · 2")).toBeVisible();
+		await user.click(monthButton("Previous month"));
+		expect(await screen.findByText("Needs attention · 2")).toBeVisible();
+		expect(screen.queryByText("Showing")).not.toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /^Over budget/ })).toHaveAttribute(
+			"aria-pressed",
+			"false",
+		);
+		await user.click(monthButton("Next month"));
+		expect(await screen.findByText("Needs attention · 4")).toBeVisible();
+		expect(screen.queryByText("Showing")).not.toBeInTheDocument();
+	});
+
+	// AC-F04-26
+	test("a state with no Budget shows the empty text, and Show all Budgets clears it", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await user.click(await screen.findByRole("button", { name: /^On track/ }));
+		expect(
+			screen.getByText("No Budgets are on track in October 2026."),
+		).toBeVisible();
+		await user.click(screen.getByRole("button", { name: "Show all Budgets" }));
+		expect(screen.getByText("Needs attention · 4")).toBeVisible();
+	});
+});
+
+describe("the selection across months (BR-F04-17, D-249)", () => {
+	const rowOf = (key: string) =>
+		document.querySelector<HTMLElement>(
+			`[role="row"][data-key="${key}"]`,
+		) as HTMLElement;
+
+	// AC-F04-29
+	test("Food selected in October stays selected in September", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		await user.click(rowOf("budget:food"));
+		await user.click(monthButton("Previous month"));
+		await screen.findByText("Needs attention · 2");
+		expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "true");
+	});
+
+	// AC-F04-29
+	test("housing selected in October clears in August, where it shows nowhere", async () => {
+		const { user } = renderPage("?month=2026-10", {
+			months: (month) =>
+				ok(month === "2026-08" ? nothing(month) : monthAnswer(month)),
+		});
+		await screen.findByText("Not budgeted · 1");
+		await user.click(rowOf("unbudgeted:housing"));
+		await user.click(monthButton("Previous month"));
+		await user.click(monthButton("Previous month"));
+		expect(await screen.findByText("No Budgets for August 2026.")).toBeVisible();
+		await user.click(monthButton("Next month"));
+		await user.click(monthButton("Next month"));
+		await screen.findByText("Not budgeted · 1");
+		expect(rowOf("unbudgeted:housing")).toHaveAttribute(
+			"aria-selected",
+			"false",
+		);
+	});
+
+	// BR-F04-32
+	test("Escape on the page clears the selection", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		await user.click(rowOf("budget:food"));
+		await user.click(screen.getByRole("heading", { level: 1, name: "Budgets" }));
+		await user.keyboard("{Escape}");
+		expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "false");
+	});
+
+	// BR-F04-32
+	test("Down on the page selects the first row and focuses it", async () => {
+		const { user } = renderPage("?month=2026-10");
+		await screen.findByText("Needs attention · 4");
+		await user.click(screen.getByRole("heading", { level: 1, name: "Budgets" }));
+		await user.keyboard("{ArrowDown}");
+		expect(rowOf("budget:entertainment")).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+		expect(rowOf("budget:entertainment")).toHaveFocus();
+	});
+});

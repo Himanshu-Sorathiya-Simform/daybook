@@ -307,3 +307,13 @@ describe("Clear all", () => {
 		);
 	});
 });
+
+describe("the clear-all button's words", () => {
+	test("can read otherwise, as Show all on Budgets, and still clears all", async () => {
+		const user = userEvent.setup();
+		const { onClearAll } = renderChips({ clearAllLabel: "Show all" });
+		expect(screen.queryByRole("button", { name: "Clear all" })).toBeNull();
+		await user.click(screen.getByRole("button", { name: "Show all" }));
+		expect(onClearAll).toHaveBeenCalledOnce();
+	});
+});
