@@ -26,6 +26,7 @@ import {
 	loadedMessage,
 } from "../lib/labels";
 import { sectionsOf } from "../lib/sections";
+import type { TransactionPageAnswer } from "../lib/types";
 import { TransactionListItem } from "./TransactionListItem";
 
 export type TransactionListProps = {
@@ -84,12 +85,16 @@ export function TransactionList({
 }: Readonly<TransactionListProps>) {
 	const query = useTransactionList({ filter, list, currency: locale.currency });
 	const [announcement, setAnnouncement] = useState({ text: "", count: 0 });
+	// The page Load earlier fetched last, which then has the last say on its groups' totals
+	// (BR-F03-56); the next load from below, or a page that changes, ends it.
+	const [earlier, setEarlier] = useState<TransactionPageAnswer | null>(null);
 	const top = useRef<HTMLDivElement>(null);
 	const loadMore = useRef<HTMLDivElement>(null);
 	const grid = useRef<HTMLDivElement | null>(null);
 	// The grid as state too, so Enter's shortcut listens on it once it is on the page.
 	const [gridElement, setGridElement] = useState<HTMLDivElement | null>(null);
-	// The row that takes focus from Load more when the last page takes the button away (D-535).
+	// The row that takes focus from Load more or Load earlier when the last page takes the button
+	// away (D-535, D-581).
 	const focusNext = useRef<string | null>(null);
 	const {
 		data,
@@ -98,6 +103,13 @@ export function TransactionList({
 		isFetchingNextPage,
 		isFetchingPreviousPage,
 	} = query;
+
+	/** Announces the page a load brought (D-530). */
+	const announce = (loaded: number) =>
+		setAnnouncement((last) => ({
+			text: loadedMessage(loaded),
+			count: last.count + 1,
+		}));
 
 	const loadNext = async () => {
 		if (!hasNextPage || isFetchingNextPage) return;
@@ -108,10 +120,20 @@ export function TransactionList({
 		if (result.isFetchNextPageError || !loaded) return;
 		if (pressed && !result.hasNextPage)
 			focusNext.current = loaded.items[0]?.id ?? null;
-		setAnnouncement((last) => ({
-			text: loadedMessage(loaded.items.length),
-			count: last.count + 1,
-		}));
+		setEarlier(null);
+		announce(loaded.items.length);
+	};
+	const loadEarlier = async () => {
+		if (!hasPreviousPage || isFetchingPreviousPage) return;
+		// Load earlier is on the page whenever there is a previous page to load.
+		const pressed = top.current?.contains(document.activeElement) ?? false;
+		const result = await query.fetchPreviousPage();
+		const loaded = result.data?.pages.at(0);
+		if (result.isFetchPreviousPageError || !loaded) return;
+		if (pressed && !result.hasPreviousPage)
+			focusNext.current = loaded.items[0]?.id ?? null;
+		setEarlier(loaded);
+		announce(loaded.items.length);
 	};
 	useEffect(() => {
 		const id = focusNext.current;
@@ -131,15 +153,11 @@ export function TransactionList({
 		focus();
 		return () => cancelAnimationFrame(frame);
 	});
-	const loadEarlier = () => {
-		if (hasPreviousPage && !isFetchingPreviousPage)
-			void query.fetchPreviousPage();
-	};
 	// Each end is watched against the screen, afresh after every page load. React Aria's own
 	// load-more sentinel watches against the page's scroller, here the whole document, where it
 	// always counts as in view: it fired on every change and never on scrolling, so a page
 	// loaded at the top set off one at the end, which trimmed the top again.
-	useInView(top, hasPreviousPage, loadEarlier, data);
+	useInView(top, hasPreviousPage, () => void loadEarlier(), data);
 	useInView(loadMore, hasNextPage, () => void loadNext(), data);
 
 	// Enter opens the selected row and Escape clears it (BR-F03-52). Both listen on the grid
@@ -213,7 +231,12 @@ export function TransactionList({
 		);
 	}
 
-	const sections = sectionsOf(data.pages, list.group, hiddenIds);
+	const sections = sectionsOf(
+		data.pages,
+		list.group,
+		hiddenIds,
+		earlier ?? undefined,
+	);
 	if (sections.length === 0) {
 		return (
 			<Section className={frame}>
@@ -246,7 +269,7 @@ export function TransactionList({
 						variant="secondary"
 						size="sm"
 						isPending={isFetchingPreviousPage}
-						onPress={loadEarlier}
+						onPress={() => void loadEarlier()}
 					>
 						Load earlier
 					</Button>

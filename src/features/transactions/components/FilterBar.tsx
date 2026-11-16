@@ -9,7 +9,6 @@ import type { ListParams, TransactionFilter } from "@/lib/transactions/url";
 import { useFacets } from "../hooks/useFacets";
 import { useHistogram } from "../hooks/useHistogram";
 import { activeChips, type FilterLocale, omitFields } from "../lib/filter-labels";
-import { quickRanges } from "../lib/quick-ranges";
 import { AmountMenu } from "./AmountMenu";
 import { CategoryMenu } from "./CategoryMenu";
 import { DateMenu } from "./DateMenu";
@@ -27,7 +26,8 @@ export type FilterBarProps = {
 	/** Commits a new filter, keeping the list's grouping and sort, as a new history entry or
 	 * in place of the current one. */
 	onFilterChange: (filter: TransactionFilter, mode: "push" | "replace") => void;
-	onListChange: (list: ListParams) => void;
+	/** Commits a new grouping or sort, as a new history entry or in place of the current one. */
+	onListChange: (list: ListParams, mode: "push" | "replace") => void;
 	locale: FilterLocale;
 	firstDayOfWeek: WeekStart;
 	/** The header's count for the committed filter, once loaded. */
@@ -71,8 +71,7 @@ export function FilterBar({
 	});
 	const countsPending = countsOn && !isOffline && facets.isPending;
 	const counts = facets.data;
-	const quick = histogram.data ? quickRanges(histogram.data) : [];
-	const chips = activeChips(filter, locale, quick);
+	const chips = activeChips(filter, locale);
 
 	/** Follows which control is open, for what to load. A close that arrives after another
 	 * control opened leaves that one open; React Aria closes first, but nothing promises it. */
@@ -183,7 +182,13 @@ export function FilterBar({
 				<span className="flex-1 max-md:hidden" />
 				<GroupSortMenu
 					list={list}
-					onChange={onListChange}
+					onChange={(next) => {
+						onListChange(next, pushed.current ? "replace" : "push");
+						pushed.current = true;
+					}}
+					onOpenChange={(isOpen) => {
+						if (isOpen) startVisit();
+					}}
 				/>
 			</div>
 			<FilterChips

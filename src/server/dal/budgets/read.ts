@@ -7,18 +7,19 @@ import {
 	monthsStarting,
 	shiftMonth,
 } from "@/lib/budgets/months";
-import {
-	buildMonthView,
-	type CategorySpending,
-	type MonthView,
-} from "@/lib/budgets/view";
+import { buildMonthView, type CategorySpending } from "@/lib/budgets/view";
 import type { ExpenseCategory } from "@/lib/budgets/model";
 import { compareCodeUnits } from "@/lib/compare";
-import type { CurrencyCode } from "@/lib/currency";
 import { safeInt } from "../../db/safe-int";
 import type { ProfiledContext } from "../context";
 import type { Tx } from "../with-user";
-import { BUDGET_JSON, type Budget } from "./row";
+import type {
+	Budget,
+	BudgetHistory,
+	BudgetMonthAnswer,
+	BudgetYearSummary,
+} from "@/lib/budgets/answers";
+import { BUDGET_JSON } from "./row";
 
 /** Category spending (TXN-5) per month: expenses minus refunds, by `occurred_on` (TIME-2). The
  * table holds confirmed rows only; pending ones live in the client's queue (TXN-6). Goal
@@ -75,9 +76,6 @@ async function readInputs(
 	return { budgets: row.budgets, spending: bySpendingMonth(row.spending) };
 }
 
-/** A month view with the profile currency, as `GET /api/budgets` answers it (API-6). */
-export type BudgetMonthAnswer = MonthView & { currency: CurrencyCode };
-
 /**
  * F04's month view for each of `months` (section 3, BR-F04-34), in one statement (D-293): the
  * user's Budgets, and the category spending from the month before the first to the last. The
@@ -112,12 +110,6 @@ export async function budgetMonth(
 	return view as BudgetMonthAnswer;
 }
 
-export type BudgetHistory = {
-	category: ExpenseCategory;
-	currency: CurrencyCode;
-	months: { month: Month; limitMinor: number | null; spentMinor: number }[];
-};
-
 /**
  * `GET /api/budgets/history` (BR-F04-35): the `count` months ending at `to`, oldest first,
  * each with the category's limit (`null` without one) and its spending, read from the month
@@ -150,11 +142,6 @@ export async function budgetHistory(
 		}),
 	};
 }
-
-export type BudgetYearSummary = {
-	year: number;
-	months: { month: Month; utilizationTenths: number | null }[];
-};
 
 /** `GET /api/budgets/summary` (BR-F04-35): each month of `year` with the overall utilization
  * of its month view from `budgetMonths`, `null` in a month with no Budget. One statement. */

@@ -37,6 +37,7 @@ function renderRange(props: Partial<CustomRangeProps> = {}) {
 	return {
 		onChange,
 		user: userEvent.setup(),
+		unmount: view.unmount,
 		setValue: (value: DateRange | null) => view.rerender(ui(value)),
 	};
 }
@@ -112,6 +113,39 @@ describe("CustomRange (BR-F03-39, D-538, D-543)", () => {
 		await new Promise((resolve) => setTimeout(resolve, 350));
 
 		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	// AC-F03-74
+	test("a typed change left within the wait commits when the control closes", async () => {
+		const view = renderRange({
+			value: { start: "2026-10-05", end: "2026-10-06" },
+		});
+
+		await view.user.click(part("To", "day"));
+		await view.user.keyboard("{ArrowUp}");
+		expect(view.onChange).not.toHaveBeenCalled();
+		view.unmount();
+
+		expect(view.onChange).toHaveBeenCalledExactlyOnceWith({
+			start: "2026-10-05",
+			end: "2026-10-07",
+		});
+	});
+
+	// AC-F03-74
+	test("leaving a date field commits at once, before the wait ends", async () => {
+		const { user, onChange } = renderRange({
+			value: { start: "2026-10-05", end: "2026-10-06" },
+		});
+
+		await user.click(part("To", "day"));
+		await user.keyboard("{ArrowUp}");
+		await user.click(document.body);
+
+		expect(onChange).toHaveBeenCalledExactlyOnceWith({
+			start: "2026-10-05",
+			end: "2026-10-07",
+		});
 	});
 
 	test("a range with the same start and a new end commits", async () => {

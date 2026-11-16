@@ -311,6 +311,54 @@ describe("Min and Max (BR-F03-39, BR-F03-04)", () => {
 		expect(onChange).toHaveBeenCalledExactlyOnceWith({ minMinor: 100000 });
 	});
 
+	// AC-F03-74
+	test("a Min typed and left within the wait commits when the control closes", async () => {
+		const { user, onChange, unmount } = renderBlock();
+
+		await user.type(min(), "900");
+		expect(onChange).not.toHaveBeenCalled();
+		unmount();
+
+		expect(onChange).toHaveBeenCalledExactlyOnceWith({ minMinor: 90000 });
+	});
+
+	// AC-F03-74
+	test("a Max typed and left within the wait commits when the control closes, the Min kept", async () => {
+		const { user, onChange, unmount } = renderBlock({
+			bounds: { minMinor: 40000 },
+		});
+
+		await user.type(max(), "799.99");
+		unmount();
+
+		expect(onChange).toHaveBeenCalledExactlyOnceWith({
+			minMinor: 40000,
+			maxMinor: 79999,
+		});
+	});
+
+	// AC-F03-74
+	test("leaving both boxes commits at once, before the wait ends", async () => {
+		const { user, onChange } = renderBlock();
+
+		await user.type(min(), "500");
+		await user.click(document.body);
+
+		expect(onChange).toHaveBeenCalledExactlyOnceWith({ minMinor: 50000 });
+	});
+
+	test("a box left with nothing typed commits nothing", async () => {
+		const { user, onChange, unmount } = renderBlock({
+			bounds: { minMinor: 40000 },
+		});
+
+		await user.click(min());
+		await user.click(document.body);
+		unmount();
+
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
 	test("a Max commits with the Min kept", async () => {
 		const { user, onChange } = renderBlock({ bounds: { minMinor: 40000 } });
 

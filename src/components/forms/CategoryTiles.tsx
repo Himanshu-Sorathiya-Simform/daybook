@@ -29,6 +29,8 @@ export type CategoryTilesProps = {
 	hint?: string | undefined;
 	error?: string | undefined;
 	isDisabled?: boolean;
+	/** Focus goes to the first tile when the tiles first show. */
+	autoFocus?: boolean;
 	className?: string;
 };
 
@@ -53,6 +55,7 @@ export function CategoryTiles({
 	hint,
 	error,
 	isDisabled = false,
+	autoFocus = false,
 	className,
 }: Readonly<CategoryTilesProps>) {
 	const hintId = useId();
@@ -71,12 +74,13 @@ export function CategoryTiles({
 				error={error}
 			>
 				<div className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-1.5">
-					{tiles.map((key) => {
+					{tiles.map((key, index) => {
 						const Icon = CATEGORY_ICONS[key];
 						return (
 							<AriaRadioField
 								key={key}
 								value={key}
+								autoFocus={autoFocus && index === 0}
 								style={
 									{ "--tile": categoryColor(key) } as CSSProperties
 								}

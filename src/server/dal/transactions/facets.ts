@@ -1,14 +1,11 @@
 import "server-only";
 import { type SQL, sql } from "drizzle-orm";
-import type { CategoryKey } from "@/lib/categories";
+import type { FacetCounts } from "@/lib/transactions/answers";
 import {
 	CATEGORY_KEYS,
 	RANGE_PRESETS,
 	SOURCES,
 	TXN_TYPES,
-	type DatePreset,
-	type Source,
-	type TxnType,
 } from "@/lib/transactions/model";
 import { presetRange } from "@/lib/transactions/presets";
 import type { TransactionFilter } from "@/lib/transactions/url";
@@ -16,17 +13,6 @@ import { safeInt } from "../../db/safe-int";
 import type { ProfiledContext } from "../context";
 import type { Tx } from "../with-user";
 import { filterSql, withoutFields } from "./filter";
-
-/** The date options counted: every preset but `custom` (BR-F03-59). */
-export type DateFacet = Exclude<DatePreset, "custom">;
-
-/** How many confirmed rows each option of four filter fields would give (BR-F03-59). */
-export type FacetCounts = {
-	type: Record<TxnType, number>;
-	category: Record<CategoryKey, number>;
-	date: Record<DateFacet, number>;
-	source: Record<Source, number>;
-};
 
 /** Counts per value of `column` over the rows `where` selects, as a JSON object of text. */
 const countsBy = (column: string, where: SQL) =>

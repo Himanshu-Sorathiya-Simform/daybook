@@ -1,7 +1,6 @@
 import "server-only";
 import { type SQL, sql } from "drizzle-orm";
 import type { CategoryKey } from "@/lib/categories";
-import type { TxnType } from "@/lib/transactions/model";
 import { payeeWindowStart } from "@/lib/transactions/payees";
 import { monthsBefore } from "@/lib/time";
 import { safeInt } from "../../db/safe-int";
@@ -9,21 +8,7 @@ import type { ProfiledContext } from "../context";
 import type { Tx } from "../with-user";
 import { escapeLike } from "./filter";
 import { INCOME, SPENDING } from "./totals";
-
-/** One payee in the suggestions (BR-F03-44): its newest spelling, type and category. */
-export type PayeeItem = {
-	payee: string;
-	count: number;
-	lastUsedOn: string;
-	lastType: TxnType;
-	lastCategory: CategoryKey;
-};
-
-/** The suggestions; `categories` only without a search (BR-F03-44, BR-F03-61). */
-export type PayeeList = {
-	items: PayeeItem[];
-	categories?: { key: CategoryKey; count: number }[];
-};
+import type { PayeeHistory, PayeeItem, PayeeList } from "@/lib/transactions/answers";
 
 /** Up to this many payees in the list, and in an answer to a search. */
 const LIST_SIZE = 200;
@@ -98,14 +83,6 @@ export async function listPayees(
 		),
 	};
 }
-
-/** One payee's recent rows (BR-F03-62); the endpoint adds `currency`. */
-export type PayeeHistory = {
-	count: number;
-	inMinor: number;
-	outMinor: number;
-	usualDay: number | null;
-};
 
 /**
  * One payee's income, expense and refund rows from `months` calendar months before today to

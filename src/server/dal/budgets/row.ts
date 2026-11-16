@@ -1,13 +1,12 @@
 import "server-only";
 import { sql } from "drizzle-orm";
-import type { BudgetRecord } from "@/lib/budgets/view";
+import type { Budget } from "@/lib/budgets/answers";
 import type { CurrencyCode } from "@/lib/currency";
 import { ApiError } from "../../api/errors";
 import { iso } from "../transactions/row";
 import type { Tx } from "../with-user";
 
-/** A Budget as the API answers it (F04 section 3). */
-export type Budget = BudgetRecord & { createdAt: string; updatedAt: string };
+export type { Budget };
 
 /** A row of `app.budgets` as the API's Budget, built in SQL as JSON. The lists are stored
  * normalized and in month order, so they are answered as stored; their limits are at most

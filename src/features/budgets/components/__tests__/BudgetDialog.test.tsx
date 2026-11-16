@@ -277,9 +277,20 @@ describe("Change limit (BR-F04-20)", () => {
 		expect(limitBox()).toHaveFocus();
 	});
 
-	test("Add starts with no focus in the limit, the category coming first", () => {
+	// AC-F04-33
+	test("Add with no category chosen starts on the first tile, the category coming first", () => {
 		renderDialog("add", null);
+
+		expect(screen.getAllByRole("radio")[0]).toHaveFocus();
 		expect(limitBox()).not.toHaveFocus();
+	});
+
+	// AC-F04-33
+	test("Add from a Not budgeted row, its category chosen, starts in the limit", () => {
+		renderDialog("add", "health");
+
+		expect(screen.getByRole("radio", { name: /^Health/ })).toBeChecked();
+		expect(limitBox()).toHaveFocus();
 	});
 
 	test("the viewed month's limit starts it: September's 6,000.00", () => {

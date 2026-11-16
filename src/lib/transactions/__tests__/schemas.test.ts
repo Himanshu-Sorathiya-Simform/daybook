@@ -486,11 +486,10 @@ describe("the edit body (BR-F03-23)", () => {
 		expect(editErrors({})).toEqual({ _body: "Send at least one change." });
 	});
 
-	// BR-F03-23, D-463: `currency` rides with an amount, and is no change of its own.
-	test("a body with only the currency is an empty edit too", () => {
-		expect(editErrors({ currency: "INR" })).toEqual({
-			_body: "Send at least one change.",
-		});
+	// BR-F03-05, D-486: a currency sent alone is a body of its own. It is checked against the
+	// profile and, when it matches, bumps the version and nothing else.
+	test("a body with only the currency is accepted", () => {
+		expect(editErrors({ currency: "INR" })).toEqual({});
 	});
 
 	test("the currency beside a real change is fine", () => {

@@ -110,6 +110,22 @@ describe("the tiles (BR-F03-75)", () => {
 			expect(radio).not.toBeChecked();
 	});
 
+	test("focus stays where it was unless asked for", () => {
+		render(<Harness />);
+
+		expect(
+			screen
+				.getAllByRole("radio")
+				.some((tile) => tile === document.activeElement),
+		).toBe(false);
+	});
+
+	test("autoFocus puts focus on the first tile when it opens", () => {
+		render(<Harness autoFocus />);
+
+		expect(screen.getAllByRole("radio")[0]).toHaveFocus();
+	});
+
 	test("a press chooses a tile and says which", async () => {
 		const user = userEvent.setup();
 		const onChange = vi.fn();

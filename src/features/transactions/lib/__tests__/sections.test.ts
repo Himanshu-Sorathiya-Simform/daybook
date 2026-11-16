@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import type { GroupTotal } from "@/server/dal/transactions/list";
+import type { GroupTotal } from "@/lib/transactions/answers";
 import { groupKeyOf, sectionsOf } from "../sections";
 import { idOf, page, row } from "./fixtures";
 
@@ -116,6 +116,53 @@ describe("sectionsOf (BR-F03-56)", () => {
 			total: total("food", 5, 622000),
 			rows: [a, b],
 		});
+	});
+
+	// AC-F03-75: "the entry of the page fetched last", which Load earlier makes the first page.
+	test("a group that spans two pages takes the totals of the page fetched last, even the first", () => {
+		const a = row({ id: idOf(1), category: "food" });
+		const b = row({ id: idOf(2), category: "food" });
+		const first = page({ items: [a], groups: [total("food", 5, 622000)] });
+		const second = page({ items: [b], groups: [total("food", 4, 600000)] });
+
+		const sections = sectionsOf([first, second], "category", new Set(), first);
+
+		expect(sections[0]?.total).toEqual(total("food", 5, 622000));
+	});
+
+	test("the page fetched last wins only for the groups it carries", () => {
+		const a = row({ id: idOf(1), category: "food" });
+		const b = row({ id: idOf(2), category: "housing" });
+		const first = page({ items: [a], groups: [total("food", 5, 622000)] });
+		const second = page({
+			items: [b],
+			groups: [total("food", 4, 600000), total("housing", 1, 900000)],
+		});
+
+		const sections = sectionsOf([first, second], "category", new Set(), first);
+
+		expect(sections.map((section) => section.total)).toEqual([
+			total("food", 5, 622000),
+			total("housing", 1, 900000),
+		]);
+	});
+
+	test("a page fetched last that is no longer loaded changes nothing", () => {
+		const a = row({ id: idOf(1), category: "food" });
+		const b = row({ id: idOf(2), category: "food" });
+		const gone = page({ items: [], groups: [total("food", 9, 1)] });
+
+		const sections = sectionsOf(
+			[
+				page({ items: [a], groups: [total("food", 4, 600000)] }),
+				page({ items: [b], groups: [total("food", 5, 622000)] }),
+			],
+			"category",
+			new Set(),
+			gone,
+		);
+
+		expect(sections[0]?.total).toEqual(total("food", 5, 622000));
 	});
 
 	test("a group's totals come from a page that carries them even if its rows are on another", () => {

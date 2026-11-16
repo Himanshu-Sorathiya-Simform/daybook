@@ -24,12 +24,10 @@ import {
 import { useCreateView } from "../hooks/useCreateView";
 import { useDeleteView } from "../hooks/useDeleteView";
 import { useEditView } from "../hooks/useEditView";
-import { useHistogram } from "../hooks/useHistogram";
 import { useViews } from "../hooks/useViews";
 import { activeChips } from "../lib/filter-labels";
 import type { LabelLocale } from "../lib/labels";
 import { deleteViewTitle, VIEW_TEXT } from "../lib/messages";
-import { quickRanges } from "../lib/quick-ranges";
 import {
 	isUnknownView,
 	selectedView,
@@ -107,12 +105,6 @@ export function ViewsBar({
 	const create = useCreateView();
 	const edit = useEditView();
 	const remove = useDeleteView();
-	// The amount chip names a quick range only once the histogram has loaded (BR-F03-74).
-	const histogram = useHistogram({
-		filter,
-		currency: locale.currency,
-		enabled: false,
-	});
 	const noteId = useId();
 	const items = views.data?.items;
 	const context = { today: locale.today, currency: locale.currency };
@@ -148,8 +140,7 @@ export function ViewsBar({
 
 	const saveAsView = async () => {
 		const fields = viewFields(current, context);
-		const quick = histogram.data ? quickRanges(histogram.data) : [];
-		const chips = activeChips(filter, locale, quick).map((chip) => chip.label);
+		const chips = activeChips(filter, locale).map((chip) => chip.label);
 		const id = uuidV7();
 		const tried: string[] = [];
 		for (;;) {

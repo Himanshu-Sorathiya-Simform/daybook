@@ -21,7 +21,6 @@ import { renderInApp } from "@/components/app/__tests__/helpers";
 import { Toaster } from "@/components/feedback/Toaster";
 import { useOnline } from "@/hooks/useOnline";
 import { isUuidV7 } from "@/lib/ids";
-import { readFilterParams } from "@/lib/transactions/url";
 import type { SavedView } from "@/lib/transactions/views";
 import {
 	ok,
@@ -33,7 +32,6 @@ import {
 import { useTransactionsUrl } from "../../hooks/useTransactionsUrl";
 import { idOf } from "../../lib/__tests__/fixtures";
 import type { LabelLocale } from "../../lib/labels";
-import { histogramOptions } from "../../lib/queries";
 import { type ViewDialog, ViewsBar } from "../ViewsBar";
 
 const network = setupServer();
@@ -480,24 +478,10 @@ describe("Save as view (BR-F03-67)", () => {
 		});
 	});
 
-	test("an amount that is a quick range is named as its chip reads", async () => {
+	// AC-F03-59
+	test("an amount that equals a quick range is named by its plain bounds, as its chip reads", async () => {
 		const search = `?${CHECK_B}&min=400&max=799.99`;
-		const { queryClient, store, user } = renderBar(search);
-		const { filter } = readFilterParams(new URLSearchParams(search), {
-			currency: "INR",
-		});
-		// Check B's histogram (F03 section 5), cached as the Amount control left it.
-		queryClient.setQueryData(
-			histogramOptions({ filter, currency: "INR" }).queryKey,
-			{
-				edges: [
-					31500, 40000, 50000, 63000, 80000, 100000, 125000, 160000,
-					200000, 250000, 315000,
-				],
-				counts: [1, 0, 0, 1, 0, 0, 0, 0, 1, 1],
-				currency: "INR",
-			},
-		);
+		const { store, user } = renderBar(search);
 		await loaded();
 		const created = route(
 			network,
@@ -508,7 +492,7 @@ describe("Save as view (BR-F03-67)", () => {
 		await user.click(button("Save as view"));
 		await screen.findByText("Saved as a new view.");
 		expect(created[0]?.body).toMatchObject({
-			name: "Last month, Food, ₹400 to ₹800",
+			name: "Last month, Food, ₹400 to ₹799.99",
 			filter: { minMinor: 40000, maxMinor: 79999 },
 		});
 	});

@@ -67,13 +67,15 @@ describe("the trigger (BR-F03-39)", () => {
 		expect(trigger("Amount ₹1,000 to ₹2,500")).toHaveClass("border-accent");
 	});
 
-	test("reads a quick range's own name once the histogram is known", () => {
+	// AC-F03-59
+	test("bounds equal to a quick range read as plain bounds", () => {
 		renderMenu({ bounds: { maxMinor: 39999 } });
 
-		expect(trigger("Amount Under ₹400")).toBeInTheDocument();
+		expect(trigger("Amount Up to ₹399.99")).toBeInTheDocument();
 	});
 
-	test("without the histogram the same bounds read as themselves", () => {
+	// AC-F03-59
+	test("without the histogram the same bounds read the same", () => {
 		renderMenu({ bounds: { maxMinor: 39999 }, histogram: undefined });
 
 		expect(trigger("Amount Up to ₹399.99")).toBeInTheDocument();
@@ -101,7 +103,7 @@ describe("the popover", () => {
 
 		expect(onChange).toHaveBeenCalledExactlyOnceWith({ minMinor: 250000 });
 		expect(screen.getByRole("dialog", { name: "Amount" })).toBeInTheDocument();
-		expect(trigger("Amount ₹2,500 and over")).toBeInTheDocument();
+		expect(trigger("Amount From ₹2,500")).toBeInTheDocument();
 	});
 
 	test("Clear drops both bounds at once", async () => {

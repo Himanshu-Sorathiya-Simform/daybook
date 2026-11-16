@@ -8,7 +8,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vite
 
 import { renderInApp } from "@/components/app/__tests__/helpers";
 import type { TransactionFilter } from "@/lib/transactions/url";
-import { ok, route, type Seen } from "../../hooks/__tests__/helpers";
+import { ok, refuse, route, type Seen } from "../../hooks/__tests__/helpers";
 import type { FilterLocale } from "../../lib/filter-labels";
 import { FilterSheet, type FilterSheetProps } from "../FilterSheet";
 
@@ -363,6 +363,22 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 		await closed();
 	});
 
+	// AC-F03-74
+	test("a Min typed and Show pressed within the wait applies with the Min", async () => {
+		const { user, onApply } = renderSheet();
+
+		await open(user);
+		await waitFor(() => expect(show()).not.toHaveAttribute("data-pending"));
+		await user.type(screen.getByRole("textbox", { name: "Min" }), "500");
+		await user.click(show());
+		// The press that moved focus out of the box commits the Min and starts a new count;
+		// Show applies once that count answers.
+		if (onApply.mock.calls.length === 0) await apply(user);
+
+		expect(onApply).toHaveBeenCalledExactlyOnceWith({ minMinor: 50000 });
+		await closed();
+	});
+
 	test("the draft's count is asked 300 ms after its last change, once", async () => {
 		const { user, summaries } = renderSheet();
 
@@ -449,6 +465,23 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 		await open(user);
 		await user.click(chip("Type", "Expense"));
 		expect(show()).not.toHaveAttribute("data-pending");
+		await user.click(show());
+
+		expect(onApply).toHaveBeenCalledExactlyOnceWith({ type: ["expense"] });
+	});
+
+	// AC-F03-76
+	test("when the count fails while online, Show reads Show Transactions and applies at once", async () => {
+		const { user, onApply } = renderSheet();
+		route(network, "get", "/api/transactions/summary", () =>
+			refuse(500, "internal"),
+		);
+
+		await open(user);
+		await user.click(chip("Type", "Expense"));
+
+		await waitFor(() => expect(show()).not.toHaveAttribute("data-pending"));
+		expect(show()).toHaveTextContent(/^Show Transactions$/);
 		await user.click(show());
 
 		expect(onApply).toHaveBeenCalledExactlyOnceWith({ type: ["expense"] });
@@ -580,6 +613,32 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 		await apply(user);
 
 		expect(onApply).toHaveBeenCalledExactlyOnceWith({ q: "swiggy" });
+	});
+
+	// AC-F03-74
+	test("Clear all also leaves Custom range, back to All time", async () => {
+		const { user } = renderSheet();
+
+		await open(user);
+		await user.click(chip("Date", "Custom range"));
+		expect(screen.getByRole("group", { name: "From" })).toBeInTheDocument();
+		await user.click(screen.getByRole("button", { name: "Clear all" }));
+
+		expect(chip("Date", "All time")).toBeChecked();
+		expect(
+			screen.queryByRole("group", { name: "From" }),
+		).not.toBeInTheDocument();
+	});
+
+	// AC-F03-74
+	test("the Category control says that category filters hide Goal Transactions", async () => {
+		const { user } = renderSheet();
+
+		const sheet = await open(user);
+
+		expect(
+			within(sheet).getByText("Category filters hide Goal Transactions."),
+		).toBeInTheDocument();
 	});
 
 	test("closing drops the draft, and opening again starts from the committed filter", async () => {

@@ -1,6 +1,9 @@
 "use client";
 
+import { X } from "lucide-react";
+
 import { Button } from "@/components/actions/Button";
+import { IconButton } from "@/components/actions/IconButton";
 import { Skeleton } from "@/components/feedback/Skeleton";
 import { Drawer } from "@/components/surfaces/Drawer";
 import { Section } from "@/components/surfaces/Section";
@@ -68,20 +71,43 @@ export function TransactionPanel({
 	onDelete,
 	className,
 }: Readonly<TransactionPanelProps>) {
+	// The heading and Close of the selected row, kept while it loads or fails (BR-F03-72).
+	const header = (
+		<div className="flex items-center">
+			<h2 className="text-label text-ink-2 flex-1">{PANEL_TEXT.heading}</h2>
+			<IconButton
+				icon={X}
+				label={PANEL_TEXT.close}
+				variant="plain"
+				size="sm"
+				onPress={onClose}
+			/>
+		</div>
+	);
 	const detail = (() => {
 		if (selection === null) return null;
-		if (selection.state === "loading") return <LoadingLines />;
+		if (selection.state === "loading") {
+			return (
+				<div className="flex flex-col gap-4">
+					{header}
+					<LoadingLines />
+				</div>
+			);
+		}
 		if (selection.state === "failed") {
 			return (
-				<div className="flex flex-col items-start gap-3">
-					<p className="text-body text-ink">{PANEL_TEXT.failed}</p>
-					<Button
-						variant="secondary"
-						size="sm"
-						onPress={selection.onRetry}
-					>
-						Retry
-					</Button>
+				<div className="flex flex-col gap-4">
+					{header}
+					<div className="flex flex-col items-start gap-3">
+						<p className="text-body text-ink">{PANEL_TEXT.failed}</p>
+						<Button
+							variant="secondary"
+							size="sm"
+							onPress={selection.onRetry}
+						>
+							Retry
+						</Button>
+					</div>
 				</div>
 			);
 		}

@@ -329,9 +329,7 @@ export const transactionEditSchema = z
 		...SYSTEM_FIELDS,
 	})
 	.superRefine((body, ctx) => {
-		// `currency` rides with an amount and is no field of the row, so alone it changes nothing.
-		const fields = Object.keys(body).filter((key) => key !== "currency");
-		if (fields.length === 0) addIssue(ctx, null, M.nothingToChange);
+		if (Object.keys(body).length === 0) addIssue(ctx, null, M.nothingToChange);
 		if (body.occurredAt !== undefined && body.occurredOn === undefined) {
 			addIssue(ctx, "occurredOn", M.dateAndTimeTogether);
 		}

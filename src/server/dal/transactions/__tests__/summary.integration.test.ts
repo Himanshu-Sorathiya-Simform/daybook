@@ -6,7 +6,7 @@ import type { TransactionFilter } from "@/lib/transactions/url";
 import { runtimePool } from "../../../db/pools";
 import { createUser } from "../../../db/__tests__/private-rows";
 import { parseOwnerEnv } from "../../../env";
-import type { Breakdown } from "../query";
+import type { Breakdown } from "@/lib/transactions/answers";
 import { listTransactions } from "../list";
 import { transactionSummary } from "../summary";
 import type { Tx } from "../../with-user";

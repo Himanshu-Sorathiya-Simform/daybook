@@ -17,7 +17,7 @@ import { call } from "@/server/api/__tests__/call";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
 import { runtimePool } from "@/server/db/pools";
 import { parseOwnerEnv } from "@/server/env";
-import type { GroupTotal } from "@/server/dal/transactions/list";
+import type { GroupTotal } from "@/lib/transactions/answers";
 import { GET } from "../route";
 
 /** `GET /api/transactions` (F03 section 11) through the route wrapper, a real session and the

@@ -214,25 +214,20 @@ describe("amountLabel (BR-F03-39)", () => {
 		);
 	});
 
-	test("bounds equal to a quick range take the range's own name", () => {
-		expect(amountLabel({ maxMinor: 39999 }, IN, CHECK_B)).toBe("Under ₹400");
-		expect(amountLabel({ minMinor: 40000, maxMinor: 79999 }, IN, CHECK_B)).toBe(
-			"₹400 to ₹800",
-		);
-		expect(amountLabel({ minMinor: 250000 }, IN, CHECK_B)).toBe(
-			"₹2,500 and over",
-		);
-	});
-
-	test("without the quick ranges the same bounds read as themselves", () => {
+	// AC-F03-59
+	test("bounds equal to a quick range still read as plain bounds", () => {
 		expect(amountLabel({ maxMinor: 39999 }, IN)).toBe("Up to ₹399.99");
+		expect(amountLabel({ minMinor: 40000, maxMinor: 79999 }, IN)).toBe(
+			"₹400 to ₹799.99",
+		);
+		expect(amountLabel({ minMinor: 250000 }, IN)).toBe("From ₹2,500");
 	});
 
 	test("bounds near a quick range but not equal read as themselves", () => {
-		expect(amountLabel({ minMinor: 40000, maxMinor: 80000 }, IN, CHECK_B)).toBe(
+		expect(amountLabel({ minMinor: 40000, maxMinor: 80000 }, IN)).toBe(
 			"₹400 to ₹800",
 		);
-		expect(amountLabel({ minMinor: 40000 }, IN, CHECK_B)).toBe("From ₹400");
+		expect(amountLabel({ minMinor: 40000 }, IN)).toBe("From ₹400");
 	});
 });
 
@@ -343,13 +338,10 @@ describe("activeChips (BR-F03-39)", () => {
 		expect(chips[0]!.without).toEqual({ src: "manual" });
 	});
 
-	test("the amount chip takes a quick range's name when one is given", () => {
-		const [amount] = activeChips(
-			{ minMinor: 80000, maxMinor: 249999 },
-			IN,
-			CHECK_B,
-		);
-		expect(amount!.label).toBe("₹800 to ₹2,500");
+	// AC-F03-59
+	test("the amount chip reads the plain bounds, even when they equal a quick range", () => {
+		const [amount] = activeChips({ minMinor: 80000, maxMinor: 249999 }, IN);
+		expect(amount!.label).toBe("₹800 to ₹2,499.99");
 	});
 
 	test("each other chip removes only its own field", () => {

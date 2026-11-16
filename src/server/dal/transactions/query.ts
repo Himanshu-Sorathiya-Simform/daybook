@@ -9,6 +9,7 @@ import {
 } from "@/lib/transactions/url";
 import { ApiError } from "../../api/errors";
 import { readCursor } from "./cursor";
+import { BREAKDOWNS, type Breakdown } from "@/lib/transactions/answers";
 
 /** 400 `bad_request` naming every invalid parameter, in the URL's order (D-457, D-478). */
 export function badParams(params: readonly string[]): ApiError {
@@ -110,10 +111,6 @@ export function readFilterQuery(
 	if (refused.length > 0) throw badParams(refused);
 	return filter;
 }
-
-/** What a summary can break Out down by (BR-F03-58). */
-export const BREAKDOWNS = ["category", "payee"] as const;
-export type Breakdown = (typeof BREAKDOWNS)[number];
 
 /** `by`: absent for no breakdowns, else a comma list of distinct breakdowns. An empty value,
  * an unknown or repeated value, or `by` given twice is invalid (BR-F03-58). */

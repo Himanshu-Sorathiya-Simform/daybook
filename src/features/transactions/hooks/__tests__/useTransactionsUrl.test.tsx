@@ -322,6 +322,21 @@ describe("writing the URL", () => {
 		});
 	});
 
+	// D-547
+	test("a list change replaces the current entry when asked, keeping the filter", async () => {
+		const { result, calls } = await renderUrl("?cat=food");
+		act(() =>
+			result.current.setList(
+				{ sort: "amount", dir: "asc", group: "category" },
+				"replace",
+			),
+		);
+		expect(calls.at(-1)).toEqual({
+			mode: "replace",
+			href: "/transactions?cat=food&sort=amount&dir=asc&group=category",
+		});
+	});
+
 	test("names that are not the page's are dropped on a write (D-458)", async () => {
 		const { result, calls } = await renderUrl("?cat=food&utm_source=mail");
 		act(() =>

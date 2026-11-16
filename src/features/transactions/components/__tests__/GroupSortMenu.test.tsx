@@ -8,13 +8,17 @@ import { GroupSortMenu } from "../GroupSortMenu";
 
 const DEFAULT: ListParams = { sort: "date", dir: "desc", group: "day" };
 
-function renderMenu(list: ListParams = DEFAULT) {
+function renderMenu(
+	list: ListParams = DEFAULT,
+	onOpenChange?: (isOpen: boolean) => void,
+) {
 	const user = userEvent.setup();
 	const onChange = vi.fn();
 	const view = render(
 		<GroupSortMenu
 			list={list}
 			onChange={onChange}
+			{...(onOpenChange ? { onOpenChange } : {})}
 		/>,
 	);
 	return { ...view, user, onChange };
@@ -280,5 +284,17 @@ describe("choosing (D-529)", () => {
 
 		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
 		await waitFor(() => expect(trigger()).toHaveFocus());
+	});
+});
+
+describe("opening (D-547)", () => {
+	test("tells the caller when it opens and closes, so a visit is one history entry", async () => {
+		const onOpenChange = vi.fn();
+		const { user } = renderMenu(DEFAULT, onOpenChange);
+
+		await open(user);
+		await user.keyboard("{Escape}");
+
+		expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
 	});
 });

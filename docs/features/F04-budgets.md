@@ -9,7 +9,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 | Milestone  | M2. Before M5, writes are online only, with F03's stand-ins: Save disabled offline, and a failed save keeps the dialog open (D-241)                                                                                                                 |
 | Plan       | Free and Premium, with no gating; one-month limits included (D-560)                                                                                                                                                                                 |
 | Depends on | [F03](F03-transactions.md) (category spending, summary, drill-down), [F02](F02-onboarding-profile-settings.md) (month, locale), [P2](../platform/P2-data-access-and-security.md); P1 (write queue, from M5); F08, F09, F10, F11 read Budget figures |
-| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-580                                                                                                                |
+| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-580, D-583                                                                                                         |
 
 ## 1. User stories
 
@@ -162,6 +162,7 @@ Examples in this spec write amounts without the currency symbol and months as `e
     - **Monthly limit:** typed with F03's amount rules (BR-F03-04). Once a category is chosen, its hint reads as Change limit's does (BR-F04-20): "Spent 450.00 in September and 0.00 in August." for the viewed month and the one before.
     - **For how long** (BR-F04-20), only when the chosen category has a Budget record. A category without one always applies from a month (D-560).
     - **Apply from** or **Month:** a month (BR-F04-28).
+    - **Focus:** it starts on the first category tile, or in the limit when the dialog opens with a category already chosen, from a Not budgeted row (D-583).
 
     For a category with no Budget record it sends `POST /api/budgets`. For a category with a record (one that starts later, is stopped, or has a `null` one-month limit in M), it sends `PATCH`.
 
@@ -531,6 +532,7 @@ F08's widget, F09's chart, F10's threshold detector and F11's report all call th
 - **AC-F04-30** (client integration, MSW) Changing golden food to 7,000.00 from 2026-12 meets 409 with `details.current` whose schedule adds `{ 2026-11, 5,500.00 }`. The view titled "This Budget changed on another device" shows a Nov 2026 row marked "Differs" ("None" against "5,500.00 from Nov 2026") and a Dec 2026 row marked "Differs" ("7,000.00 from Dec 2026" against "None"), and the line "Keep mine applies your change, 7,000.00 from December 2026, to the saved Budget.". Keep mine resends the `PATCH` with the saved version in `If-Match` and a new `Idempotency-Key`; Keep theirs sends nothing and the November row reads 5,500.00. The same 409 on Undo shows "Keep mine puts the Budget back as it was before your change.", and on a delete "Delete anyway" and "Keep it".
 - **AC-F04-31** (client integration, MSW) In the dialog on golden, Change limit for food at 7,000.00 from September shows three cards and "Dec 2026 onward", "84.2% Nearing limit → 72.1% · On track" in September, and the two notes of section 5; shopping at 4,000.00 from November 2023 shows the strip's caption, the four groups of section 5 and its three notes; food at 8,000.00 for October only shows September "Unchanged", October "124.4% Over budget → 77.8% · On track", November "Back to the schedule" and one note; stopping entertainment from October adds "October's spending moves to Not budgeted."; food at 5,000.00 for November only says "Nothing changes." with no notes; offline, or after a failed history read, the cards show limits without states.
 - **AC-F04-32** (performance) On the stress account with golden's four Budgets, pressing a state count, pressing a table heading, selecting a row and saving a change of limit each stay within INP 200 ms (root 11.1, D-580).
+- **AC-F04-33** (unit) Add a Budget's first focus (D-583): opened with no category, focus is on the first category tile and not in the limit; opened from a Not budgeted row for Health, Health is chosen and focus is in the limit; Change limit and Stop budgeting keep starting in their own fields.
 
 ## 15. Illustrations
 

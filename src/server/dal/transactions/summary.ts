@@ -1,31 +1,11 @@
 import "server-only";
+import type { Breakdown, BreakdownGroup, Summary } from "@/lib/transactions/answers";
 import type { TxnType } from "@/lib/transactions/model";
 import type { TransactionFilter } from "@/lib/transactions/url";
 import type { ProfiledContext } from "../context";
 import type { Tx } from "../with-user";
-import type { Breakdown } from "./query";
 import { type Bounds, rollup, type RollupGroup, type RollupRequest } from "./rollup";
 import type { Totals } from "./totals";
-
-/** One group of a summary breakdown (BR-F03-58): its expense and refund rows only. */
-export type BreakdownGroup = {
-	key: string;
-	label: string | null;
-	count: number;
-	outMinor: number;
-};
-
-/** The header totals and date span (BR-F03-41, BR-F03-58); the endpoint adds `currency`. */
-export type Summary = {
-	count: number;
-	incomeMinor: number;
-	spendingMinor: number;
-	toGoalsMinor: number;
-	firstOn: string | null;
-	lastOn: string | null;
-	byCategory?: BreakdownGroup[];
-	byPayee?: BreakdownGroup[];
-};
 
 /** At most this many groups in a breakdown. */
 const BREAKDOWN_SIZE = 6;

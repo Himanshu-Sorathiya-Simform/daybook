@@ -395,6 +395,7 @@ export function BudgetDialog({
 					)}
 					{kind === "add" && (
 						<CategoryTiles
+							autoFocus={openedWith === null}
 							tiles={addCategories(view)}
 							captions={tileCaptions(view, locale)}
 							value={category}
@@ -418,7 +419,9 @@ export function BudgetDialog({
 								:	DIALOG_TEXT.newLimit
 							}
 							name="limit"
-							autoFocus={kind !== "add"}
+							// Where the first entry is: the limit, unless an Add still needs its
+							// category (BR-F04-19).
+							autoFocus={kind !== "add" || openedWith !== null}
 							currency={locale.currency}
 							numberLocale={locale.numberLocale}
 							value={amount}

@@ -32,7 +32,7 @@ import { AppProviders } from "@/components/app/AppProviders";
 import { Toaster } from "@/components/feedback/Toaster";
 import type { Transaction } from "@/lib/transactions/model";
 import { readFilterParams } from "@/lib/transactions/url";
-import type { GroupTotal } from "@/server/dal/transactions/list";
+import type { GroupTotal } from "@/lib/transactions/answers";
 import { type GoldenTransaction, goldenRow } from "../../../../../seed/golden";
 import {
 	ok,
@@ -1090,6 +1090,71 @@ describe("pages trimmed from the top (BR-F03-30, D-36)", () => {
 		expect(screen.queryByRole("button", { name: "Load earlier" })).toBeNull();
 	});
 
+	// AC-F03-75
+	test("Load earlier announces the page it brought", async () => {
+		const { user } = renderPage("?sort=amount", { list: sevenPages() });
+		await grid();
+		await loadSix(user);
+		// Each announcement is a new element, so assistive technology reads a repeat.
+		const before = listLive().firstElementChild;
+
+		await user.click(screen.getByRole("button", { name: "Load earlier" }));
+
+		await waitFor(() => expect(rowNames()[0]).toMatch(/^Payee 1,/));
+		await waitFor(() => expect(listLive().firstElementChild).not.toBe(before));
+		expect(listLive()).toHaveTextContent("Loaded 2 more Transactions");
+	});
+
+	// AC-F03-75
+	test("a press on Load earlier that brings the first page moves focus to that page's first row", async () => {
+		const { user } = renderPage("?sort=amount", { list: sevenPages() });
+		await grid();
+		await loadSix(user);
+		screen.getByRole("button", { name: "Load earlier" }).focus();
+
+		await user.keyboard("{Enter}");
+
+		await waitFor(() =>
+			expect(
+				screen
+					.getAllByRole("row")
+					.find((each) =>
+						each.getAttribute("aria-label")?.startsWith("Payee 1,"),
+					),
+			).toHaveFocus(),
+		);
+	});
+
+	// AC-F03-75
+	test("a press on Load earlier stays on the button while more pages wait above", async () => {
+		const { user } = renderPage("?sort=amount", { list: sevenPages() });
+		await grid();
+		await loadSix(user);
+		await user.click(screen.getByRole("button", { name: "Load more" }));
+		await waitFor(() => expect(rowNames()[0]).toMatch(/^Payee 5,/));
+		screen.getByRole("button", { name: "Load earlier" }).focus();
+
+		await user.keyboard("{Enter}");
+		await waitFor(() => expect(rowNames()[0]).toMatch(/^Payee 3,/));
+
+		expect(screen.getByRole("button", { name: "Load earlier" })).toHaveFocus();
+	});
+
+	// AC-F03-75
+	test("the top coming into view loads the earlier page and leaves focus where it was", async () => {
+		const { user } = renderPage("?sort=amount", { list: sevenPages() });
+		await grid();
+		await loadSix(user);
+		const heading = screen.getByRole("heading", { level: 1 });
+		heading.tabIndex = -1;
+		heading.focus();
+
+		scrollToTop();
+
+		await waitFor(() => expect(rowNames()[0]).toMatch(/^Payee 1,/));
+		expect(heading).toHaveFocus();
+	});
+
 	test("asks for the earlier page once, however often the top comes into view while it loads", async () => {
 		let answer: () => void = () => {};
 		const waiting = new Promise<void>((resolve) => (answer = resolve));
@@ -2055,6 +2120,53 @@ describe("history (D-547)", () => {
 			{ mode: "push", href: "/transactions?type=expense" },
 			{ mode: "replace", href: "/transactions?type=expense,refund" },
 		]);
+	});
+
+	// AC-F03-69
+	test("one visit to the Group · Sort menu adds one entry, and its later choices replace it", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.click(screen.getByRole("button", { name: /^Group and sort/ }));
+		await user.click(await screen.findByRole("radio", { name: "Category" }));
+		await user.click(screen.getByRole("radio", { name: "Largest first" }));
+
+		expect(calls).toEqual([
+			{ mode: "push", href: "/transactions?group=category" },
+			{ mode: "replace", href: "/transactions?sort=amount&group=category" },
+		]);
+	});
+
+	// AC-F03-69
+	test("a second visit to the Group · Sort menu adds a second entry", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.click(screen.getByRole("button", { name: /^Group and sort/ }));
+		await user.click(await screen.findByRole("radio", { name: "Category" }));
+		await user.keyboard("{Escape}");
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		await user.click(screen.getByRole("button", { name: /^Group and sort/ }));
+		await user.click(
+			await screen.findByRole("radio", { name: "Largest first" }),
+		);
+
+		expect(calls.map((call) => call.mode)).toEqual(["push", "push"]);
+	});
+
+	// AC-F03-69
+	test("a visit to a filter menu and then to Group · Sort adds an entry for each", async () => {
+		const { user, calls } = renderFiltered("");
+		await grid();
+
+		await user.click(menu("Type"));
+		await user.click(await screen.findByRole("checkbox", { name: /^Expense/ }));
+		await user.keyboard("{Escape}");
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		await user.click(screen.getByRole("button", { name: /^Group and sort/ }));
+		await user.click(await screen.findByRole("radio", { name: "Category" }));
+
+		expect(calls.map((call) => call.mode)).toEqual(["push", "push"]);
 	});
 
 	// AC-F03-69

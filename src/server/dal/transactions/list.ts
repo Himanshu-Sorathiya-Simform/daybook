@@ -5,7 +5,6 @@ import {
 	type Dir,
 	type Group,
 	type Sort,
-	type Transaction,
 } from "@/lib/transactions/model";
 import type { TransactionFilter } from "@/lib/transactions/url";
 import { safeInt } from "../../db/safe-int";
@@ -15,6 +14,9 @@ import { type Cursor, decodeCursor, encodeCursor, type Travel } from "./cursor";
 import { filterSql } from "./filter";
 import { readRow, ROW_JSON, type RowJson } from "./row";
 import { GROUP_JSON, PAYEE_KEY, PAYEE_LABEL, WEIGHT } from "./totals";
+import type { GroupTotal, TransactionPage } from "@/lib/transactions/answers";
+
+export type { GroupTotal, TransactionPage } from "@/lib/transactions/answers";
 
 export type ListOptions = {
 	sort: Sort;
@@ -22,27 +24,6 @@ export type ListOptions = {
 	group: Group;
 	limit: number;
 	cursor?: string | undefined;
-};
-
-/** A group's totals over the whole filter (BR-F03-56). `label` names a payee group. */
-export type GroupTotal = {
-	key: string;
-	label: string | null;
-	count: number;
-	inMinor: number;
-	outMinor: number;
-	toGoalsMinor: number;
-};
-
-/** One page of the list (F03 section 11); the endpoint adds `currency`. */
-export type TransactionPage = {
-	items: Transaction[];
-	nextCursor: string | null;
-	prevCursor: string | null;
-	/** One entry per group with a row on the page, in page order; empty under no grouping. */
-	groups: GroupTotal[];
-	/** The order fingerprint under category or payee grouping (BR-F03-57), else null. */
-	order: string | null;
 };
 
 type GroupJson = Omit<GroupTotal, "count" | "inMinor" | "outMinor" | "toGoalsMinor">

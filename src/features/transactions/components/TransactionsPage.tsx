@@ -224,7 +224,7 @@ export function TransactionsPage({
 					onFilterChange={(filter, mode) =>
 						url.setFilter(filter, url.list, mode)
 					}
-					onListChange={url.setList}
+					onListChange={(list, mode) => url.setList(list, mode)}
 					locale={locale}
 					firstDayOfWeek={weekStart}
 					count={summary.data?.count}
