@@ -9,7 +9,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 | Milestone  | M2. Before M5, writes are online only, with F03's stand-ins: Save disabled offline, and a failed save keeps the dialog open (D-241)                                                                                                                 |
 | Plan       | Free and Premium, with no gating; one-month limits included (D-560)                                                                                                                                                                                 |
 | Depends on | [F03](F03-transactions.md) (category spending, summary, drill-down), [F02](F02-onboarding-profile-settings.md) (month, locale), [P2](../platform/P2-data-access-and-security.md); P1 (write queue, from M5); F08, F09, F10, F11 read Budget figures |
-| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-573                                                                                                                |
+| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-574                                                                                                                |
 
 ## 1. User stories
 
@@ -196,10 +196,12 @@ Examples in this spec write amounts without the currency symbol and months as `e
     - **From a month onward:** M to the current month, or M alone when M is later, captioned "3 months, then every month after" (or "November 2026 and every month after").
     - **One month only:** M − 1, M and M + 1, each only when inside the range (BR-F04-07), with M emphasized; M − 1 reads "Unchanged", and M + 1 reads "Back to the schedule", or "Unchanged" when it has its own one-month limit.
 
-    Each month shows its old limit struck through, its new limit, and the new state: "72.1% · On track", "No Food spending · On track", "Nothing spent yet" (a later month with no spending), "Moves to Not budgeted" (no new limit, with spending) or "No Budget". When the state changes, the old one shows first: "84.2% Nearing limit → 72.1% · On track". A month whose limit does not change reads "Keeps its one-month limit".
+    Each month shows its old limit struck through, its new limit, and the new state: "72.1% · On track", "No Food spending · On track", "Nothing spent yet" (a later month with no spending), "Moves to Not budgeted" (no new limit, with spending) or "No Budget". When the state changes, the old one shows first: "84.2% Nearing limit → 72.1% · On track". A month whose limit does not change reads "Keeps its one-month limit" when it holds a one-month limit of its own, and "Unchanged" otherwise, and shows no state (D-574).
 
     - **Up to 4 months:** one card per month, then a card "Dec 2026 onward" with the new limit and "Carries on until you change it".
-    - **5 months or more:** a strip with one column per month (spending against the new limit, a tick at the old limit), captioned "One column per month: spending against the new limit. Black tick: the old limit."; then a table "Months that change" whose rows group consecutive months with the same old limit, new limit and spending ("Nov 2023 to Aug 2026", "34 months"), 6 groups at first with "Show 3 more"; then "Dec 2026 onward" with the new limit, "carries on until you change it".
+    - **5 months or more:** a strip with one column per month (spending against the new limit, a tick at the old limit), captioned "One column per month: spending against the new limit. Black tick: the old limit."; then a table "Months that change" with the columns Months, Limit and State, whose rows group consecutive months with the same old limit, new limit, spending and one-month limit of their own ("Nov 2023 to Aug 2026", "34 months"), 6 groups at first with "Show 3 more" (and "Show fewer" once shown); then "Dec 2026 onward" with the new limit, "carries on until you change it". The strip is drawn in SVG and hidden from screen readers, the table saying the same in words, and the table row under the pointer tints its months in the strip (D-574).
+
+    **Without the spending** (offline, a failed read, or while it loads) each month shows its old and new limit alone: no state, no strip, and while it loads a line holds the state's place (section 10, D-574). The old state shows first only for a month with spending.
 
     The spending comes from the history endpoint (BR-F04-35) and the months, groups and notes from one shared function, `previewChange`, so the page and its tests agree. There is no preview endpoint.
 
@@ -211,7 +213,9 @@ Examples in this spec write amounts without the currency symbol and months as `e
     5. Later schedule entries it replaces: "This replaces the change to 7,000.00 from December 2026." (or "the stop from December 2026"); several: "This replaces 2 later changes: 7,000.00 from Dec 2026, the stop from Mar 2027."
     6. One-month limits at or after M that stay: "October 2026 keeps its one-month limit." or "October and December 2026 keep their one-month limits."
 
-    When the change would leave the Budget exactly as it is, the dialog says "Food already has this limit from November 2026. Nothing changes." (or "in November 2026") and its button is disabled. The button names the change: "Add Budget from November", "Change from November", "Change November only", "Add for November only", "Stop from November" or "Stop November only".
+    Months in a note are written with their year once where it is shared, and three or more in a row as a range: "September and October 2026", "October and December 2026", "November 2023 to October 2026". A year other than the current one shows in "January 2027's spending" (D-574).
+
+    When the change would leave the Budget exactly as it is, the dialog says "Food already has this limit from November 2026. Nothing changes." (or "in November 2026") and its button is disabled. "What changes" stays and the notes are left out. The button names the change: "Add Budget from November", "Change from November", "Change November only", "Add for November only", "Stop from November" or "Stop November only".
 
 **The month field**
 
@@ -431,7 +435,7 @@ None. Every Budget feature, one-month limits included, is on both plans (D-560);
 
 ## 10. Offline behavior
 
-- **Readable:** the current month's Budgets, persisted (root 7.3), shown with "as of". The history and year summary are not kept: offline, Last 6 months and the month grid show no figures, and the preview shows each month's old and new limit without spending or states.
+- **Readable:** the current month's Budgets, persisted (root 7.3), shown with "as of". The history and year summary are not kept: offline, Last 6 months and the month grid show no figures, and the preview shows each month's old and new limit without spending or states, as it does when the history cannot be read.
 - **Writable:** create, change, one-month limits, stop, delete and restoring writes queue (D-46, P1). The row shows pending annotations; states and figures stay confirmed-only (BR-F04-12). Undo of a change not yet sent removes it from the queue; once sent, Undo queues a restoring write (BR-F04-33).
 - **Replay outcomes:** 409 `version_conflict` opens the conflict view. `budget_exists` is rejected with Edit, which opens the existing Budget. 404 on a change is rejected; a 404 on a delete counts as done (D-239).
 
@@ -522,6 +526,7 @@ F08's widget, F09's chart, F10's threshold detector and F11's report all call th
     - below 1180 px with nothing selected, the same change opens no drawer and shows the notice above the list;
     - Food selected in October stays selected in September; housing selected in October clears in August.
 - **AC-F04-30** (client integration, MSW) Changing golden food to 7,000.00 from 2026-12 meets 409 with `details.current` whose schedule adds `{ 2026-11, 5,500.00 }`. The view titled "This Budget changed on another device" shows a Nov 2026 row marked "Differs" ("None" against "5,500.00 from Nov 2026") and a Dec 2026 row marked "Differs" ("7,000.00 from Dec 2026" against "None"), and the line "Keep mine applies your change, 7,000.00 from December 2026, to the saved Budget.". Keep mine resends the `PATCH` with the saved version in `If-Match` and a new `Idempotency-Key`; Keep theirs sends nothing and the November row reads 5,500.00. The same 409 on Undo shows "Keep mine puts the Budget back as it was before your change.", and on a delete "Delete anyway" and "Keep it".
+- **AC-F04-31** (client integration, MSW) In the dialog on golden, Change limit for food at 7,000.00 from September shows three cards and "Dec 2026 onward", "84.2% Nearing limit → 72.1% · On track" in September, and the two notes of section 5; shopping at 4,000.00 from November 2023 shows the strip's caption, the four groups of section 5 and its three notes; food at 8,000.00 for October only shows September "Unchanged", October "124.4% Over budget → 77.8% · On track", November "Back to the schedule" and one note; stopping entertainment from October adds "October's spending moves to Not budgeted."; food at 5,000.00 for November only says "Nothing changes." with no notes; offline, or after a failed history read, the cards show limits without states.
 
 ## 15. Illustrations
 

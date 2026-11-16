@@ -16,7 +16,8 @@ import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
 import { useOnline } from "@/hooks/useOnline";
 import { formatAmountInput, parseAmount } from "@/lib/amount";
 import type { ExpenseCategory } from "@/lib/budgets/model";
-import { type Month, monthOf } from "@/lib/budgets/months";
+import { type Month, monthOf, monthRange } from "@/lib/budgets/months";
+import { type BudgetChange, previewChange } from "@/lib/budgets/preview";
 import { BUDGET_MESSAGES } from "@/lib/budgets/schemas";
 import type { BudgetRecord } from "@/lib/budgets/view";
 import { categoryLabel } from "@/lib/categories";
@@ -43,10 +44,13 @@ import {
 	tileCaptions,
 } from "../lib/dialog";
 import { BUDGETS_TEXT, budgetExistsMessage } from "../lib/messages";
+import { type Figures, historyWindow } from "../lib/preview";
 import { refreshAfterBudgetWrite } from "../lib/refresh";
 import type { BudgetAnswer, BudgetMonthAnswer, BudgetsLocale } from "../lib/types";
 import { type BudgetField, readBudgetWriteError } from "../lib/write-errors";
+import { ChangeNotes } from "./ChangeNotes";
 import { MonthField } from "./MonthField";
+import { WhatChanges } from "./WhatChanges";
 
 export type BudgetDialogProps = {
 	isOpen: boolean;
@@ -159,6 +163,43 @@ export function BudgetDialog({
 		:	null;
 	const blocked = plan?.kind === "edit" && plan.blocked;
 	const unchanged = plan?.kind === "edit" && plan.unchanged;
+
+	// What changes (BR-F04-26): the change as typed, over the Budget record if there is one, with
+	// the spending of the months it lists. A category with no record always applies from a month.
+	const limit =
+		stopping ? null
+		: typed.ok ? typed.minor
+		: undefined;
+	const change: BudgetChange | null =
+		category !== null && limit !== undefined ?
+			{
+				scope: scope === "month" ? "month" : "from",
+				month,
+				limitMinor: limit,
+			}
+		:	null;
+	const window =
+		change && historyWindow(change, current, monthRange(current).last);
+	const spending = useBudgetHistory(
+		change ? category : null,
+		window?.to ?? current,
+		window?.months,
+	);
+	const figures: Figures =
+		spending.data ? "ready"
+		: spending.isError || spending.fetchStatus === "paused" ? "missing"
+		: "loading";
+	const spentIn = new Map(
+		spending.data?.months.map((each) => [each.month, each.spentMinor]),
+	);
+	const preview =
+		change
+		&& previewChange({
+			rules: record,
+			change,
+			spending: (each) => spentIn.get(each) ?? 0,
+			current,
+		});
 
 	/** Clears what the server said about a field once it changes. */
 	const changed = (field: BudgetField) => {
@@ -356,6 +397,14 @@ export function BudgetDialog({
 					isDisabled={busy}
 				/>
 				{shown("month") && <FormAlert>{shown("month")}</FormAlert>}
+				{change && preview && !preview.blocked && category !== null && (
+					<WhatChanges
+						preview={preview}
+						change={change}
+						context={{ category, current, formats: locale }}
+						figures={figures}
+					/>
+				)}
 				{blocked && (
 					<FormAlert>{BUDGET_MESSAGES.stopRemovesEveryMonth}</FormAlert>
 				)}
@@ -364,6 +413,17 @@ export function BudgetDialog({
 						{nothingChanges(category, scope, month, locale)}
 					</p>
 				)}
+				{!unchanged
+					&& change
+					&& preview
+					&& !preview.blocked
+					&& category !== null && (
+						<ChangeNotes
+							notes={preview.notes}
+							change={change}
+							context={{ category, current, formats: locale }}
+						/>
+					)}
 			</form>
 		</Dialog>
 	);

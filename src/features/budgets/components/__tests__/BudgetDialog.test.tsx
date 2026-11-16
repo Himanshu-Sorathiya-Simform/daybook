@@ -582,3 +582,343 @@ describe("refusals and states (sections 6 and 8)", () => {
 		expect(onClose).toHaveBeenCalledTimes(2);
 	});
 });
+
+describe("What changes and its notes (BR-F04-26, BR-F04-27)", () => {
+	const region = () => screen.queryByRole("region", { name: "What changes" });
+	const cardsOf = () =>
+		within(screen.getByRole("region", { name: "What changes" })).getAllByRole(
+			"listitem",
+		);
+	/** Waits for the spending to come in, a state's words being split over two elements. */
+	const stateShown = (text: string) =>
+		waitFor(() =>
+			expect(
+				screen.getByRole("region", { name: "What changes" }),
+			).toHaveTextContent(text),
+		);
+	async function typeLimit(
+		user: ReturnType<typeof userEvent.setup>,
+		text: string,
+	) {
+		await user.clear(limitBox());
+		await user.type(limitBox(), text);
+	}
+	async function pickMonth(
+		user: ReturnType<typeof userEvent.setup>,
+		year: number,
+		name: RegExp,
+		yearsBack: number,
+	) {
+		await user.click(chip("Other month"));
+		for (let each = 0; each < yearsBack; each++) {
+			await user.click(screen.getByRole("button", { name: /Previous year/ }));
+		}
+		expect(screen.getByText(String(year))).toBeVisible();
+		await user.click(screen.getByRole("option", { name }));
+	}
+
+	test("shows nothing until a category and a valid limit are set", async () => {
+		const { user } = renderDialog("add", null, "2026-09");
+		expect(region()).not.toBeInTheDocument();
+		await user.click(screen.getByText("Health"));
+		expect(region()).not.toBeInTheDocument();
+		await user.type(limitBox(), "0");
+		expect(region()).not.toBeInTheDocument();
+		await user.clear(limitBox());
+		await user.type(limitBox(), "1500");
+		expect(region()).toBeVisible();
+	});
+
+	test("a Stop shows it with no limit typed", () => {
+		renderDialog("stop", "entertainment");
+		expect(region()).toBeVisible();
+	});
+
+	// Section 5, a retroactive change; flow 7.2.
+	test("food at 7,000 from September: three cards, Dec 2026 onward, and the two notes", async () => {
+		const { user } = renderDialog("change", "food");
+		await typeLimit(user, "7000");
+		await pickMonth(user, 2026, /September/, 0);
+		await stateShown("84.2% Nearing limit → 72.1% · On track");
+		const cards = cardsOf();
+		expect(cards).toHaveLength(4);
+		expect(cards[0]).toHaveTextContent("Sept 2026");
+		expect(cards[0]).toHaveTextContent("Was ₹6,000.00");
+		expect(cards[0]).toHaveTextContent("Now ₹7,000.00");
+		expect(cards[1]).toHaveTextContent(
+			"124.4% Over budget → 88.9% · Nearing limit",
+		);
+		expect(cards[2]).toHaveTextContent("6.0% · On track");
+		expect(cards[3]).toHaveTextContent("Dec 2026 onward");
+		expect(cards[3]).toHaveTextContent("₹7,000.00");
+		expect(screen.getByText("3 months, then every month after")).toBeVisible();
+		expect(
+			screen.getByText("This also changes September and October 2026."),
+		).toBeVisible();
+		expect(
+			screen.getByText(
+				"This replaces the change to ₹5,000.00 from October 2026.",
+			),
+		).toBeVisible();
+	});
+
+	test("asks the history for the months it lists: September to the current month", async () => {
+		const seen = route(network, "get", "/api/budgets/history", ({ path }) => {
+			const query = new URL(path, "http://x").searchParams;
+			return ok(
+				historyAnswer(
+					query.get("category") as ExpenseCategory,
+					query.get("to") as Month,
+					Number(query.get("months")),
+				),
+			);
+		});
+		const { user } = renderDialog("change", "food");
+		await typeLimit(user, "7000");
+		await pickMonth(user, 2026, /September/, 0);
+		await stateShown("84.2% Nearing limit → 72.1% · On track");
+		const queries = seen.map((each) =>
+			Object.fromEntries(new URL(each.path, "http://x").searchParams),
+		);
+		expect(queries).toContainEqual({
+			category: "food",
+			to: "2026-11",
+			months: "3",
+		});
+	});
+
+	test("the cards follow the limit as it is typed", async () => {
+		const { user } = renderDialog("change", "food");
+		await typeLimit(user, "7000");
+		await pickMonth(user, 2026, /September/, 0);
+		expect(cardsOf()[0]).toHaveTextContent("Now ₹7,000.00");
+		await typeLimit(user, "6500");
+		expect(cardsOf()[0]).toHaveTextContent("Now ₹6,500.00");
+		await stateShown("84.2% Nearing limit → 77.7% · On track");
+	});
+
+	// Section 5, a long change: 37 months, a strip and four groups.
+	test("shopping at 4,000 from November 2023: a strip, the four groups and the three notes", async () => {
+		const { user } = renderDialog("change", "shopping");
+		await typeLimit(user, "4000");
+		await pickMonth(user, 2023, /November/, 3);
+		const table = await screen.findByRole("table", {
+			name: "Months that change",
+		});
+		expect(screen.getByText("37 months, then every month after")).toBeVisible();
+		expect(
+			screen.getByText(
+				"One column per month: spending against the new limit. Black tick: the old limit.",
+			),
+		).toBeVisible();
+		const rows = within(within(table).getAllByRole("rowgroup")[1]!).getAllByRole(
+			"row",
+		);
+		expect(rows).toHaveLength(5);
+		expect(rows[0]).toHaveTextContent("Nov 2023 to Aug 202634 months");
+		expect(rows[0]).toHaveTextContent("No Shopping spending · On track");
+		expect(rows[1]).toHaveTextContent("80.0% Nearing limit → 60.0% · On track");
+		expect(rows[2]).toHaveTextContent("100.0% At limit → 75.0% · On track");
+		expect(rows[4]).toHaveTextContent("Dec 2026 onward");
+		expect(
+			screen.getByText("This also changes November 2023 to October 2026."),
+		).toBeVisible();
+		expect(
+			screen.getByText("Shopping gets a Budget in 34 months that had none."),
+		).toBeVisible();
+		expect(
+			screen.getByText(
+				"This replaces the change to ₹3,000.00 from September 2026.",
+			),
+		).toBeVisible();
+	});
+
+	test("it asks the history for 37 months", async () => {
+		const seen = route(network, "get", "/api/budgets/history", ({ path }) => {
+			const query = new URL(path, "http://x").searchParams;
+			return ok(
+				historyAnswer(
+					query.get("category") as ExpenseCategory,
+					query.get("to") as Month,
+					Number(query.get("months")),
+				),
+			);
+		});
+		const { user } = renderDialog("change", "shopping");
+		await typeLimit(user, "4000");
+		await pickMonth(user, 2023, /November/, 3);
+		await screen.findByRole("table", { name: "Months that change" });
+		expect(
+			seen.map((each) =>
+				Object.fromEntries(new URL(each.path, "http://x").searchParams),
+			),
+		).toContainEqual({ category: "shopping", to: "2026-11", months: "37" });
+	});
+
+	// Section 5, one-month limits.
+	test("food at 8,000 for October only: the month before, the month, the month after, one note", async () => {
+		const { user } = renderDialog("change", "food");
+		await typeLimit(user, "8000");
+		await user.click(chip(/^One month only/));
+		await user.click(chip("October (viewing)"));
+		await stateShown("124.4% Over budget → 77.8% · On track");
+		const cards = cardsOf();
+		expect(cards).toHaveLength(3);
+		expect(cards[0]).toHaveTextContent("Unchanged");
+		expect(cards[2]).toHaveTextContent("Back to the schedule");
+		expect(screen.queryByText(/every month after/)).not.toBeInTheDocument();
+		expect(
+			screen.getByText(
+				"Only October 2026 changes. The limits for other months stay as they are.",
+			),
+		).toBeVisible();
+	});
+
+	test("one month only asks the history for September to November", async () => {
+		const seen = route(network, "get", "/api/budgets/history", ({ path }) => {
+			const query = new URL(path, "http://x").searchParams;
+			return ok(
+				historyAnswer(
+					query.get("category") as ExpenseCategory,
+					query.get("to") as Month,
+					Number(query.get("months")),
+				),
+			);
+		});
+		const { user } = renderDialog("change", "food");
+		await typeLimit(user, "8000");
+		await user.click(chip(/^One month only/));
+		await user.click(chip("October (viewing)"));
+		await stateShown("124.4% Over budget → 77.8% · On track");
+		expect(
+			seen.map((each) =>
+				Object.fromEntries(new URL(each.path, "http://x").searchParams),
+			),
+		).toContainEqual({ category: "food", to: "2026-11", months: "3" });
+	});
+
+	// Section 5, stopping.
+	test("stopping entertainment from November: November and what comes after, one note", async () => {
+		renderDialog("stop", "entertainment");
+		const cards = cardsOf();
+		expect(cards).toHaveLength(2);
+		expect(cards[0]).toHaveTextContent("Nov 2026");
+		expect(cards[0]).toHaveTextContent("Now No Budget");
+		expect(cards[1]).toHaveTextContent("Dec 2026 onward");
+		expect(screen.getByText("Earlier months keep their limits.")).toBeVisible();
+		expect(screen.queryByText(/moves to Not budgeted/)).not.toBeInTheDocument();
+	});
+
+	test("stopping a month with spending says it moves to Not budgeted", async () => {
+		const { user } = renderDialog("stop", "entertainment");
+		await user.click(chip("October (viewing)"));
+		expect(
+			await screen.findByText(
+				"Earlier months keep their limits. October's spending moves to Not budgeted.",
+			),
+		).toBeVisible();
+		await stateShown("214.8% Over budget → Moves to Not budgeted");
+	});
+
+	test("a stop that would remove every month shows no preview and no notes", async () => {
+		const { user } = renderDialog("stop", "food");
+		await user.click(chip("Other month"));
+		await user.click(screen.getByRole("option", { name: /September/ }));
+		expect(region()).not.toBeInTheDocument();
+		expect(screen.queryByText(/Earlier months keep/)).not.toBeInTheDocument();
+	});
+
+	// Section 5, equal to the schedule; BR-F04-27.
+	test("a limit equal to the schedule says Nothing changes, with the preview and no notes", async () => {
+		const { user } = renderDialog("change", "food", "2026-11");
+		await user.click(chip(/^One month only/));
+		await typeLimit(user, "5000");
+		expect(
+			screen.getByText(
+				"Food already has this limit in November 2026. Nothing changes.",
+			),
+		).toBeVisible();
+		expect(region()).toBeVisible();
+		expect(
+			screen.queryByText(/Only November 2026 changes/),
+		).not.toBeInTheDocument();
+		expect(button("Change November only")).toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+	});
+
+	test("a new Budget from September has no old limits and no notes about gains", async () => {
+		const { user } = renderDialog("add", null, "2026-09");
+		await user.click(screen.getByText("Health"));
+		await user.type(limitBox(), "1500");
+		await pickMonth(user, 2026, /September/, 0);
+		expect(
+			await screen.findByText("This also changes September and October 2026."),
+		).toBeVisible();
+		expect(screen.queryByText(/gets a Budget/)).not.toBeInTheDocument();
+	});
+
+	test("while the spending loads, the limits show and the states follow", async () => {
+		route(network, "get", "/api/budgets/history", async ({ path }) => {
+			await delay(150);
+			const query = new URL(path, "http://x").searchParams;
+			return ok(
+				historyAnswer(
+					query.get("category") as ExpenseCategory,
+					query.get("to") as Month,
+					Number(query.get("months")),
+				),
+			);
+		});
+		const { user } = renderDialog("change", "food");
+		await typeLimit(user, "7000");
+		await pickMonth(user, 2026, /September/, 0);
+		expect(cardsOf()[0]).toHaveTextContent("Now ₹7,000.00");
+		expect(cardsOf()[0]).not.toHaveTextContent("On track");
+		await stateShown("84.2% Nearing limit → 72.1% · On track");
+	});
+
+	test("when the history cannot be read, the limits show alone", async () => {
+		route(network, "get", "/api/budgets/history", () => refuse(500, "internal"));
+		const { user } = renderDialog("change", "food");
+		await typeLimit(user, "7000");
+		await pickMonth(user, 2026, /September/, 0);
+		await waitFor(() =>
+			expect(
+				screen.getByText("This also changes September and October 2026."),
+			).toBeVisible(),
+		);
+		expect(cardsOf()[0]).toHaveTextContent("Now ₹7,000.00");
+		expect(screen.queryByText(/On track/)).not.toBeInTheDocument();
+		expect(screen.queryByText(/Nearing limit/)).not.toBeInTheDocument();
+	});
+
+	// Section 10
+	test("offline, each month shows its old and new limit without spending or states", async () => {
+		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+		const { user } = renderDialog("change", "food");
+		act(() => {
+			window.dispatchEvent(new Event("offline"));
+		});
+		await typeLimit(user, "7000");
+		await pickMonth(user, 2026, /September/, 0);
+		expect(cardsOf()[0]).toHaveTextContent("Was ₹6,000.00");
+		expect(cardsOf()[0]).toHaveTextContent("Now ₹7,000.00");
+		expect(screen.queryByText(/On track/)).not.toBeInTheDocument();
+		expect(
+			screen.getByText("This also changes September and October 2026."),
+		).toBeVisible();
+	});
+
+	test("a category's Budget record decides the gains note: a stopped Budget that restarts", async () => {
+		const { user } = renderDialog("change", "transportation", "2026-10");
+		await typeLimit(user, "2500");
+		await pickMonth(user, 2026, /August/, 0);
+		expect(
+			await screen.findByText(
+				"Transportation gets a Budget in 2 months that had none.",
+			),
+		).toBeVisible();
+	});
+});

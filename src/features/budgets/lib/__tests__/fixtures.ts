@@ -1,4 +1,13 @@
-import { type ExpenseCategory, limitIn } from "@/lib/budgets/model";
+import {
+	type BudgetRules,
+	type ExpenseCategory,
+	limitIn,
+} from "@/lib/budgets/model";
+import {
+	type BudgetChange,
+	type BudgetPreview,
+	previewChange,
+} from "@/lib/budgets/preview";
 import { type Month, monthsStarting } from "@/lib/budgets/months";
 import { buildMonthView } from "@/lib/budgets/view";
 import {
@@ -83,4 +92,18 @@ export function historyAnswer(
 			spentMinor: goldenSpending(month)[category] ?? 0,
 		})),
 	};
+}
+
+/** The preview of a change over a golden Budget (or `rules`), with golden's spending and its
+ * November 2026 as the current month, which is never blocked here. */
+export function goldenPreview(
+	category: ExpenseCategory,
+	change: BudgetChange,
+	rules: BudgetRules | null = goldenBudget(category),
+	spending: (month: Month) => number = (month) =>
+		goldenSpending(month)[category] ?? 0,
+): Extract<BudgetPreview, { blocked: false }> {
+	const result = previewChange({ rules, change, spending, current: "2026-11" });
+	if (result.blocked) throw new Error("The preview is blocked.");
+	return result;
 }
