@@ -9,7 +9,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 | Milestone  | M2. Before M5, writes are online only, with F03's stand-ins: Save disabled offline, and a failed save keeps the dialog open (D-241)                                                                                                                 |
 | Plan       | Free and Premium, with no gating; one-month limits included (D-560)                                                                                                                                                                                 |
 | Depends on | [F03](F03-transactions.md) (category spending, summary, drill-down), [F02](F02-onboarding-profile-settings.md) (month, locale), [P2](../platform/P2-data-access-and-security.md); P1 (write queue, from M5); F08, F09, F10, F11 read Budget figures |
-| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-574                                                                                                                |
+| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-577                                                                                                                |
 
 ## 1. User stories
 
@@ -117,7 +117,7 @@ Examples in this spec write amounts without the currency symbol and months as `e
 
 - **BR-F04-14** `/budgets?month=YYYY-MM` shows one month, defaulting to the current month. A `month` that is invalid or outside the range (BR-F04-07) is dropped with the FIL-5 notice. The header holds, in order:
     1. **The title** "Budgets", with "as of 14:05" beside it when offline (section 10).
-    2. **The month control:** Previous month and Next month buttons, disabled at the ends of the range, around the month's name ("October 2026"; the current month reads "November 2026 · to date"). The name opens a month grid: the year with Previous year and Next year, twelve months with those outside the range disabled, each in-range month showing its overall utilization ("81.0%") or nothing when it has no Budget (BR-F04-35), the caption "Figures: overall use of the month's limits", and a This month button.
+    2. **The month control:** Previous month and Next month buttons, disabled at the ends of the range, around the month's name ("October 2026"; the current month reads "November 2026 · to date"). The name opens a month grid: the year with Previous year and Next year, twelve months with those outside the range disabled, each in-range month showing its overall utilization ("81.0%") or nothing when it has no Budget (BR-F04-35), every month keeping a line for the figure so the names never move, with a skeleton bar in it while the year's figures load (D-577), the caption "Figures: overall use of the month's limits", and a This month button.
     3. **"Show Budgets as":** List or Table, remembered on the device (`daybook.budgets.view`).
     4. **Add a Budget.**
 
@@ -181,6 +181,7 @@ Examples in this spec write amounts without the currency symbol and months as `e
     - **What Keep mine saves:** a line below the table names the change, for example "Keep mine applies your change, 7,000.00 from December 2026, to the saved Budget." (or "8,000.00 for October 2026 only", "the stop from November 2026", "no limit for October 2026 only", "the removal of the one-month limit for October 2026"); after Undo, "Keep mine puts the Budget back as it was before your change." A delete's view has none.
     - **Keep mine** ("Delete anyway" for a delete) resends the same write with `If-Match` set to the saved version, under a new `Idempotency-Key`. Another 409 shows the newer version. Any other refusal closes the view and shows where the write started: in the dialog, or in the notice for Remove and Undo (BR-F04-29).
     - **Keep theirs** ("Keep it" for a delete) sends nothing, shows the saved Budget everywhere, and closes the view and its dialog; an Undo notice clears.
+    - **Which version a save is made against:** the one the dialog was opened on. The page reading new data while the dialog is open changes neither its fields nor that version, so another device's change meets this 409 (D-576).
     - **Closing the view without a choice** goes back to the dialog with what was typed. From Remove or Undo, nothing is sent and the notice stays.
 
     Online saves and, from M5, queued replays use the same view.
@@ -228,7 +229,8 @@ Examples in this spec write amounts without the currency symbol and months as `e
     - **Where:** in the panel when the changed Budget is selected, otherwise above the list with a Dismiss button. After a delete it is always above the list.
     - **Selection:** after a confirmed write other than a delete, the changed Budget becomes the selection when the panel is docked or a Budget is already selected (an open drawer then shows it), so its notice shows in the panel. With the drawer closed and nothing selected, nothing is selected and no drawer opens. A delete clears the selection (D-562).
     - **A failed Undo or Remove:** nothing changes, and the notice reads the failure instead, with Dismiss: "The Budget could not be saved. Check your connection and try again." or "This Budget was deleted on another device." (section 8). A Remove that fails shows this notice above the list, or in the panel when its Budget is selected.
-    - **How long:** until Undo, Dismiss, the next write, or a change of month.
+    - **How long:** until Undo, Dismiss, the next write, or a change of month. An answer that arrives after the notice has ended or been replaced changes nothing on the page (D-575).
+    - **Buttons:** Undo and Dismiss show wherever the notice does. While Undo or Remove is on its way its buttons rest and a second press sends nothing; a failed one has Dismiss alone and is announced at once, the other notices politely (D-575).
     - **What Undo sends:**
         - after a create sent as `POST`, `DELETE` with the version it returned; an Add sent as `PATCH` (BR-F04-19) counts as a change;
         - after a schedule change, a one-month limit or a removal, a restoring `PATCH` (BR-F04-33) with the previous schedule and one-month limits and `If-Match` set to the version the change returned;

@@ -25,8 +25,8 @@ export type MonthMenuProps = {
 
 /**
  * The header's month grid (BR-F04-14): the year shown, with each month's overall utilization
- * ("81.0%") under it, nothing for a month with no Budget, and no figures while the year
- * summary is loading or cannot load (section 10). Under it, the caption and This month. Moving
+ * ("81.0%") under it, nothing for a month with no Budget, a skeleton bar in each month's figure
+ * place while the year summary loads, and no figures when it cannot load (section 10). Under it, the caption and This month. Moving
  * to another year loads that year's figures.
  */
 export function MonthMenu({
@@ -60,6 +60,9 @@ export function MonthMenu({
 				current={current}
 				dateLocale={dateLocale}
 				figures={figures}
+				isLoadingFigures={
+					summary.isPending && summary.fetchStatus === "fetching"
+				}
 				autoFocus
 			/>
 			<div className="border-line flex items-center gap-2 border-t pt-2">

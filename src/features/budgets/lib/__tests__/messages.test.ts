@@ -62,6 +62,7 @@ describe("the page's words (BR-F04-14, section 6, section 8)", () => {
 			thisMonth: "This month",
 			invalidLink: "Some filters in this link weren't valid and were removed.",
 			dismiss: "Dismiss",
+			undo: "Undo",
 			loadFailed: "Budgets could not be loaded.",
 			loadFailedBody:
 				"Check your connection, then try again. Your Budgets are safe.",

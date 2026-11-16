@@ -1,5 +1,7 @@
+import { onlineManager } from "@tanstack/react-query";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { delay } from "msw";
 import { setupServer } from "msw/node";
 import {
 	afterAll,
@@ -152,6 +154,81 @@ describe("figures (BR-F04-14, BR-F04-35)", () => {
 				screen.getByRole("option", { name: "October 2026" }),
 			).toBeVisible(),
 		);
+	});
+});
+
+describe("while the year's figures load (BR-F04-14, section 6)", () => {
+	const bars = () =>
+		document.querySelectorAll('[role=option] [aria-hidden="true"]');
+
+	test("every month holds a skeleton bar until the summary comes, then its figure", async () => {
+		route(network, "get", "/api/budgets/summary", async () => {
+			await delay(80);
+			return ok(YEAR_2026);
+		});
+		renderMenu();
+		expect(bars()).toHaveLength(12);
+		expect(
+			await screen.findByRole("option", { name: "October 2026, 119.7%" }),
+		).toBeVisible();
+		expect(bars()).toHaveLength(0);
+	});
+
+	test("the months keep their names while it loads", async () => {
+		route(network, "get", "/api/budgets/summary", async () => {
+			await delay(80);
+			return ok(YEAR_2026);
+		});
+		renderMenu();
+		expect(screen.getByRole("option", { name: "October 2026" })).toBeVisible();
+		expect(
+			screen.getByRole("option", { name: "November 2026, this month" }),
+		).toBeVisible();
+		await screen.findByRole("option", { name: "October 2026, 119.7%" });
+	});
+
+	test("moving to another year shows the bars again until that year loads", async () => {
+		route(network, "get", "/api/budgets/summary", async ({ path }) => {
+			if (path.endsWith("2025")) await delay(80);
+			return ok(path.endsWith("2025") ? empty(2025) : YEAR_2026);
+		});
+		const { user } = renderMenu();
+		await screen.findByRole("option", { name: "October 2026, 119.7%" });
+		await user.click(screen.getByRole("button", { name: /Previous year/ }));
+		expect(bars()).toHaveLength(12);
+		await waitFor(() => expect(bars()).toHaveLength(0));
+	});
+
+	test("a year already read shows its figures at once, with no bars", async () => {
+		route(network, "get", "/api/budgets/summary", () => ok(YEAR_2026));
+		const { user } = renderMenu();
+		await screen.findByRole("option", { name: "October 2026, 119.7%" });
+		await user.click(screen.getByRole("button", { name: /Next year/ }));
+		await user.click(screen.getByRole("button", { name: /Previous year/ }));
+		expect(
+			screen.getByRole("option", { name: "October 2026, 119.7%" }),
+		).toBeVisible();
+		expect(bars()).toHaveLength(0);
+	});
+
+	test("when the summary cannot load, the bars give way to empty lines", async () => {
+		route(network, "get", "/api/budgets/summary", () => refuse(500, "internal"));
+		renderMenu();
+		expect(bars()).toHaveLength(12);
+		await waitFor(() => expect(bars()).toHaveLength(0));
+		expect(screen.getByRole("option", { name: "October 2026" })).toBeVisible();
+	});
+
+	test("offline, with nothing read, no bars wait for a connection", async () => {
+		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+		onlineManager.setOnline(false);
+		try {
+			route(network, "get", "/api/budgets/summary", () => ok(YEAR_2026));
+			renderMenu();
+			expect(bars()).toHaveLength(0);
+		} finally {
+			onlineManager.setOnline(true);
+		}
 	});
 });
 

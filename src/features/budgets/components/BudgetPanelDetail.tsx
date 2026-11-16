@@ -1,6 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/actions/Button";
 import { IconButton } from "@/components/actions/IconButton";
@@ -51,6 +52,10 @@ export type BudgetPanelDetailProps = {
 	onDelete: () => void;
 	/** Remove on a one-month limit in the limit history (BR-F04-25). */
 	onRemoveMonthLimit: (month: Month) => void;
+	/** A Remove is on its way: its buttons rest. */
+	isRemoving?: boolean;
+	/** The Undo notice for this category, under its figures (BR-F04-29). */
+	notice?: ReactNode;
 	className?: string;
 };
 
@@ -75,6 +80,8 @@ export function BudgetPanelDetail({
 	onStop,
 	onDelete,
 	onRemoveMonthLimit,
+	isRemoving = false,
+	notice,
 	className,
 }: Readonly<BudgetPanelDetailProps>) {
 	const history = useBudgetHistory(category, month);
@@ -237,6 +244,7 @@ export function BudgetPanelDetail({
 				/>
 				{figures()}
 			</div>
+			{notice}
 			{(history.data || fetching(history)) && (
 				<LastSixMonths
 					months={history.data?.months}
@@ -253,6 +261,7 @@ export function BudgetPanelDetail({
 					month={month}
 					formats={formats}
 					onRemove={onRemoveMonthLimit}
+					isRemoving={isRemoving}
 				/>
 			)}
 			{(payees.data ?

@@ -14,6 +14,7 @@ import {
 	vi,
 } from "vitest";
 
+import { AppProviders } from "@/components/app/AppProviders";
 import { renderInApp } from "@/components/app/__tests__/helpers";
 import { goldenBudget } from "@/lib/budgets/__tests__/golden";
 import type { ExpenseCategory } from "@/lib/budgets/model";
@@ -164,6 +165,10 @@ describe("Add a Budget (BR-F04-19)", () => {
 		expect(isUuidV7(posts[0]?.headers.get("idempotency-key"))).toBe(true);
 		expect(onSaved).toHaveBeenCalledWith(
 			expect.objectContaining({ category: "health" }),
+			expect.objectContaining({
+				category: "health",
+				text: "Health Budget added: ₹1,500.00 from November 2026.",
+			}),
 		);
 	});
 
@@ -422,6 +427,46 @@ describe("Stop budgeting (BR-F04-21)", () => {
 		});
 	});
 
+	test("a confirmed stop hands over its notice, undone by a restoring change", async () => {
+		route(network, "patch", "/api/budgets/:id", () =>
+			ok(budgetAnswer("entertainment", { version: 2 })),
+		);
+		const { user, onSaved } = renderDialog("stop", "entertainment");
+		await user.click(button("Stop from November"));
+		await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+		expect(onSaved).toHaveBeenCalledWith(
+			expect.objectContaining({ version: 2 }),
+			{
+				category: "entertainment",
+				text: "Entertainment Budget stops from November 2026. Earlier months keep their limits.",
+				inPanel: true,
+				undo: {
+					kind: "restore",
+					id: goldenBudget("entertainment").id,
+					version: 2,
+					rules: {
+						schedule: [{ from: "2026-09", limitMinor: 100000 }],
+						overrides: [],
+					},
+				},
+			},
+		);
+	});
+
+	test("a stop for one month reads No limit … only", async () => {
+		route(network, "patch", "/api/budgets/:id", () =>
+			ok(budgetAnswer("entertainment", { version: 2 })),
+		);
+		const { user, onSaved } = renderDialog("stop", "entertainment");
+		await user.click(chip(/^One month only/));
+		await user.click(chip("October (viewing)"));
+		await user.click(button("Stop October only"));
+		await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+		expect(onSaved.mock.calls[0]?.[1].text).toBe(
+			"Entertainment has no limit for October 2026 only.",
+		);
+	});
+
 	test("one month only reads Stop … only", async () => {
 		const { user } = renderDialog("stop", "entertainment");
 		await user.click(chip(/^One month only/));
@@ -446,6 +491,106 @@ describe("Stop budgeting (BR-F04-21)", () => {
 			expect.objectContaining({ id: goldenBudget("food").id }),
 		);
 		expect(patches).toHaveLength(0);
+	});
+});
+
+describe("a draft keeps the Budget it was opened on (BR-F04-23, BR-P1-26)", () => {
+	/** The month view after another device changed food: version 3, its limit now 9,000.00. */
+	const elsewhere = () => {
+		const view = monthAnswer("2026-10");
+		return {
+			...view,
+			budgets: view.budgets.map((row) =>
+				row.category === "food" ?
+					{
+						...row,
+						version: 3,
+						schedule: [
+							...row.schedule,
+							{ from: "2026-11", limitMinor: 900000 },
+						],
+					}
+				:	row,
+			),
+		};
+	};
+
+	test("a refetch of the page while the dialog is open does not move its version", async () => {
+		const patches = route(network, "patch", "/api/budgets/:id", () =>
+			ok(budgetAnswer("food", { version: 4 })),
+		);
+		const handlers = {
+			onClose: vi.fn(),
+			onDeleteInstead: vi.fn(),
+			onSaved: vi.fn(),
+		};
+		const { rerender, navigate, queryClient } = renderInApp(
+			<BudgetDialog
+				isOpen
+				kind="change"
+				category="food"
+				view={monthAnswer("2026-10")}
+				locale={IN}
+				{...handlers}
+			/>,
+		);
+		const user = userEvent.setup();
+		// Another device saved while this dialog was open, and the page read its change.
+		rerender(
+			<AppProviders
+				navigate={navigate}
+				queryClient={queryClient}
+			>
+				<BudgetDialog
+					isOpen
+					kind="change"
+					category="food"
+					view={elsewhere()}
+					locale={IN}
+					{...handlers}
+				/>
+			</AppProviders>,
+		);
+		await user.clear(limitBox());
+		await user.type(limitBox(), "7000");
+		await user.click(button("Change from November"));
+		await waitFor(() => expect(patches).toHaveLength(1));
+		// Version 2, as it was opened on: the server can then see the other change.
+		expect(patches[0]?.headers.get("if-match")).toBe('"2"');
+	});
+
+	test("a draft opened before the refetch also keeps the limit and categories it showed", async () => {
+		const handlers = {
+			onClose: vi.fn(),
+			onDeleteInstead: vi.fn(),
+			onSaved: vi.fn(),
+		};
+		const { rerender, navigate, queryClient } = renderInApp(
+			<BudgetDialog
+				isOpen
+				kind="change"
+				category="food"
+				view={monthAnswer("2026-10")}
+				locale={IN}
+				{...handlers}
+			/>,
+		);
+		rerender(
+			<AppProviders
+				navigate={navigate}
+				queryClient={queryClient}
+			>
+				<BudgetDialog
+					isOpen
+					kind="change"
+					category="food"
+					view={elsewhere()}
+					locale={IN}
+					{...handlers}
+				/>
+			</AppProviders>,
+		);
+		expect(limitBox()).toHaveValue("5,000.00");
 	});
 });
 

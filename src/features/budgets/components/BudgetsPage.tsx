@@ -14,11 +14,13 @@ import { type Month, monthOf } from "@/lib/budgets/months";
 import { cn } from "@/lib/cn";
 import { formatMonth, formatTime } from "@/lib/date-format";
 import { useBudgetMonth } from "../hooks/useBudgetMonth";
+import { useBudgetNotices } from "../hooks/useBudgetNotice";
 import { useBudgetsUrl } from "../hooks/useBudgetsUrl";
 import { useBudgetsView } from "../hooks/useBudgetsView";
 import { dayOfMonth } from "../lib/labels";
 import { emptyTitle, offlineAction, offlineBody, PAGE_TEXT } from "../lib/messages";
 import { type DialogKind, recordIn } from "../lib/dialog";
+import { deletionNotice } from "../lib/notices";
 import { selectionKeys, subjectOf } from "../lib/panel";
 import type { BudgetMonthAnswer, BudgetsLocale } from "../lib/types";
 import { BudgetDialog } from "./BudgetDialog";
@@ -29,16 +31,13 @@ import { BudgetsOverview } from "./BudgetsOverview";
 import { BudgetsSkeleton } from "./BudgetsSkeleton";
 import { BudgetTable } from "./BudgetTable";
 import { DeleteBudgetDialog } from "./DeleteBudgetDialog";
+import { UndoNotice } from "./UndoNotice";
 
 export type BudgetsPageProps = {
 	/** The profile's formats and its today, from the server render (TIME-5). */
 	locale: BudgetsLocale;
-	/** Removes a one-month limit from a category's Budget (BR-F04-25). */
-	onRemoveMonthLimit?: (category: ExpenseCategory, month: Month) => void;
 	className?: string;
 };
-
-const nothing = () => {};
 
 /** The dialog open over the page: Add, Change limit or Stop, or Delete's confirmation with the
  * Budget it deletes. `opened` starts each one afresh. */
@@ -82,11 +81,7 @@ function shows(view: BudgetMonthAnswer, category: ExpenseCategory): boolean {
  * - **The dialogs** (BR-F04-19 to BR-F04-21, BR-F04-06) open from the header, the empty
  *   message, the rows, the panel and L, over the page; while one is open the page's keys rest.
  */
-export function BudgetsPage({
-	locale,
-	onRemoveMonthLimit = nothing,
-	className,
-}: Readonly<BudgetsPageProps>) {
+export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 	const current = monthOf(locale.today);
 	const url = useBudgetsUrl(current);
 	const online = useOnline();
@@ -104,6 +99,11 @@ export function BudgetsPage({
 	const [isDialogOpen, setDialogOpen] = useState(false);
 	const { dateLocale } = locale;
 	const data = query.data;
+	const notices = useBudgetNotices({
+		month: url.month,
+		currency: locale.currency,
+		formats: locale,
+	});
 
 	// A change of month, Back included, drops the filter for good (BR-F04-31), React's pattern
 	// for state that follows what was read.
@@ -180,6 +180,31 @@ export function BudgetsPage({
 			`as of ${formatTime(new Date(query.dataUpdatedAt), locale)}`
 		:	null;
 
+	// The notice shows in the panel while the Budget it is about is selected, else above the list
+	// (BR-F04-29); a delete's never shows in the panel.
+	const notice = notices.notice;
+	const inPanel =
+		notice !== null
+		&& notice.inPanel
+		&& showPanel
+		&& selected === notice.category;
+	const noticeNode =
+		notice === null ? null : (
+			<UndoNotice
+				text={notice.failure ?? notice.text}
+				isFailure={notice.failure !== null}
+				isPending={notices.isUndoing}
+				{...(notice.undo ? { onUndo: notices.undo } : {})}
+				onDismiss={notices.dismiss}
+			/>
+		);
+	// Remove is offered only on a Budget record in the month shown.
+	const removeMonthLimit = (category: ExpenseCategory, limitMonth: Month) =>
+		notices.remove(
+			recordIn(data as BudgetMonthAnswer, category) as BudgetRecord,
+			limitMonth,
+		);
+
 	const month = (shown: BudgetMonthAnswer) => {
 		const hasBudgets = shown.budgets.length > 0;
 		const hasOthers = shown.unbudgeted.length > 0 || shown.inactive.length > 0;
@@ -205,6 +230,7 @@ export function BudgetsPage({
 						/>
 					</Section>
 				}
+				{!inPanel && noticeNode}
 				{hasBudgets && wide && view === "table" ?
 					<BudgetTable
 						view={shown}
@@ -313,7 +339,9 @@ export function BudgetsPage({
 					onChangeLimit={onChangeLimit}
 					onStop={onStop}
 					onDelete={onDelete}
-					onRemoveMonthLimit={onRemoveMonthLimit}
+					onRemoveMonthLimit={removeMonthLimit}
+					isRemoving={notices.isRemoving}
+					notice={inPanel ? noticeNode : null}
 				/>
 			)}
 			{dialog?.kind === "delete" && (
@@ -323,6 +351,10 @@ export function BudgetsPage({
 					record={dialog.record}
 					formats={locale}
 					onClose={() => setDialogOpen(false)}
+					onDeleted={(deleted) => {
+						notices.show(deletionNotice(deleted.category, deleted));
+						setSelected(null);
+					}}
 				/>
 			)}
 			{dialog && dialog.kind !== "delete" && data && (
@@ -334,6 +366,12 @@ export function BudgetsPage({
 					view={data}
 					locale={locale}
 					onClose={() => setDialogOpen(false)}
+					onSaved={(saved, written) => {
+						notices.show(written);
+						// The changed Budget is selected where its notice can show: docked, or with
+						// a selection already open (BR-F04-29).
+						if (docked || selected !== null) setSelected(saved.category);
+					}}
 					onDeleteInstead={(found) =>
 						open({ kind: "delete", record: found, opened })
 					}

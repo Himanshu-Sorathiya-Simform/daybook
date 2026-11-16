@@ -45,6 +45,7 @@ import {
 } from "../lib/dialog";
 import { BUDGETS_TEXT, budgetExistsMessage } from "../lib/messages";
 import { type Figures, historyWindow } from "../lib/preview";
+import { type WriteNotice, writeNotice } from "../lib/notices";
 import { refreshAfterBudgetWrite } from "../lib/refresh";
 import type { BudgetAnswer, BudgetMonthAnswer, BudgetsLocale } from "../lib/types";
 import { type BudgetField, readBudgetWriteError } from "../lib/write-errors";
@@ -63,8 +64,9 @@ export type BudgetDialogProps = {
 	onClose: () => void;
 	/** "Delete Budget instead", with the Budget to delete (BR-F04-21). */
 	onDeleteInstead: (record: BudgetRecord) => void;
-	/** A confirmed write, with the Budget as the server saved it. */
-	onSaved?: (budget: BudgetAnswer) => void;
+	/** A confirmed write, with the Budget as the server saved it and the notice to show for it
+	 * (BR-F04-29). */
+	onSaved?: (budget: BudgetAnswer, notice: WriteNotice) => void;
 };
 
 /** What the dialog is about: its kind, category and Budget record, which a `budget_exists`
@@ -98,12 +100,16 @@ export function BudgetDialog({
 	isOpen,
 	kind: openedAs,
 	category: openedWith,
-	view,
+	view: latest,
 	locale,
 	onClose,
 	onDeleteInstead,
 	onSaved,
 }: Readonly<BudgetDialogProps>) {
+	// The dialog works on the month as it was when it opened, so a refetch of the page while it
+	// is open never moves the version a save is made against: another device's change then
+	// meets a 409 and the conflict view, not a silent overwrite (BR-F04-23).
+	const [view] = useState(latest);
 	const online = useOnline();
 	const queryClient = useQueryClient();
 	const create = useCreateBudget();
@@ -240,7 +246,18 @@ export function BudgetDialog({
 						body: ready.body,
 						idempotencyKey: uuidV7(),
 					});
-			onSaved?.(saved);
+			onSaved?.(
+				saved,
+				writeNotice({
+					scope,
+					month,
+					// A saved dialog has a valid limit, or is a stop.
+					limitMinor: limit as number | null,
+					before: record,
+					saved,
+					formats: locale,
+				}),
+			);
 			onClose();
 		} catch (error) {
 			const outcome = readBudgetWriteError(error);

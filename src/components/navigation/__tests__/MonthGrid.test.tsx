@@ -146,6 +146,76 @@ describe("figures (BR-F04-14)", () => {
 	});
 });
 
+describe("figures on their way (BR-F04-14)", () => {
+	const FIGURES = { "2026-10": "119.7%" };
+	const slots = () => grid().querySelectorAll("[role=option] > span:nth-child(2)");
+	const bars = () => grid().querySelectorAll('[role=option] [aria-hidden="true"]');
+
+	test("while they load, every month holds a skeleton bar in its figure's place", () => {
+		renderGrid({ figures: {}, isLoadingFigures: true });
+		expect(slots()).toHaveLength(12);
+		expect(bars()).toHaveLength(12);
+	});
+
+	test("the skeleton is hidden from screen readers and changes no month's name", () => {
+		renderGrid({ figures: {}, isLoadingFigures: true });
+		expect(names()).toEqual([
+			"January 2026",
+			"February 2026",
+			"March 2026",
+			"April 2026",
+			"May 2026",
+			"June 2026",
+			"July 2026",
+			"August 2026",
+			"September 2026",
+			"October 2026",
+			"November 2026, this month",
+			"December 2026",
+		]);
+		expect(month("October 2026")).toHaveTextContent(/^Oct$/);
+	});
+
+	test("a month that has its figure shows it, not a bar", () => {
+		renderGrid({ figures: FIGURES, isLoadingFigures: true });
+		expect(month("October 2026, 119.7%")).toHaveTextContent("Oct119.7%");
+		expect(
+			month("October 2026, 119.7%").querySelector('[aria-hidden="true"]'),
+		).toBeNull();
+		expect(bars()).toHaveLength(11);
+	});
+
+	test("once loaded, a month with no figure keeps its line, so the names stay put", () => {
+		renderGrid({ figures: FIGURES });
+		expect(slots()).toHaveLength(12);
+		expect(bars()).toHaveLength(0);
+		expect(month("August 2026")).toHaveTextContent(/^Aug$/);
+	});
+
+	test("the line is one line of the figure's text tall, and the same with or without a figure", () => {
+		renderGrid({ figures: FIGURES });
+		const [withFigure, without] = [
+			month("October 2026, 119.7%").children[1],
+			month("August 2026").children[1],
+		];
+		expect(withFigure).toHaveClass("h-lh", "text-small");
+		expect(without).toHaveClass("h-lh", "text-small");
+	});
+
+	test("with no figures prop there is no line and no bar, loading or not", () => {
+		renderGrid({ isLoadingFigures: true });
+		expect(slots()).toHaveLength(0);
+		expect(bars()).toHaveLength(0);
+		expect(month("August 2026")).toHaveClass("min-h-10");
+	});
+
+	test("months out of the range hold a bar too", () => {
+		renderGrid({ figures: {}, isLoadingFigures: true, value: "2023-12" });
+		// 2023 starts at November: only the grid's twelve months of the year shown.
+		expect(bars()).toHaveLength(12);
+	});
+});
+
 describe("the chosen month and the current month", () => {
 	test("the value is selected, and no other month", () => {
 		renderGrid();

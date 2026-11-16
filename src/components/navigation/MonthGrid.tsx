@@ -14,6 +14,7 @@ import {
 	type MonthRange,
 	monthsStarting,
 } from "@/lib/budgets/months";
+import { Skeleton } from "@/components/feedback/Skeleton";
 import { cn } from "@/lib/cn";
 import { formatMonth, formatYear } from "@/lib/date-format";
 
@@ -31,6 +32,9 @@ export type MonthGridProps = {
 	/** A figure under a month, such as its overall utilization "81.0%" (BR-F04-14). A month
 	 * missing here shows none. */
 	figures?: Partial<Record<Month, string>>;
+	/** The figures are on their way: every month holds the place of its figure with a skeleton
+	 * bar, so the names stay where they are when the figures arrive. Only with `figures`. */
+	isLoadingFigures?: boolean;
 	/** The grid's name, "Months". The year shown is added to it. */
 	label?: string;
 	/** Called with the year the arrows move to, for a page that loads that year's figures. */
@@ -49,7 +53,9 @@ const yearOf = (month: Month) => Number(month.slice(0, 4));
  * Enter, Space or a press chooses, and Escape is left to whatever holds the grid. Months outside the range are disabled and skipped. The
  * chosen month takes the accent outline and is announced as selected; the current month is
  * bold and named "this month". Each month's name, figure included, is read in full: "October
- * 2026, 119.7%".
+ * 2026, 119.7%". With figures, each month keeps a line for its figure even when it has none,
+ * and while they load (`isLoadingFigures`) that line shows a skeleton bar, so nothing moves
+ * when they arrive.
  */
 export function MonthGrid({
 	value,
@@ -58,6 +64,7 @@ export function MonthGrid({
 	current,
 	dateLocale,
 	figures,
+	isLoadingFigures = false,
 	label = "Months",
 	onYearChange,
 	autoFocus = false,
@@ -148,9 +155,13 @@ export function MonthGrid({
 							)}
 						>
 							<span>{formatMonth(month, locale, "shortName")}</span>
-							{figure !== undefined && (
-								<span className="text-small text-ink-2 figures font-medium">
-									{figure}
+							{/* With figures, every month keeps a line for one, so its name never moves. */}
+							{figures && (
+								<span className="text-small text-ink-2 figures flex h-lh items-center font-medium">
+									{figure
+										?? (isLoadingFigures && (
+											<Skeleton className="h-[0.7em] w-8" />
+										))}
 								</span>
 							)}
 						</AriaListBoxItem>

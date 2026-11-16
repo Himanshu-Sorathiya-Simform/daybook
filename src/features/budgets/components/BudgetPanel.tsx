@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { Drawer } from "@/components/surfaces/Drawer";
 import { Section } from "@/components/surfaces/Section";
 import type { ExpenseCategory } from "@/lib/budgets/model";
@@ -28,6 +30,10 @@ export type BudgetPanelProps = {
 	onStop: (category: ExpenseCategory) => void;
 	onDelete: (category: ExpenseCategory) => void;
 	onRemoveMonthLimit: (category: ExpenseCategory, month: Month) => void;
+	/** A Remove is on its way. */
+	isRemoving?: boolean;
+	/** The Undo notice, shown in the detail of the category it is about (BR-F04-29). */
+	notice?: ReactNode;
 	className?: string;
 };
 
@@ -51,6 +57,8 @@ export function BudgetPanel({
 	onStop,
 	onDelete,
 	onRemoveMonthLimit,
+	isRemoving = false,
+	notice,
 	className,
 }: Readonly<BudgetPanelProps>) {
 	const subject = view && selected !== null ? subjectOf(view, selected) : null;
@@ -71,6 +79,8 @@ export function BudgetPanel({
 			onRemoveMonthLimit={(limitMonth) =>
 				onRemoveMonthLimit(category, limitMonth)
 			}
+			isRemoving={isRemoving}
+			notice={notice}
 		/>
 	);
 

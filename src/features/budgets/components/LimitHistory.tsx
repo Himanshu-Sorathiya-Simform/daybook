@@ -17,6 +17,8 @@ export type LimitHistoryProps = {
 	formats: Formats;
 	/** Remove on a one-month limit (BR-F04-25). */
 	onRemove: (month: Month) => void;
+	/** A Remove is on its way: the buttons rest until it is answered. */
+	isRemoving?: boolean;
 	className?: string;
 };
 
@@ -31,6 +33,7 @@ export function LimitHistory({
 	month,
 	formats,
 	onRemove,
+	isRemoving = false,
 	className,
 }: Readonly<LimitHistoryProps>) {
 	const heading = useId();
@@ -78,6 +81,7 @@ export function LimitHistory({
 											size="sm"
 											aria-label={`${PANEL_TEXT.remove} ${item.text}`}
 											className="h-auto px-0 py-0.5"
+											isDisabled={isRemoving}
 											onPress={() => onRemove(item.month)}
 										>
 											{PANEL_TEXT.remove}
