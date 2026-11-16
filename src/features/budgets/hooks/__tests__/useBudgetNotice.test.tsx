@@ -1,7 +1,7 @@
 import { act, waitFor } from "@testing-library/react";
 import { delay, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { goldenBudget } from "@/lib/budgets/__tests__/golden";
 import type { Month } from "@/lib/budgets/months";
@@ -241,15 +241,6 @@ describe("when Undo is refused (BR-F04-29, section 8)", () => {
 		);
 	});
 
-	test("a version conflict reads the failure until the conflict view comes", async () => {
-		const { result } = await undoWith(() =>
-			refuse(409, "version_conflict", {
-				details: { current: budgetAnswer("food", { version: 4 }) },
-			}),
-		);
-		await waitFor(() => expect(result.current.notice?.failure).not.toBeNull());
-	});
-
 	test("a 401 is the app's to answer: the notice stays as it was, with its Undo", async () => {
 		const { result } = await undoWith(() => refuse(401, "unauthorized"));
 		await waitFor(() => expect(result.current.isUndoing).toBe(false));
@@ -372,17 +363,6 @@ describe("remove (BR-F04-25, BR-F04-29)", () => {
 		);
 	});
 
-	test("a version conflict reads the failure until the conflict view comes", async () => {
-		route(network, "delete", REMOVE_PATH, () =>
-			refuse(409, "version_conflict", {
-				details: { current: budgetAnswer("food", { version: 4 }) },
-			}),
-		);
-		const { result } = renderNotices();
-		act(() => result.current.remove(WITH_LIMIT, "2026-10"));
-		await waitFor(() => expect(result.current.notice?.failure).not.toBeNull());
-	});
-
 	test("a 401 shows nothing", async () => {
 		route(network, "delete", REMOVE_PATH, () => refuse(401, "unauthorized"));
 		const { result } = renderNotices();
@@ -412,6 +392,384 @@ describe("remove (BR-F04-25, BR-F04-29)", () => {
 		act(() => result.current.remove(WITH_LIMIT, "2026-10"));
 		await waitFor(() => expect(result.current.notice).not.toBeNull());
 		rerender({ month: "2026-09" });
+		expect(result.current.notice).toBeNull();
+	});
+});
+
+describe("the conflict view after a 409 (BR-F04-23, AC-F04-25, AC-F04-30)", () => {
+	const SAVED = budgetAnswer("food", {
+		version: 5,
+		schedule: [...FOOD.schedule, { from: "2026-11", limitMinor: 550000 }],
+	});
+	const NEWER = budgetAnswer("food", {
+		version: 6,
+		schedule: [...SAVED.schedule, { from: "2027-01", limitMinor: 450000 }],
+	});
+	const conflict = (current = SAVED) =>
+		refuse(409, "version_conflict", { details: { current } });
+	const WITH_LIMIT = {
+		...goldenBudget("food"),
+		overrides: [{ month: "2026-10", limitMinor: 800000 }],
+	};
+	const REMOVE_PATH = `/api/budgets/${FOOD.id}/overrides/2026-10`;
+
+	/** Shows the change's notice and presses Undo against `answer`. */
+	async function undoMet(
+		answer: (index: number) => Response | Promise<Response>,
+		notice = change(),
+		method: "patch" | "delete" | "post" = "patch",
+		path = "/api/budgets/:id",
+	) {
+		const seen = route(network, method, path, (_, index) => answer(index));
+		const view = renderNotices();
+		act(() => view.result.current.show(notice));
+		act(() => view.result.current.undo());
+		await waitFor(() => expect(view.result.current.conflict).not.toBeNull());
+		return { ...view, seen };
+	}
+
+	describe("on Undo", () => {
+		test("after a change: the rules Undo puts back beside the saved Budget, with the Undo line", async () => {
+			const { result } = await undoMet(() => conflict());
+			expect(result.current.conflict).toEqual({
+				current: SAVED,
+				yours: { schedule: FOOD.schedule, overrides: [] },
+				line: "Keep mine puts the Budget back as it was before your change.",
+				isDelete: false,
+			});
+			// The notice stays, with its Undo, until a choice is made.
+			expect(result.current.notice?.undo).not.toBeNull();
+			expect(result.current.notice?.failure).toBeNull();
+			expect(result.current.isUndoing).toBe(false);
+		});
+
+		test("after a create: the view for a delete, with the Budget the create made and no line", async () => {
+			const { result } = await undoMet(() => conflict(), created(), "delete");
+			expect(result.current.conflict).toMatchObject({
+				isDelete: true,
+				line: null,
+				yours: { schedule: FOOD.schedule, overrides: [] },
+				current: SAVED,
+			});
+		});
+
+		test("after a delete: a Budget made for the category meanwhile meets it the same way", async () => {
+			const { result } = await undoMet(
+				() => conflict(),
+				deletionNotice("food", RULES),
+				"post",
+				"/api/budgets",
+			);
+			expect(result.current.conflict).toMatchObject({
+				isDelete: false,
+				line: "Keep mine puts the Budget back as it was before your change.",
+				yours: RULES,
+				current: SAVED,
+			});
+		});
+
+		test("a budget_exists answer opens it too", async () => {
+			const { result } = await undoMet(
+				() => refuse(409, "budget_exists", { details: { current: SAVED } }),
+				deletionNotice("food", RULES),
+				"post",
+				"/api/budgets",
+			);
+			expect(result.current.conflict?.current).toEqual(SAVED);
+		});
+
+		test("Keep mine after a change restores at the saved version, then the notice ends", async () => {
+			const { result, seen } = await undoMet((index) =>
+				index === 0 ? conflict() : ok(budgetAnswer("food", { version: 6 })),
+			);
+			act(() => result.current.keepMine());
+			await waitFor(() => expect(result.current.conflict).toBeNull());
+			expect(seen).toHaveLength(2);
+			expect(seen[1]?.path).toBe(`/api/budgets/${SAVED.id}`);
+			expect(seen[1]?.headers.get("if-match")).toBe('"5"');
+			expect(seen[1]?.body).toEqual({
+				schedule: FOOD.schedule,
+				overrides: [],
+				currency: "INR",
+			});
+			expect(seen[1]?.headers.get("idempotency-key")).not.toBe(
+				seen[0]?.headers.get("idempotency-key"),
+			);
+			expect(result.current.notice).toBeNull();
+		});
+
+		test("Delete anyway after a create deletes at the saved version", async () => {
+			const { result, seen } = await undoMet(
+				(index) =>
+					index === 0 ? conflict() : (
+						new HttpResponse(null, { status: 204 })
+					),
+				created(),
+				"delete",
+			);
+			act(() => result.current.keepMine());
+			await waitFor(() => expect(result.current.notice).toBeNull());
+			expect(seen[1]?.path).toBe(`/api/budgets/${SAVED.id}`);
+			expect(seen[1]?.headers.get("if-match")).toBe('"5"');
+			expect(result.current.conflict).toBeNull();
+		});
+
+		test("Keep mine after a delete restores the Budget that was made meanwhile, never a second create", async () => {
+			const patches = route(network, "patch", "/api/budgets/:id", () =>
+				ok(budgetAnswer("food", { version: 6 })),
+			);
+			const posts = route(network, "post", "/api/budgets", () =>
+				refuse(409, "budget_exists", { details: { current: SAVED } }),
+			);
+			const { result } = renderNotices();
+			act(() => result.current.show(deletionNotice("food", RULES)));
+			act(() => result.current.undo());
+			await waitFor(() => expect(result.current.conflict).not.toBeNull());
+			act(() => result.current.keepMine());
+			await waitFor(() => expect(result.current.notice).toBeNull());
+			expect(posts).toHaveLength(1);
+			expect(patches).toHaveLength(1);
+			expect(patches[0]?.path).toBe(`/api/budgets/${SAVED.id}`);
+			expect(patches[0]?.headers.get("if-match")).toBe('"5"');
+			expect(patches[0]?.body).toEqual({
+				schedule: FOOD.schedule,
+				overrides: [],
+				currency: "INR",
+			});
+		});
+
+		test("another 409 shows the newer version, with the notice still there", async () => {
+			const { result, seen } = await undoMet((index) =>
+				index === 0 ? conflict(SAVED) : conflict(NEWER),
+			);
+			act(() => result.current.keepMine());
+			await waitFor(() =>
+				expect(result.current.conflict?.current).toEqual(NEWER),
+			);
+			expect(seen).toHaveLength(2);
+			expect(result.current.notice?.undo).not.toBeNull();
+			act(() => result.current.keepMine());
+			await waitFor(() => expect(seen).toHaveLength(3));
+			expect(seen[2]?.headers.get("if-match")).toBe('"6"');
+		});
+
+		test.each([
+			[
+				"a 404",
+				() => refuse(404, "not_found"),
+				"This Budget was deleted on another device.",
+			],
+			[
+				"no answer",
+				() => HttpResponse.error(),
+				"The Budget could not be saved. Check your connection and try again.",
+			],
+		])(
+			"Keep mine meeting %s closes the view and the notice reads the failure",
+			async (_, answer, message) => {
+				const { result } = await undoMet((index) =>
+					index === 0 ? conflict() : answer(),
+				);
+				act(() => result.current.keepMine());
+				await waitFor(() => expect(result.current.conflict).toBeNull());
+				await waitFor(() =>
+					expect(result.current.notice?.failure).toBe(message),
+				);
+				expect(result.current.notice?.undo).toBeNull();
+			},
+		);
+
+		test("Keep theirs sends nothing, reads the saved Budget again and ends the notice", async () => {
+			const { result, seen, queryClient } = await undoMet(() => conflict());
+			const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+			act(() => result.current.keepTheirs());
+			expect(result.current.conflict).toBeNull();
+			expect(result.current.notice).toBeNull();
+			expect(seen).toHaveLength(1);
+			expect(invalidate).toHaveBeenCalledWith({ queryKey: ["budgets"] });
+		});
+
+		test("closing the view without a choice sends nothing and leaves the notice", async () => {
+			const { result, seen } = await undoMet(() => conflict());
+			act(() => result.current.closeConflict());
+			expect(result.current.conflict).toBeNull();
+			expect(result.current.notice?.text).toBe(
+				"Food limit is now ₹7,000.00 from November 2026.",
+			);
+			expect(result.current.notice?.undo).not.toBeNull();
+			expect(seen).toHaveLength(1);
+			// Undo can be pressed again, and meets the conflict again.
+			act(() => result.current.undo());
+			await waitFor(() => expect(result.current.conflict).not.toBeNull());
+			expect(seen).toHaveLength(2);
+		});
+
+		test("Keep mine is sent once however often it is pressed", async () => {
+			const { result, seen } = await undoMet(async (index) => {
+				if (index === 0) return conflict();
+				await delay(80);
+				return ok(budgetAnswer("food", { version: 6 }));
+			});
+			act(() => result.current.keepMine());
+			await waitFor(() => expect(result.current.isUndoing).toBe(true));
+			act(() => result.current.keepMine());
+			await waitFor(() => expect(result.current.notice).toBeNull());
+			expect(seen).toHaveLength(2);
+		});
+
+		test("a result after the notice was replaced leaves the newer one alone", async () => {
+			const { result } = await undoMet((index) =>
+				index === 0 ? conflict() : (
+					delay(80).then(() => ok(budgetAnswer("food", { version: 6 })))
+				),
+			);
+			act(() => result.current.keepMine());
+			await waitFor(() => expect(result.current.isUndoing).toBe(true));
+			act(() => result.current.show(deletionNotice("shopping", RULES)));
+			await waitFor(() => expect(result.current.isUndoing).toBe(false));
+			expect(result.current.notice?.text).toBe("Shopping Budget deleted.");
+		});
+	});
+
+	describe("on Remove", () => {
+		async function removeMet(
+			answer: (index: number) => Response | Promise<Response>,
+		) {
+			const seen = route(network, "delete", REMOVE_PATH, (_, index) =>
+				answer(index),
+			);
+			const view = renderNotices();
+			act(() => view.result.current.remove(WITH_LIMIT, "2026-10"));
+			await waitFor(() => expect(view.result.current.conflict).not.toBeNull());
+			return { ...view, seen };
+		}
+
+		test("shows the Budget without that one-month limit beside the saved one, and no notice", async () => {
+			const { result } = await removeMet(() => conflict());
+			expect(result.current.conflict).toEqual({
+				current: SAVED,
+				yours: { schedule: FOOD.schedule, overrides: [] },
+				line: "Keep mine applies your change, the removal of the one-month limit for October 2026, to the saved Budget.",
+				isDelete: false,
+			});
+			expect(result.current.notice).toBeNull();
+			expect(result.current.isRemoving).toBe(false);
+		});
+
+		test("Keep mine removes it at the saved version and shows the removal notice over the saved Budget", async () => {
+			const { result, seen } = await removeMet((index) =>
+				index === 0 ? conflict() : ok(budgetAnswer("food", { version: 6 })),
+			);
+			act(() => result.current.keepMine());
+			await waitFor(() => expect(result.current.notice).not.toBeNull());
+			expect(seen[1]?.path).toBe(`/api/budgets/${SAVED.id}/overrides/2026-10`);
+			expect(seen[1]?.headers.get("if-match")).toBe('"5"');
+			expect(seen[1]?.headers.get("idempotency-key")).not.toBe(
+				seen[0]?.headers.get("idempotency-key"),
+			);
+			expect(result.current.conflict).toBeNull();
+			expect(result.current.notice).toMatchObject({
+				text: "One-month limit for October 2026 removed.",
+				undo: {
+					kind: "restore",
+					version: 6,
+					rules: {
+						schedule: SAVED.schedule,
+						overrides: SAVED.overrides,
+					},
+				},
+			});
+		});
+
+		test("another 409 shows the newer version", async () => {
+			const { result, seen } = await removeMet((index) =>
+				index === 0 ? conflict(SAVED) : conflict(NEWER),
+			);
+			act(() => result.current.keepMine());
+			await waitFor(() =>
+				expect(result.current.conflict?.current).toEqual(NEWER),
+			);
+			act(() => result.current.keepMine());
+			await waitFor(() => expect(seen).toHaveLength(3));
+			expect(seen[2]?.headers.get("if-match")).toBe('"6"');
+		});
+
+		test.each([
+			[
+				"a 404",
+				() => refuse(404, "not_found"),
+				"This Budget was deleted on another device.",
+			],
+			[
+				"no answer",
+				() => HttpResponse.error(),
+				"The Budget could not be saved. Check your connection and try again.",
+			],
+		])(
+			"Keep mine meeting %s closes the view and a failure notice shows",
+			async (_, answer, message) => {
+				const { result } = await removeMet((index) =>
+					index === 0 ? conflict() : answer(),
+				);
+				act(() => result.current.keepMine());
+				await waitFor(() => expect(result.current.conflict).toBeNull());
+				await waitFor(() =>
+					expect(result.current.notice?.failure).toBe(message),
+				);
+				expect(result.current.notice).toMatchObject({
+					category: "food",
+					undo: null,
+					inPanel: true,
+				});
+			},
+		);
+
+		test("Keep mine meeting a 401 closes the view and shows nothing", async () => {
+			const { result } = await removeMet((index) =>
+				index === 0 ? conflict() : refuse(401, "unauthorized"),
+			);
+			act(() => result.current.keepMine());
+			await waitFor(() => expect(result.current.conflict).toBeNull());
+			expect(result.current.notice).toBeNull();
+		});
+
+		test("Keep theirs sends nothing and reads the saved Budget again", async () => {
+			const { result, seen, queryClient } = await removeMet(() => conflict());
+			const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+			act(() => result.current.keepTheirs());
+			expect(result.current.conflict).toBeNull();
+			expect(result.current.notice).toBeNull();
+			expect(seen).toHaveLength(1);
+			expect(invalidate).toHaveBeenCalledWith({ queryKey: ["budgets"] });
+		});
+
+		test("closing the view without a choice sends nothing", async () => {
+			const { result, seen } = await removeMet(() => conflict());
+			act(() => result.current.closeConflict());
+			expect(result.current.conflict).toBeNull();
+			expect(result.current.notice).toBeNull();
+			expect(seen).toHaveLength(1);
+		});
+
+		test("a 409 with no Budget in it is only a failure", async () => {
+			route(network, "delete", REMOVE_PATH, () =>
+				refuse(409, "version_conflict"),
+			);
+			const { result } = renderNotices();
+			act(() => result.current.remove(WITH_LIMIT, "2026-10"));
+			await waitFor(() =>
+				expect(result.current.notice?.failure).not.toBeNull(),
+			);
+			expect(result.current.conflict).toBeNull();
+		});
+	});
+
+	test("Keep mine and Keep theirs do nothing with no conflict", () => {
+		const { result } = renderNotices();
+		act(() => result.current.keepMine());
+		act(() => result.current.keepTheirs());
+		act(() => result.current.closeConflict());
+		expect(result.current.conflict).toBeNull();
 		expect(result.current.notice).toBeNull();
 	});
 });

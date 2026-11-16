@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -124,18 +124,232 @@ describe("DeleteBudgetDialog (BR-F04-06)", () => {
 		).toBeVisible();
 	});
 
-	test("a 409 says the delete failed until the conflict view comes", async () => {
-		route(network, "delete", "/api/budgets/:id", () =>
-			refuse(409, "version_conflict", {
-				details: { current: budgetAnswer("food", { version: 5 }) },
-			}),
-		);
-		const { user, onClose } = renderDelete();
-		await user.click(confirm());
-		expect(
-			await screen.findByText(/^The Budget could not be deleted/),
-		).toBeVisible();
-		expect(onClose).not.toHaveBeenCalled();
+	describe("a 409 opens the conflict view (BR-F04-23, AC-F04-30)", () => {
+		/** The Budget saved now: another device added 5,500.00 from November, as version 5. */
+		const saved = () =>
+			budgetAnswer("food", {
+				version: 5,
+				schedule: [
+					...goldenBudget("food").schedule,
+					{ from: "2026-11", limitMinor: 550000 },
+				],
+			});
+		const conflict = () =>
+			refuse(409, "version_conflict", { details: { current: saved() } });
+		const view = () =>
+			screen.getByRole("dialog", {
+				name: "This Budget changed on another device",
+			});
+		const noView = () =>
+			expect(
+				screen.queryByRole("dialog", {
+					name: "This Budget changed on another device",
+				}),
+			).not.toBeInTheDocument();
+
+		test("shows the Budget as it was chosen to be deleted beside the one saved now", async () => {
+			route(network, "delete", "/api/budgets/:id", () => conflict());
+			const { user, onClose } = renderDelete();
+			await user.click(confirm());
+			expect(
+				await screen.findByRole("dialog", {
+					name: "This Budget changed on another device",
+				}),
+			).toBeVisible();
+			expect(onClose).not.toHaveBeenCalled();
+			const november = within(view())
+				.getAllByRole("row")
+				.find((row) => /Nov 2026/.test(row.textContent ?? ""))!;
+			expect(within(november).getAllByRole("cell")[0]).toHaveTextContent(
+				"None",
+			);
+			expect(within(november).getAllByRole("cell")[1]).toHaveTextContent(
+				"₹5,500.00 from Nov 2026",
+			);
+			expect(november).toHaveAttribute("data-differs", "true");
+		});
+
+		test("offers Delete anyway and Keep it, and no Keep mine line", async () => {
+			route(network, "delete", "/api/budgets/:id", () => conflict());
+			const { user } = renderDelete();
+			await user.click(confirm());
+			await screen.findByRole("dialog", {
+				name: "This Budget changed on another device",
+			});
+			expect(
+				within(view()).getByRole("button", { name: "Delete anyway" }),
+			).toBeVisible();
+			expect(
+				within(view()).getByRole("button", { name: "Keep it" }),
+			).toBeVisible();
+			expect(within(view()).queryByText(/^Keep mine/)).not.toBeInTheDocument();
+		});
+
+		test("Delete anyway deletes at the saved version, under a new key, and the notice undoes that Budget", async () => {
+			const deletes = route(
+				network,
+				"delete",
+				"/api/budgets/:id",
+				(_, index) =>
+					index === 0 ? conflict() : (
+						new HttpResponse(null, { status: 204 })
+					),
+			);
+			const { user, onClose, onDeleted } = renderDelete();
+			await user.click(confirm());
+			await screen.findByRole("dialog", {
+				name: "This Budget changed on another device",
+			});
+			await user.click(
+				within(view()).getByRole("button", { name: "Delete anyway" }),
+			);
+			await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+			expect(deletes).toHaveLength(2);
+			expect(deletes[1]?.headers.get("if-match")).toBe('"5"');
+			expect(deletes[1]?.headers.get("idempotency-key")).not.toBe(
+				deletes[0]?.headers.get("idempotency-key"),
+			);
+			expect(isUuidV7(deletes[1]?.headers.get("idempotency-key"))).toBe(true);
+			expect(onDeleted).toHaveBeenCalledWith(
+				expect.objectContaining({
+					id: goldenBudget("food").id,
+					version: 5,
+					schedule: saved().schedule,
+				}),
+			);
+			noView();
+		});
+
+		test("another 409 shows the newer version", async () => {
+			const deletes = route(
+				network,
+				"delete",
+				"/api/budgets/:id",
+				(_, index) =>
+					index === 0 ? conflict() : (
+						refuse(409, "version_conflict", {
+							details: {
+								current: budgetAnswer("food", {
+									version: 6,
+									schedule: [
+										...saved().schedule,
+										{ from: "2027-01", limitMinor: 450000 },
+									],
+								}),
+							},
+						})
+					),
+			);
+			const { user, onClose } = renderDelete();
+			await user.click(confirm());
+			await screen.findByRole("dialog", {
+				name: "This Budget changed on another device",
+			});
+			await user.click(
+				within(view()).getByRole("button", { name: "Delete anyway" }),
+			);
+			expect(
+				await within(view()).findByText("₹4,500.00 from Jan 2027"),
+			).toBeVisible();
+			expect(onClose).not.toHaveBeenCalled();
+			await user.click(
+				within(view()).getByRole("button", { name: "Delete anyway" }),
+			);
+			await waitFor(() => expect(deletes).toHaveLength(3));
+			expect(deletes[2]?.headers.get("if-match")).toBe('"6"');
+		});
+
+		test("Keep it sends nothing, reads the saved Budget again and closes both", async () => {
+			const deletes = route(network, "delete", "/api/budgets/:id", () =>
+				conflict(),
+			);
+			const { user, onClose, onDeleted, queryClient } = renderDelete();
+			const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+			await user.click(confirm());
+			await screen.findByRole("dialog", {
+				name: "This Budget changed on another device",
+			});
+			await user.click(
+				within(view()).getByRole("button", { name: "Keep it" }),
+			);
+			expect(onClose).toHaveBeenCalledOnce();
+			expect(onDeleted).not.toHaveBeenCalled();
+			expect(deletes).toHaveLength(1);
+			expect(invalidate).toHaveBeenCalledWith({ queryKey: ["budgets"] });
+		});
+
+		test("closing it without a choice goes back to the confirmation", async () => {
+			const deletes = route(network, "delete", "/api/budgets/:id", () =>
+				conflict(),
+			);
+			const { user, onClose } = renderDelete();
+			await user.click(confirm());
+			await screen.findByRole("dialog", {
+				name: "This Budget changed on another device",
+			});
+			await user.keyboard("{Escape}");
+			noView();
+			expect(
+				screen.getByRole("alertdialog", { name: "Delete the Food Budget?" }),
+			).toBeVisible();
+			expect(onClose).not.toHaveBeenCalled();
+			expect(deletes).toHaveLength(1);
+		});
+
+		test("another refusal closes the view and shows its line in the confirmation", async () => {
+			route(network, "delete", "/api/budgets/:id", (_, index) =>
+				index === 0 ? conflict() : HttpResponse.error(),
+			);
+			const { user, onClose } = renderDelete();
+			await user.click(confirm());
+			await screen.findByRole("dialog", {
+				name: "This Budget changed on another device",
+			});
+			await user.click(
+				within(view()).getByRole("button", { name: "Delete anyway" }),
+			);
+			expect(
+				await screen.findByText(/^The Budget could not be deleted/),
+			).toBeVisible();
+			noView();
+			expect(onClose).not.toHaveBeenCalled();
+		});
+
+		test("a 404 on Delete anyway counts as done", async () => {
+			route(network, "delete", "/api/budgets/:id", (_, index) =>
+				index === 0 ? conflict() : refuse(404, "not_found"),
+			);
+			const { user, onClose, onDeleted } = renderDelete();
+			await user.click(confirm());
+			await screen.findByRole("dialog", {
+				name: "This Budget changed on another device",
+			});
+			await user.click(
+				within(view()).getByRole("button", { name: "Delete anyway" }),
+			);
+			await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+			expect(onDeleted).toHaveBeenCalledOnce();
+		});
+
+		test("while Delete anyway is sent, both choices wait", async () => {
+			route(network, "delete", "/api/budgets/:id", async (_, index) => {
+				if (index === 0) return conflict();
+				await delay(100);
+				return new HttpResponse(null, { status: 204 });
+			});
+			const { user, onClose } = renderDelete();
+			await user.click(confirm());
+			await screen.findByRole("dialog", {
+				name: "This Budget changed on another device",
+			});
+			await user.click(
+				within(view()).getByRole("button", { name: "Delete anyway" }),
+			);
+			expect(
+				within(view()).getByRole("button", { name: "Keep it" }),
+			).toHaveAttribute("aria-disabled", "true");
+			await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		});
 	});
 
 	test("a 401 is the app's to answer: it stays open, saying nothing more", async () => {

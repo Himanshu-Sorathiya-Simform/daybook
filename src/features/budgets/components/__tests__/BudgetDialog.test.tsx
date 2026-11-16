@@ -594,6 +594,322 @@ describe("a draft keeps the Budget it was opened on (BR-F04-23, BR-P1-26)", () =
 	});
 });
 
+describe("the conflict view (BR-F04-23, D-567, AC-F04-30)", () => {
+	const FOOD = goldenBudget("food");
+	/** The Budget saved now: another device added 5,500.00 from November, as version 5. */
+	const saved = (version = 5) =>
+		budgetAnswer("food", {
+			version,
+			schedule: [...FOOD.schedule, { from: "2026-11", limitMinor: 550000 }],
+		});
+	const conflict = (version = 5) =>
+		refuse(409, "version_conflict", { details: { current: saved(version) } });
+	const view = () =>
+		screen.getByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+	const noView = () =>
+		expect(
+			screen.queryByRole("dialog", {
+				name: "This Budget changed on another device",
+			}),
+		).not.toBeInTheDocument();
+	const rowOf = (name: RegExp) =>
+		within(view())
+			.getAllByRole("row")
+			.find((each) => name.test(each.textContent ?? ""))!;
+
+	/** Food at 7,000.00 from December, which meets the 409. */
+	async function changeFromDecember(user: ReturnType<typeof userEvent.setup>) {
+		await user.clear(limitBox());
+		await user.type(limitBox(), "7000");
+		await user.click(chip("Next month (December)"));
+		await user.click(button("Change from December"));
+	}
+
+	test("a 409 opens it over the dialog, which stays with what was typed", async () => {
+		route(network, "patch", "/api/budgets/:id", () => conflict());
+		const { user, onClose } = renderDialog("change", "food");
+		await changeFromDecember(user);
+		expect(
+			await screen.findByRole("dialog", {
+				name: "This Budget changed on another device",
+			}),
+		).toBeVisible();
+		expect(onClose).not.toHaveBeenCalled();
+		expect(screen.getAllByRole("dialog", { hidden: true })).toHaveLength(2);
+	});
+
+	test("shows the change over the Budget as it was opened beside the Budget saved now", async () => {
+		route(network, "patch", "/api/budgets/:id", () => conflict());
+		const { user } = renderDialog("change", "food");
+		await changeFromDecember(user);
+		await screen.findByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+		const december = within(rowOf(/Dec 2026/)).getAllByRole("cell");
+		expect(december[0]).toHaveTextContent("₹7,000.00 from Dec 2026");
+		expect(december[1]).toHaveTextContent("None");
+		const november = within(rowOf(/Nov 2026/)).getAllByRole("cell");
+		expect(november[0]).toHaveTextContent("None");
+		expect(november[1]).toHaveTextContent("₹5,500.00 from Nov 2026");
+		expect(rowOf(/Dec 2026/)).toHaveAttribute("data-differs", "true");
+		expect(rowOf(/Nov 2026/)).toHaveAttribute("data-differs", "true");
+		expect(rowOf(/Oct 2026/)).not.toHaveAttribute("data-differs");
+		expect(
+			within(view()).getByText(
+				"Keep mine applies your change, ₹7,000.00 from December 2026, to the saved Budget.",
+			),
+		).toBeVisible();
+	});
+
+	test("Keep mine resends the same change at the saved version, under a new key", async () => {
+		const patches = route(network, "patch", "/api/budgets/:id", (_, index) =>
+			index === 0 ? conflict() : ok(budgetAnswer("food", { version: 6 })),
+		);
+		const { user, onClose, onSaved } = renderDialog("change", "food");
+		await changeFromDecember(user);
+		await screen.findByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+		await user.click(within(view()).getByRole("button", { name: "Keep mine" }));
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(patches).toHaveLength(2);
+		expect(patches[1]?.headers.get("if-match")).toBe('"5"');
+		expect(patches[1]?.body).toEqual(patches[0]?.body);
+		expect(patches[1]?.headers.get("idempotency-key")).not.toBe(
+			patches[0]?.headers.get("idempotency-key"),
+		);
+		expect(isUuidV7(patches[1]?.headers.get("idempotency-key"))).toBe(true);
+		noView();
+		expect(onSaved).toHaveBeenCalledOnce();
+	});
+
+	test("its notice's Undo puts back the Budget as it was saved when Keep mine ran", async () => {
+		route(network, "patch", "/api/budgets/:id", (_, index) =>
+			index === 0 ? conflict() : ok(budgetAnswer("food", { version: 6 })),
+		);
+		const { user, onSaved } = renderDialog("change", "food");
+		await changeFromDecember(user);
+		await screen.findByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+		await user.click(within(view()).getByRole("button", { name: "Keep mine" }));
+		await waitFor(() => expect(onSaved).toHaveBeenCalledOnce());
+		expect(onSaved.mock.calls[0]?.[1]).toMatchObject({
+			text: "Food limit is now ₹7,000.00 from December 2026.",
+			undo: {
+				kind: "restore",
+				version: 6,
+				rules: {
+					schedule: [
+						{ from: "2026-09", limitMinor: 600000 },
+						{ from: "2026-10", limitMinor: 500000 },
+						{ from: "2026-11", limitMinor: 550000 },
+					],
+					overrides: [],
+				},
+			},
+		});
+	});
+
+	test("another 409 shows the newer version, and the view stays", async () => {
+		const patches = route(network, "patch", "/api/budgets/:id", (_, index) =>
+			index === 0 ?
+				conflict(5)
+			:	refuse(409, "version_conflict", {
+					details: {
+						current: budgetAnswer("food", {
+							version: 6,
+							schedule: [
+								...FOOD.schedule,
+								{ from: "2026-11", limitMinor: 550000 },
+								{ from: "2027-01", limitMinor: 450000 },
+							],
+						}),
+					},
+				}),
+		);
+		const { user, onClose } = renderDialog("change", "food");
+		await changeFromDecember(user);
+		await screen.findByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+		expect(within(view()).queryByText(/Jan 2027/)).not.toBeInTheDocument();
+		await user.click(within(view()).getByRole("button", { name: "Keep mine" }));
+		expect(
+			await within(view()).findByText("₹4,500.00 from Jan 2027"),
+		).toBeVisible();
+		expect(patches).toHaveLength(2);
+		expect(onClose).not.toHaveBeenCalled();
+		// Keep mine again goes against the newest version.
+		await user.click(within(view()).getByRole("button", { name: "Keep mine" }));
+		await waitFor(() => expect(patches).toHaveLength(3));
+		expect(patches[2]?.headers.get("if-match")).toBe('"6"');
+	});
+
+	test("Keep theirs sends nothing, reads the saved Budget again and closes the dialog", async () => {
+		const patches = route(network, "patch", "/api/budgets/:id", () =>
+			conflict(),
+		);
+		const { user, onClose, queryClient } = renderDialog("change", "food");
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		await changeFromDecember(user);
+		await screen.findByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+		await user.click(
+			within(view()).getByRole("button", { name: "Keep theirs" }),
+		);
+		expect(onClose).toHaveBeenCalledOnce();
+		expect(patches).toHaveLength(1);
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ["budgets"] });
+		noView();
+	});
+
+	test("closing it without a choice goes back to the dialog with what was typed", async () => {
+		const patches = route(network, "patch", "/api/budgets/:id", () =>
+			conflict(),
+		);
+		const { user, onClose, onSaved } = renderDialog("change", "food");
+		await changeFromDecember(user);
+		await screen.findByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+		await user.keyboard("{Escape}");
+		noView();
+		expect(limitBox()).toHaveValue("7,000.00");
+		expect(chip("Next month (December)")).toHaveAttribute(
+			"aria-checked",
+			"true",
+		);
+		expect(onClose).not.toHaveBeenCalled();
+		expect(onSaved).not.toHaveBeenCalled();
+		expect(patches).toHaveLength(1);
+		// Saving again goes against the version the dialog was opened on.
+		await user.click(button("Change from December"));
+		await screen.findByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+		expect(patches).toHaveLength(2);
+		expect(patches[1]?.headers.get("if-match")).toBe('"2"');
+	});
+
+	test("while Keep mine is sent, both choices wait", async () => {
+		route(network, "patch", "/api/budgets/:id", async (_, index) => {
+			if (index === 0) return conflict();
+			await delay(100);
+			return ok(budgetAnswer("food", { version: 6 }));
+		});
+		const { user, onClose } = renderDialog("change", "food");
+		await changeFromDecember(user);
+		await screen.findByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+		await user.click(within(view()).getByRole("button", { name: "Keep mine" }));
+		expect(
+			within(view()).getByRole("button", { name: "Keep theirs" }),
+		).toHaveAttribute("aria-disabled", "true");
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+	});
+
+	test.each([
+		[
+			"a 422 puts its messages in the dialog",
+			() =>
+				refuse(422, "validation_failed", {
+					fields: { limitMinor: "The largest amount is 99,99,99,999.99." },
+				}),
+			"The largest amount is 99,99,99,999.99.",
+		],
+		[
+			"a 404 says the Budget was deleted on another device",
+			() => refuse(404, "not_found"),
+			"This Budget was deleted on another device.",
+		],
+		[
+			"no answer says the save failed",
+			() => HttpResponse.error(),
+			/^The Budget could not be saved/,
+		],
+	])("Keep mine meeting %s closes the view", async (_, answer, text) => {
+		route(network, "patch", "/api/budgets/:id", (_, index) =>
+			index === 0 ? conflict() : answer(),
+		);
+		const { user, onClose } = renderDialog("change", "food");
+		await changeFromDecember(user);
+		await screen.findByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+		await user.click(within(view()).getByRole("button", { name: "Keep mine" }));
+		expect(await screen.findByText(text)).toBeVisible();
+		noView();
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	test("a one-month limit's line says for … only", async () => {
+		route(network, "patch", "/api/budgets/:id", () => conflict());
+		const { user } = renderDialog("change", "food");
+		await user.clear(limitBox());
+		await user.type(limitBox(), "8000");
+		await user.click(chip(/^One month only/));
+		await user.click(chip("October (viewing)"));
+		await user.click(button("Change October only"));
+		await screen.findByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+		expect(
+			within(view()).getByText(
+				"Keep mine applies your change, ₹8,000.00 for October 2026 only, to the saved Budget.",
+			),
+		).toBeVisible();
+		expect(within(rowOf(/Oct 2026/)).getAllByRole("cell")[0]).toHaveTextContent(
+			"₹8,000.00 in Oct 2026 only",
+		);
+	});
+
+	test("a stop's line names the stop", async () => {
+		route(network, "patch", "/api/budgets/:id", () =>
+			refuse(409, "version_conflict", {
+				details: { current: budgetAnswer("entertainment", { version: 4 }) },
+			}),
+		);
+		const { user } = renderDialog("stop", "entertainment");
+		await user.click(button("Stop from November"));
+		await screen.findByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+		expect(
+			within(view()).getByText(
+				"Keep mine applies your change, the stop from November 2026, to the saved Budget.",
+			),
+		).toBeVisible();
+		expect(within(rowOf(/Nov 2026/)).getAllByRole("cell")[0]).toHaveTextContent(
+			"Stopped from Nov 2026",
+		);
+	});
+
+	test("a stop for one month says no limit for … only", async () => {
+		route(network, "patch", "/api/budgets/:id", () =>
+			refuse(409, "version_conflict", {
+				details: { current: budgetAnswer("entertainment", { version: 4 }) },
+			}),
+		);
+		const { user } = renderDialog("stop", "entertainment");
+		await user.click(chip(/^One month only/));
+		await user.click(chip("October (viewing)"));
+		await user.click(button("Stop October only"));
+		await screen.findByRole("dialog", {
+			name: "This Budget changed on another device",
+		});
+		expect(
+			within(view()).getByText(
+				"Keep mine applies your change, no limit for October 2026 only, to the saved Budget.",
+			),
+		).toBeVisible();
+	});
+});
+
 describe("refusals and states (sections 6 and 8)", () => {
 	async function changeFood(user: ReturnType<typeof userEvent.setup>) {
 		await user.clear(limitBox());
@@ -663,19 +979,6 @@ describe("refusals and states (sections 6 and 8)", () => {
 			await screen.findByText("This Budget was deleted on another device."),
 		).toBeVisible();
 		await waitFor(() => expect(histories.length).toBeGreaterThan(before));
-	});
-
-	test("a 409 says the save failed until the conflict view comes", async () => {
-		route(network, "patch", "/api/budgets/:id", () =>
-			refuse(409, "version_conflict", {
-				details: { current: budgetAnswer("food", { version: 5 }) },
-			}),
-		);
-		const { user } = renderDialog("change", "food");
-		await changeFood(user);
-		expect(
-			await screen.findByText(/^The Budget could not be saved/),
-		).toBeVisible();
 	});
 
 	test("a 401 is the app's to answer: the dialog stays and says nothing more", async () => {

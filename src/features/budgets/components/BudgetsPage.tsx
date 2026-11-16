@@ -20,10 +20,12 @@ import { useBudgetsView } from "../hooks/useBudgetsView";
 import { dayOfMonth } from "../lib/labels";
 import { emptyTitle, offlineAction, offlineBody, PAGE_TEXT } from "../lib/messages";
 import { type DialogKind, recordIn } from "../lib/dialog";
+import { conflictRows } from "../lib/conflict";
 import { deletionNotice } from "../lib/notices";
 import { selectionKeys, subjectOf } from "../lib/panel";
 import type { BudgetMonthAnswer, BudgetsLocale } from "../lib/types";
 import { BudgetDialog } from "./BudgetDialog";
+import { ConflictDialog } from "./ConflictDialog";
 import { BudgetList } from "./BudgetList";
 import { BudgetPanel } from "./BudgetPanel";
 import { BudgetsHeader } from "./BudgetsHeader";
@@ -342,6 +344,23 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 					onRemoveMonthLimit={removeMonthLimit}
 					isRemoving={notices.isRemoving}
 					notice={inPanel ? noticeNode : null}
+				/>
+			)}
+			{notices.conflict && (
+				<ConflictDialog
+					isOpen
+					isDelete={notices.conflict.isDelete}
+					// It only ever reports closing.
+					onOpenChange={notices.closeConflict}
+					rows={conflictRows(
+						notices.conflict.yours,
+						notices.conflict.current,
+						locale,
+					)}
+					keepMineLine={notices.conflict.line ?? undefined}
+					isPending={notices.isUndoing || notices.isRemoving}
+					onKeepMine={notices.keepMine}
+					onKeepTheirs={notices.keepTheirs}
 				/>
 			)}
 			{dialog?.kind === "delete" && (

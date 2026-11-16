@@ -1709,20 +1709,6 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 			);
 		});
 
-		test("a version conflict reads the failure until the conflict view comes", async () => {
-			const { user } = renderPage("?month=2026-10");
-			await changeThenUndo(
-				() =>
-					refuse(409, "version_conflict", {
-						details: { current: budgetAnswer("food", { version: 4 }) },
-					}),
-				user,
-			);
-			expect(await within(panel()).findByRole("alert")).toHaveTextContent(
-				"The Budget could not be saved. Check your connection and try again.",
-			);
-		});
-
 		test("a 401 is the app's to answer: the notice stays as it was", async () => {
 			const { user } = renderPage("?month=2026-10");
 			await changeThenUndo(() => refuse(401, "unauthorized"), user);
@@ -1905,23 +1891,6 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 			expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 		});
 
-		test("a version conflict reads the failure until the conflict view comes", async () => {
-			route(network, "delete", "/api/budgets/:id/overrides/:month", () =>
-				refuse(409, "version_conflict", {
-					details: { current: budgetAnswer("food", { version: 4 }) },
-				}),
-			);
-			const { user } = renderPage("?month=2026-10", {
-				months: (month) => ok(withMonthLimit(month)),
-			});
-			await screen.findByText("Needs attention · 4");
-			await user.click(rowOf("budget:food"));
-			await user.click(remove());
-			expect(await within(panel()).findByRole("alert")).toHaveTextContent(
-				"The Budget could not be saved. Check your connection and try again.",
-			);
-		});
-
 		test("a 401 is the app's to answer: nothing is shown", async () => {
 			route(network, "delete", "/api/budgets/:id/overrides/:month", () =>
 				refuse(401, "unauthorized"),
@@ -2003,6 +1972,342 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 				name: "Budget details",
 			});
 			expect(await within(shown).findByText(CHANGED)).toBeVisible();
+		});
+	});
+
+	// AC-F04-30
+	describe("the conflict view (BR-F04-23, D-567)", () => {
+		beforeEach(() => media({ wide: true, docked: true }));
+
+		/** Food as another device left it: 5,500.00 from November, as version 4. */
+		const SAVED = () =>
+			budgetAnswer("food", {
+				version: 4,
+				schedule: [
+					...FOOD_SCHEDULE,
+					{ from: "2026-11", limitMinor: 550000 },
+				],
+			});
+		const conflict = () =>
+			refuse(409, "version_conflict", { details: { current: SAVED() } });
+		const view = () =>
+			screen.getByRole("dialog", {
+				name: "This Budget changed on another device",
+			});
+		const noView = () =>
+			expect(
+				screen.queryByRole("dialog", {
+					name: "This Budget changed on another device",
+				}),
+			).not.toBeInTheDocument();
+		const opened = () =>
+			screen.findByRole("dialog", {
+				name: "This Budget changed on another device",
+			});
+		/** The month view once another device's change has been read. */
+		const elsewhere = (month: Month) => {
+			const view = monthAnswer(month);
+			return {
+				...view,
+				budgets: view.budgets.map((row) =>
+					row.category === "food" ?
+						{ ...row, version: 4, schedule: SAVED().schedule }
+					:	row,
+				),
+			};
+		};
+
+		/** Food at 7,000.00 from December in its dialog. */
+		async function changeFromDecember(user: ReturnType<typeof userEvent.setup>) {
+			await user.click(rowOf("budget:food"));
+			await user.click(panelButton("Change limit"));
+			const dialog = await screen.findByRole("dialog", {
+				name: "Change the Food limit",
+			});
+			const box = within(dialog).getByRole("textbox");
+			await user.clear(box);
+			await user.type(box, "7000");
+			await user.click(
+				within(dialog).getByRole("radio", { name: "Next month (December)" }),
+			);
+			await user.click(
+				within(dialog).getByRole("button", { name: "Change from December" }),
+			);
+		}
+
+		test("a change that meets a 409 shows the Dec 2026 and Nov 2026 rows marked Differs, and the Keep mine line", async () => {
+			route(network, "patch", "/api/budgets/:id", () => conflict());
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await changeFromDecember(user);
+			await opened();
+			const row = (name: RegExp) =>
+				within(view())
+					.getAllByRole("row")
+					.find((each) => name.test(each.textContent ?? ""))!;
+			expect(row(/Dec 2026/)).toHaveAttribute("data-differs", "true");
+			expect(
+				within(row(/Dec 2026/)).getAllByRole("cell")[0],
+			).toHaveTextContent("₹7,000.00 from Dec 2026");
+			expect(
+				within(row(/Dec 2026/)).getAllByRole("cell")[1],
+			).toHaveTextContent("None");
+			expect(row(/Nov 2026/)).toHaveAttribute("data-differs", "true");
+			expect(
+				within(row(/Nov 2026/)).getAllByRole("cell")[0],
+			).toHaveTextContent("None");
+			expect(
+				within(row(/Nov 2026/)).getAllByRole("cell")[1],
+			).toHaveTextContent("₹5,500.00 from Nov 2026");
+			expect(
+				within(view()).getByText(
+					"Keep mine applies your change, ₹7,000.00 from December 2026, to the saved Budget.",
+				),
+			).toBeVisible();
+		});
+
+		test("Keep mine resends the PATCH at the saved version under a new key, then the notice shows", async () => {
+			const patches = route(
+				network,
+				"patch",
+				"/api/budgets/:id",
+				(_, index) =>
+					index === 0 ? conflict() : (
+						ok(budgetAnswer("food", { version: 5 }))
+					),
+			);
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await changeFromDecember(user);
+			await opened();
+			await user.click(
+				within(view()).getByRole("button", { name: "Keep mine" }),
+			);
+			await waitFor(() => expect(patches).toHaveLength(2));
+			expect(patches[1]?.headers.get("if-match")).toBe('"4"');
+			expect(patches[1]?.headers.get("idempotency-key")).not.toBe(
+				patches[0]?.headers.get("idempotency-key"),
+			);
+			expect(patches[1]?.body).toEqual(patches[0]?.body);
+			await waitFor(() =>
+				expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+			);
+			expect(
+				await within(panel()).findByText(
+					"Food limit is now ₹7,000.00 from December 2026.",
+				),
+			).toBeVisible();
+		});
+
+		test("Keep theirs sends nothing, shows the saved Budget everywhere and closes the view and the dialog", async () => {
+			let readElsewhere = false;
+			const patches = route(network, "patch", "/api/budgets/:id", () => {
+				readElsewhere = true;
+				return conflict();
+			});
+			const { user } = renderPage("?month=2026-10", {
+				months: (month) =>
+					ok(readElsewhere ? elsewhere(month) : monthAnswer(month)),
+			});
+			await screen.findByText("Needs attention · 4");
+			await changeFromDecember(user);
+			await opened();
+			await user.click(
+				within(view()).getByRole("button", { name: "Keep theirs" }),
+			);
+			await waitFor(() =>
+				expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+			);
+			expect(patches).toHaveLength(1);
+			// The panel's limit history now reads the saved Budget's November entry.
+			expect(
+				await within(panel()).findByText("₹5,500.00 from Nov 2026"),
+			).toBeVisible();
+			expect(screen.queryByText(/Food limit is now/)).not.toBeInTheDocument();
+		});
+
+		test("closing it goes back to the dialog with what was typed", async () => {
+			route(network, "patch", "/api/budgets/:id", () => conflict());
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await changeFromDecember(user);
+			await opened();
+			await user.keyboard("{Escape}");
+			noView();
+			const dialog = screen.getByRole("dialog", {
+				name: "Change the Food limit",
+			});
+			expect(within(dialog).getByRole("textbox")).toHaveValue("7,000.00");
+		});
+
+		test("Undo's 409 opens it with the Undo line, and Keep mine puts the Budget back at the saved version", async () => {
+			const patches = route(
+				network,
+				"patch",
+				"/api/budgets/:id",
+				(_, index) =>
+					index === 0 ? ok(budgetAnswer("food", { version: 3 }))
+					: index === 1 ? conflict()
+					: ok(budgetAnswer("food", { version: 5 })),
+			);
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await changeFood(user);
+			await within(panel()).findByText(CHANGED);
+			await user.click(within(panel()).getByRole("button", { name: "Undo" }));
+			await opened();
+			expect(
+				within(view()).getByText(
+					"Keep mine puts the Budget back as it was before your change.",
+				),
+			).toBeVisible();
+			// The notice stays under the view until a choice is made.
+			expect(screen.getByText(CHANGED)).toBeInTheDocument();
+			await user.click(
+				within(view()).getByRole("button", { name: "Keep mine" }),
+			);
+			await waitFor(() => expect(patches).toHaveLength(3));
+			expect(patches[2]?.headers.get("if-match")).toBe('"4"');
+			expect(patches[2]?.body).toEqual({
+				schedule: FOOD_SCHEDULE,
+				overrides: [],
+				currency: "INR",
+			});
+			await waitFor(() =>
+				expect(screen.queryByText(CHANGED)).not.toBeInTheDocument(),
+			);
+			noView();
+		});
+
+		test("Undo's 409, Keep theirs ends the notice and sends nothing", async () => {
+			const patches = route(
+				network,
+				"patch",
+				"/api/budgets/:id",
+				(_, index) =>
+					index === 0 ?
+						ok(budgetAnswer("food", { version: 3 }))
+					:	conflict(),
+			);
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await changeFood(user);
+			await within(panel()).findByText(CHANGED);
+			await user.click(within(panel()).getByRole("button", { name: "Undo" }));
+			await opened();
+			await user.click(
+				within(view()).getByRole("button", { name: "Keep theirs" }),
+			);
+			await waitFor(() =>
+				expect(screen.queryByText(CHANGED)).not.toBeInTheDocument(),
+			);
+			expect(patches).toHaveLength(2);
+			noView();
+		});
+
+		test("Undo's 409, closing the view leaves the notice with its Undo", async () => {
+			route(network, "patch", "/api/budgets/:id", (_, index) =>
+				index === 0 ? ok(budgetAnswer("food", { version: 3 })) : conflict(),
+			);
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await changeFood(user);
+			await within(panel()).findByText(CHANGED);
+			await user.click(within(panel()).getByRole("button", { name: "Undo" }));
+			await opened();
+			await user.keyboard("{Escape}");
+			noView();
+			expect(within(panel()).getByText(CHANGED)).toBeVisible();
+			expect(
+				within(panel()).getByRole("button", { name: "Undo" }),
+			).toBeVisible();
+		});
+
+		test("a delete's 409 offers Delete anyway and Keep it, and Delete anyway deletes the saved Budget", async () => {
+			const deletes = route(
+				network,
+				"delete",
+				"/api/budgets/:id",
+				(_, index) =>
+					index === 0 ? conflict() : (
+						new HttpResponse(null, { status: 204 })
+					),
+			);
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await user.click(rowOf("budget:food"));
+			await user.click(panelButton("Delete"));
+			await user.click(
+				within(await screen.findByRole("alertdialog")).getByRole("button", {
+					name: "Delete Budget",
+				}),
+			);
+			await opened();
+			expect(
+				within(view()).getByRole("button", { name: "Keep it" }),
+			).toBeVisible();
+			expect(within(view()).queryByText(/^Keep mine/)).not.toBeInTheDocument();
+			await user.click(
+				within(view()).getByRole("button", { name: "Delete anyway" }),
+			);
+			await waitFor(() => expect(deletes).toHaveLength(2));
+			expect(deletes[1]?.headers.get("if-match")).toBe('"4"');
+			expect(await screen.findByText(DELETED)).toBeVisible();
+		});
+
+		test("Remove's 409 opens it, and Keep mine removes the one-month limit from the saved Budget", async () => {
+			const withLimit = (month: Month) => {
+				const view = monthAnswer(month);
+				return {
+					...view,
+					budgets: view.budgets.map((row) =>
+						row.category === "food" ?
+							{
+								...row,
+								overrides: [
+									{ month: "2026-12", limitMinor: 700000 },
+								],
+							}
+						:	row,
+					),
+				};
+			};
+			const deletes = route(
+				network,
+				"delete",
+				"/api/budgets/:id/overrides/:month",
+				(_, index) =>
+					index === 0 ? conflict() : (
+						ok(budgetAnswer("food", { version: 5 }))
+					),
+			);
+			const { user } = renderPage("?month=2026-10", {
+				months: (month) => ok(withLimit(month)),
+			});
+			await screen.findByText("Needs attention · 4");
+			await user.click(rowOf("budget:food"));
+			await user.click(
+				screen.getByRole("button", {
+					name: "Remove ₹7,000.00 in Dec 2026 only",
+				}),
+			);
+			await opened();
+			expect(
+				within(view()).getByText(
+					"Keep mine applies your change, the removal of the one-month limit for December 2026, to the saved Budget.",
+				),
+			).toBeVisible();
+			await user.click(
+				within(view()).getByRole("button", { name: "Keep mine" }),
+			);
+			await waitFor(() => expect(deletes).toHaveLength(2));
+			expect(deletes[1]?.headers.get("if-match")).toBe('"4"');
+			expect(
+				await within(panel()).findByText(
+					"One-month limit for December 2026 removed.",
+				),
+			).toBeVisible();
+			noView();
 		});
 	});
 });

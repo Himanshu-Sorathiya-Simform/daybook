@@ -112,7 +112,18 @@ describe("writeNotice's Undo (BR-F04-29)", () => {
 			saved: budgetAnswer("food", { id: "new-id", version: 1 }),
 			formats: IN,
 		});
-		expect(notice.undo).toEqual({ kind: "delete", id: "new-id", version: 1 });
+		expect(notice.undo).toEqual({
+			kind: "delete",
+			id: "new-id",
+			version: 1,
+			rules: {
+				schedule: [
+					{ from: "2026-09", limitMinor: 600000 },
+					{ from: "2026-10", limitMinor: 500000 },
+				],
+				overrides: [],
+			},
+		});
 	});
 
 	test("after a change, Undo restores the rules from before it at the returned version", () => {

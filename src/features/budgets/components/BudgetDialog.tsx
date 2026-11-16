@@ -15,10 +15,15 @@ import { Dialog } from "@/components/surfaces/Dialog";
 import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
 import { useOnline } from "@/hooks/useOnline";
 import { formatAmountInput, parseAmount } from "@/lib/amount";
-import type { ExpenseCategory } from "@/lib/budgets/model";
+import {
+	type BudgetRules,
+	type ExpenseCategory,
+	setFrom,
+	setMonth as setMonthLimit,
+} from "@/lib/budgets/model";
 import { type Month, monthOf, monthRange } from "@/lib/budgets/months";
 import { type BudgetChange, previewChange } from "@/lib/budgets/preview";
-import { BUDGET_MESSAGES } from "@/lib/budgets/schemas";
+import { BUDGET_MESSAGES, type BudgetEditInput } from "@/lib/budgets/schemas";
 import type { BudgetRecord } from "@/lib/budgets/view";
 import { categoryLabel } from "@/lib/categories";
 import { uuidV7 } from "@/lib/ids";
@@ -43,13 +48,15 @@ import {
 	startLimit,
 	tileCaptions,
 } from "../lib/dialog";
-import { BUDGETS_TEXT, budgetExistsMessage } from "../lib/messages";
+import { budgetExistsMessage } from "../lib/messages";
 import { type Figures, historyWindow } from "../lib/preview";
+import { type ConflictChange, conflictRows, keepMineLine } from "../lib/conflict";
 import { type WriteNotice, writeNotice } from "../lib/notices";
 import { refreshAfterBudgetWrite } from "../lib/refresh";
 import type { BudgetAnswer, BudgetMonthAnswer, BudgetsLocale } from "../lib/types";
 import { type BudgetField, readBudgetWriteError } from "../lib/write-errors";
 import { ChangeNotes } from "./ChangeNotes";
+import { ConflictDialog } from "./ConflictDialog";
 import { MonthField } from "./MonthField";
 import { WhatChanges } from "./WhatChanges";
 
@@ -134,6 +141,14 @@ export function BudgetDialog({
 	const [tried, setTried] = useState(false);
 	const [server, setServer] = useState<Partial<Record<BudgetField, string>>>({});
 	const [failure, setFailure] = useState<string | null>(null);
+	// A 409: the Budget saved now beside the user's version, with the write to resend
+	// (BR-F04-23).
+	const [conflict, setConflict] = useState<{
+		current: BudgetAnswer;
+		body: BudgetEditInput;
+		yours: BudgetRules;
+		line: string;
+	} | null>(null);
 	const formRef = useRef<HTMLFormElement>(null);
 	const focusInvalid = useFocusFirstInvalid(formRef);
 	const history = useBudgetHistory(
@@ -217,20 +232,13 @@ export function BudgetDialog({
 		setFailure(null);
 	};
 
-	const save = async () => {
-		setTried(true);
-		// Only a stop on a Budget record can be blocked.
-		if (blocked) {
-			onDeleteInstead(record as BudgetRecord);
-			return;
-		}
-		if (messages.category || messages.limitMinor) {
-			focusInvalid();
-			return;
-		}
-		// Fields without a message always make a plan; the button and Enter refuse one that
-		// changes nothing.
-		const ready = plan as DialogPlan;
+	/** Sends the write for `ready` against `version`, over the Budget as it was, `before`, for
+	 * the notice's Undo. Keep mine resends it against the saved version. */
+	const submit = async (
+		ready: DialogPlan,
+		version: number,
+		before: BudgetRules | null,
+	) => {
 		setFailure(null);
 		setServer({});
 		try {
@@ -242,10 +250,11 @@ export function BudgetDialog({
 					})
 				:	await edit.mutateAsync({
 						id: (record as BudgetRecord).id,
-						version: (record as BudgetRecord).version,
+						version,
 						body: ready.body,
 						idempotencyKey: uuidV7(),
 					});
+			setConflict(null);
 			onSaved?.(
 				saved,
 				writeNotice({
@@ -253,7 +262,7 @@ export function BudgetDialog({
 					month,
 					// A saved dialog has a valid limit, or is a stop.
 					limitMinor: limit as number | null,
-					before: record,
+					before,
 					saved,
 					formats: locale,
 				}),
@@ -261,6 +270,36 @@ export function BudgetDialog({
 			onClose();
 		} catch (error) {
 			const outcome = readBudgetWriteError(error);
+			if (outcome.kind === "conflict") {
+				// Only a change on a Budget record has a version to conflict on.
+				const edited = ready as Extract<DialogPlan, { kind: "edit" }>;
+				const change: ConflictChange = {
+					kind: "limit",
+					scope,
+					month,
+					limitMinor: limit as number | null,
+				};
+				setConflict({
+					current: outcome.current,
+					body: edited.body,
+					yours:
+						scope === "month" ?
+							setMonthLimit(
+								record as BudgetRules,
+								month,
+								limit as number | null,
+							)
+						:	setFrom(
+								record as BudgetRules,
+								month,
+								limit as number | null,
+							),
+					line: keepMineLine(change, locale),
+				});
+				return;
+			}
+			// Any other refusal closes the view and shows where the write started.
+			setConflict(null);
 			if (outcome.kind === "fields") {
 				setServer(outcome.fields);
 				setFailure(outcome.message);
@@ -280,168 +319,220 @@ export function BudgetDialog({
 				void refreshAfterBudgetWrite(queryClient, "count");
 			} else if (outcome.kind === "form") {
 				setFailure(outcome.message);
-			} else if (outcome.kind === "conflict") {
-				// The conflict view comes with Undo (C9); until then the save says it failed.
-				setFailure(BUDGETS_TEXT.saveFailed);
 			}
 		}
+	};
+
+	const save = async () => {
+		setTried(true);
+		// Only a stop on a Budget record can be blocked.
+		if (blocked) {
+			onDeleteInstead(record as BudgetRecord);
+			return;
+		}
+		if (messages.category || messages.limitMinor) {
+			focusInvalid();
+			return;
+		}
+		// Fields without a message always make a plan; the button and Enter refuse one that
+		// changes nothing.
+		await submit(
+			plan as DialogPlan,
+			(record as BudgetRecord | null)?.version ?? 0,
+			record,
+		);
 	};
 
 	const shown = (field: BudgetField) => (tried ? messages[field] : server[field]);
 	const title = dialogTitle(kind, category);
 	return (
-		<Dialog
-			title={title}
-			isOpen={isOpen}
-			// It only ever reports closing.
-			onOpenChange={onClose}
-			size="lg"
-			isKeyboardDismissDisabled={busy}
-			footer={
-				<>
-					<span className="flex-1" />
-					<Button
-						variant="secondary"
-						isDisabled={busy}
-						onPress={onClose}
-						className="max-md:hidden"
-					>
-						{DIALOG_TEXT.cancel}
-					</Button>
-					<Button
-						variant={blocked ? "danger" : "primary"}
-						isDisabled={!online || unchanged}
-						isPending={busy}
-						onPress={() => void save()}
-					>
-						{blocked ?
-							DIALOG_TEXT.deleteInstead
-						:	buttonName(kind, scope, month, current, locale)}
-					</Button>
-				</>
-			}
-		>
-			<form
-				ref={formRef}
-				noValidate
-				aria-label={title}
-				className="flex flex-col gap-4"
-				onSubmit={(event) => {
-					event.preventDefault();
-					if (online && !unchanged) void save();
-				}}
+		<>
+			<Dialog
+				title={title}
+				isOpen={isOpen}
+				// It only ever reports closing.
+				onOpenChange={onClose}
+				size="lg"
+				isKeyboardDismissDisabled={busy}
+				footer={
+					<>
+						<span className="flex-1" />
+						<Button
+							variant="secondary"
+							isDisabled={busy}
+							onPress={onClose}
+							className="max-md:hidden"
+						>
+							{DIALOG_TEXT.cancel}
+						</Button>
+						<Button
+							variant={blocked ? "danger" : "primary"}
+							isDisabled={!online || unchanged}
+							isPending={busy}
+							onPress={() => void save()}
+						>
+							{blocked ?
+								DIALOG_TEXT.deleteInstead
+							:	buttonName(kind, scope, month, current, locale)}
+						</Button>
+					</>
+				}
 			>
-				{!online && <OfflineNote>{DIALOG_TEXT.offline}</OfflineNote>}
-				{failure && <FormAlert>{failure}</FormAlert>}
-				{subject.notice && <FormNote icon={Info}>{subject.notice}</FormNote>}
-				{kind === "add" && (
-					<CategoryTiles
-						tiles={addCategories(view)}
-						captions={tileCaptions(view, locale)}
-						value={category}
-						onChange={(next) => {
-							setSubject((was) => ({
-								...was,
-								category: next as ExpenseCategory,
-							}));
-							setScope("onward");
-							changed("category");
-						}}
-						error={shown("category")}
-						isDisabled={busy}
-					/>
-				)}
-				{!stopping && (
-					<AmountInput
-						label={
-							kind === "add" ?
-								DIALOG_TEXT.monthlyLimit
-							:	DIALOG_TEXT.newLimit
-						}
-						name="limit"
-						autoFocus={kind !== "add"}
-						currency={locale.currency}
-						numberLocale={locale.numberLocale}
-						value={amount}
-						onChange={(text) => {
-							setAmount(text);
-							changed("limitMinor");
-						}}
-						onBlur={() => {
-							if (typed.ok)
-								setAmount(formatAmountInput(typed.minor, locale));
-						}}
-						hint={
-							history.data ?
-								spentHint(history.data.months, locale)
-							:	undefined
-						}
-						error={shown("limitMinor")}
-						isDisabled={busy}
-					/>
-				)}
-				{/* A category with no Budget record always applies from a month (BR-F04-19,
-				    D-560), and choosing one sets For how long back to that. */}
-				{record && (
-					<ChoiceGroup
-						label={DIALOG_TEXT.forHowLong}
-						value={scope}
-						onChange={(next) => setScope(next as DialogScope)}
-						options={FOR_HOW_LONG.map((value) => ({
-							value,
-							label:
-								value === "onward" ?
-									DIALOG_TEXT.onward
-								:	DIALOG_TEXT.oneMonth,
-							description:
-								value === "onward" ?
-									DIALOG_TEXT.onwardDetail
-								:	oneMonthDetail(record, month, current, locale),
-						}))}
-						isDisabled={busy}
-					/>
-				)}
-				<MonthField
-					label={monthLabel(kind, scope)}
-					value={month}
-					onChange={(next) => {
-						setMonth(next);
-						changed("month");
+				<form
+					ref={formRef}
+					noValidate
+					aria-label={title}
+					className="flex flex-col gap-4"
+					onSubmit={(event) => {
+						event.preventDefault();
+						if (online && !unchanged) void save();
 					}}
-					current={current}
-					viewed={view.month}
-					formats={locale}
-					isDisabled={busy}
-				/>
-				{shown("month") && <FormAlert>{shown("month")}</FormAlert>}
-				{change && preview && !preview.blocked && category !== null && (
-					<WhatChanges
-						preview={preview}
-						change={change}
-						context={{ category, current, formats: locale }}
-						figures={figures}
-					/>
-				)}
-				{blocked && (
-					<FormAlert>{BUDGET_MESSAGES.stopRemovesEveryMonth}</FormAlert>
-				)}
-				{unchanged && category !== null && (
-					<p className="text-body text-ink-2">
-						{nothingChanges(category, scope, month, locale)}
-					</p>
-				)}
-				{!unchanged
-					&& change
-					&& preview
-					&& !preview.blocked
-					&& category !== null && (
-						<ChangeNotes
-							notes={preview.notes}
-							change={change}
-							context={{ category, current, formats: locale }}
+				>
+					{!online && <OfflineNote>{DIALOG_TEXT.offline}</OfflineNote>}
+					{failure && <FormAlert>{failure}</FormAlert>}
+					{subject.notice && (
+						<FormNote icon={Info}>{subject.notice}</FormNote>
+					)}
+					{kind === "add" && (
+						<CategoryTiles
+							tiles={addCategories(view)}
+							captions={tileCaptions(view, locale)}
+							value={category}
+							onChange={(next) => {
+								setSubject((was) => ({
+									...was,
+									category: next as ExpenseCategory,
+								}));
+								setScope("onward");
+								changed("category");
+							}}
+							error={shown("category")}
+							isDisabled={busy}
 						/>
 					)}
-			</form>
-		</Dialog>
+					{!stopping && (
+						<AmountInput
+							label={
+								kind === "add" ?
+									DIALOG_TEXT.monthlyLimit
+								:	DIALOG_TEXT.newLimit
+							}
+							name="limit"
+							autoFocus={kind !== "add"}
+							currency={locale.currency}
+							numberLocale={locale.numberLocale}
+							value={amount}
+							onChange={(text) => {
+								setAmount(text);
+								changed("limitMinor");
+							}}
+							onBlur={() => {
+								if (typed.ok)
+									setAmount(
+										formatAmountInput(typed.minor, locale),
+									);
+							}}
+							hint={
+								history.data ?
+									spentHint(history.data.months, locale)
+								:	undefined
+							}
+							error={shown("limitMinor")}
+							isDisabled={busy}
+						/>
+					)}
+					{/* A category with no Budget record always applies from a month (BR-F04-19,
+				    D-560), and choosing one sets For how long back to that. */}
+					{record && (
+						<ChoiceGroup
+							label={DIALOG_TEXT.forHowLong}
+							value={scope}
+							onChange={(next) => setScope(next as DialogScope)}
+							options={FOR_HOW_LONG.map((value) => ({
+								value,
+								label:
+									value === "onward" ?
+										DIALOG_TEXT.onward
+									:	DIALOG_TEXT.oneMonth,
+								description:
+									value === "onward" ?
+										DIALOG_TEXT.onwardDetail
+									:	oneMonthDetail(record, month, current, locale),
+							}))}
+							isDisabled={busy}
+						/>
+					)}
+					<MonthField
+						label={monthLabel(kind, scope)}
+						value={month}
+						onChange={(next) => {
+							setMonth(next);
+							changed("month");
+						}}
+						current={current}
+						viewed={view.month}
+						formats={locale}
+						isDisabled={busy}
+					/>
+					{shown("month") && <FormAlert>{shown("month")}</FormAlert>}
+					{change && preview && !preview.blocked && category !== null && (
+						<WhatChanges
+							preview={preview}
+							change={change}
+							context={{ category, current, formats: locale }}
+							figures={figures}
+						/>
+					)}
+					{blocked && (
+						<FormAlert>
+							{BUDGET_MESSAGES.stopRemovesEveryMonth}
+						</FormAlert>
+					)}
+					{unchanged && category !== null && (
+						<p className="text-body text-ink-2">
+							{nothingChanges(category, scope, month, locale)}
+						</p>
+					)}
+					{!unchanged
+						&& change
+						&& preview
+						&& !preview.blocked
+						&& category !== null && (
+							<ChangeNotes
+								notes={preview.notes}
+								change={change}
+								context={{ category, current, formats: locale }}
+							/>
+						)}
+				</form>
+			</Dialog>
+			{conflict && (
+				<ConflictDialog
+					isOpen
+					// It only ever reports closing.
+					onOpenChange={() => setConflict(null)}
+					rows={conflictRows(conflict.yours, conflict.current, locale)}
+					keepMineLine={conflict.line}
+					isPending={edit.isPending}
+					onKeepMine={() =>
+						void submit(
+							{
+								kind: "edit",
+								body: conflict.body,
+								blocked: false,
+								unchanged: false,
+							},
+							conflict.current.version,
+							conflict.current,
+						)
+					}
+					onKeepTheirs={() => {
+						setConflict(null);
+						void refreshAfterBudgetWrite(queryClient, "rules");
+						onClose();
+					}}
+				/>
+			)}
+		</>
 	);
 }

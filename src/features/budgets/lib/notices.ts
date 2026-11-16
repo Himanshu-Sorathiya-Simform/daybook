@@ -18,8 +18,9 @@ const long = (month: Month, f: Formats) => formatMonth(month, f, "long");
 
 /** What Undo sends (BR-F04-29): the Budget as it was, kept with the write that changed it. */
 export type UndoPlan =
-	/** After a create sent as `POST`: `DELETE` at the version the create returned. */
-	| { kind: "delete"; id: string; version: number }
+	/** After a create sent as `POST`: `DELETE` at the version the create returned. `rules` is
+	 * the Budget the create made, which the conflict view shows as the user's. */
+	| { kind: "delete"; id: string; version: number; rules: BudgetRules }
 	/** After a change, a one-month limit or a removal: a restoring `PATCH` at the version the
 	 * write returned, with the schedule and one-month limits from before it. */
 	| { kind: "restore"; id: string; version: number; rules: BudgetRules }
@@ -99,7 +100,12 @@ export function writeNotice({
 		inPanel: true,
 		undo:
 			before === null ?
-				{ kind: "delete", id: saved.id, version: saved.version }
+				{
+					kind: "delete",
+					id: saved.id,
+					version: saved.version,
+					rules: rulesOf(saved),
+				}
 			:	{
 					kind: "restore",
 					id: saved.id,
