@@ -11,7 +11,13 @@ import {
 	useTable,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ChevronsUpDown } from "lucide-react";
-import { type ReactNode, useId, useState } from "react";
+import {
+	type Dispatch,
+	type ReactNode,
+	type SetStateAction,
+	useId,
+	useState,
+} from "react";
 import {
 	Cell as AriaCell,
 	Column as AriaColumn,
@@ -53,6 +59,9 @@ export type BudgetTableProps = {
 	/** The state the rows are filtered to, or `null` (BR-F04-31). */
 	filter: StateLabel | null;
 	onFilterChange: (filter: StateLabel | null) => void;
+	/** The sort, held by the page so it outlives the table while a month loads (D-570). */
+	sorting: SortingState;
+	onSortingChange: Dispatch<SetStateAction<SortingState>>;
 	/** The selected category, or `null` (BR-F04-17). */
 	selected: ExpenseCategory | null;
 	onSelect: (category: ExpenseCategory | null) => void;
@@ -186,13 +195,14 @@ export function BudgetTable({
 	formats,
 	filter,
 	onFilterChange,
+	sorting,
+	onSortingChange,
 	selected,
 	onSelect,
 	arrows = "select",
 	className,
 }: Readonly<BudgetTableProps>) {
 	const captionId = useId();
-	const [sorting, setSorting] = useState<SortingState>([]);
 	// The rows' holder as state, so the shortcuts listen on it once it is on the page.
 	const [holder, setHolder] = useState<HTMLDivElement | null>(null);
 	const money = (minor: number) =>
@@ -210,7 +220,7 @@ export function BudgetTable({
 		data: budgets,
 		getRowId: (row) => row.category,
 		state: { sorting },
-		onSortingChange: setSorting,
+		onSortingChange,
 		enableMultiSort: false,
 	});
 	const rows = table.getRowModel().rows;

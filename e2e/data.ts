@@ -87,19 +87,26 @@ export async function userWithGolden(
 }
 
 /** A new user holding the stress rows (`seed/stress.ts`), 1,000 unless `count` says, ending on
- * today in India, on `/transactions` at `path`. */
+ * today in India, on `/transactions` at `path`. With `budgets`, golden's four Budgets too, for
+ * the Budgets page's own measurements (F04, AC-F04-32). */
 export async function userWithStress(
 	page: Page,
-	{ count, path = "/transactions" }: { count?: number; path?: string } = {},
+	{
+		count,
+		path = "/transactions",
+		budgets = false,
+	}: { count?: number; path?: string; budgets?: boolean } = {},
 ): Promise<{ account: Account; stress: LoadedStress }> {
 	const { account, userId } = await signUpByApi(page);
 	const today = todayIn("Asia/Kolkata", new Date());
-	const stress = await withDatabase("DATABASE_URL_SYSTEM", (client) =>
-		loadStress(client, userId, {
+	const stress = await withDatabase("DATABASE_URL_SYSTEM", async (client) => {
+		const loaded = await loadStress(client, userId, {
 			today,
 			...(count === undefined ? {} : { count }),
-		}),
-	);
+		});
+		if (budgets) await loadGoldenBudgets(client, userId);
+		return loaded;
+	});
 	await open(page, path);
 	return { account, stress };
 }

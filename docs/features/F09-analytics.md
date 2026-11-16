@@ -20,7 +20,7 @@ Three of them are Daybook Premium: Budget against actual, period over period, an
 | Milestone  | M3 (charts and page). The Premium gates show the locked card from M0, through P4; the purchase flow arrives in M4 (F12). Before M4 the locked card has no Upgrade button. Offline reading and the pending note arrive with P1 (M5)                                                             |
 | Plan       | Free: spending over time, by category, income vs expenses, portfolio, allocation, Goal progress. Premium: `analytics.comparative.view` (Budget vs actual, period over period), `analytics.heatmap.view` (calendar heat map). Stretch: `analytics.weekdayHour.view`                             |
 | Depends on | [F03](F03-transactions.md) (filter-to-SQL, the filter object), [F04](F04-budgets.md), [F06](F06-goals.md), [F07](F07-investments.md), [P4](../platform/P4-capabilities.md) (gates, locked card), [F02](F02-onboarding-profile-settings.md) (locales, week start); F08 and F11 reuse the charts |
-| Decisions  | D-49, D-50, D-108, D-111, D-112, D-115 to D-119, D-124, D-185, D-284 to D-290, D-295, D-296                                                                                                                                                                                                    |
+| Decisions  | D-49, D-50, D-108, D-111, D-112, D-115 to D-119, D-124, D-185, D-284 to D-290, D-295, D-296, D-580                                                                                                                                                                                             |
 
 ## 1. User stories
 
@@ -317,6 +317,7 @@ The portfolio charts use F07's `/api/investments/series` and `/api/investments/s
     - current 18,420.00, previous 18,000.00, change +420.00 (+2.3%);
     - housing 18,000.00 against 18,000.00;
     - food 420.00 against 0.00, with change % "—".
+- **AC-F09-15** (performance) On the stress account, applying a filter, changing the range and switching a chart to its table each stay within INP 200 ms (root 11.1, D-580).
 
 ## 15. Illustrations
 

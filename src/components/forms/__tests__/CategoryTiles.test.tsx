@@ -333,7 +333,7 @@ describe("captions (BR-F04-19)", () => {
 		expect(screen.getByRole("radio", { name: "Housing" })).toBeInTheDocument();
 		expect(screen.getByText("₹1,500.00 in Sept", { exact: false })).toHaveClass(
 			"text-small",
-			"text-ink-3",
+			"text-ink-2",
 		);
 	});
 

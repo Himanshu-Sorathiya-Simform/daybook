@@ -22,7 +22,7 @@ import {
 } from "vitest";
 
 import { AppProviders } from "@/components/app/AppProviders";
-import { goldenBudget } from "@/lib/budgets/__tests__/golden";
+import { goldenBudget, goldenBudgets } from "@/lib/budgets/__tests__/golden";
 import type { ExpenseCategory } from "@/lib/budgets/model";
 import type { Month } from "@/lib/budgets/months";
 import { isUuidV7 } from "@/lib/ids";
@@ -346,6 +346,47 @@ describe("the Table view (BR-F04-18, D-570)", () => {
 		).toBeVisible();
 		expect(screen.queryByText("Needs attention · 4")).not.toBeInTheDocument();
 		expect(screen.getByText("Budgeted spending in October")).toBeVisible();
+	});
+
+	// BR-F04-18, D-570
+	test("a sort holds across months, a month that still loads between them included", async () => {
+		wide();
+		window.localStorage.setItem(VIEW_KEY, "table");
+		const { user } = renderPage("?month=2026-10", {
+			months: async (month) => {
+				// September has not been read: the page shows its skeleton while it loads.
+				if (month === "2026-09") await delay(150);
+				return ok(monthAnswer(month));
+			},
+		});
+		await waitFor(() => expect(table()).toBeVisible());
+		const spent = screen.getByRole("columnheader", { name: "Spent" });
+		await user.click(spent);
+		expect(spent).toHaveAttribute("aria-sort", "descending");
+
+		await user.click(screen.getByRole("button", { name: "Previous month" }));
+		// The table gave way to the loading page and is back, still sorted by Spent.
+		await waitFor(() =>
+			expect(
+				screen.getByRole("grid", {
+					name: "September 2026. Select a column heading to sort.",
+				}),
+			).toBeVisible(),
+		);
+		expect(screen.getByRole("columnheader", { name: "Spent" })).toHaveAttribute(
+			"aria-sort",
+			"descending",
+		);
+		// September: food 5,050.00, shopping 2,400.00, entertainment 649.00.
+		const keys = within(table() as HTMLElement)
+			.getAllByRole("row")
+			.slice(1, 4)
+			.map((row) => row.getAttribute("data-key"));
+		expect(keys).toEqual([
+			"budget:food",
+			"budget:shopping",
+			"budget:entertainment",
+		]);
 	});
 
 	test("a remembered Table shows on the next visit, and List brings the list back", async () => {
@@ -1378,6 +1419,7 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 	describe("docked", () => {
 		beforeEach(() => media({ wide: true, docked: true }));
 
+		// AC-F04-29
 		test("a change shows its notice in the panel, with the Budget selected", async () => {
 			answerChange();
 			const { user } = renderPage("?month=2026-10");
@@ -1506,6 +1548,7 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 			);
 		});
 
+		// AC-F04-29
 		test("a delete shows its notice above the list, clears the selection, and Undo restores with a new id", async () => {
 			const deletes = route(
 				network,
@@ -1912,6 +1955,7 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 	describe("below 1180 px, where the panel is a drawer", () => {
 		beforeEach(() => media({ wide: true, docked: false }));
 
+		// AC-F04-29
 		test("with nothing selected, a write selects nothing and opens no drawer; the notice is above the list", async () => {
 			route(network, "post", "/api/budgets", () =>
 				ok(
@@ -2005,17 +2049,15 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 				name: "This Budget changed on another device",
 			});
 		/** The month view once another device's change has been read. */
-		const elsewhere = (month: Month) => {
-			const view = monthAnswer(month);
-			return {
-				...view,
-				budgets: view.budgets.map((row) =>
-					row.category === "food" ?
-						{ ...row, version: 4, schedule: SAVED().schedule }
-					:	row,
+		const elsewhere = (month: Month) =>
+			monthAnswer(
+				month,
+				goldenBudgets().map((budget) =>
+					budget.category === "food" ?
+						{ ...budget, version: 4, schedule: SAVED().schedule }
+					:	budget,
 				),
-			};
-		};
+			);
 
 		/** Food at 7,000.00 from December in its dialog. */
 		async function changeFromDecember(user: ReturnType<typeof userEvent.setup>) {
@@ -2124,6 +2166,11 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 				await within(panel()).findByText("₹5,500.00 from Nov 2026"),
 			).toBeVisible();
 			expect(screen.queryByText(/Food limit is now/)).not.toBeInTheDocument();
+			// The November row reads the saved 5,500.00.
+			await user.click(screen.getByRole("button", { name: "Next month" }));
+			await waitFor(() =>
+				expect(rowOf("budget:food")).toHaveAccessibleName(/of ₹5,500\.00/),
+			);
 		});
 
 		test("closing it goes back to the dialog with what was typed", async () => {
@@ -2177,6 +2224,27 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 				expect(screen.queryByText(CHANGED)).not.toBeInTheDocument(),
 			);
 			noView();
+		});
+
+		test("while Undo's conflict view is open, the page's S, L, Delete and arrows rest", async () => {
+			route(network, "patch", "/api/budgets/:id", (_, index) =>
+				index === 0 ? ok(budgetAnswer("food", { version: 3 })) : conflict(),
+			);
+			const { user } = renderPage("?month=2026-10");
+			await screen.findByText("Needs attention · 4");
+			await changeFood(user);
+			await within(panel()).findByText(CHANGED);
+			await user.click(within(panel()).getByRole("button", { name: "Undo" }));
+			await opened();
+			await user.keyboard("slL{Delete}{ArrowDown}");
+			expect(screen.getAllByRole("dialog", { hidden: true })).toHaveLength(1);
+			expect(
+				screen.queryByRole("dialog", { name: "Stop budgeting Food" }),
+			).not.toBeInTheDocument();
+			expect(
+				screen.queryByRole("alertdialog", { hidden: true }),
+			).not.toBeInTheDocument();
+			expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "true");
 		});
 
 		test("Undo's 409, Keep theirs ends the notice and sends nothing", async () => {

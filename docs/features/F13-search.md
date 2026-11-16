@@ -11,7 +11,7 @@ Scope chips and typed prefixes narrow the search. Results come from the server, 
 | Milestone  | M6. Learn results arrive with F14 (M7)                                                                                                                                                                                                                                  |
 | Plan       | Free and Premium. Field operators (`amount:>500`) are Stretch (`search.operators`)                                                                                                                                                                                      |
 | Depends on | [F03](F03-transactions.md) (search expression, list order, the `q` filter), [F05](F05-subscriptions.md), [F06](F06-goals.md), F14 (Learn, M7), [P1](../platform/P1-offline-and-pwa.md) (offline, the queue), [F02](F02-onboarding-profile-settings.md) (theme, formats) |
-| Decisions  | D-47, D-48, D-133 to D-136, D-344 to D-347, D-372, D-385, D-386                                                                                                                                                                                                         |
+| Decisions  | D-47, D-48, D-133 to D-136, D-344 to D-347, D-372, D-385, D-386, D-580                                                                                                                                                                                                  |
 
 ## 1. User stories
 
@@ -210,6 +210,7 @@ BR-F13-15: actions and navigation only. The palette saves nothing, and the searc
 - **AC-F13-08** (E2E) Offline: actions work, and the search groups show the offline message.
 - **AC-F13-09** (accessibility) The palette passes axe with no serious or critical violations, follows the combobox pattern, and announces the result count.
 - **AC-F13-10** (performance, M7) `/api/search?q=swi`, every scope, on the stress account meets the 300 ms p95 of `app;dur` (NFR-1, NFR-2; P3, BR-P3-09).
+- **AC-F13-11** (performance) On the stress account, typing a character of a query stays within INP 200 ms (root 11.1, D-580).
 
 ## 15. Illustrations
 

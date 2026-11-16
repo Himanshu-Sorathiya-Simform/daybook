@@ -139,11 +139,12 @@ export function overviewFigures(
 /** "Black tick: the ₹11,000.00 limit.", adding "The bar stops at 160%." past it
  * (BR-F04-15). */
 export function tickCaption(
-	overall: { limitMinor: number; utilizationTenths: number },
+	overall: { limitMinor: number; spentMinor: number },
 	f: Formats,
 ): string {
 	const tick = `Black tick: the ${money(overall.limitMinor, f)} limit.`;
-	return overall.utilizationTenths > 1600 ?
+	// Above 160% of the limit itself, not of its rounded percentage.
+	return overall.spentMinor * 10 > overall.limitMinor * 16 ?
 			`${tick} The bar stops at 160%.`
 		:	tick;
 }

@@ -486,6 +486,17 @@ describe("the edit body (BR-F03-23)", () => {
 		expect(editErrors({})).toEqual({ _body: "Send at least one change." });
 	});
 
+	// BR-F03-23, D-463: `currency` rides with an amount, and is no change of its own.
+	test("a body with only the currency is an empty edit too", () => {
+		expect(editErrors({ currency: "INR" })).toEqual({
+			_body: "Send at least one change.",
+		});
+	});
+
+	test("the currency beside a real change is fine", () => {
+		expect(editErrors({ note: "x", currency: "INR" })).toEqual({});
+	});
+
 	test("sends the date and time together or neither", () => {
 		expect(editErrors({ occurredAt: "2026-10-19T16:45:00Z" })).toEqual({
 			occurredOn: "Send the date and time together.",

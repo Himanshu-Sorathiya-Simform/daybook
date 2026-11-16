@@ -15,7 +15,7 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 | Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                 |
 | Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                    |
 | Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows) |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-559                      |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-559, D-580               |
 
 ## 1. User stories
 
@@ -1071,7 +1071,7 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
 - **AC-F03-22** (E2E) On the stress account, scrolling 1,000 rows keeps at most 5 pages loaded, and scrolling back to the top restores the first rows.
 - **AC-F03-23** (E2E, M3) Adding a Transaction from the dashboard's Add button updates the dashboard's spending widget after confirmation (root TST-4).
 - **AC-F03-24** (accessibility) The list, filters and dialog pass axe with no serious or critical violations. The panel and the drawer pass too. A Transaction can be added, filtered, selected with the arrow keys, opened with Enter, edited, duplicated with `D` and deleted with the keyboard alone, using Load more instead of scrolling.
-- **AC-F03-25** (performance) Saving a Transaction and applying a filter each stay within INP 200 ms on the stress account (root 11.1).
+- **AC-F03-25** (performance) Saving a Transaction and applying a filter each stay within INP 200 ms on the stress account (root 11.1, D-580).
 - **AC-F03-26** (integration, Stretch) A bulk delete of 3 rows, one with a stale version, deletes none and returns 409 with that id.
 - **AC-F03-27** (integration) On golden's income, expense and refund rows alone, list checks B, C, D, E, G and H hold. At M1 the charges load as unlinked rows with source `subscription`.
 - **AC-F03-28** (integration, M2) A charge delete and a catch-up run for the same Subscription start together. Afterwards the tombstone exists and no charge exists for that due date.

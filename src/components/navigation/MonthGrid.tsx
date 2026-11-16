@@ -142,7 +142,6 @@ export function MonthGrid({
 							key={month}
 							id={month}
 							textValue={formatMonth(month, locale, "long")}
-							aria-label={name}
 							className={cn(
 								"rounded-control text-label text-ink flex cursor-pointer flex-col items-center justify-center gap-px border border-transparent px-1 outline-none",
 								figures ? "min-h-13" : "min-h-10",
@@ -154,10 +153,19 @@ export function MonthGrid({
 								"disabled:text-ink-3 disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent",
 							)}
 						>
-							<span>{formatMonth(month, locale, "shortName")}</span>
+							{/* The short name and the figure are for the eye; the option's name is the full
+							    month, this month and the figure in one text, so what is spoken matches
+							    what is shown (axe: label-content-name-mismatch). */}
+							<span aria-hidden="true">
+								{formatMonth(month, locale, "shortName")}
+							</span>
+							<span className="sr-only">{name}</span>
 							{/* With figures, every month keeps a line for one, so its name never moves. */}
 							{figures && (
-								<span className="text-small text-ink-2 figures flex h-lh items-center font-medium">
+								<span
+									aria-hidden="true"
+									className="text-small text-ink-2 figures flex h-lh items-center font-medium"
+								>
 									{figure
 										?? (isLoadingFigures && (
 											<Skeleton className="h-[0.7em] w-8" />

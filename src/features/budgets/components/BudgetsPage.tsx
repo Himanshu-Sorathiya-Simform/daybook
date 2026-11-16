@@ -1,5 +1,6 @@
 "use client";
 
+import type { SortingState } from "@tanstack/react-table";
 import { useState } from "react";
 
 import { Banner } from "@/components/feedback/Banner";
@@ -97,6 +98,9 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 		state: StateLabel;
 	} | null>(null);
 	const [selected, setSelected] = useState<ExpenseCategory | null>(null);
+	// The table's sort belongs to the page, so it holds across months, a loading one included
+	// (BR-F04-18, D-570).
+	const [sorting, setSorting] = useState<SortingState>([]);
 	const [dialog, setDialog] = useState<OpenDialog | null>(null);
 	const [isDialogOpen, setDialogOpen] = useState(false);
 	const { dateLocale } = locale;
@@ -153,15 +157,17 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 		);
 	const showPanel = !offOther && !failed && !isNewUser;
 	const drawerOpen = showPanel && !docked && selected !== null;
+	// The conflict view of an Undo or a Remove is a dialog too, though the page opens it.
+	const isViewOpen = isDialogOpen || notices.conflict !== null;
 	const arrows =
-		isDialogOpen || drawerOpen ? "off"
+		isViewOpen || drawerOpen ? "off"
 		: docked ? "select"
 		: "focus";
 	const subject =
 		!offOther && data && selected !== null ? subjectOf(data, selected) : null;
 	// The keys act as the selection's buttons do, and rest while a dialog is open (D-573).
 	const keys =
-		subject && !isDialogOpen ?
+		subject && !isViewOpen ?
 			selectionKeys(subject)
 		:	{ changeLimit: false, stop: false, remove: false };
 	// It is on only while the selection has a record.
@@ -239,6 +245,8 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 						formats={locale}
 						filter={filter}
 						onFilterChange={setFilter}
+						sorting={sorting}
+						onSortingChange={setSorting}
 						selected={selected}
 						onSelect={setSelected}
 						arrows={arrows}

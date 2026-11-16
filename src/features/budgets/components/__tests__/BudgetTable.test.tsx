@@ -1,3 +1,4 @@
+import type { SortingState } from "@tanstack/react-table";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
@@ -28,6 +29,7 @@ function Host({
 }) {
 	const [selected, setSelected] = useState<ExpenseCategory | null>(start);
 	const [filter, setFilter] = useState<StateLabel | null>(startFilter);
+	const [sorting, setSorting] = useState<SortingState>([]);
 	return (
 		<>
 			<button type="button">Before</button>
@@ -39,6 +41,8 @@ function Host({
 					props.onFilterChange?.(next);
 					setFilter(next);
 				}}
+				sorting={sorting}
+				onSortingChange={setSorting}
 				selected={selected}
 				onSelect={(next) => {
 					props.onSelect?.(next);

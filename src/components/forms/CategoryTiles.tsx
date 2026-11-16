@@ -96,7 +96,7 @@ export function CategoryTiles({
 									/>
 									{categoryLabel(key)}
 									{captions?.[key] && (
-										<span className="text-small text-ink-3 figures font-normal">
+										<span className="text-small text-ink-2 figures font-normal">
 											{/* Read as "Health, ₹1,500.00 in Sept", not run together. */}
 											<span className="sr-only">,</span>{" "}
 											{captions[key]}

@@ -31,6 +31,21 @@ describe("DateInputBox", () => {
 		}
 	});
 
+	// WCAG 2.5.8 (axe target-size): each part is a target of at least 24 by 24 px.
+	test("gives each part a target of at least 24 px, and the separators none", () => {
+		renderBox();
+
+		for (const part of screen.getAllByRole("spinbutton")) {
+			expect(part).toHaveClass("min-h-6", "min-w-6");
+		}
+		for (const literal of document.querySelectorAll('[data-type="literal"]')) {
+			expect(literal).toHaveClass(
+				"type-literal:min-h-0",
+				"type-literal:min-w-0",
+			);
+		}
+	});
+
 	test("shows the focus ring around the box while a part is focused", () => {
 		renderBox();
 

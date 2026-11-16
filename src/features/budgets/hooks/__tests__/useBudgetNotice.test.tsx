@@ -604,6 +604,50 @@ describe("the conflict view after a 409 (BR-F04-23, AC-F04-25, AC-F04-30)", () =
 			expect(seen).toHaveLength(2);
 		});
 
+		test("a 409 that arrives after the notice was replaced is not shown", async () => {
+			route(network, "patch", "/api/budgets/:id", async () => {
+				await delay(80);
+				return conflict();
+			});
+			const { result } = renderNotices();
+			act(() => result.current.show(change()));
+			act(() => result.current.undo());
+			await waitFor(() => expect(result.current.isUndoing).toBe(true));
+			act(() => result.current.show(deletionNotice("shopping", RULES)));
+			await waitFor(() => expect(result.current.isUndoing).toBe(false));
+			expect(result.current.conflict).toBeNull();
+			expect(result.current.notice?.text).toBe("Shopping Budget deleted.");
+		});
+
+		test("a 409 that arrives after the notice was dismissed is not shown", async () => {
+			route(network, "patch", "/api/budgets/:id", async () => {
+				await delay(80);
+				return conflict();
+			});
+			const { result } = renderNotices();
+			act(() => result.current.show(change()));
+			act(() => result.current.undo());
+			await waitFor(() => expect(result.current.isUndoing).toBe(true));
+			act(() => result.current.dismiss());
+			await waitFor(() => expect(result.current.isUndoing).toBe(false));
+			expect(result.current.conflict).toBeNull();
+			expect(result.current.notice).toBeNull();
+		});
+
+		test("a 409 that arrives after a change of month is not shown", async () => {
+			route(network, "patch", "/api/budgets/:id", async () => {
+				await delay(80);
+				return conflict();
+			});
+			const { result, rerender } = renderNotices("2026-10");
+			act(() => result.current.show(change()));
+			act(() => result.current.undo());
+			await waitFor(() => expect(result.current.isUndoing).toBe(true));
+			rerender({ month: "2026-09" });
+			await waitFor(() => expect(result.current.isUndoing).toBe(false));
+			expect(result.current.conflict).toBeNull();
+		});
+
 		test("Keep mine is sent once however often it is pressed", async () => {
 			const { result, seen } = await undoMet(async (index) => {
 				if (index === 0) return conflict();
@@ -730,6 +774,20 @@ describe("the conflict view after a 409 (BR-F04-23, AC-F04-25, AC-F04-30)", () =
 			);
 			act(() => result.current.keepMine());
 			await waitFor(() => expect(result.current.conflict).toBeNull());
+			expect(result.current.notice).toBeNull();
+		});
+
+		test("a 409 that arrives after a change of month is not shown", async () => {
+			route(network, "delete", REMOVE_PATH, async () => {
+				await delay(80);
+				return conflict();
+			});
+			const { result, rerender } = renderNotices("2026-10");
+			act(() => result.current.remove(WITH_LIMIT, "2026-10"));
+			await waitFor(() => expect(result.current.isRemoving).toBe(true));
+			rerender({ month: "2026-09" });
+			await waitFor(() => expect(result.current.isRemoving).toBe(false));
+			expect(result.current.conflict).toBeNull();
 			expect(result.current.notice).toBeNull();
 		});
 

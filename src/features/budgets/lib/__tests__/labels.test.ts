@@ -253,18 +253,26 @@ describe("the overview (BR-F04-15)", () => {
 	});
 
 	test("the tick's caption names the limit", () => {
-		expect(
-			tickCaption({ limitMinor: 1100000, utilizationTenths: 1197 }, IN),
-		).toBe("Black tick: the ₹11,000.00 limit.");
+		expect(tickCaption({ limitMinor: 1100000, spentMinor: 1316800 }, IN)).toBe(
+			"Black tick: the ₹11,000.00 limit.",
+		);
 	});
 
 	test("past 160% it says the bar stops; at exactly 160% it does not", () => {
-		expect(
-			tickCaption({ limitMinor: 100000, utilizationTenths: 1601 }, IN),
-		).toBe("Black tick: the ₹1,000.00 limit. The bar stops at 160%.");
-		expect(
-			tickCaption({ limitMinor: 100000, utilizationTenths: 1600 }, IN),
-		).toBe("Black tick: the ₹1,000.00 limit.");
+		expect(tickCaption({ limitMinor: 100000, spentMinor: 160100 }, IN)).toBe(
+			"Black tick: the ₹1,000.00 limit. The bar stops at 160%.",
+		);
+		expect(tickCaption({ limitMinor: 100000, spentMinor: 160000 }, IN)).toBe(
+			"Black tick: the ₹1,000.00 limit.",
+		);
+	});
+
+	// BR-F04-15: above 160% of the limit itself, not of its rounded percentage.
+	test("a hair past 160% still says it, though the percentage rounds to 160.0%", () => {
+		// 4,800.10 of 3,000.00 is 160.003%, which reads 160.0%.
+		expect(tickCaption({ limitMinor: 300000, spentMinor: 480010 }, IN)).toBe(
+			"Black tick: the ₹3,000.00 limit. The bar stops at 160%.",
+		);
 	});
 
 	// F04 section 5: the golden clock's day 2 of November's 30.

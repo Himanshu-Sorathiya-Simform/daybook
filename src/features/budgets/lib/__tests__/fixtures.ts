@@ -38,11 +38,14 @@ export function budgetAnswer(
 }
 
 /** Golden's month view for `month`, as `GET /api/budgets` answers it. */
-export function monthAnswer(month: Month): BudgetMonthAnswer {
+export function monthAnswer(
+	month: Month,
+	budgets = goldenBudgets(),
+): BudgetMonthAnswer {
 	return {
 		...buildMonthView({
 			month,
-			budgets: goldenBudgets(),
+			budgets,
 			spending: goldenSpending(month),
 			previousSpending: goldenSpending(shiftMonth(month, -1)),
 		}),

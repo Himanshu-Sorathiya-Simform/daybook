@@ -1083,6 +1083,7 @@ describe("What changes and its notes (BR-F04-26, BR-F04-27)", () => {
 	});
 
 	// Section 5, a retroactive change; flow 7.2.
+	// AC-F04-31
 	test("food at 7,000 from September: three cards, Dec 2026 onward, and the two notes", async () => {
 		const { user } = renderDialog("change", "food");
 		await typeLimit(user, "7000");
@@ -1146,6 +1147,7 @@ describe("What changes and its notes (BR-F04-26, BR-F04-27)", () => {
 	});
 
 	// Section 5, a long change: 37 months, a strip and four groups.
+	// AC-F04-31
 	test("shopping at 4,000 from November 2023: a strip, the four groups and the three notes", async () => {
 		const { user } = renderDialog("change", "shopping");
 		await typeLimit(user, "4000");
@@ -1167,6 +1169,8 @@ describe("What changes and its notes (BR-F04-26, BR-F04-27)", () => {
 		expect(rows[0]).toHaveTextContent("No Shopping spending · On track");
 		expect(rows[1]).toHaveTextContent("80.0% Nearing limit → 60.0% · On track");
 		expect(rows[2]).toHaveTextContent("100.0% At limit → 75.0% · On track");
+		expect(rows[3]).toHaveTextContent("Nov 2026");
+		expect(rows[3]).toHaveTextContent("No Shopping spending · On track");
 		expect(rows[4]).toHaveTextContent("Dec 2026 onward");
 		expect(
 			screen.getByText("This also changes November 2023 to October 2026."),
@@ -1204,6 +1208,7 @@ describe("What changes and its notes (BR-F04-26, BR-F04-27)", () => {
 	});
 
 	// Section 5, one-month limits.
+	// AC-F04-31
 	test("food at 8,000 for October only: the month before, the month, the month after, one note", async () => {
 		const { user } = renderDialog("change", "food");
 		await typeLimit(user, "8000");
@@ -1215,11 +1220,12 @@ describe("What changes and its notes (BR-F04-26, BR-F04-27)", () => {
 		expect(cards[0]).toHaveTextContent("Unchanged");
 		expect(cards[2]).toHaveTextContent("Back to the schedule");
 		expect(screen.queryByText(/every month after/)).not.toBeInTheDocument();
-		expect(
-			screen.getByText(
-				"Only October 2026 changes. The limits for other months stay as they are.",
-			),
-		).toBeVisible();
+		const only = screen.getByText(
+			"Only October 2026 changes. The limits for other months stay as they are.",
+		);
+		expect(only).toBeVisible();
+		// It is the only note.
+		expect(only.closest("ul")?.children).toHaveLength(1);
 	});
 
 	test("one month only asks the history for September to November", async () => {
@@ -1257,6 +1263,7 @@ describe("What changes and its notes (BR-F04-26, BR-F04-27)", () => {
 		expect(screen.queryByText(/moves to Not budgeted/)).not.toBeInTheDocument();
 	});
 
+	// AC-F04-31
 	test("stopping a month with spending says it moves to Not budgeted", async () => {
 		const { user } = renderDialog("stop", "entertainment");
 		await user.click(chip("October (viewing)"));
@@ -1277,6 +1284,7 @@ describe("What changes and its notes (BR-F04-26, BR-F04-27)", () => {
 	});
 
 	// Section 5, equal to the schedule; BR-F04-27.
+	// AC-F04-31
 	test("a limit equal to the schedule says Nothing changes, with the preview and no notes", async () => {
 		const { user } = renderDialog("change", "food", "2026-11");
 		await user.click(chip(/^One month only/));
@@ -1327,6 +1335,7 @@ describe("What changes and its notes (BR-F04-26, BR-F04-27)", () => {
 		await stateShown("84.2% Nearing limit → 72.1% · On track");
 	});
 
+	// AC-F04-31
 	test("when the history cannot be read, the limits show alone", async () => {
 		route(network, "get", "/api/budgets/history", () => refuse(500, "internal"));
 		const { user } = renderDialog("change", "food");
@@ -1343,6 +1352,7 @@ describe("What changes and its notes (BR-F04-26, BR-F04-27)", () => {
 	});
 
 	// Section 10
+	// AC-F04-31
 	test("offline, each month shows its old and new limit without spending or states", async () => {
 		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
 		const { user } = renderDialog("change", "food");

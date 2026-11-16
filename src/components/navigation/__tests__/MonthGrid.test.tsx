@@ -24,10 +24,18 @@ function renderGrid(props: Partial<MonthGridProps> = {}) {
 
 const grid = () => screen.getByRole("listbox", { name: "Months" });
 const month = (name: string | RegExp) => screen.getByRole("option", { name });
-const names = () =>
-	within(grid())
-		.getAllByRole("option")
-		.map((option) => option.getAttribute("aria-label"));
+/** What a month shows the eye: its short name and its figure, not the text read aloud. */
+const seen = (option: HTMLElement) =>
+	[...option.querySelectorAll('[aria-hidden="true"]')]
+		.map((part) => part.textContent)
+		.join("");
+
+/** Each month's accessible name, in order. */
+const expectNames = (expected: string[], from = 0) => {
+	const options = within(grid()).getAllByRole("option").slice(from);
+	expect(options).toHaveLength(expected.length);
+	expected.forEach((name, at) => expect(options[at]).toHaveAccessibleName(name));
+};
 
 /** jsdom lays nothing out, so the grid's arrow keys, which move by position, get each month at
  * its place in four columns of 80 by 50 px. */
@@ -72,7 +80,7 @@ describe("structure", () => {
 	test("twelve months in order, in four columns, each shown by its short name", () => {
 		renderGrid();
 		const options = within(grid()).getAllByRole("option");
-		expect(options.map((option) => option.textContent)).toEqual([
+		expect(options.map((option) => seen(option))).toEqual([
 			"Jan",
 			"Feb",
 			"Mar",
@@ -91,12 +99,15 @@ describe("structure", () => {
 
 	test("each month is named in full, the current month as this month", () => {
 		renderGrid();
-		expect(names().slice(8)).toEqual([
-			"September 2026",
-			"October 2026",
-			"November 2026, this month",
-			"December 2026",
-		]);
+		expectNames(
+			[
+				"September 2026",
+				"October 2026",
+				"November 2026, this month",
+				"December 2026",
+			],
+			8,
+		);
 	});
 
 	test("takes another name", () => {
@@ -107,7 +118,7 @@ describe("structure", () => {
 	test("follows the profile's date locale", () => {
 		renderGrid({ dateLocale: "ja-JP" });
 		expect(screen.getByText("2026年")).toBeVisible();
-		expect(month("2026年10月")).toHaveTextContent("10月");
+		expect(seen(month("2026年10月"))).toBe("10月");
 	});
 
 	test("takes the caller's classes on its root", () => {
@@ -127,13 +138,13 @@ describe("figures (BR-F04-14)", () => {
 
 	test("a month with a figure shows it under its name, and says it", () => {
 		renderGrid({ figures: FIGURES });
-		expect(month("October 2026, 119.7%")).toHaveTextContent("Oct119.7%");
+		expect(seen(month("October 2026, 119.7%"))).toBe("Oct119.7%");
 		expect(month("November 2026, this month, 3.8%")).toBeVisible();
 	});
 
 	test("a month without a figure shows none", () => {
 		renderGrid({ figures: FIGURES });
-		expect(month("August 2026")).toHaveTextContent(/^Aug$/);
+		expect(seen(month("August 2026"))).toBe("Aug");
 	});
 
 	test("months are taller when they hold figures", () => {
@@ -148,8 +159,13 @@ describe("figures (BR-F04-14)", () => {
 
 describe("figures on their way (BR-F04-14)", () => {
 	const FIGURES = { "2026-10": "119.7%" };
-	const slots = () => grid().querySelectorAll("[role=option] > span:nth-child(2)");
-	const bars = () => grid().querySelectorAll('[role=option] [aria-hidden="true"]');
+	// The figure's line is the option's third part, after the short name and the spoken name.
+	const slots = () => grid().querySelectorAll("[role=option] > span:nth-child(3)");
+	// A skeleton bar sits inside the figure's line.
+	const bars = () =>
+		grid().querySelectorAll(
+			'[role=option] > span:nth-child(3) [aria-hidden="true"]',
+		);
 
 	test("while they load, every month holds a skeleton bar in its figure's place", () => {
 		renderGrid({ figures: {}, isLoadingFigures: true });
@@ -159,7 +175,7 @@ describe("figures on their way (BR-F04-14)", () => {
 
 	test("the skeleton is hidden from screen readers and changes no month's name", () => {
 		renderGrid({ figures: {}, isLoadingFigures: true });
-		expect(names()).toEqual([
+		expectNames([
 			"January 2026",
 			"February 2026",
 			"March 2026",
@@ -173,14 +189,16 @@ describe("figures on their way (BR-F04-14)", () => {
 			"November 2026, this month",
 			"December 2026",
 		]);
-		expect(month("October 2026")).toHaveTextContent(/^Oct$/);
+		expect(seen(month("October 2026"))).toBe("Oct");
 	});
 
 	test("a month that has its figure shows it, not a bar", () => {
 		renderGrid({ figures: FIGURES, isLoadingFigures: true });
-		expect(month("October 2026, 119.7%")).toHaveTextContent("Oct119.7%");
+		expect(seen(month("October 2026, 119.7%"))).toBe("Oct119.7%");
 		expect(
-			month("October 2026, 119.7%").querySelector('[aria-hidden="true"]'),
+			month("October 2026, 119.7%").querySelector(
+				"[role=option] > span:nth-child(3) [aria-hidden=true]",
+			),
 		).toBeNull();
 		expect(bars()).toHaveLength(11);
 	});
@@ -189,14 +207,14 @@ describe("figures on their way (BR-F04-14)", () => {
 		renderGrid({ figures: FIGURES });
 		expect(slots()).toHaveLength(12);
 		expect(bars()).toHaveLength(0);
-		expect(month("August 2026")).toHaveTextContent(/^Aug$/);
+		expect(seen(month("August 2026"))).toBe("Aug");
 	});
 
 	test("the line is one line of the figure's text tall, and the same with or without a figure", () => {
 		renderGrid({ figures: FIGURES });
 		const [withFigure, without] = [
-			month("October 2026, 119.7%").children[1],
-			month("August 2026").children[1],
+			month("October 2026, 119.7%").children[2],
+			month("August 2026").children[2],
 		];
 		expect(withFigure).toHaveClass("h-lh", "text-small");
 		expect(without).toHaveClass("h-lh", "text-small");

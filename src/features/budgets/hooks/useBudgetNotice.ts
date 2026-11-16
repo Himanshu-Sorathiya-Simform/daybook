@@ -47,9 +47,12 @@ export type BudgetNoticeConflict = {
 	isDelete: boolean;
 };
 
-type Pending =
+/** The write whose conflict is shown, and the month the page showed when it was sent: a change
+ * of month, or for an Undo a new notice, ends the view with what it was about. */
+type Pending = { viewed: Month } & (
 	| { source: "undo"; noticeId: number; plan: UndoPlan }
-	| { source: "remove"; record: BudgetRecord; month: Month };
+	| { source: "remove"; record: BudgetRecord; month: Month }
+);
 
 /** What the page shows of the notice and the writes behind it. */
 export type BudgetNotices = {
@@ -106,6 +109,16 @@ export function useBudgetNotices({
 
 	// A change of month ends the notice, React's pattern for state that follows what was read.
 	if (notice !== null && notice.month !== month) setNotice(null);
+	// A conflict that arrives after what it was about has ended is not shown: the page has moved
+	// on to another month, or the Undo's notice was replaced or dismissed (D-575).
+	if (
+		conflictOf !== null
+		&& (conflictOf.pending.viewed !== month
+			|| (conflictOf.pending.source === "undo"
+				&& notice?.id !== conflictOf.pending.noticeId))
+	) {
+		setConflictOf(null);
+	}
 
 	const show = (next: WriteNotice) => {
 		counter.current += 1;
@@ -189,7 +202,7 @@ export function useBudgetNotices({
 				yours: rulesOf(plan.rules),
 				line: plan.kind === "delete" ? null : CONFLICT_TEXT.undoLine,
 				isDelete: plan.kind === "delete",
-				pending: { source: "undo", noticeId: id, plan },
+				pending: { source: "undo", noticeId: id, plan, viewed: month },
 			});
 			return;
 		}
@@ -219,7 +232,12 @@ export function useBudgetNotices({
 				yours: removeMonth(record, limitMonth) as BudgetRules,
 				line: keepMineLine({ kind: "removal", month: limitMonth }, formats),
 				isDelete: false,
-				pending: { source: "remove", record, month: limitMonth },
+				pending: {
+					source: "remove",
+					record,
+					month: limitMonth,
+					viewed: month,
+				},
 			});
 			return;
 		}

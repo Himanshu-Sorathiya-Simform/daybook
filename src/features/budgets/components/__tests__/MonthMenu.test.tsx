@@ -103,9 +103,10 @@ describe("figures (BR-F04-14, BR-F04-35)", () => {
 		expect(
 			screen.getByRole("option", { name: "December 2026, 0.0%" }),
 		).toBeVisible();
-		expect(
-			screen.getByRole("option", { name: "August 2026" }),
-		).toHaveTextContent(/^Aug$/);
+		// What shows is the short name alone; the figure's line is empty.
+		const august = screen.getByRole("option", { name: "August 2026" });
+		expect(august.children[0]).toHaveTextContent(/^Aug$/);
+		expect(august.children[2]).toBeEmptyDOMElement();
 	});
 
 	test("asks for the shown year's summary", async () => {
@@ -159,7 +160,9 @@ describe("figures (BR-F04-14, BR-F04-35)", () => {
 
 describe("while the year's figures load (BR-F04-14, section 6)", () => {
 	const bars = () =>
-		document.querySelectorAll('[role=option] [aria-hidden="true"]');
+		document.querySelectorAll(
+			'[role=option] > span:nth-child(3) [aria-hidden="true"]',
+		);
 
 	test("every month holds a skeleton bar until the summary comes, then its figure", async () => {
 		route(network, "get", "/api/budgets/summary", async () => {
