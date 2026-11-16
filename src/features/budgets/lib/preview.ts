@@ -48,6 +48,19 @@ export const PREVIEW_TEXT = {
  * (section 10). */
 export type Figures = "loading" | "missing" | "ready";
 
+/** What the preview knows, from the history query: `ready` with its data, `missing` when it
+ * failed or is paused offline, else `loading`. */
+export function figuresOf(history: {
+	data: unknown;
+	isError: boolean;
+	fetchStatus: "fetching" | "paused" | "idle";
+}): Figures {
+	if (history.data) return "ready";
+	return history.isError || history.fetchStatus === "paused" ?
+			"missing"
+		:	"loading";
+}
+
 /** What the preview words a month with: the category, the user's current month, the formats. */
 export type PreviewContext = {
 	category: ExpenseCategory;
@@ -173,8 +186,7 @@ export function monthList(months: readonly Month[], f: Formats): string {
 			const next = segments[at + 1];
 			// A year follows the last month of each year.
 			const yearFollows =
-				next === undefined
-				|| next.first.slice(0, 4) !== segment.first.slice(0, 4);
+				next?.first.slice(0, 4) !== segment.first.slice(0, 4);
 			return formatMonth(segment.first, f, yearFollows ? "long" : "name");
 		}
 		const sameYear = segment.first.slice(0, 4) === segment.last.slice(0, 4);

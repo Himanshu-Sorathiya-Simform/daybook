@@ -58,6 +58,10 @@ export function MonthPicker({
 	stretch = false,
 	className,
 }: Readonly<MonthPickerProps>) {
+	const triggerProps = {
+		...(isGridOpen === undefined ? {} : { isOpen: isGridOpen }),
+		...(onGridOpenChange ? { onOpenChange: onGridOpenChange } : {}),
+	};
 	const month = (
 		<AriaButton
 			aria-haspopup="dialog"
@@ -92,10 +96,7 @@ export function MonthPicker({
 			/>
 			{grid === undefined ?
 				month
-			:	<AriaDialogTrigger
-					{...(isGridOpen === undefined ? {} : { isOpen: isGridOpen })}
-					{...(onGridOpenChange ? { onOpenChange: onGridOpenChange } : {})}
-				>
+			:	<AriaDialogTrigger {...triggerProps}>
 					{month}
 					<AriaPopover
 						placement="bottom"

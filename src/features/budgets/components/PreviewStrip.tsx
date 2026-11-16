@@ -79,7 +79,7 @@ export function PreviewStrip({
 									className="fill-accent-soft"
 								/>
 							)}
-							{column.noBudget ?
+							{column.noBudget && (
 								<rect
 									data-part="no-budget"
 									x={percent(x(at))}
@@ -89,7 +89,8 @@ export function PreviewStrip({
 									className="stroke-line-strong fill-none"
 									strokeDasharray="3 2"
 								/>
-							: !isLoading ?
+							)}
+							{!column.noBudget && !isLoading && (
 								<>
 									{within > 0 && (
 										<rect
@@ -112,7 +113,7 @@ export function PreviewStrip({
 										/>
 									)}
 								</>
-							:	null}
+							)}
 							{column.tickShare !== null && (
 								<line
 									data-part="tick"

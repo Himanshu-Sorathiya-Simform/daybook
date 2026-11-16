@@ -114,12 +114,15 @@ export const scrollsSideways = (page: Page) =>
 			> document.documentElement.clientWidth,
 	);
 
+/** The width a second window opens at, a desktop's. */
+const DESKTOP = { width: 1440, height: 1000 };
+
 /** A second window of the same user, as another device would be: the same session, on the page
  * `path`, hydrated. */
 export async function secondWindow(
 	context: BrowserContext,
 	path: string,
-	viewport = { width: 1440, height: 1000 },
+	viewport = DESKTOP,
 ): Promise<Page> {
 	const other = await context.newPage();
 	await other.setViewportSize(viewport);

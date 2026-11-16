@@ -9,17 +9,25 @@ import { Section } from "@/components/surfaces/Section";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useOnline } from "@/hooks/useOnline";
 import { useShortcut } from "@/hooks/useShortcut";
-import type { ExpenseCategory, StateLabel } from "@/lib/budgets/model";
+import type { ExpenseCategory } from "@/lib/budgets/model";
 import type { BudgetRecord } from "@/lib/budgets/view";
 import { type Month, monthOf } from "@/lib/budgets/months";
 import { cn } from "@/lib/cn";
-import { formatMonth, formatTime } from "@/lib/date-format";
+import { formatMonth } from "@/lib/date-format";
 import { useBudgetMonth } from "../hooks/useBudgetMonth";
 import { useBudgetNotices } from "../hooks/useBudgetNotice";
 import { useBudgetsUrl } from "../hooks/useBudgetsUrl";
 import { useBudgetsView } from "../hooks/useBudgetsView";
+import { useMonthFilter } from "../hooks/useMonthFilter";
+import type { RowArrows } from "../hooks/useRowArrows";
 import { dayOfMonth } from "../lib/labels";
-import { emptyTitle, offlineAction, offlineBody, PAGE_TEXT } from "../lib/messages";
+import {
+	asOfText,
+	emptyTitle,
+	offlineAction,
+	offlineBody,
+	PAGE_TEXT,
+} from "../lib/messages";
 import { type DialogKind, recordIn } from "../lib/dialog";
 import { conflictRows } from "../lib/conflict";
 import { deletionNotice } from "../lib/notices";
@@ -61,6 +69,23 @@ function shows(view: BudgetMonthAnswer, category: ExpenseCategory): boolean {
 	);
 }
 
+/** Whether a loaded month has no Budget, Not budgeted or Not active row: a new user's. */
+function showsNothing(view: BudgetMonthAnswer | undefined): boolean {
+	return (
+		view !== undefined
+		&& [view.budgets, view.unbudgeted, view.inactive].every(
+			(group) => group.length === 0,
+		)
+	);
+}
+
+/** What Up and Down do in the list: nothing while a dialog or the drawer is open (D-571,
+ * D-573), select with the panel docked, else only move focus. */
+function arrowsFor(isCovered: boolean, isDocked: boolean): RowArrows {
+	if (isCovered) return "off";
+	return isDocked ? "select" : "focus";
+}
+
 /**
  * The Budgets page (F04 section 6), from top to bottom: the header (BR-F04-14), the
  * invalid-link notice (FIL-5), then the month: the overview (BR-F04-15) and the list, or the
@@ -93,10 +118,7 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 	// The server can't know the width: it renders the docked panel, which CSS hides below 1180 px.
 	const docked = useMediaQuery(DOCKED, true);
 	const query = useBudgetMonth(url.month);
-	const [filterIn, setFilterIn] = useState<{
-		month: Month;
-		state: StateLabel;
-	} | null>(null);
+	const [filter, setFilter] = useMonthFilter(url.month);
 	const [selected, setSelected] = useState<ExpenseCategory | null>(null);
 	// The table's sort belongs to the page, so it holds across months, a loading one included
 	// (BR-F04-18, D-570).
@@ -110,13 +132,6 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 		currency: locale.currency,
 		formats: locale,
 	});
-
-	// A change of month, Back included, drops the filter for good (BR-F04-31), React's pattern
-	// for state that follows what was read.
-	if (filterIn !== null && filterIn.month !== url.month) setFilterIn(null);
-	const filter = filterIn?.month === url.month ? filterIn.state : null;
-	const setFilter = (state: StateLabel | null) =>
-		setFilterIn(state === null ? null : { month: url.month, state });
 
 	// A selection the new month does not show clears, React's pattern for state that follows
 	// what was read.
@@ -150,19 +165,12 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 
 	const offOther = !online && url.month !== current;
 	const failed = !data && (query.isError || query.fetchStatus === "paused");
-	const isNewUser =
-		data !== undefined
-		&& [data.budgets, data.unbudgeted, data.inactive].every(
-			(group) => group.length === 0,
-		);
+	const isNewUser = showsNothing(data);
 	const showPanel = !offOther && !failed && !isNewUser;
 	const drawerOpen = showPanel && !docked && selected !== null;
 	// The conflict view of an Undo or a Remove is a dialog too, though the page opens it.
 	const isViewOpen = isDialogOpen || notices.conflict !== null;
-	const arrows =
-		isViewOpen || drawerOpen ? "off"
-		: docked ? "select"
-		: "focus";
+	const arrows = arrowsFor(isViewOpen || drawerOpen, docked);
 	const subject =
 		!offOther && data && selected !== null ? subjectOf(data, selected) : null;
 	// The keys act as the selection's buttons do, and rest while a dialog is open (D-573).
@@ -183,10 +191,7 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 	useShortcut("Backspace", () => onDelete(selected as ExpenseCategory), {
 		enabled: keys.remove,
 	});
-	const asOf =
-		!online && query.dataUpdatedAt > 0 ?
-			`as of ${formatTime(new Date(query.dataUpdatedAt), locale)}`
-		:	null;
+	const asOf = asOfText(online, query.dataUpdatedAt, locale);
 
 	// The notice shows in the panel while the Budget it is about is selected, else above the list
 	// (BR-F04-29); a delete's never shows in the panel.
@@ -196,13 +201,14 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 		&& notice.inPanel
 		&& showPanel
 		&& selected === notice.category;
+	const undoProps = notice?.undo ? { onUndo: notices.undo } : {};
 	const noticeNode =
 		notice === null ? null : (
 			<UndoNotice
 				text={notice.failure ?? notice.text}
 				isFailure={notice.failure !== null}
 				isPending={notices.isUndoing}
-				{...(notice.undo ? { onUndo: notices.undo } : {})}
+				{...undoProps}
 				onDismiss={notices.dismiss}
 			/>
 		);
@@ -217,13 +223,15 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 		const hasBudgets = shown.budgets.length > 0;
 		const hasOthers = shown.unbudgeted.length > 0 || shown.inactive.length > 0;
 		const isCurrent = shown.month === current;
+		const today = isCurrent ? locale.today : null;
+		const todayShare = isCurrent ? dayOfMonth(locale.today).share : null;
 		return (
 			<>
 				{hasBudgets ?
 					<BudgetsOverview
 						view={shown}
 						formats={locale}
-						today={isCurrent ? locale.today : null}
+						today={today}
 						filter={filter}
 						onFilterChange={setFilter}
 					/>
@@ -255,9 +263,7 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 						<BudgetList
 							view={shown}
 							formats={locale}
-							todayShare={
-								isCurrent ? dayOfMonth(locale.today).share : null
-							}
+							todayShare={todayShare}
 							filter={filter}
 							onFilterChange={setFilter}
 							selected={selected}

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { goldenBudget } from "@/lib/budgets/__tests__/golden";
-import type { BudgetRules } from "@/lib/budgets/model";
+import { type BudgetRules, setFrom, setMonth } from "@/lib/budgets/model";
 import {
 	addCategories,
 	buttonName,
@@ -10,15 +10,19 @@ import {
 	deleteTitle,
 	DIALOG_TEXT,
 	dialogTitle,
+	fieldMessages,
 	limitMessage,
+	limitOf,
 	monthChips,
 	monthLabel,
 	monthName,
 	nothingChanges,
 	oneMonthDetail,
 	planChange,
+	planOf,
 	rangeCaption,
 	recordIn,
+	rulesAfter,
 	spentHint,
 	startLimit,
 	tileCaptions,
@@ -497,6 +501,187 @@ describe("planChange (BR-F04-19 to BR-F04-21, D-561)", () => {
 				month: "2026-12",
 			}),
 		).toMatchObject({ blocked: false, unchanged: true });
+	});
+});
+
+describe("limitOf (BR-F04-19 to BR-F04-21)", () => {
+	test("a stop has no limit, whatever the field holds", () => {
+		expect(limitOf("stop", { ok: true, minor: 700000 })).toBeNull();
+		expect(limitOf("stop", { ok: false, error: "required" })).toBeNull();
+	});
+
+	test.each(["add", "change"] as const)("%s takes the typed amount", (kind) => {
+		expect(limitOf(kind, { ok: true, minor: 700000 })).toBe(700000);
+	});
+
+	test.each(["add", "change"] as const)(
+		"%s with no valid amount has no limit yet",
+		(kind) => {
+			expect(limitOf(kind, { ok: false, error: "required" })).toBeUndefined();
+		},
+	);
+});
+
+describe("rulesAfter (BR-F04-20, BR-F04-23)", () => {
+	const food = goldenBudget("food");
+
+	test("from a month onward, the rules of a change from it", () => {
+		expect(
+			rulesAfter(food, {
+				scope: "onward",
+				month: "2026-09",
+				limitMinor: 700000,
+			}),
+		).toEqual(setFrom(food, "2026-09", 700000));
+	});
+
+	test("for one month only, the rules of a one-month limit", () => {
+		expect(
+			rulesAfter(food, {
+				scope: "month",
+				month: "2026-10",
+				limitMinor: 800000,
+			}),
+		).toEqual(setMonth(food, "2026-10", 800000));
+	});
+
+	test("a stop is a null limit in either scope", () => {
+		expect(
+			rulesAfter(food, {
+				scope: "onward",
+				month: "2026-12",
+				limitMinor: null,
+			}),
+		).toEqual(setFrom(food, "2026-12", null));
+		expect(
+			rulesAfter(food, { scope: "month", month: "2026-12", limitMinor: null }),
+		).toEqual(setMonth(food, "2026-12", null));
+	});
+});
+
+describe("planOf (BR-F04-19 to BR-F04-21)", () => {
+	const base = {
+		id: ID,
+		currency: "INR" as const,
+		scope: "onward" as const,
+		month: "2026-11",
+	};
+
+	test("without a category there is no plan", () => {
+		expect(
+			planOf({
+				...base,
+				kind: "add",
+				record: null,
+				category: null,
+				typed: { ok: true, minor: 150000 },
+			}),
+		).toBeNull();
+	});
+
+	test("an Add or a Change without a valid limit has no plan", () => {
+		for (const kind of ["add", "change"] as const) {
+			expect(
+				planOf({
+					...base,
+					kind,
+					record: null,
+					category: "health",
+					typed: { ok: false, error: "required" },
+				}),
+			).toBeNull();
+		}
+	});
+
+	test("with a category and a valid limit, the plan of planChange", () => {
+		const input = {
+			...base,
+			kind: "add" as const,
+			record: null,
+			category: "health" as const,
+		};
+		expect(planOf({ ...input, typed: { ok: true, minor: 150000 } })).toEqual(
+			planChange({ ...input, limitMinor: 150000 }),
+		);
+	});
+
+	test("a stop needs no limit", () => {
+		const food = goldenBudget("food");
+		expect(
+			planOf({
+				...base,
+				month: "2026-12",
+				kind: "stop",
+				record: food,
+				category: "food",
+				typed: { ok: false, error: "required" },
+			}),
+		).toMatchObject({
+			kind: "edit",
+			body: { from: "2026-12", limitMinor: null },
+		});
+	});
+});
+
+describe("fieldMessages (BR-F04-19, section 8)", () => {
+	const none = { ok: false, error: "required" } as const;
+
+	test("an Add without a category asks for one, and without a limit for a limit", () => {
+		expect(
+			fieldMessages(
+				{ server: {}, kind: "add", category: null, typed: none },
+				IN,
+			),
+		).toEqual({
+			category: "Choose a category.",
+			limitMinor: "Enter a limit.",
+			month: undefined,
+		});
+	});
+
+	test("a valid Change says nothing", () => {
+		expect(
+			fieldMessages(
+				{
+					server: {},
+					kind: "change",
+					category: "food",
+					typed: { ok: true, minor: 700000 },
+				},
+				IN,
+			),
+		).toEqual({ category: undefined, limitMinor: undefined, month: undefined });
+	});
+
+	test("a stop has no limit to check", () => {
+		expect(
+			fieldMessages(
+				{ server: {}, kind: "stop", category: "food", typed: none },
+				IN,
+			).limitMinor,
+		).toBeUndefined();
+	});
+
+	test("the server's message comes before the dialog's own", () => {
+		expect(
+			fieldMessages(
+				{
+					server: {
+						category: "Pick another.",
+						limitMinor: "Too large.",
+						month: "Out of range.",
+					},
+					kind: "add",
+					category: null,
+					typed: none,
+				},
+				IN,
+			),
+		).toEqual({
+			category: "Pick another.",
+			limitMinor: "Too large.",
+			month: "Out of range.",
+		});
 	});
 });
 

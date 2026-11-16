@@ -1,3 +1,5 @@
+import { formatTime } from "@/lib/date-format";
+
 /** F04 section 8's messages that the page writes itself for a refused write, rather than
  * reading from the API's error envelope. The server's own messages arrive in the envelope's
  * `fields` and `message`. */
@@ -10,6 +12,17 @@ export const BUDGETS_TEXT = {
 		"The Budget could not be saved. Check your connection and try again.",
 	deletedElsewhere: "This Budget was deleted on another device.",
 } as const;
+
+/** "as of 2:05 pm" beside the title while offline, once a month has loaded (section 10); `null`
+ * online, or when nothing has loaded. `updatedAt` is the load's time in milliseconds. */
+export function asOfText(
+	online: boolean,
+	updatedAt: number,
+	formats: { dateLocale: string; timezone: string },
+): string | null {
+	if (online || updatedAt <= 0) return null;
+	return `as of ${formatTime(new Date(updatedAt), formats)}`;
+}
 
 /** "A Shopping Budget already exists. We opened it so you can change it." (flow 7.1), with
  * "An" before a vowel: "An Entertainment Budget …". */

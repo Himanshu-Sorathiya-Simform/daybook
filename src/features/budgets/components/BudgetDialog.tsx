@@ -15,12 +15,7 @@ import { Dialog } from "@/components/surfaces/Dialog";
 import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
 import { useOnline } from "@/hooks/useOnline";
 import { formatAmountInput, parseAmount } from "@/lib/amount";
-import {
-	type BudgetRules,
-	type ExpenseCategory,
-	setFrom,
-	setMonth as setMonthLimit,
-} from "@/lib/budgets/model";
+import type { BudgetRules, ExpenseCategory } from "@/lib/budgets/model";
 import { type Month, monthOf, monthRange } from "@/lib/budgets/months";
 import { type BudgetChange, previewChange } from "@/lib/budgets/preview";
 import { BUDGET_MESSAGES, type BudgetEditInput } from "@/lib/budgets/schemas";
@@ -38,18 +33,20 @@ import {
 	type DialogPlan,
 	type DialogScope,
 	dialogTitle,
-	limitMessage,
+	fieldMessages,
+	limitOf,
 	monthLabel,
 	nothingChanges,
 	oneMonthDetail,
-	planChange,
+	planOf,
 	recordIn,
+	rulesAfter,
 	spentHint,
 	startLimit,
 	tileCaptions,
 } from "../lib/dialog";
 import { budgetExistsMessage } from "../lib/messages";
-import { type Figures, historyWindow } from "../lib/preview";
+import { figuresOf, historyWindow } from "../lib/preview";
 import { type ConflictChange, conflictRows, keepMineLine } from "../lib/conflict";
 import { type WriteNotice, writeNotice } from "../lib/notices";
 import { refreshAfterBudgetWrite } from "../lib/refresh";
@@ -160,37 +157,23 @@ export function BudgetDialog({
 
 	const stopping = kind === "stop";
 	const typed = parseAmount(amount, locale);
-	const messages = {
-		category:
-			server.category
-			?? (category === null ? "Choose a category." : undefined),
-		limitMinor:
-			server.limitMinor
-			?? (stopping ? undefined : limitMessage(typed, locale)),
-		month: server.month,
-	};
-	const plan =
-		category !== null && (stopping || typed.ok) ?
-			planChange({
-				kind,
-				record,
-				category,
-				scope: scope,
-				month,
-				limitMinor: typed.ok ? typed.minor : 0,
-				id,
-				currency: locale.currency,
-			})
-		:	null;
+	const messages = fieldMessages({ server, kind, category, typed }, locale);
+	const plan = planOf({
+		kind,
+		record,
+		category,
+		typed,
+		scope,
+		month,
+		id,
+		currency: locale.currency,
+	});
 	const blocked = plan?.kind === "edit" && plan.blocked;
 	const unchanged = plan?.kind === "edit" && plan.unchanged;
 
 	// What changes (BR-F04-26): the change as typed, over the Budget record if there is one, with
 	// the spending of the months it lists. A category with no record always applies from a month.
-	const limit =
-		stopping ? null
-		: typed.ok ? typed.minor
-		: undefined;
+	const limit = limitOf(kind, typed);
 	const change: BudgetChange | null =
 		category !== null && limit !== undefined ?
 			{
@@ -206,10 +189,7 @@ export function BudgetDialog({
 		window?.to ?? current,
 		window?.months,
 	);
-	const figures: Figures =
-		spending.data ? "ready"
-		: spending.isError || spending.fetchStatus === "paused" ? "missing"
-		: "loading";
+	const figures = figuresOf(spending);
 	const spentIn = new Map(
 		spending.data?.months.map((each) => [each.month, each.spentMinor]),
 	);
@@ -282,18 +262,7 @@ export function BudgetDialog({
 				setConflict({
 					current: outcome.current,
 					body: edited.body,
-					yours:
-						scope === "month" ?
-							setMonthLimit(
-								record as BudgetRules,
-								month,
-								limit as number | null,
-							)
-						:	setFrom(
-								record as BudgetRules,
-								month,
-								limit as number | null,
-							),
+					yours: rulesAfter(record as BudgetRules, change),
 					line: keepMineLine(change, locale),
 				});
 				return;

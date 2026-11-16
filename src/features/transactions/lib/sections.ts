@@ -23,6 +23,24 @@ export function groupKeyOf(row: Transaction, group: Group): string {
 	return group === "category" ? own : lowercase(own);
 }
 
+/** Each group's total from the page fetched last that carries it. Pages arrive in display
+ * order and the last one is the one fetched last, except after Load earlier, which fetches
+ * the first: `newest` then has the last say (BR-F03-56). */
+function latestTotals(
+	pages: readonly TransactionPageAnswer[],
+	newest: TransactionPageAnswer | undefined,
+): Map<string, GroupTotal> {
+	const fetchedLast = newest && pages.includes(newest) ? newest : null;
+	const ordered =
+		fetchedLast ?
+			[...pages.filter((page) => page !== fetchedLast), fetchedLast]
+		:	pages;
+	const totals = new Map<string, GroupTotal>();
+	for (const page of ordered)
+		for (const total of page.groups) totals.set(total.key, total);
+	return totals;
+}
+
 /**
  * The loaded pages as sections in display order (BR-F03-56). Rows already arrive grouped, so a
  * new section starts wherever the key changes. A group's totals come from the page fetched
@@ -37,15 +55,7 @@ export function sectionsOf(
 	hidden: ReadonlySet<string> = new Set(),
 	newest?: TransactionPageAnswer,
 ): ListSection[] {
-	const totals = new Map<string, GroupTotal>();
-	// Pages arrive in display order, and the last one is the one fetched last, except after
-	// Load earlier, which fetches the first: `newest` then has the last say (BR-F03-56).
-	for (const page of pages)
-		if (page !== newest)
-			for (const total of page.groups) totals.set(total.key, total);
-	if (newest && pages.includes(newest))
-		for (const total of newest.groups) totals.set(total.key, total);
-
+	const totals = latestTotals(pages, newest);
 	const sections: ListSection[] = [];
 	for (const page of pages) {
 		for (const row of page.items) {

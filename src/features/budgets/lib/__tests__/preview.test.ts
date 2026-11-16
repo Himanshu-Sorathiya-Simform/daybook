@@ -11,6 +11,7 @@ import {
 } from "@/lib/budgets/preview";
 import type { Formats } from "../labels";
 import {
+	figuresOf,
 	groupText,
 	historyWindow,
 	limitText,
@@ -476,6 +477,42 @@ describe("groupText (BR-F04-26)", () => {
 		expect(groupText(group("2023-11", "2026-08", 34), DE).range).toBe(
 			"Nov. 2023 to Aug. 2026",
 		);
+	});
+});
+
+describe("figuresOf (section 10)", () => {
+	test("with the history in, the figures are ready", () => {
+		expect(
+			figuresOf({ data: { months: [] }, isError: false, fetchStatus: "idle" }),
+		).toBe("ready");
+	});
+
+	test("data wins over an error from a later refetch", () => {
+		expect(
+			figuresOf({
+				data: { months: [] },
+				isError: true,
+				fetchStatus: "paused",
+			}),
+		).toBe("ready");
+	});
+
+	test("a failed history is missing", () => {
+		expect(
+			figuresOf({ data: undefined, isError: true, fetchStatus: "idle" }),
+		).toBe("missing");
+	});
+
+	test("a paused history, as when offline, is missing", () => {
+		expect(
+			figuresOf({ data: undefined, isError: false, fetchStatus: "paused" }),
+		).toBe("missing");
+	});
+
+	test("a history on its way is loading", () => {
+		expect(
+			figuresOf({ data: undefined, isError: false, fetchStatus: "fetching" }),
+		).toBe("loading");
 	});
 });
 

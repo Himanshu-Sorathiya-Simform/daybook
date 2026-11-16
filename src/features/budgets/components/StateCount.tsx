@@ -16,6 +16,13 @@ export type StateCountProps = {
 	className?: string;
 };
 
+/** The label's colour: the accent while selected, the state's own with Budgets, else muted. */
+function labelTone(state: StateLabel, count: number, isSelected: boolean): string {
+	if (isSelected) return "text-accent font-semibold";
+	if (count > 0) return cn(STATE_TONES[state], "font-semibold");
+	return "text-ink-2";
+}
+
 /**
  * One of the overview's four state counts (BR-F04-15, BR-F04-31): the label and its number, a
  * toggle that filters the list to that state, announced as pressed while it does. A state with
@@ -39,14 +46,7 @@ export function StateCount({
 				className,
 			)}
 		>
-			<span
-				className={cn(
-					"flex-1",
-					isSelected ? "text-accent font-semibold"
-					: count > 0 ? cn(STATE_TONES[state], "font-semibold")
-					: "text-ink-2",
-				)}
-			>
+			<span className={cn("flex-1", labelTone(state, count, isSelected))}>
 				{STATE_LABELS[state]}
 			</span>
 			{/* A space keeps the label and the number apart when read. */}{" "}

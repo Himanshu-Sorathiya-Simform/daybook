@@ -17,6 +17,7 @@ import { formatMonth } from "@/lib/date-format";
 import { formatMoney } from "@/lib/money";
 import type { Formats } from "./labels";
 import type { BudgetMonthAnswer } from "./types";
+import type { BudgetField } from "./write-errors";
 
 const money = (minor: number, f: Formats) =>
 	formatMoney(minor, f.currency, f.numberLocale);
@@ -282,6 +283,78 @@ export function planChange({
 		blocked,
 		unchanged: sameRules(record, setFrom(record, month, limit)),
 	};
+}
+
+/** The request a dialog's choices make, or `null` while it lacks a category, or a limit that
+ * is not a stop (BR-F04-19 to BR-F04-21). */
+export function planOf({
+	kind,
+	typed,
+	category,
+	...rest
+}: Omit<Parameters<typeof planChange>[0], "limitMinor" | "category"> & {
+	category: ExpenseCategory | null;
+	typed: AmountResult;
+}): DialogPlan | null {
+	if (category === null || (kind !== "stop" && !typed.ok)) return null;
+	return planChange({
+		...rest,
+		kind,
+		category,
+		limitMinor: typed.ok ? typed.minor : 0,
+	});
+}
+
+/** The message each field shows: the server's, else what the typed value lacks. A stop has no
+ * limit to check (section 8). */
+export function fieldMessages(
+	{
+		server,
+		kind,
+		category,
+		typed,
+	}: {
+		server: Partial<Record<BudgetField, string>>;
+		kind: DialogKind;
+		category: ExpenseCategory | null;
+		typed: AmountResult;
+	},
+	f: Formats,
+): Record<BudgetField, string | undefined> {
+	return {
+		category:
+			server.category
+			?? (category === null ? "Choose a category." : undefined),
+		limitMinor:
+			server.limitMinor
+			?? (kind === "stop" ? undefined : limitMessage(typed, f)),
+		month: server.month,
+	};
+}
+
+/** The limit a dialog would save: `null` for a stop, else the typed amount, or `undefined`
+ * while the field holds none (BR-F04-19 to BR-F04-21). */
+export function limitOf(
+	kind: DialogKind,
+	typed: AmountResult,
+): number | null | undefined {
+	if (kind === "stop") return null;
+	return typed.ok ? typed.minor : undefined;
+}
+
+/** The rules a change leaves, from a month onward or for one month only (BR-F04-20): the
+ * user's side of the conflict view (BR-F04-23). */
+export function rulesAfter(
+	rules: BudgetRules,
+	{
+		scope,
+		month,
+		limitMinor,
+	}: { scope: DialogScope; month: Month; limitMinor: number | null },
+): BudgetRules {
+	return scope === "month" ?
+			setMonth(rules, month, limitMinor)
+		:	setFrom(rules, month, limitMinor);
 }
 
 /** The Delete confirmation's title and line (BR-F04-06). */

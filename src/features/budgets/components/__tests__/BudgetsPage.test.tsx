@@ -2192,10 +2192,11 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 				network,
 				"patch",
 				"/api/budgets/:id",
-				(_, index) =>
-					index === 0 ? ok(budgetAnswer("food", { version: 3 }))
-					: index === 1 ? conflict()
-					: ok(budgetAnswer("food", { version: 5 })),
+				(_, index) => {
+					if (index === 0) return ok(budgetAnswer("food", { version: 3 }));
+					if (index === 1) return conflict();
+					return ok(budgetAnswer("food", { version: 5 }));
+				},
 			);
 			const { user } = renderPage("?month=2026-10");
 			await screen.findByText("Needs attention · 4");

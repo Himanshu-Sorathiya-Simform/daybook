@@ -8,6 +8,7 @@ import {
 } from "@/lib/budgets/model";
 import { type Month, monthsStarting, shiftMonth } from "@/lib/budgets/months";
 import type { BudgetRecord } from "@/lib/budgets/view";
+import { compareCodeUnits } from "@/lib/compare";
 import { formatMonth } from "@/lib/date-format";
 import { formatMoney } from "@/lib/money";
 import { type Formats, percentOf, TABLE_TEXT } from "./labels";
@@ -234,9 +235,7 @@ export function historyItems(
 		inForce: source?.kind === "override" && source.month === each.month,
 	}));
 	return [...overrides, ...entries].sort((a, b) =>
-		a.month === b.month ? 0
-		: a.month > b.month ? -1
-		: 1,
+		compareCodeUnits(b.month, a.month),
 	);
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+	asOfText,
 	BUDGETS_TEXT,
 	budgetExistsMessage,
 	emptyTitle,
@@ -83,5 +84,23 @@ describe("the page's words (BR-F04-14, section 6, section 8)", () => {
 			"Only November 2026 is kept for offline use.",
 		);
 		expect(offlineAction("November")).toBe("Go to November");
+	});
+});
+
+describe("asOfText (section 10)", () => {
+	const formats = { dateLocale: "en-IN", timezone: "Asia/Kolkata" };
+	// The golden clock, 2026-11-02T12:00:00+05:30 (TST-3).
+	const loadedAt = Date.parse("2026-11-02T12:00:00+05:30");
+
+	test("offline, with a month loaded, says when, in the profile's zone", () => {
+		expect(asOfText(false, loadedAt, formats)).toBe("as of 12:00 pm");
+	});
+
+	test("online, it says nothing", () => {
+		expect(asOfText(true, loadedAt, formats)).toBeNull();
+	});
+
+	test("offline with nothing loaded, it says nothing", () => {
+		expect(asOfText(false, 0, formats)).toBeNull();
 	});
 });
