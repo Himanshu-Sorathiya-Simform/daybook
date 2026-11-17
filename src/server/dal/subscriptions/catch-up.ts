@@ -113,19 +113,21 @@ export async function catchUpSubscription(
 }
 
 /**
- * Locks every Subscription of the user `FOR UPDATE`, in id order, and reads each with its
+ * Locks every Subscription of the user `FOR UPDATE`, in id order, and then reads each with its
  * tombstones (SRV-7, JOB-2). Two catch-ups, a change and a charge delete therefore take their
- * locks in one order and cannot deadlock; the second waits, then finds the charges the first
- * made.
+ * locks in one order and cannot deadlock; the second waits, then sees what the first committed.
+ * The lock and the read are two statements on purpose (D-605): one statement that locks as it
+ * reads would show the tombstones as they were before the wait, and charge a date that a skip
+ * committed meanwhile.
  */
 export async function lockSubscriptions(
 	tx: Tx,
 ): Promise<{ subscription: SubscriptionRecord; skipped: readonly string[] }[]> {
+	await tx.execute(sql`SELECT id FROM app.subscriptions ORDER BY id FOR UPDATE`);
 	const { rows } = await tx.execute<{ item: ItemJson }>(
 		sql`SELECT ${ITEM_JSON} AS item
 		FROM app.subscriptions s ${ITEM_JOINS}
-		ORDER BY s.id
-		FOR UPDATE OF s`,
+		ORDER BY s.id`,
 	);
 	return rows.map(({ item }) => ({
 		subscription: readSubscription(item.subscription),

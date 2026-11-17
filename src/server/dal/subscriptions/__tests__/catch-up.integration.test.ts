@@ -11,7 +11,11 @@ import { createUser } from "../../../db/__tests__/private-rows";
 import { runtimePool } from "../../../db/pools";
 import { parseOwnerEnv } from "../../../env";
 import { resetCatchUpNote, runCatchUpIfDue } from "../../catch-up";
-import { asUser, goldenContext } from "../../transactions/__tests__/helpers";
+import {
+	asUser,
+	goldenContext,
+	uuidV7At,
+} from "../../transactions/__tests__/helpers";
 import { withUser, type Tx } from "../../with-user";
 import {
 	bootCatchUp,
@@ -531,14 +535,14 @@ describe("catchUpAll and the locks (BR-F05-05, SRV-7, JOB-2)", () => {
 		record({ id: "0199a000-0000-7000-8002-0000000000a2", name: "B" }),
 	];
 
-	test("catches every Subscription up in one locking read and one insert, however many there are", async () => {
+	test("catches every Subscription up in one lock, one read and one insert, however many there are", async () => {
 		const one = await withSubs([record()], (tx) => catchUpAll(tx, ctxOf()));
 		const many = await withSubs(three(), (tx) => catchUpAll(tx, ctxOf()));
 		expect(one.result.created).toBe(2);
 		expect(many.result.created).toBe(6);
-		// The setup is one insert in both; catch-up adds a read and an insert.
-		expect(one.statements).toBe(3);
-		expect(many.statements).toBe(3);
+		// The setup is one insert in both; catch-up adds the lock, the read and the insert (D-605).
+		expect(one.statements).toBe(4);
+		expect(many.statements).toBe(4);
 	});
 
 	test("reads the tombstones itself: a skipped date stays skipped (AC-F05-09)", async () => {
@@ -617,6 +621,48 @@ describe("catchUpAll and the locks (BR-F05-05, SRV-7, JOB-2)", () => {
 			expect(finished).toBe(false);
 			await holder.query("COMMIT");
 			expect((await run).created).toBe(1);
+		} finally {
+			await holder.query("ROLLBACK").catch(() => {});
+			holder.release();
+		}
+	}, 60_000);
+
+	// D-605: the read after the lock sees what the holder committed while this run waited.
+	test("waits for a held lock, then sees the tombstone the holder committed and charges nothing on it", async () => {
+		const before = await goldenUser(owner, "sub-catch-up-wait-skip", {
+			beforeCatchUp: true,
+		});
+		users.push(before.userId);
+		const ctx = goldenContext(before.userId);
+		const id = before.subscription("sunrise");
+		const holder = await runtimePool().connect();
+		try {
+			await holder.query("BEGIN");
+			await holder.query("SELECT set_config('app.user_id', $1, true)", [
+				before.userId,
+			]);
+			await holder.query(
+				"SELECT id FROM app.subscriptions WHERE id = $1 FOR UPDATE",
+				[id],
+			);
+			const xid = await transactionIdOf(holder as unknown as Client);
+			let finished = false;
+			const run = withUser({ user: ctx.user }, "write", (tx) =>
+				catchUpAll(tx, chargeContext(ctx)),
+			).finally(() => {
+				finished = true;
+			});
+			await waitForWaiterOn(owner, xid);
+			expect(finished).toBe(false);
+			await holder.query(
+				`INSERT INTO app.subscription_skips (id, user_id, created_at, updated_at,
+					subscription_id, due_on)
+				VALUES ($1, $2, $3, $3, $4, '2026-11-01')`,
+				[uuidV7At(GOLDEN_NOW), before.userId, GOLDEN_NOW, id],
+			);
+			await holder.query("COMMIT");
+			// Sunrise's 1 November charge is the only one missing, and it was skipped meanwhile.
+			expect((await run).created).toBe(0);
 		} finally {
 			await holder.query("ROLLBACK").catch(() => {});
 			holder.release();

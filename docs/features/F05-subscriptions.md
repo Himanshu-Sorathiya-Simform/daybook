@@ -11,7 +11,7 @@ The Subscriptions page shows the monthly cost, what this month has charged and s
 | Milestone  | M2. Before M5, writes are online only: Save is disabled offline with "You are offline. Connect to save.", a failed save keeps the dialog open, and the app calls the boot endpoint once at start. From M5 the write queue (P1) adds offline writes, and boot step 5 calls the endpoint (D-241)      |
 | Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                                               |
 | Depends on | [F03](F03-transactions.md) (charges are Transactions), [F02](F02-onboarding-profile-settings.md) (time zone, today, week start), [P2](../platform/P2-data-access-and-security.md) (catch-up check, locks, request clock); P1 (write queue and boot sequence); F08, F10, F11, F13 read Subscriptions |
-| Decisions  | D-26, D-27, D-70 to D-72, D-90 to D-96, D-181, D-213, D-219, D-224, D-236, D-239, D-241, D-244, D-250 to D-257, D-265, D-267, D-269, D-270, D-347, D-580, D-589 to D-603                                                                                                                            |
+| Decisions  | D-26, D-27, D-70 to D-72, D-90 to D-96, D-181, D-213, D-219, D-224, D-236, D-239, D-241, D-244, D-250 to D-257, D-265, D-267, D-269, D-270, D-347, D-580, D-589 to D-605                                                                                                                            |
 
 ## 1. User stories
 
@@ -118,7 +118,7 @@ A queued change therefore never reaches back past a change applied before it, an
 
     The count and total are computed in the browser from the schedule. When expenses whose payee equals the name, ignoring case, already fall from the start date up to yesterday, a note follows: "You already have 2 Netflix expenses in that period, on 5 Sep, 5 Oct. Adding past charges would count them twice." It names up to three dates, then "and more". The browser reads them through F03's list with `q`, `type=expense`, `from` and `to` (D-594).
 
-- **BR-F05-05** Catch-up runs at three moments (JOB-1). Each run locks the profile, then each Subscription it covers with `FOR UPDATE` in id order (SRV-7, JOB-2).
+- **BR-F05-05** Catch-up runs at three moments (JOB-1). Each run locks the profile, then each Subscription it covers with `FOR UPDATE` in id order (SRV-7, JOB-2). The lock and the read of the Subscription, its charges and its tombstones are two statements, so a run sees what the writer it waited for committed (D-605).
     - **Lazy:** once a day before reads and writes (P2, BR-P2-14), for every Subscription, through today. It is skipped while the device's queue holds pending or in-flight Subscription items (D-244).
     - **Boot:** `POST /api/sync/catch-up` (BR-F05-06), for every Subscription, through today.
     - **On change:** inside the create's or change's own transaction, for that Subscription only (BR-F05-08).
@@ -284,6 +284,8 @@ A queued change therefore never reaches back past a change applied before it, an
 - **BR-F05-30** `alsoPastCharges: true`, sent with a `name` or `category` change, also gives the unedited linked charges due on or before C the new payee and category, never a new amount. It bumps their `version` and leaves `edited` false. The Edit dialog offers it, off by default, as "Also change the 2 past charges", described "Name and category only. Past amounts never change." This narrows D-92 on request only.
 - **BR-F05-31** When a start or cadence change makes the new schedule's first due date after C fall less than one new period after the last charge on or before C, the dialog offers "Skip 15 Nov, so it isn't charged twice", ticked by default, described "5 Nov was already charged, less than one month before it. The first charge on the new date is 15 Dec." Ticked, the `PATCH` carries `skipDueOn` with that date, and step 3 writes its tombstone; it must be a due date of the new schedule after C, else 422.
 - **BR-F05-32** `backfillGap: true`, sent with `endDate: null` or a later end date while the stored end date is before C, sets `chargesFrom` to the earlier of its value and the day after the stored end date, never before `startDate` (D-597). Step 4 then charges the due dates between the old end date and today, except tombstoned and paused ones, even after an earlier resume had moved `chargesFrom` past them. The Resume dialog's "It never actually stopped" and the Undo of a cancel send it (D-591). Without a stored end date before C it changes nothing.
+- **BR-F05-46** A field sent with its stored value is no change, and is not judged by the windows or the pause and end date rules again. A `PATCH` in which every field equals the stored one and no skip option acts answers 200 with the Subscription as it is: no new version, no move of `lastChangeOn`, no catch-up, and every count 0 (D-604).
+- **BR-F05-47** `skipDueOn` must be a due date of the new schedule after C (BR-F05-31). An unedited charge already on it is deleted with the tombstone written; an edited one makes it 422 "This charge was edited, so it stays. Delete it in Transactions to skip it."; a date that is already skipped writes nothing. `unskipDueOn` is refused on or before C (BR-F05-34), and a date with no tombstone changes nothing (D-604).
 
 **Undo** (D-589, D-590, D-591, D-597)
 
@@ -679,6 +681,7 @@ The request clock is frozen per test. Steps that need a later day move it explic
 - **AC-F05-29** (integration) Undo of section 5's double-charge change, with `unskipDueOn` 2026-11-15, puts the start back to 2026-09-05 with no 15 November tombstone, and next due is 5 December.
 - **AC-F05-30** (integration) On golden at 2 November, Cancel "Now" on Netflix sets `endDate` 2026-11-02 with status `ended` and deletes nothing. After section 5's cancel in the past, a resume with "Restart from today", its Undo, and then a resume with `backfillGap` still create the 5 October charge.
 - **AC-F05-31** (client integration, M5) A queued cancel whose dialog showed 1 deletion and whose response has `chargesDeleted` 3 shows "Netflix: 2 more charges were removed when this change synced."
+- **AC-F05-32** (integration) A change whose fields all equal the stored ones answers 200 with the same version and no charge. An end date of 2026-09-30 on golden Netflix deletes #16 although it is due before C. A change that waits for another writer's lock sees the tombstone that writer committed and does not charge that date.
 
 ## 15. Illustrations
 
