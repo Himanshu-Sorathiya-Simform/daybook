@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import type { Client } from "pg";
+import { sql } from "drizzle-orm";
+import type { Client, PoolClient } from "pg";
+import { expect } from "vitest";
+
+import { todayIn } from "@/lib/time";
 
 import {
 	GOLDEN_NOW,
@@ -16,7 +20,11 @@ import {
 	type LoadOptions,
 } from "../../../../../seed/load-golden";
 import { createUser } from "../../../db/__tests__/private-rows";
-import { uuidV7At } from "../../transactions/__tests__/helpers";
+import { transactionIdOf, waitForWaiterOn } from "../../budgets/__tests__/helpers";
+import type { ProfiledContext } from "../../context";
+import { goldenContext, uuidV7At } from "../../transactions/__tests__/helpers";
+import { runtimePool } from "../../../db/pools";
+import type { Tx } from "../../with-user";
 
 export { GOLDEN_TODAY };
 
@@ -133,3 +141,121 @@ export async function ownerExec(
 ): Promise<void> {
 	await owner.query(sql, params);
 }
+
+/** The golden context with the request clock at 12:00 in India on `day`. */
+export function on(userId: string, day: string): ProfiledContext {
+	const ctx = goldenContext(userId);
+	const now = new Date(`${day}T06:30:00.000Z`);
+	return { ...ctx, now, today: todayIn(ctx.profile.timezone, now) };
+}
+
+/** `changedAt` at 12:00 in India on `day`. */
+export const when = (day: string) => `${day}T06:30:00.000Z`;
+
+export const charges = async (tx: Tx, subscriptionId: string) =>
+	(
+		await tx.execute<{
+			id: string;
+			dueOn: string;
+			amount: string;
+			payee: string;
+			category: string;
+			edited: boolean;
+			version: number;
+			occurredOn: string;
+			demo: boolean;
+		}>(
+			sql`SELECT id, due_on::text AS "dueOn", amount_minor::text AS amount, payee, category,
+				edited, version, occurred_on::text AS "occurredOn", demo
+			FROM app.transactions WHERE subscription_id = ${subscriptionId}::uuid ORDER BY due_on`,
+		)
+	).rows;
+
+export const dueOns = async (tx: Tx, subscriptionId: string) =>
+	(await charges(tx, subscriptionId)).map((row) => row.dueOn);
+
+/** A charge another device made, in the open transaction. */
+export async function laterCharge(
+	tx: Tx,
+	userId: string,
+	subscriptionId: string,
+	dueOn: string,
+	fields: {
+		amountMinor?: number;
+		payee?: string;
+		category?: string;
+		edited?: boolean;
+	} = {},
+): Promise<string> {
+	const id = uuidV7At(GOLDEN_NOW);
+	const occurredAt = new Date(`${dueOn}T00:00:00+05:30`).toISOString();
+	await tx.execute(
+		sql`INSERT INTO app.transactions (id, user_id, created_at, updated_at, type, amount_minor,
+			occurred_at, occurred_on, category, payee, source, subscription_id, due_on, edited,
+			demo, version)
+		VALUES (${id}, ${userId}, ${GOLDEN_NOW}, ${GOLDEN_NOW}, 'expense',
+			${String(fields.amountMinor ?? 64900)}::bigint, ${occurredAt}, ${dueOn},
+			${fields.category ?? "entertainment"}, ${fields.payee ?? "Netflix"}, 'subscription',
+			${subscriptionId}::uuid, ${dueOn}, ${fields.edited ?? false}, false, 1)`,
+	);
+	return id;
+}
+
+/** A tombstone, in the open transaction. */
+export async function tombstone(
+	tx: Tx,
+	userId: string,
+	subscriptionId: string,
+	dueOn: string,
+): Promise<void> {
+	await tx.execute(
+		sql`INSERT INTO app.subscription_skips (id, user_id, created_at, updated_at,
+			subscription_id, due_on)
+		VALUES (${uuidV7At(GOLDEN_NOW)}, ${userId}, ${GOLDEN_NOW}, ${GOLDEN_NOW},
+			${subscriptionId}::uuid, ${dueOn}::date)`,
+	);
+}
+
+export const skipsOf = async (tx: Tx, subscriptionId: string) =>
+	(
+		await tx.execute<{ dueOn: string }>(
+			sql`SELECT due_on::text AS "dueOn" FROM app.subscription_skips
+			WHERE subscription_id = ${subscriptionId}::uuid ORDER BY due_on`,
+		)
+	).rows.map((row) => row.dueOn);
+
+/** Holds `FOR UPDATE` on a Subscription in a transaction of its own, starts `run`, waits until
+ * `run` is blocked on that lock, lets `write` change things in the holder's transaction, commits,
+ * and returns what `run` answered. The holder's writes are what a writer committed first. */
+export async function holdingLock<T>(
+	owner: Client,
+	userId: string,
+	subscriptionId: string,
+	write: (holder: PoolClient) => Promise<void>,
+	run: () => Promise<T>,
+): Promise<T> {
+	const holder = await runtimePool().connect();
+	try {
+		await holder.query("BEGIN");
+		await holder.query("SELECT set_config('app.user_id', $1, true)", [userId]);
+		await holder.query(
+			"SELECT id FROM app.subscriptions WHERE id = $1 FOR UPDATE",
+			[subscriptionId],
+		);
+		const xid = await transactionIdOf(holder as unknown as Client);
+		let finished = false;
+		const pending = run().finally(() => {
+			finished = true;
+		});
+		await waitForWaiterOn(owner, xid);
+		expect(finished).toBe(false);
+		await write(holder);
+		await holder.query("COMMIT");
+		return await pending;
+	} finally {
+		await holder.query("ROLLBACK").catch(() => {});
+		holder.release();
+	}
+}
+
+// AC-F05-32

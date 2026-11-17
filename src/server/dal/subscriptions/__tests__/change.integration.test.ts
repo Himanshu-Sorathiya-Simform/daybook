@@ -1,19 +1,13 @@
 import { sql } from "drizzle-orm";
-import { Client, type PoolClient } from "pg";
+import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-
-import { todayIn } from "@/lib/time";
 
 import { GOLDEN_NOW } from "../../../../../seed/golden";
 import { insertProfile, type LoadedGolden } from "../../../../../seed/load-golden";
 import { createUser } from "../../../db/__tests__/private-rows";
 import { runtimePool } from "../../../db/pools";
 import { parseOwnerEnv } from "../../../env";
-import {
-	refusal,
-	transactionIdOf,
-	waitForWaiterOn,
-} from "../../budgets/__tests__/helpers";
+import { refusal } from "../../budgets/__tests__/helpers";
 import type { ProfiledContext } from "../../context";
 import {
 	asUser,
@@ -25,7 +19,18 @@ import { withUser } from "../../with-user";
 import { changeSubscription } from "../change";
 import { catchUpAll, chargeContext } from "../catch-up";
 import { getSubscriptionItem } from "../read";
-import { addSubscription, goldenUser } from "./helpers";
+import {
+	addSubscription,
+	charges,
+	dueOns,
+	goldenUser,
+	holdingLock,
+	laterCharge,
+	on,
+	skipsOf,
+	tombstone,
+	when,
+} from "./helpers";
 
 /** `PATCH /api/subscriptions/[id]` (F05 section 11, BR-F05-08 to BR-F05-14, BR-F05-29 to
  * BR-F05-32) through the runtime role and RLS. Every scenario runs in a rolled-back transaction
@@ -59,16 +64,6 @@ afterAll(async () => {
 const netflix = () => golden.subscription("netflix");
 const cultGym = () => golden.subscription("cultGym");
 
-/** The golden context with the request clock at 12:00 in India on `day`. */
-function on(userId: string, day: string): ProfiledContext {
-	const ctx = goldenContext(userId);
-	const now = new Date(`${day}T06:30:00.000Z`);
-	return { ...ctx, now, today: todayIn(ctx.profile.timezone, now) };
-}
-
-/** `changedAt` at 12:00 in India on `day`. */
-const when = (day: string) => `${day}T06:30:00.000Z`;
-
 type Result = Awaited<ReturnType<typeof changeSubscription>>;
 
 /** One change as the client sends it, with `changedAt` at the golden clock unless the body says. */
@@ -80,78 +75,6 @@ const change = (
 	body: Record<string, unknown>,
 ): Promise<Result> =>
 	changeSubscription(tx, ctx, id, version, { changedAt: GOLDEN_NOW, ...body });
-
-const charges = async (tx: Tx, subscriptionId: string) =>
-	(
-		await tx.execute<{
-			id: string;
-			dueOn: string;
-			amount: string;
-			payee: string;
-			category: string;
-			edited: boolean;
-			version: number;
-			occurredOn: string;
-			demo: boolean;
-		}>(
-			sql`SELECT id, due_on::text AS "dueOn", amount_minor::text AS amount, payee, category,
-				edited, version, occurred_on::text AS "occurredOn", demo
-			FROM app.transactions WHERE subscription_id = ${subscriptionId}::uuid ORDER BY due_on`,
-		)
-	).rows;
-
-const dueOns = async (tx: Tx, subscriptionId: string) =>
-	(await charges(tx, subscriptionId)).map((row) => row.dueOn);
-
-/** A charge another device made, in the open transaction. */
-async function laterCharge(
-	tx: Tx,
-	userId: string,
-	subscriptionId: string,
-	dueOn: string,
-	fields: {
-		amountMinor?: number;
-		payee?: string;
-		category?: string;
-		edited?: boolean;
-	} = {},
-): Promise<string> {
-	const id = uuidV7At(GOLDEN_NOW);
-	const occurredAt = new Date(`${dueOn}T00:00:00+05:30`).toISOString();
-	await tx.execute(
-		sql`INSERT INTO app.transactions (id, user_id, created_at, updated_at, type, amount_minor,
-			occurred_at, occurred_on, category, payee, source, subscription_id, due_on, edited,
-			demo, version)
-		VALUES (${id}, ${userId}, ${GOLDEN_NOW}, ${GOLDEN_NOW}, 'expense',
-			${String(fields.amountMinor ?? 64900)}::bigint, ${occurredAt}, ${dueOn},
-			${fields.category ?? "entertainment"}, ${fields.payee ?? "Netflix"}, 'subscription',
-			${subscriptionId}::uuid, ${dueOn}, ${fields.edited ?? false}, false, 1)`,
-	);
-	return id;
-}
-
-/** A tombstone, in the open transaction. */
-async function tombstone(
-	tx: Tx,
-	userId: string,
-	subscriptionId: string,
-	dueOn: string,
-): Promise<void> {
-	await tx.execute(
-		sql`INSERT INTO app.subscription_skips (id, user_id, created_at, updated_at,
-			subscription_id, due_on)
-		VALUES (${uuidV7At(GOLDEN_NOW)}, ${userId}, ${GOLDEN_NOW}, ${GOLDEN_NOW},
-			${subscriptionId}::uuid, ${dueOn}::date)`,
-	);
-}
-
-const skipsOf = async (tx: Tx, subscriptionId: string) =>
-	(
-		await tx.execute<{ dueOn: string }>(
-			sql`SELECT due_on::text AS "dueOn" FROM app.subscription_skips
-			WHERE subscription_id = ${subscriptionId}::uuid ORDER BY due_on`,
-		)
-	).rows.map((row) => row.dueOn);
 
 describe("the checks before any change (section 11 order)", () => {
 	test("an id that is not a UUID is 404 before any statement", async () => {
@@ -2275,45 +2198,13 @@ describe("pause (BR-F05-28, BR-F05-29, AC-F05-19, AC-F05-28)", () => {
 });
 
 describe("locks (SRV-7, BR-F05-08 step 1)", () => {
-	async function holding<T>(
-		userId: string,
-		subscriptionId: string,
-		write: (holder: PoolClient) => Promise<void>,
-		run: () => Promise<T>,
-	): Promise<T> {
-		const holder = await runtimePool().connect();
-		try {
-			await holder.query("BEGIN");
-			await holder.query("SELECT set_config('app.user_id', $1, true)", [
-				userId,
-			]);
-			await holder.query(
-				"SELECT id FROM app.subscriptions WHERE id = $1 FOR UPDATE",
-				[subscriptionId],
-			);
-			const xid = await transactionIdOf(holder as unknown as Client);
-			let finished = false;
-			const pending = run().finally(() => {
-				finished = true;
-			});
-			await waitForWaiterOn(owner, xid);
-			expect(finished).toBe(false);
-			await write(holder);
-			await holder.query("COMMIT");
-			return await pending;
-		} finally {
-			await holder.query("ROLLBACK").catch(() => {});
-			holder.release();
-		}
-	}
-
-	// AC-F05-32
 	test("waits for a held Subscription lock, then sees the tombstone the holder committed", async () => {
 		const user = await goldenUser(owner, "sub-change-lock-skip");
 		users.push(user.userId);
 		const ctx = on(user.userId, "2026-11-06");
 		const id = user.subscription("netflix");
-		const result = await holding(
+		const result = await holdingLock(
+			owner,
 			user.userId,
 			id,
 			async (holder) => {
@@ -2341,7 +2232,8 @@ describe("locks (SRV-7, BR-F05-08 step 1)", () => {
 		users.push(user.userId);
 		const ctx = goldenContext(user.userId);
 		const id = user.subscription("netflix");
-		const refused = await holding(
+		const refused = await holdingLock(
+			owner,
 			user.userId,
 			id,
 			async (holder) => {
