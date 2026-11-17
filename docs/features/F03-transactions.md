@@ -206,7 +206,7 @@ A view's `filter` holds the filter object's fields with these differences from t
 
 **Charges and demo rows**
 
-- **BR-F03-16** A charge is a row whose source is `subscription`. Its editable fields are amount, category, payee, description and note (D-224); its type, date and time are fixed. Any edit of a linked charge sets `edited` (D-270), so a later Subscription change leaves it alone (F05, BR-F05-10 to BR-F05-14). The dialog shows "Auto from Netflix" with a link to the Subscription (plain text until F05 builds the Subscriptions page, D-586), or "From a deleted Subscription" when it is no longer linked (D-96).
+- **BR-F03-16** A charge is a row whose source is `subscription`. Its editable fields are amount, category, payee, description and note (D-224); its type, date and time are fixed. Any edit of a linked charge sets `edited` (D-270), so a later Subscription change leaves it alone (F05, BR-F05-10 to BR-F05-14, BR-F05-26, BR-F05-29, BR-F05-30 and BR-F05-34). The dialog shows "Auto from Netflix" with a link to the Subscription (plain text until F05 builds the Subscriptions page, D-586), or "From a deleted Subscription" when it is no longer linked (D-96).
 - **BR-F03-17** Deleting a charge still linked to its Subscription runs three steps in one transaction (D-93, D-236):
     1. Lock the Subscription with `SELECT ... FOR UPDATE`.
     2. Delete the charge.

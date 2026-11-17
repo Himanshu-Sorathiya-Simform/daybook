@@ -93,13 +93,13 @@ Scope chips and typed prefixes narrow the search. Results come from the server, 
 
 - **BR-F13-13** Each result shows:
 
-    | Kind         | Line                                                                                                                | Opens                                                    |
-    | ------------ | ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-    | Transaction  | Payee (or the Goal's name for Goal rows), the category chip, the day in F02's format, and the signed amount (D-231) | `/transactions?txn=<id>`                                 |
-    | Subscription | Name, cadence and amount, and the next due date                                                                     | `/subscriptions?open=<id>`, which opens its dialog (F05) |
-    | Goal         | Name and progress percent                                                                                           | `/goals/<id>`                                            |
-    | Learn        | Title and kind                                                                                                      | `/learn/<slug>`                                          |
-    | Action       | Its label, with the shortcut where one exists                                                                       | Runs it                                                  |
+    | Kind         | Line                                                                                                                | Opens                                                                        |
+    | ------------ | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+    | Transaction  | Payee (or the Goal's name for Goal rows), the category chip, the day in F02's format, and the signed amount (D-231) | `/transactions?txn=<id>`                                                     |
+    | Subscription | Name, cadence and amount, and the next due date                                                                     | `/subscriptions?open=<id>`, which selects it and shows it in the panel (F05) |
+    | Goal         | Name and progress percent                                                                                           | `/goals/<id>`                                                                |
+    | Learn        | Title and kind                                                                                                      | `/learn/<slug>`                                                              |
+    | Action       | Its label, with the shortcut where one exists                                                                       | Runs it                                                                      |
 
     The matched part of a name or payee is highlighted. Text is rendered as text, never as HTML.
 
@@ -183,7 +183,7 @@ BR-F13-15: actions and navigation only. The palette saves nothing, and the searc
 ## 12. Cross-feature effects
 
 - **F03:** shares the search expression, numeric rule and list order. See all uses its `q` filter.
-- **F05:** `/subscriptions?open=<id>` opens that Subscription's dialog; an unknown id is ignored.
+- **F05:** `/subscriptions?open=<id>` selects that Subscription and shows it in the panel (D-593); an unknown id selects nothing.
 - **F06:** `/goals/<id>`. The Add Goal action follows F06's cap.
 - **F14 (M7):** supplies Learn search and `/learn?q=`.
 - **F02:** the theme actions. **P1:** the waiting-to-sync note and offline behavior.
@@ -240,7 +240,7 @@ Illustrative, `GET /api/search?q=net`:
 				{
 					"id": "0192…",
 					"name": "Netflix",
-					"cadence": "monthly",
+					"cadence": { "unit": "month", "every": 1 },
 					"amountMinor": 64900,
 					"nextDueOn": "2026-11-05"
 				}

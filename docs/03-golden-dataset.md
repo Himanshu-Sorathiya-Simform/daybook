@@ -202,6 +202,8 @@ October shopping is 4,500.00 spent minus the 1,500.00 refund.
 - **Upcoming, next 30 days** (2 November to 2 December, inclusive): Netflix 5 Nov, Cult Gym 10 Nov, Sunrise Apartments 1 Dec; total 20,149.00.
 - **Renewals within 7 days** (2 to 9 November, inclusive): Netflix only. Cult Gym on 10 November is just outside.
 - **Charges in October:** 20,148.00 (#12, #16, #20). The tombstoned Cult Gym charge is not included.
+- **This month (November):** charged 18,000.00 (#27), still to come 2,149.00 (Netflix 5 Nov, Cult Gym 10 Nov), 20,149.00 in all. December expects 20,149.00.
+- **Stored cadences:** monthly is `{ unit: "month", every: 1 }` and yearly `{ unit: "month", every: 12 }`. No golden Subscription is paused or has a future skip.
 
 ## Transactions list checks
 
