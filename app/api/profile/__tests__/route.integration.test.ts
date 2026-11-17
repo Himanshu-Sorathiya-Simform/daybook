@@ -495,9 +495,28 @@ describe("GET /api/profile (BR-F02-26)", () => {
 		).toBe(3);
 	});
 
-	test("the currency is editable again once the last Transaction is gone (BR-F02-14)", async () => {
+	// F05: golden's Subscriptions fix the currency too, so deleting its Transactions alone is not
+	// enough.
+	test("the golden Subscriptions alone still fix the currency (BR-F02-14)", async () => {
+		const who = await goldenUser("profile-get-subs-only");
+		await owner.query(`DELETE FROM app.transactions WHERE user_id = $1`, [
+			who.id,
+		]);
+		expect(
+			((await read(who)).body as { data: { currencyEditable: boolean } }).data
+				.currencyEditable,
+		).toBe(false);
+	});
+
+	test("the currency is editable again once the last Transaction and Subscription are gone (BR-F02-14)", async () => {
 		const who = await goldenUser("profile-get-emptied");
 		await owner.query(`DELETE FROM app.transactions WHERE user_id = $1`, [
+			who.id,
+		]);
+		await owner.query(`DELETE FROM app.subscription_skips WHERE user_id = $1`, [
+			who.id,
+		]);
+		await owner.query(`DELETE FROM app.subscriptions WHERE user_id = $1`, [
 			who.id,
 		]);
 		expect(

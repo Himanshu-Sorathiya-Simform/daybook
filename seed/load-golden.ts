@@ -140,7 +140,11 @@ export async function insertTransactions(
 		GoldenTransaction,
 		"golden" | "subscriptionId" | "dueOn" | "edited"
 	>
-		& Partial<Pick<GoldenTransaction, "subscriptionId" | "dueOn" | "edited">>)[],
+		& Partial<{
+			subscriptionId: string | null;
+			dueOn: string | null;
+			edited: boolean;
+		}>)[],
 ): Promise<void> {
 	await client.query(
 		`INSERT INTO app.transactions
