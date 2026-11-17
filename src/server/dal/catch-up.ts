@@ -4,6 +4,7 @@ import { todayIn } from "@/lib/time";
 import { describeError } from "../api/errors";
 import type { Timing } from "../api/timing";
 import { resetDailyPassNote } from "../system/daily-pass";
+import { subscriptionCatchUpStep } from "./subscriptions/catch-up";
 import type { RequestContext } from "./context";
 import { type Tx, withUser } from "./with-user";
 
@@ -20,9 +21,8 @@ export type CatchUpRun = {
  * `last_catch_up_on` or not at all. */
 export type CatchUpStep = (tx: Tx, run: CatchUpRun) => Promise<void>;
 
-/** The catch-up tasks, in order. Subscription catch-up (JOB-2, F05) joins this list when F05
- * is built. */
-export const CATCH_UP_STEPS: CatchUpStep[] = [];
+/** The catch-up tasks, in order: Subscriptions (JOB-2, F05). */
+export const CATCH_UP_STEPS: CatchUpStep[] = [subscriptionCatchUpStep];
 
 type Note = { timezone: string; lastCatchUpOn: string };
 
