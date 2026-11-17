@@ -56,6 +56,7 @@ function rowOf(
 		description: transaction.description,
 		note: transaction.note,
 		source: transaction.source,
+		due_on: transaction.dueOn,
 		demo: transaction.demo,
 		version: transaction.version,
 		created_at: transaction.createdAt,
@@ -330,7 +331,7 @@ describe("backstop constraints (D-467)", () => {
 });
 
 describe("indexes (D-468)", () => {
-	test("only the two order indexes exist, besides the primary key", async () => {
+	test("only the two order indexes and the charge key exist, besides the primary key", async () => {
 		const result = await owner.query<{ indexname: string; indexdef: string }>(
 			`SELECT indexname, indexdef FROM pg_indexes
 			 WHERE schemaname = 'app' AND tablename = 'transactions' ORDER BY indexname`,
@@ -342,12 +343,17 @@ describe("indexes (D-468)", () => {
 			"transactions_amount_order_idx",
 			"transactions_date_order_idx",
 			"transactions_pkey",
+			"transactions_subscription_due_key",
 		]);
 		expect(indexes["transactions_date_order_idx"]).toContain(
 			"(user_id, occurred_on, occurred_at, id)",
 		);
 		expect(indexes["transactions_amount_order_idx"]).toContain(
 			"(user_id, amount_minor, occurred_on, occurred_at, id)",
+		);
+		// F05 (D-598): unique, so catch-up is idempotent; led by user_id, so RLS lets it serve.
+		expect(indexes["transactions_subscription_due_key"]).toContain(
+			"UNIQUE INDEX transactions_subscription_due_key ON app.transactions USING btree (user_id, subscription_id, due_on)",
 		);
 	});
 

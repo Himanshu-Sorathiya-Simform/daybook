@@ -22,7 +22,7 @@ export const GOLDEN_PROFILE = {
 
 /** Fixed UUIDv7 ids, so the fixture loads at most once per database (BR-F15-26). The fourth
  * group names the kind: 8000 Transactions, 8001 Goals, 8002 Subscriptions, 8003 pending,
- * 8004 Budgets. */
+ * 8004 Budgets, 8005 skipped charges. */
 const id = (kind: string, n: number) =>
 	`0199a000-0000-7000-${kind}-${String(n).padStart(12, "0")}`;
 
@@ -31,12 +31,108 @@ export const GOLDEN_GOALS = {
 	vacation: { id: id("8001", 2), name: "Vacation" },
 } as const;
 
+/** A golden Subscription as the table stores it (F05 section 3). Each was created on its start
+ * date without backfill, at the midnight of its first charge, so `chargesFrom` and
+ * `lastChangeOn` are the start date (docs/03-golden-dataset.md, Setup). None is paused. */
+export type GoldenSubscription = {
+	id: string;
+	name: string;
+	amountMinor: number;
+	cadence: { unit: "week" | "month"; every: number };
+	startDate: string;
+	category: CategoryKey;
+	note: null;
+	endDate: null;
+	pause: null;
+	chargesFrom: string;
+	lastChangeOn: string;
+	createdAt: string;
+	demo: false;
+	version: 1;
+};
+
 export const GOLDEN_SUBSCRIPTIONS = {
-	sunrise: { id: id("8002", 1), name: "Sunrise Apartments" },
-	netflix: { id: id("8002", 2), name: "Netflix" },
-	cultGym: { id: id("8002", 3), name: "Cult Gym" },
-	amazonPrime: { id: id("8002", 4), name: "Amazon Prime" },
-} as const;
+	sunrise: {
+		id: id("8002", 1),
+		name: "Sunrise Apartments",
+		amountMinor: 1800000,
+		cadence: { unit: "month", every: 1 },
+		startDate: "2026-09-01",
+		category: "housing",
+		note: null,
+		endDate: null,
+		pause: null,
+		chargesFrom: "2026-09-01",
+		lastChangeOn: "2026-09-01",
+		createdAt: "2026-08-31T18:30:00Z",
+		demo: false,
+		version: 1,
+	},
+	netflix: {
+		id: id("8002", 2),
+		name: "Netflix",
+		amountMinor: 64900,
+		cadence: { unit: "month", every: 1 },
+		startDate: "2026-09-05",
+		category: "entertainment",
+		note: null,
+		endDate: null,
+		pause: null,
+		chargesFrom: "2026-09-05",
+		lastChangeOn: "2026-09-05",
+		createdAt: "2026-09-04T18:30:00Z",
+		demo: false,
+		version: 1,
+	},
+	cultGym: {
+		id: id("8002", 3),
+		name: "Cult Gym",
+		amountMinor: 150000,
+		cadence: { unit: "month", every: 1 },
+		startDate: "2026-09-10",
+		category: "health",
+		note: null,
+		endDate: null,
+		pause: null,
+		chargesFrom: "2026-09-10",
+		lastChangeOn: "2026-09-10",
+		createdAt: "2026-09-09T18:30:00Z",
+		demo: false,
+		version: 1,
+	},
+	amazonPrime: {
+		id: id("8002", 4),
+		name: "Amazon Prime",
+		amountMinor: 149900,
+		cadence: { unit: "month", every: 12 },
+		startDate: "2026-10-12",
+		category: "entertainment",
+		note: null,
+		endDate: null,
+		pause: null,
+		chargesFrom: "2026-10-12",
+		lastChangeOn: "2026-10-12",
+		createdAt: "2026-10-11T18:30:00Z",
+		demo: false,
+		version: 1,
+	},
+} as const satisfies Record<string, GoldenSubscription>;
+
+/** The one golden tombstone: the Cult Gym charge for 2026-10-10 was deleted (Setup). The
+ * dataset gives no time, so the skip is recorded on the morning of 11 October, IST. */
+export const GOLDEN_SKIPS = [
+	{
+		id: id("8005", 1),
+		subscription: "cultGym",
+		dueOn: "2026-10-10",
+		createdAt: "2026-10-11T04:30:00Z",
+	},
+] as const satisfies readonly {
+	id: string;
+	subscription: keyof typeof GOLDEN_SUBSCRIPTIONS;
+	dueOn: string;
+	createdAt: string;
+}[];
 
 /** The golden Budgets (docs/03-golden-dataset.md, Setup). Food's limit changed once, so its
  * version is 2. No golden Budget has a one-month limit. */

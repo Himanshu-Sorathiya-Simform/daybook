@@ -11,7 +11,7 @@ The Subscriptions page shows the monthly cost, what this month has charged and s
 | Milestone  | M2. Before M5, writes are online only: Save is disabled offline with "You are offline. Connect to save.", a failed save keeps the dialog open, and the app calls the boot endpoint once at start. From M5 the write queue (P1) adds offline writes, and boot step 5 calls the endpoint (D-241)      |
 | Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                                               |
 | Depends on | [F03](F03-transactions.md) (charges are Transactions), [F02](F02-onboarding-profile-settings.md) (time zone, today, week start), [P2](../platform/P2-data-access-and-security.md) (catch-up check, locks, request clock); P1 (write queue and boot sequence); F08, F10, F11, F13 read Subscriptions |
-| Decisions  | D-26, D-27, D-70 to D-72, D-90 to D-96, D-181, D-213, D-219, D-224, D-236, D-239, D-241, D-244, D-250 to D-257, D-265, D-267, D-269, D-270, D-347, D-580, D-589 to D-597                                                                                                                            |
+| Decisions  | D-26, D-27, D-70 to D-72, D-90 to D-96, D-181, D-213, D-219, D-224, D-236, D-239, D-241, D-244, D-250 to D-257, D-265, D-267, D-269, D-270, D-347, D-580, D-589 to D-599                                                                                                                            |
 
 ## 1. User stories
 
@@ -104,7 +104,7 @@ A queued change therefore never reaches back past a change applied before it, an
     - **Dates:** `dueOn` and `occurredOn` are d, and `occurredAt` is 00:00 on d in the profile time zone (TIME-6). Where midnight does not exist on a daylight-saving day, it moves forward by the gap (F03, BR-F03-06).
     - **System fields:** source `subscription`, `edited` false, the Subscription's `demo` flag, `createdAt` and `updatedAt` both `ctx.now`, and a server-generated UUIDv7 id.
 
-    The dates are computed with `src/lib/subscriptions` and inserted in one statement with `ON CONFLICT (subscription_id, due_on) DO NOTHING`, so catch-up is idempotent.
+    The dates are computed with `src/lib/subscriptions` and inserted in one statement with `ON CONFLICT DO NOTHING` and no target, against the unique key on user, Subscription and due date (D-598), so catch-up is idempotent.
 
 - **BR-F05-03** On create, `chargesFrom` depends on the past-charges choice (D-91, D-250):
     - **"Yes, add … past charges":** `startDate`;

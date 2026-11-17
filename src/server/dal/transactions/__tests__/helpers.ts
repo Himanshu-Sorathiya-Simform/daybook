@@ -112,10 +112,11 @@ export async function addExpense(
 	const createdAt = fields.createdAt ?? GOLDEN_NOW;
 	await tx.execute(
 		sql`INSERT INTO app.transactions (id, user_id, created_at, updated_at, type, amount_minor,
-		   occurred_at, occurred_on, category, payee, source, demo, version)
+		   occurred_at, occurred_on, category, payee, source, due_on, demo, version)
 		 VALUES (${id}, ${userId}, ${createdAt}, ${createdAt}, ${fields.type ?? "expense"},
 		   ${fields.amountMinor}, ${occurredAt}, ${fields.occurredOn}, ${fields.category ?? "food"},
-		   ${fields.payee}, ${fields.source ?? "manual"}, ${fields.demo ?? false}, 1)`,
+		   ${fields.payee}, ${fields.source ?? "manual"},
+		   ${fields.source === "subscription" ? fields.occurredOn : null}, ${fields.demo ?? false}, 1)`,
 	);
 	return id;
 }

@@ -159,12 +159,112 @@ function textCheck(
 }
 
 /**
- * One user's ledger (F03 section 3). At M1 it holds income, expenses and refunds; `goal_id`,
- * the Goal types and the charge link (`subscription_id`, `due_on`, `edited`) arrive with F06's
- * and F05's migrations in M2 (D-465). The checks are backstops for the shared schemas'
- * rules (D-467). Both indexes lead with `user_id` and hold only leakproof comparisons, the
- * only kind Postgres uses as an index condition under RLS; text search scans the user's
- * rows instead (D-48, D-468).
+ * One recurring bill (F05 section 3). The cadence is two columns, `cadence_unit` and
+ * `cadence_every` (D-90); a pause is `pause_from` and `pause_until`, both set or both null
+ * (D-94). The checks are backstops for the shared schemas' rules (D-467): the date windows
+ * depend on the request clock and stay in code (BR-P2-43). The currency is the profile's,
+ * as for Transactions and Budgets (MON-2). `category_kind` lets the category's foreign key
+ * refuse an income category (D-466). `UNIQUE (user_id, id)` is the target of the composite
+ * keys of its charges and skipped dates (BR-P2-06). Its charges' unique index serves every
+ * lookup by Subscription (D-598), so this table needs no index of its own.
+ */
+export const subscriptions = appSchema.table(
+	"subscriptions",
+	{
+		...privateColumns(),
+		name: text("name").notNull(),
+		amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
+		cadenceUnit: text("cadence_unit").notNull(),
+		cadenceEvery: integer("cadence_every").notNull(),
+		startDate: date("start_date", { mode: "string" }).notNull(),
+		category: text("category").notNull(),
+		categoryKind: text("category_kind").generatedAlwaysAs(sql`'expense'`),
+		note: text("note"),
+		endDate: date("end_date", { mode: "string" }),
+		pauseFrom: date("pause_from", { mode: "string" }),
+		pauseUntil: date("pause_until", { mode: "string" }),
+		chargesFrom: date("charges_from", { mode: "string" }).notNull(),
+		lastChangeOn: date("last_change_on", { mode: "string" }).notNull(),
+		demo: boolean("demo").notNull().default(false),
+		version: integer("version").notNull().default(1),
+	},
+	(t) => [
+		unique("subscriptions_user_id_id_key").on(t.userId, t.id),
+		foreignKey({
+			name: "subscriptions_category_kind_fk",
+			columns: [t.category, t.categoryKind],
+			foreignColumns: [categories.key, categories.kind],
+		}),
+		textCheck("subscriptions_name_text", t.name, 60),
+		textCheck("subscriptions_note_text", t.note, 500, true),
+		check(
+			"subscriptions_amount_range",
+			sql`${t.amountMinor} BETWEEN 1 AND 999999999999`,
+		),
+		check(
+			"subscriptions_cadence_values",
+			sql`(${t.cadenceUnit} = 'week' AND ${t.cadenceEvery} BETWEEN 1 AND 52)
+				OR (${t.cadenceUnit} = 'month' AND ${t.cadenceEvery} BETWEEN 1 AND 24)`,
+		),
+		check(
+			"subscriptions_end_after_start",
+			sql`${t.endDate} IS NULL OR ${t.endDate} >= ${t.startDate}`,
+		),
+		check(
+			"subscriptions_pause_pair",
+			sql`(${t.pauseFrom} IS NULL AND ${t.pauseUntil} IS NULL)
+				OR (${t.pauseFrom} IS NOT NULL AND ${t.pauseUntil} IS NOT NULL
+					AND ${t.pauseUntil} > ${t.pauseFrom})`,
+		),
+		check(
+			"subscriptions_charges_from_not_before_start",
+			sql`${t.chargesFrom} >= ${t.startDate}`,
+		),
+		check("subscriptions_version_positive", sql`${t.version} >= 1`),
+	],
+);
+
+/**
+ * A skipped charge, the tombstone (F05 section 3, D-93): catch-up never charges its date. It
+ * is written when a charge is deleted or a future one is skipped, and removed only by Undo
+ * skip (BR-F05-27) or together with its Subscription, so its composite key has no action:
+ * the Subscription's delete removes the skips first (BR-F05-14). A row is never updated, so
+ * it has no `version`; `updated_at` stays the creation instant.
+ */
+export const subscriptionSkips = appSchema.table(
+	"subscription_skips",
+	{
+		...privateColumns(),
+		subscriptionId: uuid("subscription_id").notNull(),
+		dueOn: date("due_on", { mode: "string" }).notNull(),
+	},
+	(t) => [
+		unique("subscription_skips_user_id_subscription_id_due_on_key").on(
+			t.userId,
+			t.subscriptionId,
+			t.dueOn,
+		),
+		foreignKey({
+			name: "subscription_skips_subscription_fk",
+			columns: [t.userId, t.subscriptionId],
+			foreignColumns: [subscriptions.userId, subscriptions.id],
+		}),
+	],
+);
+
+/**
+ * One user's ledger (F03 section 3). At M1 it held income, expenses and refunds; the charge
+ * link (`subscription_id`, `due_on`, `edited`) arrived with F05's migration (D-598) and
+ * `goal_id` and the Goal types come with F06's in M2 (D-465). The checks are backstops for
+ * the shared schemas' rules (D-467). The indexes lead with `user_id` and hold only leakproof
+ * comparisons, the only kind Postgres uses as an index condition under RLS; text search scans
+ * the user's rows instead (D-48, D-468).
+ *
+ * The charge link is a composite key to the Subscription with `ON DELETE SET NULL
+ * (subscription_id)`, written by hand in the migration (BR-P2-06, D-96): deleting a
+ * Subscription keeps its charges as ordinary expenses and never nulls `user_id`. The unique
+ * index on user, Subscription and due date makes catch-up idempotent and serves the lookups
+ * by Subscription; rows with no Subscription never collide, since null is distinct.
  */
 export const transactions = appSchema.table(
 	"transactions",
@@ -183,6 +283,9 @@ export const transactions = appSchema.table(
 		description: text("description"),
 		note: text("note"),
 		source: text("source").notNull(),
+		subscriptionId: uuid("subscription_id"),
+		dueOn: date("due_on", { mode: "string" }),
+		edited: boolean("edited").notNull().default(false),
 		demo: boolean("demo").notNull().default(false),
 		version: integer("version").notNull().default(1),
 	},
@@ -192,6 +295,16 @@ export const transactions = appSchema.table(
 			columns: [t.category, t.categoryKind],
 			foreignColumns: [categories.key, categories.kind],
 		}),
+		foreignKey({
+			name: "transactions_subscription_fk",
+			columns: [t.userId, t.subscriptionId],
+			foreignColumns: [subscriptions.userId, subscriptions.id],
+		}).onDelete("set null"),
+		uniqueIndex("transactions_subscription_due_key").on(
+			t.userId,
+			t.subscriptionId,
+			t.dueOn,
+		),
 		index("transactions_date_order_idx").on(
 			t.userId,
 			t.occurredOn,
@@ -228,6 +341,20 @@ export const transactions = appSchema.table(
 		check(
 			"transactions_source_values",
 			sql`${t.source} IN ('manual', 'subscription')`,
+		),
+		// A manual row has no charge link and was never an edited charge; a charge always
+		// knows its due date, also after its Subscription is deleted (BR-F05-02, BR-F05-14).
+		// Each half judges only its own source, so an unknown source fails the source check.
+		check(
+			"transactions_charge_link",
+			sql`(${t.source} <> 'manual' OR (${t.subscriptionId} IS NULL
+				AND ${t.dueOn} IS NULL AND NOT ${t.edited}))
+				AND (${t.source} <> 'subscription' OR ${t.dueOn} IS NOT NULL)`,
+		),
+		// A charge's date never moves (BR-F03-16), so its due date is its day.
+		check(
+			"transactions_due_on_is_occurred_on",
+			sql`${t.dueOn} IS NULL OR ${t.dueOn} = ${t.occurredOn}`,
 		),
 		check("transactions_version_positive", sql`${t.version} >= 1`),
 	],

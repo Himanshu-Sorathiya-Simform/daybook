@@ -15,6 +15,12 @@ import {
  * transaction, with `set_config(..., true)` (BR-P2-08). */
 
 const AUTH_TABLES = ["user", "session", "account", "verification"];
+
+/** Rows that must go before their parent's: a parent with a child that has no delete action
+ * refuses to go (BR-P2-06, BR-P2-24), so the feature deletes the children first. */
+const CHILDREN: Partial<Record<PrivateTable, PrivateTable[]>> = {
+	subscriptions: ["subscription_skips"],
+};
 const INSUFFICIENT_PRIVILEGE = "42501";
 
 let owner: Client;
@@ -204,10 +210,14 @@ describe.each(PRIVATE_TABLES)("app.%s, as the runtime role", (table) => {
 	});
 
 	test("user A can still read, change and remove its own rows", async () => {
-		const [updated, deleted] = await as(runtime, a, async (client) => [
-			await client.query(`UPDATE app.${table} SET updated_at = updated_at`),
-			await client.query(`DELETE FROM app.${table}`),
-		]);
+		const [updated, deleted] = await as(runtime, a, async (client) => {
+			const updated = await client.query(
+				`UPDATE app.${table} SET updated_at = updated_at`,
+			);
+			for (const child of CHILDREN[table] ?? [])
+				await client.query(`DELETE FROM app.${child}`);
+			return [updated, await client.query(`DELETE FROM app.${table}`)];
+		});
 		expect(updated.rowCount).toBe(1);
 		expect(deleted.rowCount).toBe(1);
 	});
