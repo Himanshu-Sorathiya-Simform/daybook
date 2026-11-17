@@ -92,7 +92,7 @@ export function largestAmountMessage(currency: CurrencyCode): string {
 const INSTANT =
 	/^(\d{4}-\d{2}-\d{2})T([01]\d|2[0-3]):([0-5]\d):([0-5]\d)(?:\.(\d{1,3}))?Z$/;
 
-function isInstant(text: string): boolean {
+export function isInstant(text: string): boolean {
 	const match = INSTANT.exec(text);
 	return match !== null && isIsoDate(match[1] as string);
 }

@@ -11,7 +11,7 @@ The Subscriptions page shows the monthly cost, what this month has charged and s
 | Milestone  | M2. Before M5, writes are online only: Save is disabled offline with "You are offline. Connect to save.", a failed save keeps the dialog open, and the app calls the boot endpoint once at start. From M5 the write queue (P1) adds offline writes, and boot step 5 calls the endpoint (D-241)      |
 | Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                                               |
 | Depends on | [F03](F03-transactions.md) (charges are Transactions), [F02](F02-onboarding-profile-settings.md) (time zone, today, week start), [P2](../platform/P2-data-access-and-security.md) (catch-up check, locks, request clock); P1 (write queue and boot sequence); F08, F10, F11, F13 read Subscriptions |
-| Decisions  | D-26, D-27, D-70 to D-72, D-90 to D-96, D-181, D-213, D-219, D-224, D-236, D-239, D-241, D-244, D-250 to D-257, D-265, D-267, D-269, D-270, D-347, D-580, D-589 to D-599                                                                                                                            |
+| Decisions  | D-26, D-27, D-70 to D-72, D-90 to D-96, D-181, D-213, D-219, D-224, D-236, D-239, D-241, D-244, D-250 to D-257, D-265, D-267, D-269, D-270, D-347, D-580, D-589 to D-601                                                                                                                            |
 
 ## 1. User stories
 
@@ -203,8 +203,8 @@ A queued change therefore never reaches back past a change applied before it, an
 
 **Upcoming renewals (D-95, D-254)**
 
-- **BR-F05-19** Next due is the earliest chargeable date on or after today with no charge and no tombstone. Paused dates are never chargeable, so a paused Subscription's next due is the first date after its pause. Golden: Netflix 2026-11-05, Cult Gym 2026-11-10, Sunrise Apartments 2026-12-01 (1 November is already charged), Amazon Prime 2027-10-12.
-- **BR-F05-20** The upcoming list holds every such date from today through today + 30 days, inclusive, so weekly Subscriptions appear up to five times. It is sorted by date, then name, each entry with the current amount, and shows a count and a total. Ended Subscriptions add nothing. Golden: Netflix 5 Nov, Cult Gym 10 Nov, Sunrise Apartments 1 Dec, 3 charges, total 20,149.00. F10's renewals insight uses the same function with 7 days: Netflix only.
+- **BR-F05-19** Next due is the earliest chargeable date on or after today with no charge and no tombstone. Paused dates are never chargeable, so a paused Subscription's next due is the first date after its pause. The search reaches 120 months ahead; a Subscription with no such date by then has none. Golden: Netflix 2026-11-05, Cult Gym 2026-11-10, Sunrise Apartments 2026-12-01 (1 November is already charged), Amazon Prime 2027-10-12.
+- **BR-F05-20** The upcoming list holds every such date from today through today + 30 days, inclusive, so weekly Subscriptions appear up to five times. It is sorted by date, then name (compared in lower case by code unit, then by id), each entry with the current amount, and shows a count and a total. Ended Subscriptions add nothing. Golden: Netflix 5 Nov, Cult Gym 10 Nov, Sunrise Apartments 1 Dec, 3 charges, total 20,149.00. F10's renewals insight uses the same function with 7 days: Netflix only.
 
 **The page and dialogs** (D-593)
 
@@ -274,7 +274,7 @@ A queued change therefore never reaches back past a change applied before it, an
     - **Skipped dates** inside a pause stay skipped.
 - **BR-F05-29** A pause is set through `PATCH` with `pause`, and follows BR-F05-08:
     - **A new pause:** `from` must be the first chargeable due date after C with no tombstone (the next due date when sent online), and `until` after `from` and no more than 24 months after today.
-    - **A pause in force** (stored `from` on or before C and `until` on or after C) keeps its `from` and may move `until` to any date on or after C. Resume now sends `until` = C, so C itself is charged when it is a due date; Change pause sends the new `until`. Before a pause starts, Resume now sends `pause: null` and Change pause a new pause.
+    - **A pause in force** (stored `from` on or before C and `until` on or after C) keeps its `from` and may move `until` to any date on or after C. Resume now sends `until` = C, so C itself is charged when it is a due date; Change pause sends the new `until`. Before a pause starts, or on its first day when nothing has been paused yet, Resume now sends `pause: null` (D-600); Change pause then sends a new pause.
     - **Clearing or replacing a started pause:** when a write sets `pause` to `null`, or to one with a different `from`, while the stored pause's `from` is on or before C, `chargesFrom` becomes the later of its current value and the earlier of the stored `until` and C. Dates it paused are therefore never charged afterwards.
     - **Charges on paused dates:** step 3 deletes the unedited linked charges on dates the new pause covers, on or after C. They exist only after a late sync, or when Undo puts back a pause that Resume now had shortened (BR-F05-08 step 2).
     - **Refusals:** 422 with "Choose a date with a charge to pause from." for a bad `from`, "Choose a date after 5 Nov." for an `until` not after `from`, and "Choose a date up to 2 Nov 2028." past the limit.
@@ -324,7 +324,7 @@ A queued change therefore never reaches back past a change applied before it, an
     - `chargedMinor` is BR-F05-18's charged figure for that month;
     - `expectedMinor` is the month's chargeable dates on or after today with no charge and no tombstone, at current amounts: 0 for a past month.
 
-    `from` must not be after `to`, the span is at most 24 months, and both lie within 120 months of the current month (D-596); otherwise 400. Golden: October 20,148.00 and 0; November 18,000.00 and 2,149.00; December 0 and 20,149.00.
+    `from` must not be after `to`, the span is at most 24 months, and both lie within 120 months of the current month (D-596); otherwise 400, a window miss with "Choose months from Nov 2016 to Nov 2036.". Golden: October 20,148.00 and 0; November 18,000.00 and 2,149.00; December 0 and 20,149.00.
 
 **The page in detail** (D-593, D-594)
 
@@ -527,7 +527,7 @@ The 5 November charge ends up with both changes.
 | Custom cadence                 | 1 to 52 weeks, or 1 to 24 months                     | Enter how many weeks, from 1 to 52. / Enter how many months, from 1 to 24.                                           |
 | Category                       | Required, an expense category                        | Choose a category.                                                                                                   |
 | Started on                     | Within 10 years before to 1 year after today         | Choose a date from 2 Nov 2016 to 2 Nov 2027.                                                                         |
-| End date                       | On or after Started on, within 10 years of today     | The end date can't be before the start date.                                                                         |
+| End date                       | On or after Started on, within 10 years of today     | The end date can't be before the start date. / Choose an end date up to 2 Nov 2036.                                  |
 | `createdAt` or `changedAt`     | 90 days before to 5 minutes after `ctx.now`          | This change is too old to apply. Discard it and make it again.                                                       |
 | Skip                           | A chargeable due date after the change date          | Only an upcoming charge can be skipped. / This charge was edited, so it stays. Delete it in Transactions to skip it. |
 | Undo skip                      | Its date is after the change date                    | This charge date has passed, so it can't be brought back.                                                            |
@@ -581,7 +581,7 @@ None.
 | `/api/subscriptions/months`             | GET    | `from`, `to` (BR-F05-36)                                                                                                                                                                                                                                                                     | `{ months: [{ month, chargedMinor, expectedMinor }], currency }`                                                                            | 400, 401, 403 `profile_required`                                          | Read                                                    |
 | `/api/sync/catch-up`                    | POST   | `{}`                                                                                                                                                                                                                                                                                         | `{ skipped, chargesCreated, pricesUpdated }`                                                                                                | 401, 403 `profile_required`                                               | Exempt from `Idempotency-Key` (API-3); `catchUp: false` |
 
-Each item in `items` carries its stored fields and BR-F05-35's: `skips`, `nextDueOn`, `status`, `yearlyMinor`, `monthlyMinor`, `chargeCount`, `paidMinor`. Each entry of `upcoming` is `{ subscriptionId, dueOn, amountMinor }`.
+The create and change answers carry the counts beside the Subscription's own fields, not in a wrapper (D-601). Each item in `items` carries its stored fields and BR-F05-35's: `skips`, `nextDueOn`, `status`, `yearlyMinor`, `monthlyMinor`, `chargeCount`, `paidMinor`. Each entry of `upcoming` is `{ subscriptionId, dueOn, amountMinor }`.
 
 **Shared functions**
 
@@ -675,7 +675,7 @@ The request clock is frozen per test. Steps that need a later day move it explic
 - **AC-F05-25** (integration) Section 5's several queued changes: both items get C = 4 November, and the 5 November charge ends up at 799.00 in Shopping.
 - **AC-F05-26** (unit) Status takes the first match in section 3's order: an `endDate` of today is `ended`; a pause whose `until` is today is not `paused`; an upcoming Subscription with a pause is `upcoming`.
 - **AC-F05-27** (integration) Late skips on golden Netflix: a skip of 5 November with `changedAt` on 3 November, synced on 6 November after another device created the 5 November charge, deletes that charge and writes the tombstone; with that charge edited, it returns 422. An Undo skip of 5 November with `changedAt` on 3 November, synced on 6 November, charges 5 November. A repeated skip and an Undo skip of a date with no tombstone each answer 200 without a version change.
-- **AC-F05-28** (integration) Pause refusals: a `from` that is not the next due date, an `until` not after `from`, and an `until` past 24 months each return 422. Paused from 5 November to 5 January, Resume now on 5 December charges 5 December; its Undo the same day puts the pause back and deletes that charge.
+- **AC-F05-28** (integration) Pause refusals: a `from` that is not the next due date, an `until` not after `from`, and an `until` past 24 months each return 422. Paused from 5 November to 5 January, Resume now on 5 December charges 5 December; its Undo the same day puts the pause back and deletes that charge. Resume now on 5 November itself clears the pause and charges 5 November.
 - **AC-F05-29** (integration) Undo of section 5's double-charge change, with `unskipDueOn` 2026-11-15, puts the start back to 2026-09-05 with no 15 November tombstone, and next due is 5 December.
 - **AC-F05-30** (integration) On golden at 2 November, Cancel "Now" on Netflix sets `endDate` 2026-11-02 with status `ended` and deletes nothing. After section 5's cancel in the past, a resume with "Restart from today", its Undo, and then a resume with `backfillGap` still create the 5 October charge.
 - **AC-F05-31** (client integration, M5) A queued cancel whose dialog showed 1 deletion and whose response has `chargesDeleted` 3 shows "Netflix: 2 more charges were removed when this change synced."

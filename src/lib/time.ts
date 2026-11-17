@@ -1,6 +1,7 @@
 import { tz } from "@date-fns/tz";
 import {
 	addDays,
+	addMonths,
 	differenceInCalendarDays,
 	format,
 	isValid,
@@ -51,4 +52,11 @@ export function daysInRange(from: string, to: string): number {
  * 2026-02-28 (BR-F03-62). */
 export function monthsBefore(date: string, months: number): string {
 	return writeDate(subMonths(readDate(date), months, { in: UTC }));
+}
+
+/** The calendar date `months` after `date` (before it when negative), as `YYYY-MM-DD`. A day
+ * the later month lacks clamps to its last day, as date-fns `addMonths` does: 2026-01-31 plus
+ * 1 month is 2026-02-28, and plus 2 months 2026-03-31 (BR-F05-01). */
+export function shiftMonths(date: string, months: number): string {
+	return writeDate(addMonths(readDate(date), months, { in: UTC }));
 }
