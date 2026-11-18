@@ -253,6 +253,7 @@ export async function changeSubscription(
 		|| skipRemoved !== null;
 	const unchanged: SubscriptionChanged = {
 		...item,
+		currency,
 		changeDate,
 		chargesCreated: 0,
 		chargesUpdated: 0,
@@ -399,6 +400,7 @@ export async function changeSubscription(
 	if (!answer) throw new ApiError("not_found");
 	return {
 		...answer,
+		currency,
 		changeDate,
 		chargesCreated,
 		chargesUpdated,

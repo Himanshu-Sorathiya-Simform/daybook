@@ -1,5 +1,6 @@
 import "server-only";
 import { sql } from "drizzle-orm";
+import type { CurrencyCode } from "@/lib/currency";
 import type { SubscriptionCreated } from "@/lib/subscriptions/answers";
 import { chargesFromOnCreate, recordingDateOf } from "@/lib/subscriptions/rules";
 import {
@@ -19,11 +20,12 @@ async function answer(
 	ctx: ProfiledContext,
 	id: string,
 	chargesCreated: number,
+	currency: CurrencyCode,
 ): Promise<SubscriptionCreated> {
 	const item = await getSubscriptionItem(tx, ctx, id);
 	// The row was just inserted, or read a moment ago under the profile lock.
 	if (!item) throw new ApiError("id_conflict");
-	return { ...item, chargesCreated };
+	return { ...item, chargesCreated, currency };
 }
 
 /**
@@ -57,7 +59,10 @@ export async function createSubscription(
 	const currency = await lockCurrency(tx);
 	const existing = await getSubscriptionItem(tx, ctx, body.id);
 	if (existing)
-		return { subscription: { ...existing, chargesCreated: 0 }, created: false };
+		return {
+			subscription: { ...existing, chargesCreated: 0, currency },
+			created: false,
+		};
 	if (body.currency !== currency) throw new ApiError("currency_mismatch");
 
 	const issues = createWindowIssues(body, {
@@ -95,7 +100,10 @@ export async function createSubscription(
 		// lookup (API-5); anyone else's stays hidden by RLS.
 		const raced = await getSubscriptionItem(tx, ctx, body.id);
 		if (!raced) throw new ApiError("id_conflict");
-		return { subscription: { ...raced, chargesCreated: 0 }, created: false };
+		return {
+			subscription: { ...raced, chargesCreated: 0, currency },
+			created: false,
+		};
 	}
 
 	const { created } = await catchUpSubscription(
@@ -118,5 +126,8 @@ export async function createSubscription(
 		},
 		{ through: ctx.today, skipped: [] },
 	);
-	return { subscription: await answer(tx, ctx, body.id, created), created: true };
+	return {
+		subscription: await answer(tx, ctx, body.id, created, currency),
+		created: true,
+	};
 }

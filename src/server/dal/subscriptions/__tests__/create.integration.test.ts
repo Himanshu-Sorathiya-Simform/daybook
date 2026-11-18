@@ -91,6 +91,7 @@ describe("creating a Subscription (section 7.1)", () => {
 			chargeCount: 0,
 			paidMinor: 0,
 			chargesCreated: 0,
+			currency: "INR",
 		});
 	});
 

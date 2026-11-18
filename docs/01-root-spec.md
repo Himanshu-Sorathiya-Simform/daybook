@@ -589,6 +589,8 @@ Default messages for every code are in P2, section 8. A feature spec may add its
 | `/api/budgets/[id]/overrides/[month]`                                                | DELETE (one one-month limit)                                    | F04          |
 | `/api/budgets/history`, `/api/budgets/summary`                                       | GET                                                             | F04          |
 | `/api/subscriptions`, `/api/subscriptions/[id]`                                      | GET, POST, PATCH, DELETE                                        | F05          |
+| `/api/subscriptions/[id]/skips`, `/api/subscriptions/[id]/skips/[dueOn]`             | POST (skip a charge), DELETE (bring it back)                    | F05          |
+| `/api/subscriptions/months`                                                          | GET                                                             | F05          |
 | `/api/goals`, `/api/goals/[id]`                                                      | GET, POST, PATCH, DELETE                                        | F06          |
 | `/api/goals/editable`                                                                | PUT (choose editable Goals after a lapse)                       | F06          |
 | `/api/investments/*`                                                                 | GET                                                             | F07          |

@@ -3,7 +3,8 @@ import { sql } from "drizzle-orm";
 import { isUuid } from "@/lib/ids";
 import { isIsoDate } from "@/lib/time";
 import { SUBSCRIPTION_MESSAGES as M } from "@/lib/subscriptions/messages";
-import type { SubscriptionItem } from "@/lib/subscriptions/answers";
+import type { CurrencyCode } from "@/lib/currency";
+import type { SubscriptionAnswer } from "@/lib/subscriptions/answers";
 import { changeDateOf, skipIssue, unskipIssue } from "@/lib/subscriptions/rules";
 import {
 	changedAtIssues,
@@ -41,11 +42,12 @@ async function answer(
 	tx: Tx,
 	ctx: ProfiledContext,
 	id: string,
-): Promise<SubscriptionItem> {
+	currency: CurrencyCode,
+): Promise<SubscriptionAnswer> {
 	const item = await getSubscriptionItem(tx, ctx, id);
 	// The row is locked by this transaction.
 	if (!item) throw new ApiError("not_found");
-	return item;
+	return { ...item, currency };
 }
 
 /**
@@ -66,7 +68,7 @@ export async function skipCharge(
 	id: string,
 	version: number,
 	input: unknown,
-): Promise<SubscriptionItem> {
+): Promise<SubscriptionAnswer> {
 	if (!isUuid(id)) throw new ApiError("not_found");
 	const parsed = subscriptionSkipSchema.safeParse(input);
 	if (!parsed.success) throw fromZodError(parsed.error);
@@ -81,7 +83,7 @@ export async function skipCharge(
 		version,
 		currency,
 	);
-	if (stored.skipped.includes(body.dueOn)) return item;
+	if (stored.skipped.includes(body.dueOn)) return { ...item, currency };
 
 	const changeDate = changeDateOf({
 		changedAt: body.changedAt,
@@ -109,7 +111,7 @@ export async function skipCharge(
 		);
 	}
 	await writeTombstone(tx, ctx, id, body.dueOn);
-	return answer(tx, ctx, id);
+	return answer(tx, ctx, id, currency);
 }
 
 /**
@@ -131,7 +133,7 @@ export async function unskipCharge(
 	dueOn: string,
 	version: number,
 	input: unknown,
-): Promise<SubscriptionItem> {
+): Promise<SubscriptionAnswer> {
 	if (!isUuid(id) || !isIsoDate(dueOn)) throw new ApiError("not_found");
 	const parsed = subscriptionUnskipSchema.safeParse(input);
 	if (!parsed.success) throw fromZodError(parsed.error);
@@ -146,7 +148,7 @@ export async function unskipCharge(
 		version,
 		currency,
 	);
-	if (!stored.skipped.includes(dueOn)) return item;
+	if (!stored.skipped.includes(dueOn)) return { ...item, currency };
 
 	const changeDate = changeDateOf({
 		changedAt: body.changedAt,
@@ -167,5 +169,5 @@ export async function unskipCharge(
 		through: ctx.today,
 		skipped: stored.skipped.filter((date) => date !== dueOn),
 	});
-	return answer(tx, ctx, id);
+	return answer(tx, ctx, id, currency);
 }

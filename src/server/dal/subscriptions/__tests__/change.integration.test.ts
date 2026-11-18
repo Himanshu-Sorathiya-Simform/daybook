@@ -391,6 +391,7 @@ describe("a change that changes nothing", () => {
 		}));
 		expect(result.answer).toEqual({
 			...result.before,
+			currency: "INR",
 			changeDate: "2026-11-02",
 			chargesCreated: 0,
 			chargesUpdated: 0,

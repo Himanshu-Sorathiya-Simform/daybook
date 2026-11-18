@@ -51,12 +51,16 @@ export type SubscriptionMonthsAnswer = {
 	currency: CurrencyCode;
 };
 
+/** A write's answer holding a Subscription: the item with the currency the write locked, since
+ * every response holding money carries it (API-6, D-493, D-609). */
+export type SubscriptionAnswer = SubscriptionItem & { currency: CurrencyCode };
+
 /** What a create adds to the Subscription it answers with (201, or 200 for a repeated id). */
-export type SubscriptionCreated = SubscriptionItem & { chargesCreated: number };
+export type SubscriptionCreated = SubscriptionAnswer & { chargesCreated: number };
 
 /** What a change adds to the Subscription it answers with (BR-F05-08): the change date, the
  * charges created, repriced and deleted, and every month whose charges changed. */
-export type SubscriptionChanged = SubscriptionItem & {
+export type SubscriptionChanged = SubscriptionAnswer & {
 	changeDate: string;
 	chargesCreated: number;
 	chargesUpdated: number;

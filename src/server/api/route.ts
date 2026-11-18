@@ -57,6 +57,8 @@ export type RouteInput<B> = {
 	params: Record<string, string | string[] | undefined>;
 	/** The `If-Match` version on a versioned route; `null` otherwise. */
 	version: number | null;
+	/** Whether the client says Subscription changes wait in its write queue (BR-F05-06). */
+	queuePending: boolean;
 };
 
 export type RouteHandler<B> = (
@@ -161,6 +163,7 @@ type Transaction<S extends z.ZodType | undefined> = {
 	hash: string | null;
 	url: URL;
 	params: RouteInput<unknown>["params"];
+	queueWaits: boolean;
 	handler: RouteHandler<BodyOf<S>>;
 };
 
@@ -176,6 +179,7 @@ async function answerInTransaction<S extends z.ZodType | undefined>(
 		hash,
 		url,
 		params,
+		queueWaits,
 		handler,
 	}: Transaction<S>,
 ): Promise<StoredAnswer> {
@@ -208,6 +212,7 @@ async function answerInTransaction<S extends z.ZodType | undefined>(
 		query: url.searchParams,
 		params,
 		version,
+		queuePending: queueWaits,
 	});
 	const success = successOf(result);
 	if (!recordId) return success;
@@ -270,7 +275,8 @@ export function route<S extends z.ZodType | undefined = undefined>(
 			if (!user) throw new ApiError("unauthenticated");
 
 			const { pricesUpdated } = await runDailyPassIfDue(now, { timing });
-			if (catchUp && !queuePending(request.headers)) {
+			const queueWaits = queuePending(request.headers);
+			if (catchUp && !queueWaits) {
 				await runCatchUpIfDue(user, now, { timing });
 			}
 
@@ -303,6 +309,7 @@ export function route<S extends z.ZodType | undefined = undefined>(
 						hash,
 						url,
 						params,
+						queueWaits,
 						handler,
 					}),
 				{ timing },

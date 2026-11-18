@@ -261,6 +261,9 @@ export const subscriptionUnskipSchema = z.strictObject({ changedAt: instant });
 export type SubscriptionUnskipBody = z.output<typeof subscriptionUnskipSchema>;
 export type SubscriptionUnskipInput = z.input<typeof subscriptionUnskipSchema>;
 
+/** `POST /api/sync/catch-up`: `{}` (BR-F05-06). */
+export const subscriptionCatchUpBodySchema = z.strictObject({});
+
 /** The `[dueOn]` of a skip's path. */
 export const skipDateParamSchema = date;
 
