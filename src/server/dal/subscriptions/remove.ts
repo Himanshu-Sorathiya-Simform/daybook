@@ -1,6 +1,7 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import type { Month } from "@/lib/budgets/months";
+import { compareCodeUnits } from "@/lib/compare";
 import { isUuid } from "@/lib/ids";
 import type { SubscriptionDeleted } from "@/lib/subscriptions/answers";
 import { changeDateOf } from "@/lib/subscriptions/rules";
@@ -111,6 +112,6 @@ export async function deleteSubscription(
 		chargesCreated,
 		chargesKept: safeInt((kept as { kept: string }).kept),
 		chargesDeleted: deleted.length,
-		months: [...months].sort(),
+		months: [...months].sort(compareCodeUnits),
 	};
 }

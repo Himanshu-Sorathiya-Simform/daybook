@@ -570,22 +570,34 @@ describe("races and locks (BR-F03-17)", () => {
 		const user = await fresh("remove-gone-both");
 		const ctx = goldenContext(user.userId);
 		const id = user.subscription("netflix");
-		await asUser(user.userId, (tx) =>
-			deleteTransaction(
-				afterStatement(tx, 2, async () => {
-					await owner.query("DELETE FROM app.transactions WHERE id = $1", [
-						user.id(16),
-					]);
-					await owner.query(
-						"DELETE FROM app.subscriptions WHERE id = $1",
-						[id],
-					);
-				}),
-				ctx,
-				user.id(16),
-				1,
+		const { result } = await asUser(user.userId, async (tx) => ({
+			outcome: await settled(
+				deleteTransaction(
+					afterStatement(tx, 2, async () => {
+						await owner.query(
+							"DELETE FROM app.transactions WHERE id = $1",
+							[user.id(16)],
+						);
+						await owner.query(
+							"DELETE FROM app.subscriptions WHERE id = $1",
+							[id],
+						);
+					}),
+					ctx,
+					user.id(16),
+					1,
+				),
 			),
+			row: await getTransaction(tx, user.id(16)),
+		}));
+		expect(result.outcome).toBe("done");
+		expect(result.row).toBeNull();
+		// Nothing is left to tombstone: the Subscription and its skips are gone with it.
+		const { rows } = await owner.query(
+			"SELECT count(*)::int AS n FROM app.subscription_skips WHERE user_id = $1 AND due_on = '2026-10-05'",
+			[user.userId],
 		);
+		expect(rows[0]).toEqual({ n: 0 });
 	});
 
 	test("a charge deleted by another device after the read is 404, and writes no tombstone", async () => {

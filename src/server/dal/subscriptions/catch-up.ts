@@ -1,6 +1,7 @@
 import "server-only";
 import { sql } from "drizzle-orm";
 import type { Month } from "@/lib/budgets/months";
+import { compareCodeUnits } from "@/lib/compare";
 import { uuidV7 } from "@/lib/ids";
 import { toOccurred } from "@/lib/transactions/occurred";
 import type { SubscriptionRecord } from "@/lib/subscriptions/model";
@@ -89,7 +90,9 @@ export async function insertCharges(
 		ON CONFLICT DO NOTHING
 		RETURNING to_char(occurred_on, 'YYYY-MM') AS month`,
 	);
-	const months = [...new Set(inserted.map((row) => row.month))].sort();
+	const months = [...new Set(inserted.map((row) => row.month))].sort(
+		compareCodeUnits,
+	);
 	return { created: inserted.length, months };
 }
 

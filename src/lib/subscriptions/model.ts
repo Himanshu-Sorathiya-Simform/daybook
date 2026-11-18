@@ -289,19 +289,17 @@ export type MonthItem = {
 	chargeId: string | null;
 };
 
-/**
- * Everything in `month`, for the calendar (BR-F05-38): every charge (deleted Subscriptions'
- * too); tombstoned due dates from `chargesFrom` to the end date; paused due dates from today
- * on; and chargeable dates from today on with no charge and no tombstone. Sorted by date, then
- * amount, largest first, then name. `pending` marks a Subscription that is not synced yet.
- */
-export function monthItems(
-	subscriptions: readonly (SubscriptionRecord
-		& Pick<DatedWith, "skipped"> & { pending?: boolean })[],
+/** A Subscription as the calendar reads it; `pending` marks one that is not synced yet. */
+type MonthSubscription = SubscriptionRecord
+	& Pick<DatedWith, "skipped"> & { pending?: boolean };
+
+/** Every charge in `month`, deleted Subscriptions' too, with the `id date` of each one that
+ * belongs to a Subscription, so its due date is not shown a second time. */
+function chargeItems(
+	subscriptions: readonly MonthSubscription[],
 	charges: readonly MonthCharge[],
 	month: Month,
-	today: string,
-): MonthItem[] {
+): { items: MonthItem[]; charged: Set<string> } {
 	const items: MonthItem[] = [];
 	const byId = new Map(subscriptions.map((each) => [each.id, each]));
 	const charged = new Set<string>();
@@ -323,31 +321,66 @@ export function monthItems(
 		if (charge.subscriptionId !== null)
 			charged.add(`${charge.subscriptionId} ${charge.occurredOn}`);
 	}
+	return { items, charged };
+}
+
+/** What a chargeable due date with no charge shows as (BR-F05-38): `skipped` for a tombstone,
+ * else from today on `paused` inside a pause, `pending` for an unsynced Subscription, or
+ * `due`; `null` for a past date with neither a charge nor a tombstone. */
+function dueKind(
+	subscription: MonthSubscription,
+	skipped: ReadonlySet<string>,
+	date: string,
+	today: string,
+): MonthItemKind | null {
+	if (skipped.has(date)) return "skipped";
+	if (date < today) return null;
+	if (inPause(subscription.pause, date)) return "paused";
+	return subscription.pending ? "pending" : "due";
+}
+
+/** The items of `subscription`'s due dates in `month` that have no charge (BR-F05-38). */
+function dueItems(
+	subscription: MonthSubscription,
+	month: Month,
+	today: string,
+	charged: ReadonlySet<string>,
+): MonthItem[] {
+	const skipped = new Set(subscription.skipped);
+	const items: MonthItem[] = [];
+	for (const date of dueDates(subscription, firstDayOf(month), lastDayOf(month))) {
+		if (charged.has(`${subscription.id} ${date}`)) continue;
+		if (!isChargeable(subscription, date, { ignorePause: true })) continue;
+		const kind = dueKind(subscription, skipped, date, today);
+		if (kind === null) continue;
+		items.push({
+			date,
+			kind,
+			subscriptionId: subscription.id,
+			name: subscription.name,
+			category: subscription.category,
+			amountMinor: subscription.amountMinor,
+			chargeId: null,
+		});
+	}
+	return items;
+}
+
+/**
+ * Everything in `month`, for the calendar (BR-F05-38): every charge (deleted Subscriptions'
+ * too); tombstoned due dates from `chargesFrom` to the end date; paused due dates from today
+ * on; and chargeable dates from today on with no charge and no tombstone. Sorted by date, then
+ * amount, largest first, then name. `pending` marks a Subscription that is not synced yet.
+ */
+export function monthItems(
+	subscriptions: readonly MonthSubscription[],
+	charges: readonly MonthCharge[],
+	month: Month,
+	today: string,
+): MonthItem[] {
+	const { items, charged } = chargeItems(subscriptions, charges, month);
 	for (const subscription of subscriptions) {
-		const skipped = new Set(subscription.skipped);
-		for (const date of dueDates(
-			subscription,
-			firstDayOf(month),
-			lastDayOf(month),
-		)) {
-			if (charged.has(`${subscription.id} ${date}`)) continue;
-			if (!isChargeable(subscription, date, { ignorePause: true })) continue;
-			let kind: MonthItemKind | null = null;
-			if (skipped.has(date)) kind = "skipped";
-			else if (date >= today && inPause(subscription.pause, date))
-				kind = "paused";
-			else if (date >= today) kind = subscription.pending ? "pending" : "due";
-			if (kind === null) continue;
-			items.push({
-				date,
-				kind,
-				subscriptionId: subscription.id,
-				name: subscription.name,
-				category: subscription.category,
-				amountMinor: subscription.amountMinor,
-				chargeId: null,
-			});
-		}
+		items.push(...dueItems(subscription, month, today, charged));
 	}
 	return items.sort(
 		(a, b) =>

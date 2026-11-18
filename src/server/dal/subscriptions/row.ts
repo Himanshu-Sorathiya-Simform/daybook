@@ -16,6 +16,8 @@ import { iso } from "../transactions/row";
  * pause are rebuilt as objects from their two columns each (D-598). */
 function subscriptionJson(alias: string): string {
 	const a = alias;
+	const createdAt = iso(`${a}.created_at`);
+	const updatedAt = iso(`${a}.updated_at`);
 	return `json_build_object(
 		'id', ${a}.id, 'name', ${a}.name, 'amountMinor', ${a}.amount_minor::text,
 		'cadence', json_build_object('unit', ${a}.cadence_unit, 'every', ${a}.cadence_every),
@@ -25,7 +27,7 @@ function subscriptionJson(alias: string): string {
 			json_build_object('from', ${a}.pause_from::text, 'until', ${a}.pause_until::text) END,
 		'chargesFrom', ${a}.charges_from::text, 'lastChangeOn', ${a}.last_change_on::text,
 		'demo', ${a}.demo, 'version', ${a}.version,
-		'createdAt', ${iso(`${a}.created_at`)}, 'updatedAt', ${iso(`${a}.updated_at`)})`;
+		'createdAt', ${createdAt}, 'updatedAt', ${updatedAt})`;
 }
 
 /** What a read of Subscriptions needs of each: its stored fields, its tombstones, the due dates

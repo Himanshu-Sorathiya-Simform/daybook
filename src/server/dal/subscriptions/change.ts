@@ -1,50 +1,33 @@
 import "server-only";
 import { type SQL, sql } from "drizzle-orm";
 import type { Month } from "@/lib/budgets/months";
+import { compareCodeUnits } from "@/lib/compare";
 import { isUuid, uuidV7 } from "@/lib/ids";
-import { SUBSCRIPTION_MESSAGES as M } from "@/lib/subscriptions/messages";
 import type { SubscriptionChanged } from "@/lib/subscriptions/answers";
-import type { SubscriptionRecord } from "@/lib/subscriptions/model";
 import {
-	changeDateOf,
-	chargesFromAfterEnd,
-	chargesFromAfterPause,
-	chargesFromAfterSchedule,
-	doubleChargeSkipIssue,
-	endMovesEarlier,
+	type ChangeCheck,
+	type ChangePlan,
+	changeIssues,
+	doomedCharges,
+	type LaterCharge,
+	planChange,
+} from "@/lib/subscriptions/change-plan";
+import {
 	type FieldIssue,
-	pauseIssue,
-	skipsOffSchedule,
+	changeDateOf,
 	step2Through,
-	unskipIssue,
 } from "@/lib/subscriptions/rules";
 import {
 	changedAtIssues,
-	editWindowIssues,
-	endDateIssues,
 	subscriptionEditSchema,
 } from "@/lib/subscriptions/schemas";
-import {
-	type Cadence,
-	isChargeable,
-	isDueDate,
-	type Pause,
-	sameCadence,
-} from "@/lib/subscriptions/schedule";
 import { ApiError, fromZodError } from "../../api/errors";
 import type { ProfiledContext } from "../context";
 import { lockCurrency, requireCurrency } from "../currency";
 import type { Tx } from "../with-user";
-import { catchUpSubscription, chargeContext } from "./catch-up";
+import { catchUpSubscription, chargeContext, type Created } from "./catch-up";
 import { lockSubscription } from "./lock";
 import { getSubscriptionItem } from "./read";
-
-/** A charge on or after the change date C, as the change decides what to do with it. */
-type LaterCharge = { id: string; dueOn: string; edited: boolean };
-
-const samePause = (a: Pause | null, b: Pause | null) =>
-	a === b
-	|| (a !== null && b !== null && a.from === b.from && a.until === b.until);
 
 /** Raises 422 `validation_failed` for `issues`, one message per field, the first one found. */
 function refuse(issues: readonly FieldIssue[]): void {
@@ -62,6 +45,137 @@ const monthsOf = (rows: readonly { month: Month }[]): Month[] => [
 /** A list of ids or dates as one JSON parameter, for `jsonb_array_elements_text`. */
 const jsonList = (values: readonly string[]): SQL =>
 	sql`${JSON.stringify(values)}::jsonb`;
+
+/** What a change counts as it goes: the charges created, repriced and deleted, and every month
+ * they fall in. */
+type Tally = {
+	created: number;
+	updated: number;
+	deleted: number;
+	months: Set<Month>;
+};
+
+const addMonths = (tally: Tally, months: Iterable<Month>) => {
+	for (const month of months) tally.months.add(month);
+};
+
+/** Counts the charges a catch-up created. */
+const addCreated = (tally: Tally, made: Created) => {
+	tally.created += made.created;
+	addMonths(tally, made.months);
+};
+
+/** The charges on or after `from`, which the change may delete or reprice. */
+async function laterCharges(
+	tx: Tx,
+	id: string,
+	from: string,
+): Promise<LaterCharge[]> {
+	const { rows } = await tx.execute<LaterCharge>(
+		sql`SELECT id, due_on::text AS "dueOn", edited FROM app.transactions
+		WHERE subscription_id = ${id}::uuid AND due_on >= ${from}::date`,
+	);
+	return rows;
+}
+
+/**
+ * Step 3's writes to the charges: deletes the unedited charges the new state no longer has and
+ * the one on a skipped date (BR-F05-11, BR-F05-12, BR-F05-29, BR-F05-31); reprices the unedited
+ * ones after C when the name, amount or category changes (BR-F05-10); and, with
+ * `alsoPastCharges`, renames and recategorizes those on or before C.
+ */
+async function applyToCharges(
+	tx: Tx,
+	id: string,
+	now: string,
+	check: Pick<ChangeCheck, "body" | "plan" | "later" | "changeDate">,
+	tally: Tally,
+): Promise<void> {
+	const { body, plan, later, changeDate } = check;
+	const { next, changed } = plan;
+	const doomed = doomedCharges(later, check);
+	if (doomed.length > 0) {
+		const { rows } = await tx.execute<{ month: Month }>(
+			sql`DELETE FROM app.transactions
+			WHERE subscription_id = ${id}::uuid
+				AND id IN (SELECT jsonb_array_elements_text(${jsonList(doomed)})::uuid)
+			RETURNING to_char(occurred_on, 'YYYY-MM') AS month`,
+		);
+		tally.deleted += rows.length;
+		addMonths(tally, monthsOf(rows));
+	}
+
+	if (plan.valuesChanged) {
+		const { rows } = await tx.execute<{ month: Month }>(
+			sql`UPDATE app.transactions SET amount_minor = ${String(next.amountMinor)}::bigint,
+				category = ${next.category}, payee = ${next.name},
+				version = version + 1, updated_at = ${now}
+			WHERE subscription_id = ${id}::uuid AND due_on > ${changeDate}::date AND NOT edited
+				AND (amount_minor, category, payee) IS DISTINCT FROM
+					(${String(next.amountMinor)}::bigint, ${next.category}::text, ${next.name}::text)
+			RETURNING to_char(occurred_on, 'YYYY-MM') AS month`,
+		);
+		tally.updated += rows.length;
+		addMonths(tally, monthsOf(rows));
+	}
+	if (body.alsoPastCharges === true && (changed.name || changed.category)) {
+		const { rows } = await tx.execute<{ month: Month }>(
+			sql`UPDATE app.transactions SET category = ${next.category}, payee = ${next.name},
+				version = version + 1, updated_at = ${now}
+			WHERE subscription_id = ${id}::uuid AND due_on <= ${changeDate}::date AND NOT edited
+				AND (category, payee) IS DISTINCT FROM (${next.category}::text, ${next.name}::text)
+			RETURNING to_char(occurred_on, 'YYYY-MM') AS month`,
+		);
+		tally.updated += rows.length;
+		addMonths(tally, monthsOf(rows));
+	}
+}
+
+/** The tombstones: off the new schedule after C, the one skipped, the one brought back. */
+async function writeTombstones(
+	tx: Tx,
+	ctx: ProfiledContext,
+	id: string,
+	plan: ChangePlan,
+	now: string,
+): Promise<void> {
+	if (plan.gone.size > 0) {
+		await tx.execute(
+			sql`DELETE FROM app.subscription_skips
+			WHERE subscription_id = ${id}::uuid
+				AND due_on IN (SELECT jsonb_array_elements_text(${jsonList([...plan.gone])})::date)`,
+		);
+	}
+	if (plan.skipAdded !== null) {
+		await tx.execute(
+			sql`INSERT INTO app.subscription_skips (id, user_id, created_at, updated_at,
+				subscription_id, due_on)
+			VALUES (${uuidV7(ctx.now.getTime())}, ${ctx.user.id}, ${now}, ${now}, ${id}::uuid,
+				${plan.skipAdded}::date)
+			ON CONFLICT DO NOTHING`,
+		);
+	}
+}
+
+/** Saves the Subscription's new values, raising `version` by one. */
+async function saveSubscription(
+	tx: Tx,
+	id: string,
+	{ next }: ChangePlan,
+	lastChangeOn: string,
+	now: string,
+): Promise<void> {
+	await tx.execute(
+		sql`UPDATE app.subscriptions SET name = ${next.name}, amount_minor = ${String(next.amountMinor)}::bigint,
+			cadence_unit = ${next.cadence.unit}, cadence_every = ${next.cadence.every},
+			start_date = ${next.startDate}::date, category = ${next.category}, note = ${next.note},
+			end_date = ${next.endDate}::date, pause_from = ${next.pause?.from ?? null}::date,
+			pause_until = ${next.pause?.until ?? null}::date, charges_from = ${next.chargesFrom}::date,
+			last_change_on = ${lastChangeOn}::date,
+			version = version + 1, updated_at = ${now}
+		WHERE id = ${id}::uuid`,
+	);
+}
 
 /**
  * Changes a Subscription at `If-Match` `version` (F05 section 11, BR-F05-08 to BR-F05-14,
@@ -82,6 +196,9 @@ const jsonList = (values: readonly string[]): SQL =>
  *    the new values. A change to the note alone only saves the note (BR-F05-09).
  * The answer is the Subscription as the list shows it, with the change date, the charges
  * created, repriced and deleted, and every month those charges fall in (BR-F05-08).
+ *
+ * What the change decides, from the body and the stored Subscription, is `planChange`'s, and
+ * its refusals `changeIssues`'s; this function reads, writes and keeps the order.
  */
 export async function changeSubscription(
 	tx: Tx,
@@ -114,290 +231,61 @@ export async function changeSubscription(
 		timezone: ctx.profile.timezone,
 		now: ctx.now,
 	});
-	const today = ctx.today;
-
-	// What the write really changes: a field sent with its stored value is no change.
-	const nameChanged = body.name !== undefined && body.name !== stored.name;
-	const amountChanged =
-		body.amountMinor !== undefined && body.amountMinor !== stored.amountMinor;
-	const categoryChanged =
-		body.category !== undefined && body.category !== stored.category;
-	const noteChanged = body.note !== undefined && body.note !== stored.note;
-	const cadenceChanged =
-		body.cadence !== undefined && !sameCadence(body.cadence, stored.cadence);
-	const startChanged =
-		body.startDate !== undefined && body.startDate !== stored.startDate;
-	const endChanged = body.endDate !== undefined && body.endDate !== stored.endDate;
-	const pauseChanged =
-		body.pause !== undefined && !samePause(body.pause, stored.pause);
-	const scheduleChanged = cadenceChanged || startChanged;
-	const valuesChanged = nameChanged || amountChanged || categoryChanged;
-
-	const startDate = startChanged ? (body.startDate as string) : stored.startDate;
-	const cadence: Cadence =
-		cadenceChanged ? (body.cadence as Cadence) : stored.cadence;
-	const endDate = endChanged ? (body.endDate as string | null) : stored.endDate;
-	const pause = pauseChanged ? (body.pause as Pause | null) : stored.pause;
-
-	// chargesFrom after the schedule and the end date (BR-F05-11, BR-F05-13, BR-F05-32), then
-	// after the pause (BR-F05-29).
-	let chargesFrom = stored.chargesFrom;
-	if (scheduleChanged) {
-		chargesFrom = chargesFromAfterSchedule({ startDate, changeDate });
-	}
-	if (endChanged) {
-		chargesFrom = chargesFromAfterEnd({
-			chargesFrom,
-			startDate,
-			storedEndDate: stored.endDate,
-			newEndDate: endDate,
-			changeDate,
-			backfillGap: body.backfillGap === true,
-		});
-	}
-	const chargesFromBeforePause = chargesFrom;
-	if (pauseChanged) {
-		chargesFrom = chargesFromAfterPause({
-			chargesFrom,
-			storedPause: stored.pause,
-			newPause: pause,
-			changeDate,
-		});
-	}
-
-	const next: SubscriptionRecord = {
-		...stored,
-		name: nameChanged ? (body.name as string) : stored.name,
-		amountMinor:
-			amountChanged ? (body.amountMinor as number) : stored.amountMinor,
-		category:
-			categoryChanged ?
-				(body.category as typeof stored.category)
-			:	stored.category,
-		note: noteChanged ? (body.note as string | null) : stored.note,
-		cadence,
-		startDate,
-		endDate,
-		pause,
-		chargesFrom,
-	};
-
-	// An end date set or moved earlier deletes the unedited charges due after it, even when they
-	// fall before C (BR-F05-12).
-	const endCut =
-		endChanged && endMovesEarlier(stored.endDate, endDate) ? endDate : null;
-	const prune = scheduleChanged || pauseChanged || endCut !== null;
-	const needsCharges = prune || body.skipDueOn !== undefined;
-	const laterFrom = endCut !== null && endCut < changeDate ? endCut : changeDate;
-	const later: LaterCharge[] =
-		needsCharges ?
-			(
-				await tx.execute<LaterCharge>(
-					sql`SELECT id, due_on::text AS "dueOn", edited FROM app.transactions
-					WHERE subscription_id = ${id}::uuid AND due_on >= ${laterFrom}::date`,
-				)
-			).rows
-		:	[];
-
-	const issues: FieldIssue[] = editWindowIssues(
-		{
-			startDate: startChanged ? startDate : undefined,
-			endDate: endChanged ? endDate : undefined,
-		},
-		changeDate,
+	const plan = planChange(body, stored, changeDate);
+	const later =
+		plan.needsCharges ? await laterCharges(tx, id, plan.laterFrom) : [];
+	refuse(
+		changeIssues({ body, stored, plan, changeDate, today: ctx.today, later }),
 	);
-	if (startChanged || endChanged)
-		issues.push(...endDateIssues(startDate, endDate));
-	if (pauseChanged && pause !== null) {
-		const found = pauseIssue({
-			subscription: {
-				...next,
-				chargesFrom: chargesFromBeforePause,
-				pause: stored.pause,
-			},
-			skipped: stored.skipped,
-			next: pause,
+
+	if (!plan.isChange) {
+		return {
+			...item,
+			currency,
 			changeDate,
-			today,
-		});
-		if (found) issues.push(found);
+			chargesCreated: 0,
+			chargesUpdated: 0,
+			chargesDeleted: 0,
+			months: [],
+		};
 	}
-	if (body.skipDueOn !== undefined) {
-		const found = doubleChargeSkipIssue(next, body.skipDueOn, changeDate);
-		if (found) issues.push({ path: ["skipDueOn"], message: found });
-		else if (later.some((c) => c.dueOn === body.skipDueOn && c.edited)) {
-			issues.push({ path: ["skipDueOn"], message: M.skipEdited });
-		}
-	}
-	// A date with no tombstone changes nothing, whatever its date (D-612); a tombstone on or
-	// before C stays.
-	if (
-		body.unskipDueOn !== undefined
-		&& stored.skipped.includes(body.unskipDueOn)
-	) {
-		const found = unskipIssue(body.unskipDueOn, changeDate);
-		if (found) issues.push({ path: ["unskipDueOn"], message: found });
-	}
-	refuse(issues);
 
-	const skipAdded =
-		body.skipDueOn !== undefined && !stored.skipped.includes(body.skipDueOn) ?
-			body.skipDueOn
-		:	null;
-	const skipRemoved =
-		body.unskipDueOn !== undefined && stored.skipped.includes(body.unskipDueOn) ?
-			body.unskipDueOn
-		:	null;
-	const changed =
-		valuesChanged
-		|| noteChanged
-		|| scheduleChanged
-		|| endChanged
-		|| pauseChanged
-		|| skipAdded !== null
-		|| skipRemoved !== null;
-	const unchanged: SubscriptionChanged = {
-		...item,
-		currency,
-		changeDate,
-		chargesCreated: 0,
-		chargesUpdated: 0,
-		chargesDeleted: 0,
-		months: [],
-	};
-	if (!changed) return unchanged;
-
-	const noteOnly =
-		noteChanged
-		&& !valuesChanged
-		&& !scheduleChanged
-		&& !endChanged
-		&& !pauseChanged
-		&& skipAdded === null
-		&& skipRemoved === null;
 	const now = ctx.now.toISOString();
-	const months = new Set<Month>();
-	let chargesCreated = 0;
-	let chargesUpdated = 0;
-	let chargesDeleted = 0;
-	const cctx = chargeContext(ctx);
-
+	const tally: Tally = { created: 0, updated: 0, deleted: 0, months: new Set() };
+	const { next, noteOnly } = plan;
 	if (!noteOnly) {
 		// Step 2: close the old period with the old values.
-		const closed = await catchUpSubscription(tx, cctx, stored, {
+		const closed = await catchUpSubscription(tx, chargeContext(ctx), stored, {
 			through: step2Through({
 				changeDate,
 				storedEndDate: stored.endDate,
-				newEndDate: endChanged ? endDate : undefined,
+				newEndDate: plan.changed.end ? next.endDate : undefined,
 				storedPause: stored.pause,
-				newPause: pauseChanged ? pause : undefined,
+				newPause: plan.changed.pause ? next.pause : undefined,
 			}),
 			skipped: stored.skipped,
 		});
-		chargesCreated += closed.created;
-		for (const month of closed.months) months.add(month);
+		addCreated(tally, closed);
+		// Step 3: apply.
+		await applyToCharges(tx, id, now, { body, plan, later, changeDate }, tally);
 	}
 
-	// Step 3: apply.
-	if (!noteOnly) {
-		// Charges the new state no longer has: unedited ones after the end date, and those after C that
-		// are off the new schedule, before `chargesFrom` or in the pause, and those on a pause's dates from
-		// C on (BR-F05-11, BR-F05-12, BR-F05-29); the unedited charge on a date skipped by
-		// `skipDueOn` (BR-F05-31).
-		const doomed = new Set<string>();
-		for (const charge of later) {
-			if (charge.edited) continue;
-			const lapsed =
-				(endCut !== null && charge.dueOn > endCut)
-				|| (prune
-					&& (charge.dueOn > changeDate || inNewPause(pause, charge.dueOn))
-					&& (!isChargeable(next, charge.dueOn)
-						|| (scheduleChanged && !isDueDate(next, charge.dueOn))));
-			if (lapsed || charge.dueOn === body.skipDueOn) doomed.add(charge.id);
-		}
-		if (doomed.size > 0) {
-			const { rows } = await tx.execute<{ month: Month }>(
-				sql`DELETE FROM app.transactions
-				WHERE subscription_id = ${id}::uuid
-					AND id IN (SELECT jsonb_array_elements_text(${jsonList([...doomed])})::uuid)
-				RETURNING to_char(occurred_on, 'YYYY-MM') AS month`,
-			);
-			chargesDeleted += rows.length;
-			for (const month of monthsOf(rows)) months.add(month);
-		}
-
-		if (valuesChanged) {
-			const { rows } = await tx.execute<{ month: Month }>(
-				sql`UPDATE app.transactions SET amount_minor = ${String(next.amountMinor)}::bigint,
-					category = ${next.category}, payee = ${next.name},
-					version = version + 1, updated_at = ${now}
-				WHERE subscription_id = ${id}::uuid AND due_on > ${changeDate}::date AND NOT edited
-					AND (amount_minor, category, payee) IS DISTINCT FROM
-						(${String(next.amountMinor)}::bigint, ${next.category}::text, ${next.name}::text)
-				RETURNING to_char(occurred_on, 'YYYY-MM') AS month`,
-			);
-			chargesUpdated += rows.length;
-			for (const month of monthsOf(rows)) months.add(month);
-		}
-		if (body.alsoPastCharges === true && (nameChanged || categoryChanged)) {
-			const { rows } = await tx.execute<{ month: Month }>(
-				sql`UPDATE app.transactions SET category = ${next.category}, payee = ${next.name},
-					version = version + 1, updated_at = ${now}
-				WHERE subscription_id = ${id}::uuid AND due_on <= ${changeDate}::date AND NOT edited
-					AND (category, payee) IS DISTINCT FROM (${next.category}::text, ${next.name}::text)
-				RETURNING to_char(occurred_on, 'YYYY-MM') AS month`,
-			);
-			chargesUpdated += rows.length;
-			for (const month of monthsOf(rows)) months.add(month);
-		}
-	}
-
-	// The tombstones: off the new schedule after C, the one skipped, the one brought back.
-	const gone = new Set<string>();
-	if (scheduleChanged) {
-		for (const date of skipsOffSchedule(next, stored.skipped, changeDate))
-			gone.add(date);
-	}
-	if (skipRemoved !== null) gone.add(skipRemoved);
-	if (gone.size > 0) {
-		await tx.execute(
-			sql`DELETE FROM app.subscription_skips
-			WHERE subscription_id = ${id}::uuid
-				AND due_on IN (SELECT jsonb_array_elements_text(${jsonList([...gone])})::date)`,
-		);
-	}
-	if (skipAdded !== null) {
-		await tx.execute(
-			sql`INSERT INTO app.subscription_skips (id, user_id, created_at, updated_at,
-				subscription_id, due_on)
-			VALUES (${uuidV7(ctx.now.getTime())}, ${ctx.user.id}, ${now}, ${now}, ${id}::uuid,
-				${skipAdded}::date)
-			ON CONFLICT DO NOTHING`,
-		);
-	}
-
-	await tx.execute(
-		sql`UPDATE app.subscriptions SET name = ${next.name}, amount_minor = ${String(next.amountMinor)}::bigint,
-			cadence_unit = ${next.cadence.unit}, cadence_every = ${next.cadence.every},
-			start_date = ${next.startDate}::date, category = ${next.category}, note = ${next.note},
-			end_date = ${next.endDate}::date, pause_from = ${next.pause?.from ?? null}::date,
-			pause_until = ${next.pause?.until ?? null}::date, charges_from = ${next.chargesFrom}::date,
-			last_change_on = ${noteOnly ? stored.lastChangeOn : changeDate}::date,
-			version = version + 1, updated_at = ${now}
-		WHERE id = ${id}::uuid`,
+	await writeTombstones(tx, ctx, id, plan, now);
+	await saveSubscription(
+		tx,
+		id,
+		plan,
+		noteOnly ? stored.lastChangeOn : changeDate,
+		now,
 	);
 
 	if (!noteOnly) {
 		// Step 4: open the new period with the new values.
-		const skipped = stored.skipped
-			.filter((date) => !gone.has(date))
-			.concat(skipAdded === null ? [] : [skipAdded]);
-		const opened = await catchUpSubscription(tx, cctx, next, {
-			through: today,
-			skipped,
+		const opened = await catchUpSubscription(tx, chargeContext(ctx), next, {
+			through: ctx.today,
+			skipped: plan.skippedAfter,
 		});
-		chargesCreated += opened.created;
-		for (const month of opened.months) months.add(month);
+		addCreated(tally, opened);
 	}
 
 	const answer = await getSubscriptionItem(tx, ctx, id);
@@ -407,14 +295,9 @@ export async function changeSubscription(
 		...answer,
 		currency,
 		changeDate,
-		chargesCreated,
-		chargesUpdated,
-		chargesDeleted,
-		months: [...months].sort(),
+		chargesCreated: tally.created,
+		chargesUpdated: tally.updated,
+		chargesDeleted: tally.deleted,
+		months: [...tally.months].sort(compareCodeUnits),
 	};
-}
-
-/** Whether `date` is in the new pause. */
-function inNewPause(pause: Pause | null, date: string): boolean {
-	return pause !== null && date >= pause.from && date < pause.until;
 }
