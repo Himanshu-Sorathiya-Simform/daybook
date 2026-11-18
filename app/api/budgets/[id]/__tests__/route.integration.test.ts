@@ -1,23 +1,18 @@
 import { randomUUID, randomUUIDv7 } from "node:crypto";
 import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { GOLDEN_NOW } from "../../../../../seed/golden";
 import { insertProfile } from "../../../../../seed/load-golden";
 import { call } from "@/server/api/__tests__/call";
+import {
+	closeOwner,
+	connectOwner,
+	errorOf,
+	freezeGoldenClock,
+} from "@/server/api/__tests__/endpoint";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
 import { uuidV7At } from "@/server/dal/transactions/__tests__/helpers";
-import { parseOwnerEnv } from "@/server/env";
 import { DELETE as DELETE_MONTH } from "../overrides/[month]/route";
 import { DELETE, PATCH } from "../route";
 
@@ -34,10 +29,7 @@ let other: User;
 let noProfile: User;
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
+	owner = await connectOwner();
 	me = await signedInUser(owner, "budget-id-route");
 	await insertProfile(owner, me.id);
 	other = await signedInUser(owner, "budget-id-route-other");
@@ -45,21 +37,11 @@ beforeAll(async () => {
 	noProfile = await signedInUser(owner, "budget-id-route-new");
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [
-		[me?.id, other?.id, noProfile?.id].filter(Boolean),
-	]);
-	await owner?.end();
-	await runtimePool().end();
-});
+afterAll(() =>
+	closeOwner(owner, [me?.id, other?.id, noProfile?.id].filter(Boolean)),
+);
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
+freezeGoldenClock();
 
 const FOOD = [
 	{ from: "2026-09", limitMinor: 600000 },
@@ -132,17 +114,6 @@ const removeMonth = (
 		input,
 		options,
 	);
-
-const errorOf = (body: unknown) =>
-	(
-		body as {
-			error: {
-				code: string;
-				fields: Record<string, string>;
-				details: Record<string, unknown>;
-			};
-		}
-	).error;
 
 const SEVEN_FROM_SEPTEMBER = {
 	from: "2026-09",

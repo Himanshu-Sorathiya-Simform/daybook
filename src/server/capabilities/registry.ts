@@ -38,6 +38,18 @@ export type RegistryEntry = PremiumEntry | LimitEntry | FlagEntry;
  * Client code imports `CapabilityCode` with `import type` only, so none of this reaches the
  * browser. The M8 codes join when M8 starts (D-200).
  */
+/** One of F10's insight detectors: a flag the server enforces, on by default, that no client
+ * reads. */
+const detector = (description: string) =>
+	({
+		kind: "flag",
+		description,
+		clientVisible: false,
+		enforcedBy: "server",
+		default: "on",
+		spec: "F10",
+	}) as const;
+
 export const REGISTRY = {
 	"goals.active.max": {
 		kind: "limit",
@@ -86,54 +98,14 @@ export const REGISTRY = {
 		default: "on",
 		spec: "P1",
 	},
-	"insights.detector.categoryTrend": {
-		kind: "flag",
-		description: "The category trend insight",
-		clientVisible: false,
-		enforcedBy: "server",
-		default: "on",
-		spec: "F10",
-	},
-	"insights.detector.budgetThreshold": {
-		kind: "flag",
-		description: "The budget threshold insight",
-		clientVisible: false,
-		enforcedBy: "server",
-		default: "on",
-		spec: "F10",
-	},
-	"insights.detector.savingsRate": {
-		kind: "flag",
-		description: "The savings rate insight",
-		clientVisible: false,
-		enforcedBy: "server",
-		default: "on",
-		spec: "F10",
-	},
-	"insights.detector.outlier": {
-		kind: "flag",
-		description: "The unusual spending insight",
-		clientVisible: false,
-		enforcedBy: "server",
-		default: "on",
-		spec: "F10",
-	},
-	"insights.detector.renewalsSoon": {
-		kind: "flag",
-		description: "The renewals soon insight",
-		clientVisible: false,
-		enforcedBy: "server",
-		default: "on",
-		spec: "F10",
-	},
-	"insights.detector.savingsRecommendation": {
-		kind: "flag",
-		description: "The savings recommendation insight",
-		clientVisible: false,
-		enforcedBy: "server",
-		default: "on",
-		spec: "F10",
-	},
+	"insights.detector.categoryTrend": detector("The category trend insight"),
+	"insights.detector.budgetThreshold": detector("The budget threshold insight"),
+	"insights.detector.savingsRate": detector("The savings rate insight"),
+	"insights.detector.outlier": detector("The unusual spending insight"),
+	"insights.detector.renewalsSoon": detector("The renewals soon insight"),
+	"insights.detector.savingsRecommendation": detector(
+		"The savings recommendation insight",
+	),
 } satisfies Record<string, RegistryEntry>;
 
 /** Every registry code; a code outside it is a type error (BR-P4-02). */

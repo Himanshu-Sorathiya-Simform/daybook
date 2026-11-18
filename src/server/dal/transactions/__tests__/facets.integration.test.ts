@@ -378,9 +378,9 @@ describe("another user's rows add nothing", () => {
 			] as const) {
 				const { rows } = await owner.query<{ id: string }>(
 					`INSERT INTO app.transactions (id, user_id, created_at, updated_at, type, amount_minor,
-					   occurred_at, occurred_on, category, payee, source, version)
+					   occurred_at, occurred_on, category, payee, source, due_on, version)
 					 VALUES (gen_random_uuid(), $1, $2, $2, 'income', $3, $2, '2026-11-02', 'salary', $4,
-					   'subscription', 1)
+					   'subscription', '2026-11-02', 1)
 					 RETURNING id`,
 					[other.userId, "2026-11-02T06:30:00Z", amountMinor, payee],
 				);

@@ -18,6 +18,8 @@ export const TABLE_CLASSES = {
 	categories: "reference",
 	profile: "private",
 	idempotency_records: "private",
+	subscriptions: "private",
+	subscription_skips: "private",
 	transactions: "private",
 	transaction_views: "private",
 	budgets: "private",

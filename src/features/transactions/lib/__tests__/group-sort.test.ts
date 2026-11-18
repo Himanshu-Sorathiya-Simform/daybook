@@ -72,28 +72,40 @@ describe("groupSortLabel", () => {
 });
 
 describe("withSort (BR-F03-55, D-529)", () => {
-	test("by day, newest first, to largest first: the default grouping follows to none", () => {
-		expect(withSort(list("date", "desc", "day"), "largest")).toEqual(
-			list("amount", "desc", "none"),
-		);
-	});
-
-	test("with no grouping, largest first, back to newest first: the default follows to day", () => {
-		expect(withSort(list("amount", "desc", "none"), "newest")).toEqual(
+	test.each<
+		[
+			string,
+			ReturnType<typeof list>,
+			Parameters<typeof withSort>[1],
+			ReturnType<typeof list>,
+		]
+	>([
+		[
+			"by day, newest first, to largest first: the default grouping follows to none",
 			list("date", "desc", "day"),
-		);
-	});
-
-	test("between the two date sorts the grouping stays", () => {
-		expect(withSort(list("date", "desc", "day"), "oldest")).toEqual(
+			"largest",
+			list("amount", "desc", "none"),
+		],
+		[
+			"with no grouping, largest first, back to newest first: the default follows to day",
+			list("amount", "desc", "none"),
+			"newest",
+			list("date", "desc", "day"),
+		],
+		[
+			"between the two date sorts the grouping stays",
+			list("date", "desc", "day"),
+			"oldest",
 			list("date", "asc", "day"),
-		);
-	});
-
-	test("between the two amount sorts the grouping stays", () => {
-		expect(withSort(list("amount", "desc", "none"), "smallest")).toEqual(
+		],
+		[
+			"between the two amount sorts the grouping stays",
+			list("amount", "desc", "none"),
+			"smallest",
 			list("amount", "asc", "none"),
-		);
+		],
+	])("%s", (_title, before, choice, after) => {
+		expect(withSort(before, choice)).toEqual(after);
 	});
 
 	test.each(["category", "payee"] as const)(

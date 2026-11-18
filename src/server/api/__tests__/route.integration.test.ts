@@ -186,6 +186,7 @@ const echo = route(
 		body: input.body,
 		query: Object.fromEntries(input.query),
 		params: input.params,
+		queuePending: input.queuePending,
 	}),
 );
 
@@ -863,7 +864,46 @@ describe("input", () => {
 			body: { a: [1, 2] },
 			query: { limit: "5", tag: "b" },
 			params: { id: "x" },
+			queuePending: false,
 		});
+	});
+
+	// BR-F05-06, D-610
+	test.each([
+		[
+			"the Daybook-Queue: pending header",
+			{ headers: { "daybook-queue": "pending" } },
+			true,
+		],
+		[
+			"the daybook_queue=pending cookie",
+			{ cookieExtra: "daybook_queue=pending" },
+			true,
+		],
+		[
+			"another Daybook-Queue value",
+			{ headers: { "daybook-queue": "empty" } },
+			false,
+		],
+		[
+			"another daybook_queue cookie value",
+			{ cookieExtra: "daybook_queue=empty" },
+			false,
+		],
+		["neither", {}, false],
+	])("queuePending is read from %s", async (_name, options, expected) => {
+		const user = await newUser(false);
+		const extra = "cookieExtra" in options ? `; ${options.cookieExtra}` : "";
+		const response = await echo(
+			request("/api/test/x", {
+				method: "POST",
+				cookie: `${user.cookie}${extra}`,
+				body: {},
+				...("headers" in options ? { headers: options.headers } : {}),
+			}),
+			params({ id: "x" }),
+		);
+		expect((await response.json()).data.queuePending).toBe(expected);
 	});
 
 	test("a second session for the same user works the same", async () => {

@@ -22,6 +22,12 @@ export const GOLDEN_NOW = "2026-11-02T06:30:00.000Z";
 
 type Row = Record<string, string | number | null>;
 
+/** The id of the Subscription `PRIVATE_ROWS.subscriptions` writes for `userId`, which the
+ * user's skipped-charge row points at. It depends on the user, so the key `(user_id, id)` the
+ * skip's composite foreign key needs always exists for its own user and never for another. */
+export const subscriptionIdOf = (userId: string) =>
+	`0199a000-0000-7000-8002-${userId.slice(-12)}`;
+
 /** A valid row of each private table for one user. Ids are fresh, so rows never collide. */
 export const PRIVATE_ROWS: { [K in PrivateTable]: (userId: string) => Row } = {
 	profile: (userId) => ({
@@ -43,6 +49,31 @@ export const PRIVATE_ROWS: { [K in PrivateTable]: (userId: string) => Row } = {
 		updated_at: GOLDEN_NOW,
 		key: randomUUID(),
 		request_hash: "a".repeat(64),
+	}),
+	// The golden Cult Gym Subscription (F05 section 3).
+	subscriptions: (userId) => ({
+		id: subscriptionIdOf(userId),
+		user_id: userId,
+		created_at: GOLDEN_NOW,
+		updated_at: GOLDEN_NOW,
+		name: "Cult Gym",
+		amount_minor: 150000,
+		cadence_unit: "month",
+		cadence_every: 1,
+		start_date: "2026-09-10",
+		category: "health",
+		charges_from: "2026-09-10",
+		last_change_on: "2026-09-10",
+		version: 1,
+	}),
+	// The golden tombstone: the Cult Gym charge for 10 October was deleted.
+	subscription_skips: (userId) => ({
+		id: randomUUID(),
+		user_id: userId,
+		created_at: GOLDEN_NOW,
+		updated_at: GOLDEN_NOW,
+		subscription_id: subscriptionIdOf(userId),
+		due_on: "2026-10-10",
 	}),
 	// golden #24: Swiggy, 640.00 food, 22:15 on 19 October.
 	transactions: (userId) => ({

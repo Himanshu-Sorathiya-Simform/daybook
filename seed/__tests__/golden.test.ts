@@ -9,6 +9,7 @@ import {
 	GOLDEN_NOW,
 	GOLDEN_PENDING_P1,
 	GOLDEN_ROW_27,
+	GOLDEN_SKIPS,
 	GOLDEN_SUBSCRIPTIONS,
 	GOLDEN_TRANSACTIONS,
 	goldenRow,
@@ -176,6 +177,7 @@ describe("the golden Transactions", () => {
 			...Object.values(GOLDEN_SUBSCRIPTIONS).map(
 				(subscription) => subscription.id,
 			),
+			...GOLDEN_SKIPS.map((skip) => skip.id),
 			GOLDEN_PENDING_P1.id,
 		];
 		expect(new Set(ids).size).toBe(ids.length);
@@ -279,5 +281,181 @@ describe("the golden Budgets", () => {
 			expect(isUuidV7(id)).toBe(true);
 			expect(id.split("-")[3]).toBe("8004");
 		}
+	});
+});
+
+// Each expected figure is copied from docs/03-golden-dataset.md (Setup and Subscriptions).
+describe("the golden Subscriptions", () => {
+	const subscriptions = Object.values(GOLDEN_SUBSCRIPTIONS);
+
+	test("are Sunrise Apartments, Netflix, Cult Gym and Amazon Prime", () => {
+		expect(subscriptions.map((subscription) => subscription.name)).toEqual([
+			"Sunrise Apartments",
+			"Netflix",
+			"Cult Gym",
+			"Amazon Prime",
+		]);
+	});
+
+	test("have the dataset's amount, cadence, start and category", () => {
+		expect(
+			subscriptions.map((s) => [
+				s.name,
+				s.amountMinor,
+				s.cadence,
+				s.startDate,
+				s.category,
+			]),
+		).toEqual([
+			[
+				"Sunrise Apartments",
+				1800000,
+				{ unit: "month", every: 1 },
+				"2026-09-01",
+				"housing",
+			],
+			[
+				"Netflix",
+				64900,
+				{ unit: "month", every: 1 },
+				"2026-09-05",
+				"entertainment",
+			],
+			[
+				"Cult Gym",
+				150000,
+				{ unit: "month", every: 1 },
+				"2026-09-10",
+				"health",
+			],
+			[
+				"Amazon Prime",
+				149900,
+				{ unit: "month", every: 12 },
+				"2026-10-12",
+				"entertainment",
+			],
+		]);
+	});
+
+	// golden: "each created on its start date, without backfill", so charging starts on it.
+	test("were created on their start date: charging and the last change start there", () => {
+		for (const subscription of subscriptions) {
+			expect(subscription.chargesFrom).toBe(subscription.startDate);
+			expect(subscription.lastChangeOn).toBe(subscription.startDate);
+		}
+	});
+
+	// golden: "No golden Subscription is paused"; none is cancelled, noted, demo or changed.
+	test("are running: no pause, end date or note; not demo, version 1", () => {
+		for (const subscription of subscriptions) {
+			expect(subscription).toMatchObject({
+				pause: null,
+				endDate: null,
+				note: null,
+				demo: false,
+				version: 1,
+			});
+		}
+	});
+
+	test("were recorded at the midnight of their first charge, as that charge was", () => {
+		for (const subscription of subscriptions) {
+			const first = GOLDEN_ALL.filter(
+				(row) => row.subscriptionId === subscription.id,
+			).sort((a, b) => (a.occurredOn < b.occurredOn ? -1 : 1))[0];
+			expect(first?.occurredOn).toBe(subscription.startDate);
+			expect(subscription.createdAt).toBe(first?.occurredAt);
+		}
+	});
+
+	// golden: Subscriptions (as of 2 November), Yearly cost, written out.
+	test("cost 243,287.00 a year: 216,000.00 + 18,000.00 + 7,788.00 + 1,499.00", () => {
+		const yearly = (amountMinor: number, every: number) =>
+			(amountMinor * 12) / every;
+		expect(yearly(1800000, 1)).toBe(21600000);
+		expect(yearly(150000, 1)).toBe(1800000);
+		expect(yearly(64900, 1)).toBe(778800);
+		expect(yearly(149900, 12)).toBe(149900);
+		expect(
+			subscriptions.reduce(
+				(total, s) => total + yearly(s.amountMinor, s.cadence.every),
+				0,
+			),
+		).toBe(24328700);
+	});
+
+	test("every charge repeats its Subscription's name, category and amount", () => {
+		for (const charge of GOLDEN_ALL.filter(
+			(row) => row.source === "subscription",
+		)) {
+			const subscription = subscriptions.find(
+				(s) => s.id === charge.subscriptionId,
+			);
+			expect(subscription).toBeDefined();
+			expect(charge).toMatchObject({
+				type: "expense",
+				payee: subscription?.name,
+				category: subscription?.category,
+				amountMinor: subscription?.amountMinor,
+			});
+		}
+	});
+
+	// golden: the charges' due dates, and the missing 10 October for Cult Gym.
+	test.each([
+		["sunrise", [1, 12, 27], ["2026-09-01", "2026-10-01", "2026-11-01"]],
+		["netflix", [5, 16], ["2026-09-05", "2026-10-05"]],
+		["cultGym", [7], ["2026-09-10"]],
+		["amazonPrime", [20], ["2026-10-12"]],
+	] as const)("%s has charges #%j on its due dates", (name, numbers, dates) => {
+		const charges = GOLDEN_ALL.filter(
+			(row) => row.subscriptionId === GOLDEN_SUBSCRIPTIONS[name].id,
+		);
+		expect(charges.map((row) => row.golden)).toEqual(numbers);
+		expect(charges.map((row) => row.dueOn)).toEqual(dates);
+	});
+
+	test("have distinct UUIDv7 ids of their own kind, 8002", () => {
+		const ids = subscriptions.map((subscription) => subscription.id);
+		expect(new Set(ids).size).toBe(4);
+		for (const id of ids) {
+			expect(isUuidV7(id)).toBe(true);
+			expect(id.split("-")[3]).toBe("8002");
+		}
+	});
+});
+
+describe("the golden skipped charge", () => {
+	// golden: "The 2026-10-10 charge was deleted, leaving a tombstone".
+	test("is Cult Gym's 10 October, and only that one", () => {
+		expect(GOLDEN_SKIPS).toHaveLength(1);
+		expect(GOLDEN_SKIPS[0]).toMatchObject({
+			subscription: "cultGym",
+			dueOn: "2026-10-10",
+		});
+	});
+
+	test("has no charge on its date, since the delete removed it", () => {
+		const [skip] = GOLDEN_SKIPS;
+		const id = GOLDEN_SUBSCRIPTIONS[skip.subscription].id;
+		expect(
+			GOLDEN_ALL.filter(
+				(row) => row.subscriptionId === id && row.dueOn === skip.dueOn,
+			),
+		).toEqual([]);
+	});
+
+	test("is a due date of a Subscription that exists, and was recorded after it was created", () => {
+		const [skip] = GOLDEN_SKIPS;
+		const subscription = GOLDEN_SUBSCRIPTIONS[skip.subscription];
+		expect(skip.createdAt > subscription.createdAt).toBe(true);
+		expect(skip.dueOn > subscription.startDate).toBe(true);
+	});
+
+	test("has a UUIDv7 id of its own kind, 8005", () => {
+		const [skip] = GOLDEN_SKIPS;
+		expect(isUuidV7(skip.id)).toBe(true);
+		expect(skip.id.split("-")[3]).toBe("8005");
 	});
 });

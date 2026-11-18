@@ -168,6 +168,7 @@ describe("order (BR-F03-29)", () => {
 				source: "manual",
 				demo: false,
 				subscriptionId: null,
+				subscription: null,
 				dueOn: null,
 				edited: false,
 				version: 1,
@@ -175,6 +176,75 @@ describe("order (BR-F03-29)", () => {
 				updatedAt: new Date(row.updatedAt).toISOString(),
 			},
 		]);
+	});
+});
+
+// AC-F05-13, D-255: golden Netflix's two charges, #16 (5 Oct) and #5 (5 Sep).
+describe("a Subscription's charges", () => {
+	const link = (n: number, dueOn: string) => ({
+		subscriptionId: golden.subscription("netflix"),
+		subscription: { id: golden.subscription("netflix"), name: "Netflix" },
+		dueOn,
+		edited: false,
+		source: "subscription",
+		id: golden.id(n),
+	});
+
+	test.each<Group>(["day", "none", "category", "payee"])(
+		"%s grouping lists #16 and #5 with their link, due date and Subscription",
+		async (group) => {
+			const result = await page(
+				{ sub: golden.subscription("netflix") },
+				{ group },
+			);
+			expect(numbers(result)).toEqual([16, 5]);
+			expect(result.items).toMatchObject([
+				link(16, "2026-10-05"),
+				link(5, "2026-09-05"),
+			]);
+		},
+	);
+
+	test("a row with no link has null for all three, and a charge's edited flag reads as stored", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await tx.execute(
+				sql`UPDATE app.transactions SET edited = true WHERE id = ${golden.id(16)}::uuid`,
+			);
+			return list(tx, { sub: golden.subscription("netflix") });
+		});
+		expect(result.items.map((item) => item.edited)).toEqual([true, false]);
+		const manual = await page({ q: "groceries", from: "2026-10-01" });
+		expect(manual.items[0]).toMatchObject({
+			subscriptionId: null,
+			subscription: null,
+			dueOn: null,
+		});
+	});
+
+	test("the name is the Subscription's current name", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await tx.execute(
+				sql`UPDATE app.subscriptions SET name = 'Netflix 4K' WHERE id = ${golden.subscription("netflix")}::uuid`,
+			);
+			return list(tx, { sub: golden.subscription("netflix") });
+		});
+		expect(result.items.map((item) => item.subscription?.name)).toEqual([
+			"Netflix 4K",
+			"Netflix 4K",
+		]);
+	});
+
+	test("pages of one keep the link on each row", async () => {
+		const first = await page(
+			{ sub: golden.subscription("netflix") },
+			{ limit: 1 },
+		);
+		expect(numbers(first)).toEqual([16]);
+		const second = await page(
+			{ sub: golden.subscription("netflix") },
+			{ limit: 1, cursor: first.nextCursor! },
+		);
+		expect(second.items).toMatchObject([link(5, "2026-09-05")]);
 	});
 });
 

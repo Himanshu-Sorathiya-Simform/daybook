@@ -55,7 +55,8 @@ describe("useMe (BR-P4-12)", () => {
 		expect(calls()).toBe(1);
 	});
 
-	test("focus within 60 seconds does not refetch", async () => {
+	/** Loads the answer at 06:30:00, then regains focus at `later`; answers the call counter. */
+	async function focusedAt(later: string) {
 		vi.useFakeTimers({
 			toFake: ["Date"],
 			now: new Date("2026-11-02T06:30:00Z"),
@@ -63,28 +64,22 @@ describe("useMe (BR-P4-12)", () => {
 		const calls = countedMe();
 		renderInApp(<MeView />);
 		await screen.findByText("user u1");
-		vi.setSystemTime(new Date("2026-11-02T06:30:59Z"));
+		vi.setSystemTime(new Date(later));
 		act(() => {
 			focusManager.setFocused(false);
 			focusManager.setFocused(true);
 		});
+		return calls;
+	}
+
+	test("focus within 60 seconds does not refetch", async () => {
+		const calls = await focusedAt("2026-11-02T06:30:59Z");
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		expect(calls()).toBe(1);
 	});
 
 	test("focus once the answer is older than 60 seconds refetches", async () => {
-		vi.useFakeTimers({
-			toFake: ["Date"],
-			now: new Date("2026-11-02T06:30:00Z"),
-		});
-		const calls = countedMe();
-		renderInApp(<MeView />);
-		await screen.findByText("user u1");
-		vi.setSystemTime(new Date("2026-11-02T06:31:01Z"));
-		act(() => {
-			focusManager.setFocused(false);
-			focusManager.setFocused(true);
-		});
+		const calls = await focusedAt("2026-11-02T06:31:01Z");
 		await waitFor(() => expect(calls()).toBe(2));
 	});
 

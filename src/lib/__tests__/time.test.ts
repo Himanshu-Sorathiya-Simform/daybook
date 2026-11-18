@@ -4,6 +4,7 @@ import {
 	isIsoDate,
 	monthsBefore,
 	shiftDays,
+	shiftMonths,
 	todayIn,
 	utcDate,
 } from "../time";
@@ -149,5 +150,36 @@ describe("monthsBefore (BR-F03-62)", () => {
 		["2026-01-15", 1, "2025-12-15"],
 	])("%s minus %i months is %s", (date, months, expected) => {
 		expect(monthsBefore(date, months)).toBe(expected);
+	});
+});
+
+// BR-F05-01: months keep the anchor day and clamp it to each month's length.
+describe("shiftMonths (BR-F05-01)", () => {
+	test.each([
+		["2026-01-31", 0, "2026-01-31"],
+		["2026-01-31", 1, "2026-02-28"],
+		["2026-01-31", 2, "2026-03-31"],
+		["2026-01-31", 3, "2026-04-30"],
+		["2026-08-31", 5, "2027-01-31"],
+		["2026-11-30", 3, "2027-02-28"],
+		["2026-11-30", 6, "2027-05-30"],
+		["2028-02-29", 12, "2029-02-28"],
+		["2028-02-29", 48, "2032-02-29"],
+		["2026-10-12", 12, "2027-10-12"],
+		["2026-05-31", -3, "2026-02-28"],
+		["2026-03-15", -15, "2024-12-15"],
+		["2026-12-31", 2, "2027-02-28"],
+	])("%s plus %i months is %s", (date, months, expected) => {
+		expect(shiftMonths(date, months)).toBe(expected);
+	});
+
+	test("a leap day plus one month in a leap year is 29 Feb to 29 Mar", () => {
+		expect(shiftMonths("2028-01-29", 1)).toBe("2028-02-29");
+		expect(shiftMonths("2027-01-29", 1)).toBe("2027-02-28");
+	});
+
+	test("never reads the machine's zone: the same on the day a zone changes its clocks", () => {
+		expect(shiftMonths("2026-10-31", 1)).toBe("2026-11-30");
+		expect(shiftMonths("2026-03-29", 1)).toBe("2026-04-29");
 	});
 });

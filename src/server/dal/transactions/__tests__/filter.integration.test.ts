@@ -240,9 +240,8 @@ describe("each field", () => {
 		["bounds between two amounts", { minMinor: 64901, maxMinor: 64999 }, []],
 		["min alone", { minMinor: 1800000 }, [1, 2, 12, 13, 27]],
 		["max alone", { maxMinor: 42000 }, [25, 26]],
-		// D-470: no M1 row has a Goal or a Subscription.
+		// D-470: no row has a Goal until F06.
 		["a Goal", { goal: "0199a000-0000-7000-8001-000000000001" }, []],
-		["a Subscription", { sub: "0199a000-0000-7000-8002-000000000001" }, []],
 	] as const satisfies readonly (readonly [
 		string,
 		TransactionFilter,
@@ -266,6 +265,49 @@ describe("each field", () => {
 		expect(await goldenRows(all)).toEqual([21]);
 		expect(await goldenRows({ ...all, q: "zomato" })).toEqual([15]);
 		expect(await goldenRows({ ...all, src: "subscription" })).toEqual([]);
+	});
+});
+
+// D-255: the linked charges of the golden Subscriptions, golden rows #1, #12 and #27 (Sunrise
+// Apartments), #5 and #16 (Netflix), #7 (Cult Gym) and #20 (Amazon Prime).
+describe("a Subscription's charges (D-255, AC-F05-13)", () => {
+	test.each([
+		["Netflix", "netflix", [5, 16]],
+		["Sunrise Apartments", "sunrise", [1, 12, 27]],
+		["Cult Gym", "cultGym", [7]],
+		["Amazon Prime", "amazonPrime", [20]],
+	] as const)("%s selects its charges", async (_name, key, rows) => {
+		expect(await goldenRows({ sub: golden.subscription(key) })).toEqual(rows);
+	});
+
+	test("the Subscriptions' charges are what the subscription source selects", async () => {
+		expect(await goldenRows({ src: "subscription" })).toEqual([
+			1, 5, 7, 12, 16, 20, 27,
+		]);
+	});
+
+	test("an id that is no Subscription of the user selects nothing", async () => {
+		expect(await goldenRows({ sub: randomUUID() })).toEqual([]);
+	});
+
+	test("another user's Subscription id selects nothing, and none of their rows", async () => {
+		expect(await goldenRows({ sub: mirror.subscription("netflix") })).toEqual(
+			[],
+		);
+	});
+
+	test("combines with the other fields (FIL-1)", async () => {
+		const sub = golden.subscription("netflix");
+		expect(await goldenRows({ sub, from: "2026-10-01" })).toEqual([16]);
+		expect(await goldenRows({ sub, to: "2026-09-30" })).toEqual([5]);
+		expect(await goldenRows({ sub, type: ["income"] })).toEqual([]);
+		expect(await goldenRows({ sub, cat: ["entertainment"] })).toEqual([5, 16]);
+		expect(await goldenRows({ sub, cat: ["housing"] })).toEqual([]);
+		expect(await goldenRows({ sub, minMinor: 64900, maxMinor: 64900 })).toEqual([
+			5, 16,
+		]);
+		expect(await goldenRows({ sub, q: "netflix" })).toEqual([5, 16]);
+		expect(await goldenRows({ sub, q: "sunrise" })).toEqual([]);
 	});
 });
 
@@ -613,6 +655,35 @@ describe("SQL and matchesFilter agree", () => {
 				:	[{ filter, sqlIds, fromCode }];
 		});
 		expect(mismatches).toEqual([]);
+	});
+
+	// D-255: the drawn filters hold random ids, so a Subscription of the mirror user is tried here.
+	test("on a Subscription's id alone and with other fields, row for row", async () => {
+		const rows: { id: string; row: MatchableRow }[] = [
+			...mirror.rows.map((row) => ({ id: row.id, row })),
+			...EDGES.map((row) => ({ id: row.id, row })),
+		];
+		const subs = (["netflix", "sunrise", "cultGym", "amazonPrime"] as const).map(
+			(key) => mirror.subscription(key),
+		);
+		const filters: TransactionFilter[] = subs.flatMap((sub) => [
+			{ sub },
+			{ sub, from: "2026-10-01" },
+			{ sub, to: "2026-09-30" },
+			{ sub, src: "subscription" },
+			{ sub, src: "manual" },
+			{ sub, cat: ["housing", "health"] },
+			{ sub, q: "o" },
+		]);
+		const fromSql = await idsFor(mirror.userId, filters);
+		filters.forEach((filter, index) => {
+			const fromCode = rows
+				.filter(({ row }) => matchesFilter(row, filter, "INR"))
+				.map(({ id }) => id)
+				.sort();
+			expect(fromSql[index]).toEqual(fromCode);
+		});
+		expect(fromSql.filter((ids) => ids.length > 0).length).toBeGreaterThan(15);
 	});
 
 	test("the drawn filters reach every field and select none, some and many rows", async () => {

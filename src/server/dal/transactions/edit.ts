@@ -116,7 +116,10 @@ const COLUMNS = {
 } as const;
 
 /** `SET` for the sent fields, `version` raised by one and `updated_at` the request clock
- * (BR-P2-21, BR-P2-43). */
+ * (BR-P2-21, BR-P2-43). An edit of a linked charge also sets `edited` (BR-F03-16, D-270), in
+ * the same statement, so a Subscription change that reprices at the same moment either sees
+ * the flag or fails this row's version. The flag never turns back, and a row with no link
+ * keeps its value. */
 function setClause(ctx: ProfiledContext, body: TransactionEditBody): SQL {
 	const sets = Object.entries(COLUMNS)
 		.filter(([field]) => body[field as keyof typeof COLUMNS] !== undefined)
@@ -127,6 +130,7 @@ function setClause(ctx: ProfiledContext, body: TransactionEditBody): SQL {
 	return sql.join(
 		[
 			...sets,
+			sql`edited = edited OR subscription_id IS NOT NULL`,
 			sql`version = version + 1`,
 			sql`updated_at = ${ctx.now.toISOString()}`,
 		],

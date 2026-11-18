@@ -10,9 +10,8 @@
 import { pathToFileURL } from "node:url";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import { Client, type ClientBase } from "pg";
-import { parseOwnerEnv } from "../../src/server/env";
-import { loadEnvFile } from "./env-file";
+import type { Client, ClientBase } from "pg";
+import { connectAsOwner } from "./owner-client";
 import { report, verifyDatabase } from "./verify";
 
 export const MIGRATIONS_FOLDER = "drizzle";
@@ -39,18 +38,7 @@ export async function runMigrations(client: Client): Promise<number> {
 }
 
 async function main(): Promise<void> {
-	const file = loadEnvFile(process.argv.slice(2));
-	const env = parseOwnerEnv(process.env);
-	const target = new URL(env.DATABASE_URL_OWNER);
-	console.log(
-		`Migrating ${target.hostname}/${target.pathname.slice(1)} as ${decodeURIComponent(target.username)}`
-			+ (file ? ` (variables from ${file})` : ""),
-	);
-	const client = new Client({
-		connectionString: env.DATABASE_URL_OWNER,
-		connectionTimeoutMillis: 10_000,
-	});
-	await client.connect();
+	const { client } = await connectAsOwner("Migrating");
 	try {
 		const applied = await runMigrations(client);
 		const noun = applied === 1 ? "migration" : "migrations";

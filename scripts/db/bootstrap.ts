@@ -8,9 +8,9 @@
  * by a migration.
  */
 import { pathToFileURL } from "node:url";
-import { Client, type ClientBase } from "pg";
-import { parseOwnerEnv, type OwnerEnv } from "../../src/server/env";
-import { loadEnvFile } from "./env-file";
+import type { ClientBase } from "pg";
+import type { OwnerEnv } from "../../src/server/env";
+import { connectAsOwner } from "./owner-client";
 
 export const ROLES = ["daybook_auth", "daybook_runtime", "daybook_system"] as const;
 export type Role = (typeof ROLES)[number];
@@ -110,18 +110,7 @@ async function assertPlainRoles(client: ClientBase): Promise<void> {
 }
 
 async function main(): Promise<void> {
-	const file = loadEnvFile(process.argv.slice(2));
-	const env = parseOwnerEnv(process.env);
-	const target = new URL(env.DATABASE_URL_OWNER);
-	console.log(
-		`Bootstrapping ${target.hostname}/${target.pathname.slice(1)} as ${decodeURIComponent(target.username)}`
-			+ (file ? ` (variables from ${file})` : ""),
-	);
-	const client = new Client({
-		connectionString: env.DATABASE_URL_OWNER,
-		connectionTimeoutMillis: 10_000,
-	});
-	await client.connect();
+	const { client, env } = await connectAsOwner("Bootstrapping");
 	try {
 		for (const { role, action } of await bootstrap(client, env)) {
 			console.log(`  ${role}: ${action}`);

@@ -1,23 +1,18 @@
 import { randomUUIDv7 } from "node:crypto";
 import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { GOLDEN_NOW, GOLDEN_SUBSCRIPTIONS } from "../../../../../seed/golden";
 import { loadGolden, type LoadedGolden } from "../../../../../seed/load-golden";
 import { call } from "@/server/api/__tests__/call";
+import {
+	closeOwner,
+	connectOwner,
+	errorOf,
+	freezeGoldenClock,
+} from "@/server/api/__tests__/endpoint";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
 import { uuidV7At } from "@/server/dal/transactions/__tests__/helpers";
-import { parseOwnerEnv } from "@/server/env";
 import { GET as list } from "../../route";
 import { GET as summary } from "../../summary/route";
 import { DELETE, GET, PATCH } from "../route";
@@ -36,30 +31,20 @@ async function goldenUser(label: string) {
 }
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
+	owner = await connectOwner();
 	golden = await goldenUser("delete-route");
 	other = await goldenUser("delete-route-other");
 	noProfile = await signedInUser(owner, "delete-route-new");
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [
+afterAll(() =>
+	closeOwner(
+		owner,
 		[golden?.userId, other?.userId, noProfile?.id].filter(Boolean),
-	]);
-	await owner?.end();
-	await runtimePool().end();
-});
+	),
+);
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
+freezeGoldenClock();
 
 /** A committed expense of the golden user's at version 1: Chai Point, 300.00 on 2 November. */
 async function fresh(): Promise<string> {
@@ -96,17 +81,6 @@ const remove = (
 
 const read = (id: string, cookie = golden.cookie) =>
 	call(GET, `/api/transactions/${id}`, { cookie, params: { id } });
-
-const errorOf = (body: unknown) =>
-	(
-		body as {
-			error: {
-				code: string;
-				fields: Record<string, string>;
-				details: Record<string, unknown>;
-			};
-		}
-	).error;
 
 test("answers 204 with no body, and the row is gone", async () => {
 	const id = await fresh();
@@ -393,5 +367,98 @@ describe("a key reused (BR-P2-18, D-432)", () => {
 		);
 		expect(status).toBe(422);
 		expect(errorOf(body).code).toBe("idempotency_key_reused");
+	});
+});
+
+// BR-F03-17, BR-F05-07, D-607, D-608: the tombstone through the route.
+describe("a linked charge's tombstone", () => {
+	/** The tombstones of a golden Subscription of `user`, as dates in order, and its version. */
+	async function skipsOf(user: LoadedGolden, name: "netflix" | "cultGym") {
+		const { rows } = await owner.query(
+			`SELECT coalesce((SELECT array_agg(due_on::text ORDER BY due_on)
+			                  FROM app.subscription_skips WHERE subscription_id = $1), '{}') AS skips,
+			        (SELECT version FROM app.subscriptions WHERE id = $1) AS version`,
+			[user.subscription(name)],
+		);
+		return rows[0] as { skips: string[]; version: number };
+	}
+
+	// golden #5: the Netflix charge due on 5 September.
+	test("deleting #5 answers 204 and tombstones 5 September, raising the version once", async () => {
+		const before = await skipsOf(golden, "netflix");
+		const { status } = await remove(golden.id(5));
+		expect(status).toBe(204);
+		const after = await skipsOf(golden, "netflix");
+		expect(after.skips).toContain("2026-09-05");
+		expect(after.version).toBe(before.version + 1);
+		expect((await read(golden.id(5))).status).toBe(404);
+	});
+
+	// golden #7: the Cult Gym charge due on 10 September.
+	test("a stale version is 409 with the charge, and no tombstone is written", async () => {
+		const before = await skipsOf(golden, "cultGym");
+		const { status, body } = await remove(golden.id(7), {}, { version: "2" });
+		expect(status).toBe(409);
+		expect(errorOf(body).code).toBe("version_conflict");
+		expect(errorOf(body).details).toMatchObject({
+			current: {
+				id: golden.id(7),
+				subscriptionId: golden.subscription("cultGym"),
+			},
+		});
+		expect(await skipsOf(golden, "cultGym")).toEqual(before);
+	});
+
+	test("the hint of a charge that is gone writes the tombstone and answers 204; a replay writes nothing more", async () => {
+		const before = await skipsOf(golden, "netflix");
+		const key = randomUUIDv7();
+		const hint = {
+			subscriptionId: golden.subscription("netflix"),
+			dueOn: "2026-12-05",
+		};
+		const gone = uuidV7At(GOLDEN_NOW);
+		const first = await remove(gone, hint, { key });
+		expect(first.status).toBe(204);
+		const once = await skipsOf(golden, "netflix");
+		expect(once.skips).toContain("2026-12-05");
+		expect(once.version).toBe(before.version + 1);
+		const replay = await remove(gone, hint, { key });
+		expect(replay.status).toBe(204);
+		expect(await skipsOf(golden, "netflix")).toEqual(once);
+	});
+
+	test("the same hint sent again with a new key is done and writes nothing", async () => {
+		const before = await skipsOf(golden, "netflix");
+		const { status } = await remove(uuidV7At(GOLDEN_NOW), {
+			subscriptionId: golden.subscription("netflix"),
+			dueOn: "2026-12-05",
+		});
+		expect(status).toBe(204);
+		expect(await skipsOf(golden, "netflix")).toEqual(before);
+	});
+
+	test("a hint for a date off the schedule is 404 and writes nothing", async () => {
+		const before = await skipsOf(golden, "netflix");
+		const { status, body } = await remove(uuidV7At(GOLDEN_NOW), {
+			subscriptionId: golden.subscription("netflix"),
+			dueOn: "2026-12-06",
+		});
+		expect(status).toBe(404);
+		expect(errorOf(body).code).toBe("not_found");
+		expect(await skipsOf(golden, "netflix")).toEqual(before);
+	});
+
+	test("a hint for another user's Subscription is 404 and writes nothing", async () => {
+		const before = await skipsOf(other, "netflix");
+		const { status } = await remove(uuidV7At(GOLDEN_NOW), {
+			subscriptionId: other.subscription("netflix"),
+			dueOn: "2026-12-05",
+		});
+		expect(status).toBe(404);
+		expect(await skipsOf(other, "netflix")).toEqual(before);
+	});
+
+	test("an id with no row and no hint is 404", async () => {
+		expect((await remove(uuidV7At(GOLDEN_NOW))).status).toBe(404);
 	});
 });

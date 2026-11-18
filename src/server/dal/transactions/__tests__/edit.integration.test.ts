@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
@@ -114,6 +115,7 @@ describe("an edit", () => {
 			source: "manual",
 			demo: false,
 			subscriptionId: null,
+			subscription: null,
 			dueOn: null,
 			edited: false,
 			version: 2,
@@ -275,6 +277,92 @@ describe("charges and demo rows (BR-F03-11, BR-F03-16, BR-F03-18; D-486)", () =>
 			occurredOn: "2026-10-01",
 			source: "subscription",
 			version: 2,
+		});
+	});
+
+	// BR-F03-16, D-270
+	test("an edit of a linked charge sets edited, and keeps its link, due date and Subscription", async () => {
+		const { result, statements } = await edit(golden.id(16), {
+			amountMinor: 69900,
+			currency: "INR",
+		});
+		expect(result).toMatchObject({
+			amountMinor: 69900,
+			subscriptionId: golden.subscription("netflix"),
+			subscription: { id: golden.subscription("netflix"), name: "Netflix" },
+			dueOn: "2026-10-05",
+			edited: true,
+			version: 2,
+		});
+		// The read, the profile lock and the update: the flag costs no statement.
+		expect(statements).toBe(3);
+	});
+
+	test.each([
+		["a note", { note: "Sent to accounts" }],
+		["a category", { category: "shopping" }],
+		["a payee", { payee: "Netflix India" }],
+		["a description", { description: "Premium plan" }],
+	])(
+		"an edit of %s alone sets edited on a linked charge",
+		async (_what, fields) => {
+			const { result } = await edit(golden.id(5), fields);
+			expect(result.edited).toBe(true);
+		},
+	);
+
+	test("resending every stored value is still an edit of the charge", async () => {
+		const stored = (
+			await asUser(golden.userId, (tx) => getTransaction(tx, golden.id(5)))
+		).result;
+		const { result } = await edit(golden.id(5), {
+			amountMinor: stored!.amountMinor,
+			currency: "INR",
+			payee: stored!.payee,
+		});
+		expect(result).toMatchObject({ edited: true, version: 2 });
+	});
+
+	test("a charge that is already edited stays edited after another edit", async () => {
+		const { result } = await edit(
+			async (tx) => {
+				await tx.execute(
+					sql`UPDATE app.transactions SET edited = true WHERE id = ${golden.id(16)}::uuid`,
+				);
+				return golden.id(16);
+			},
+			{ note: "Again" },
+		);
+		expect(result.edited).toBe(true);
+	});
+
+	test("an edit of a row with no link leaves edited false", async () => {
+		const { result } = await edit(golden.id(24), { payee: "Swiggy Instamart" });
+		expect(result).toMatchObject({
+			edited: false,
+			subscriptionId: null,
+			subscription: null,
+			dueOn: null,
+		});
+	});
+
+	// BR-F03-17: a charge of a deleted Subscription is an ordinary expense.
+	test("an edit of a charge whose Subscription is gone leaves edited as it was", async () => {
+		const { result } = await edit(
+			async (tx) => {
+				await tx.execute(
+					sql`UPDATE app.transactions SET subscription_id = NULL WHERE id = ${golden.id(16)}::uuid`,
+				);
+				return golden.id(16);
+			},
+			{ note: "Kept" },
+		);
+		expect(result).toMatchObject({
+			edited: false,
+			subscriptionId: null,
+			subscription: null,
+			dueOn: "2026-10-05",
+			source: "subscription",
 		});
 	});
 

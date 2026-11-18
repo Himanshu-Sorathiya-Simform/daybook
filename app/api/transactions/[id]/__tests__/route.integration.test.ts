@@ -1,20 +1,15 @@
 import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, expect, test } from "vitest";
 
-import { GOLDEN_NOW, goldenRow } from "../../../../../seed/golden";
+import { goldenRow } from "../../../../../seed/golden";
 import { loadGolden, type LoadedGolden } from "../../../../../seed/load-golden";
 import { call } from "@/server/api/__tests__/call";
+import {
+	closeOwner,
+	connectOwner,
+	freezeGoldenClock,
+} from "@/server/api/__tests__/endpoint";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
-import { parseOwnerEnv } from "@/server/env";
 import { GET } from "../route";
 
 /** `GET /api/transactions/[id]` (F03 section 11, BR-F03-53, D-479) through the route wrapper,
@@ -31,30 +26,20 @@ async function goldenUser(label: string) {
 }
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
+	owner = await connectOwner();
 	golden = await goldenUser("by-id");
 	other = await goldenUser("by-id-other");
 	noProfile = await signedInUser(owner, "by-id-new");
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [
+afterAll(() =>
+	closeOwner(
+		owner,
 		[golden?.userId, other?.userId, noProfile?.id].filter(Boolean),
-	]);
-	await owner?.end();
-	await runtimePool().end();
-});
+	),
+);
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
+freezeGoldenClock();
 
 const byId = (id: string, cookie = golden.cookie) =>
 	call(GET, `/api/transactions/${encodeURIComponent(id)}`, {
@@ -82,6 +67,7 @@ test("answers the row in the API's shape, with the profile's currency", async ()
 			source: "manual",
 			demo: false,
 			subscriptionId: null,
+			subscription: null,
 			dueOn: null,
 			edited: false,
 			version: 1,
@@ -92,11 +78,21 @@ test("answers the row in the API's shape, with the profile's currency", async ()
 	});
 });
 
-// golden #27 is a charge: source subscription, unlinked at M1 (AC-F03-27).
-test("answers a charge with source subscription", async () => {
+// golden #27 is a charge: Sunrise Apartments' 1 November charge (AC-F03-27, D-598).
+test("answers a charge with its link, due date and Subscription", async () => {
 	const { body } = await byId(golden.id(27));
 	expect(body).toMatchObject({
-		data: { source: "subscription", subscriptionId: null, amountMinor: 1800000 },
+		data: {
+			source: "subscription",
+			amountMinor: 1800000,
+			subscriptionId: golden.subscription("sunrise"),
+			subscription: {
+				id: golden.subscription("sunrise"),
+				name: "Sunrise Apartments",
+			},
+			dueOn: "2026-11-01",
+			edited: false,
+		},
 	});
 });
 

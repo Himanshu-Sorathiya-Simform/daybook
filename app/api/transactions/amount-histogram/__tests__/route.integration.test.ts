@@ -1,20 +1,14 @@
 import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, expect, test } from "vitest";
 
-import { GOLDEN_NOW } from "../../../../../seed/golden";
 import { loadGolden, type LoadedGolden } from "../../../../../seed/load-golden";
 import { call } from "@/server/api/__tests__/call";
+import {
+	closeOwner,
+	connectOwner,
+	freezeGoldenClock,
+} from "@/server/api/__tests__/endpoint";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
-import { parseOwnerEnv } from "@/server/env";
 import { GET } from "../route";
 
 /** `GET /api/transactions/amount-histogram` (BR-F03-60) through the route wrapper, a real session and the
@@ -25,30 +19,15 @@ let golden: LoadedGolden & { cookie: string };
 let noProfile: { id: string; cookie: string };
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
+	owner = await connectOwner();
 	const user = await signedInUser(owner, "histogram-route");
 	golden = { ...(await loadGolden(owner, user.id)), cookie: user.cookie };
 	noProfile = await signedInUser(owner, "histogram-route-new");
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [
-		[golden?.userId, noProfile?.id].filter(Boolean),
-	]);
-	await owner?.end();
-	await runtimePool().end();
-});
+afterAll(() => closeOwner(owner, [golden?.userId, noProfile?.id].filter(Boolean)));
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
+freezeGoldenClock();
 
 const get = (query: string, cookie: string | null = golden.cookie) =>
 	call(

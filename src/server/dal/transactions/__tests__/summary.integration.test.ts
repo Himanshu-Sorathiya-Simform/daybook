@@ -39,6 +39,18 @@ const summarize = (filter: TransactionFilter, by: Breakdown[] = []) =>
 		transactionSummary(tx, goldenContext(golden.userId), filter, by),
 	);
 
+// AC-F05-13
+test("a Subscription's charges: Netflix's two are Out 1,298.00", async () => {
+	const { result } = await summarize({ sub: golden.subscription("netflix") });
+	expect(result).toMatchObject({
+		count: 2,
+		incomeMinor: 0,
+		spendingMinor: 129800,
+		firstOn: "2026-09-05",
+		lastOn: "2026-10-05",
+	});
+});
+
 // AC-F03-39; golden: section 5's summary breakdowns for check A. At M1 To Goals is 0, since the
 // Goal rows are not loaded (D-465).
 test("check A by category and payee matches section 5, in one statement", async () => {

@@ -6,6 +6,8 @@ import {
 	dailyPassMarkers,
 	idempotencyRecords,
 	profile,
+	subscriptionSkips,
+	subscriptions,
 	transactionViews,
 	transactions,
 } from "./app";
@@ -27,6 +29,8 @@ export const ALL_TABLES = [
 	categories,
 	profile,
 	idempotencyRecords,
+	subscriptions,
+	subscriptionSkips,
 	transactions,
 	transactionViews,
 	budgets,

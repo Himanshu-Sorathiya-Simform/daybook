@@ -1,15 +1,6 @@
 import { randomUUIDv7 } from "node:crypto";
 import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { GOLDEN_NOW } from "../../../../seed/golden";
 import {
@@ -18,10 +9,15 @@ import {
 	loadGoldenBudgets,
 } from "../../../../seed/load-golden";
 import { call } from "@/server/api/__tests__/call";
+import {
+	closeOwner,
+	connectOwner,
+	errorOf,
+	freezeGoldenClock,
+} from "@/server/api/__tests__/endpoint";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
 import { uuidV7At } from "@/server/dal/transactions/__tests__/helpers";
-import { parseOwnerEnv, serverEnv } from "@/server/env";
+import { serverEnv } from "@/server/env";
 import { GET, POST } from "../route";
 
 /** `GET` and `POST /api/budgets` (F04 section 11) through the route wrapper, real sessions and
@@ -38,10 +34,7 @@ let noProfile: User;
 const users: string[] = [];
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
+	owner = await connectOwner();
 	golden = await signedInUser(owner, "budgets-route");
 	await loadGolden(owner, golden.id);
 	goldenIds = Object.fromEntries(
@@ -56,19 +49,9 @@ beforeAll(async () => {
 	users.push(golden.id, other.id, noProfile.id);
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [users]);
-	await owner?.end();
-	await runtimePool().end();
-});
+afterAll(() => closeOwner(owner, users));
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
+freezeGoldenClock();
 
 /** A signed-in user with the golden profile and no Budgets, for a test that writes. */
 async function freshUser(label: string): Promise<User> {
@@ -77,17 +60,6 @@ async function freshUser(label: string): Promise<User> {
 	await insertProfile(owner, user.id);
 	return user;
 }
-
-const errorOf = (body: unknown) =>
-	(
-		body as {
-			error: {
-				code: string;
-				fields: Record<string, string>;
-				details: Record<string, unknown>;
-			};
-		}
-	).error;
 
 const dataOf = <T = Record<string, unknown>>(body: unknown) =>
 	(body as { data: T }).data;

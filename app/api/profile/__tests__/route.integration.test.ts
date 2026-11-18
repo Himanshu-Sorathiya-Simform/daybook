@@ -1,23 +1,18 @@
 import { randomUUIDv7 } from "node:crypto";
 import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { GOLDEN_NOW } from "../../../../seed/golden";
 import { loadGolden } from "../../../../seed/load-golden";
 import { PROFILE_MESSAGES } from "@/lib/profile";
 import { call } from "@/server/api/__tests__/call";
+import {
+	closeOwner,
+	connectOwner,
+	freezeGoldenClock,
+} from "@/server/api/__tests__/endpoint";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
-import { parseOwnerEnv, serverEnv } from "@/server/env";
+import { serverEnv } from "@/server/env";
 import { GET as listTransactions } from "../../transactions/route";
 import { GET, POST } from "../route";
 
@@ -31,25 +26,12 @@ let owner: Client;
 const users: string[] = [];
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
+	owner = await connectOwner();
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [users]);
-	await owner?.end();
-	await runtimePool().end();
-});
+afterAll(() => closeOwner(owner, users));
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
+freezeGoldenClock();
 
 async function newUser(label: string): Promise<User> {
 	const signedIn = await signedInUser(owner, label);
@@ -495,9 +477,28 @@ describe("GET /api/profile (BR-F02-26)", () => {
 		).toBe(3);
 	});
 
-	test("the currency is editable again once the last Transaction is gone (BR-F02-14)", async () => {
+	// F05: golden's Subscriptions fix the currency too, so deleting its Transactions alone is not
+	// enough.
+	test("the golden Subscriptions alone still fix the currency (BR-F02-14)", async () => {
+		const who = await goldenUser("profile-get-subs-only");
+		await owner.query(`DELETE FROM app.transactions WHERE user_id = $1`, [
+			who.id,
+		]);
+		expect(
+			((await read(who)).body as { data: { currencyEditable: boolean } }).data
+				.currencyEditable,
+		).toBe(false);
+	});
+
+	test("the currency is editable again once the last Transaction and Subscription are gone (BR-F02-14)", async () => {
 		const who = await goldenUser("profile-get-emptied");
 		await owner.query(`DELETE FROM app.transactions WHERE user_id = $1`, [
+			who.id,
+		]);
+		await owner.query(`DELETE FROM app.subscription_skips WHERE user_id = $1`, [
+			who.id,
+		]);
+		await owner.query(`DELETE FROM app.subscriptions WHERE user_id = $1`, [
 			who.id,
 		]);
 		expect(
