@@ -2,6 +2,7 @@ import { randomUUIDv7 } from "node:crypto";
 
 import type { Browser, Page } from "@playwright/test";
 
+import { todayIn } from "@/lib/time";
 import { insertProfile } from "../seed/load-golden";
 import { open, signUpByApi, userWithGolden } from "./data";
 import { withDatabase } from "./db";
@@ -65,6 +66,19 @@ async function asIntruder(browser: Browser, run: (intruder: Page) => Promise<voi
 
 const originOf = () => test.info().project.use.baseURL!;
 
+const HISTORY = "/api/budgets/history?category=food&to=2026-10&months=6";
+const SUMMARY = "/api/budgets/summary?year=2026";
+type HistoryAnswer = {
+	data: {
+		months: { month: string; limitMinor: number | null; spentMinor: number }[];
+	};
+};
+type SummaryAnswer = {
+	data: {
+		months: { month: string; utilizationTenths: number | null }[];
+	};
+};
+
 // SEC-2: another user's Budgets do not show.
 test("another user sees none of a Budget, on the page or in the API", async ({
 	page,
@@ -85,7 +99,42 @@ test("another user sees none of a Budget, on the page or in the API", async ({
 		expect(data.budgets).toEqual([]);
 		expect(data.inactive).toEqual([]);
 		expect(data.unbudgeted).toEqual([]);
+
+		// The history and the year summary are scoped the same way: 200, with no limit, no
+		// spending and no utilization.
+		const history = await intruder.request.get(HISTORY);
+		expect(history.status()).toBe(200);
+		const theirs = ((await history.json()) as HistoryAnswer).data;
+		expect(theirs.months).toHaveLength(6);
+		for (const each of theirs.months) {
+			expect(each, `history ${each.month}`).toMatchObject({
+				limitMinor: null,
+				spentMinor: 0,
+			});
+		}
+		const year = await intruder.request.get(SUMMARY);
+		expect(year.status()).toBe(200);
+		const theirYear = ((await year.json()) as SummaryAnswer).data;
+		expect(theirYear.months).toHaveLength(12);
+		for (const each of theirYear.months) {
+			expect(each.utilizationTenths, `summary ${each.month}`).toBeNull();
+		}
 	});
+
+	// The same reads answer the owner with figures, so the empty answers above mean something.
+	const mine = await page.request.get(HISTORY);
+	expect(mine.status()).toBe(200);
+	const october = ((await mine.json()) as HistoryAnswer).data.months.find(
+		(each) => each.month === "2026-10",
+	);
+	expect(october).toMatchObject({ limitMinor: 500000, spentMinor: 622000 });
+	const mineYear = await page.request.get(SUMMARY);
+	expect(mineYear.status()).toBe(200);
+	expect(
+		((await mineYear.json()) as SummaryAnswer).data.months.find(
+			(each) => each.month === "2026-10",
+		),
+	).toMatchObject({ utilizationTenths: 1197 });
 });
 
 // SEC-2: another user's Budget and its one-month limit answer 404 and stay as they were. The
@@ -326,7 +375,10 @@ test("markup in a month link shows nothing and runs nothing", async ({ page }) =
 	await expect(
 		page.getByText("Some filters in this link weren't valid and were removed."),
 	).toBeVisible();
+	// No element was made, which is conclusive. A broken image would also have asked for its
+	// source and run its handler, so wait for the page to go quiet before counting dialogs.
 	await expect(page.locator("img[src='x']")).toHaveCount(0);
+	await page.waitForLoadState("networkidle");
 	expect(dialogs).toBe(0);
 });
 
@@ -340,11 +392,9 @@ test("a payee name with markup shows as text in Where it went", async ({ page })
 	});
 	const markup = '<img src=x onerror="alert(1)">';
 	const origin = test.info().project.use.baseURL!;
-	const at = new Date();
-	at.setSeconds(0, 0);
-	const today = new Intl.DateTimeFormat("en-CA", {
-		timeZone: "Asia/Kolkata",
-	}).format(at);
+	// One instant gives both fields, so they name the same day in the first minute after
+	// midnight too, and it is in whole minutes, as the API wants (BR-F03-06).
+	const happened = new Date(Math.floor((Date.now() - 60_000) / 60_000) * 60_000);
 	const made = await page.request.post("/api/transactions", {
 		data: {
 			id: randomUUIDv7(),
@@ -354,8 +404,8 @@ test("a payee name with markup shows as text in Where it went", async ({ page })
 			category: "food",
 			payee: markup,
 			description: null,
-			occurredAt: new Date(at.getTime() - 60_000).toISOString(),
-			occurredOn: today,
+			occurredAt: happened.toISOString(),
+			occurredOn: todayIn("Asia/Kolkata", happened),
 			createdAt: new Date().toISOString(),
 		},
 		headers: { origin, "idempotency-key": randomUUIDv7() },
@@ -365,6 +415,9 @@ test("a payee name with markup shows as text in Where it went", async ({ page })
 	await page.goto("/budgets");
 	await row(page, "budget:food").click();
 	await expect(panel(page)).toContainText(markup);
+	// No element was made, which is conclusive. A broken image would also have asked for its
+	// source and run its handler, so wait for the page to go quiet before counting dialogs.
 	await expect(page.locator("img[src='x']")).toHaveCount(0);
+	await page.waitForLoadState("networkidle");
 	expect(dialogs).toBe(0);
 });

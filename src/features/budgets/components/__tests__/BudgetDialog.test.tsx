@@ -272,9 +272,19 @@ describe("Change limit (BR-F04-20)", () => {
 		);
 	});
 
-	test("focus starts in the limit", () => {
+	// AC-F04-33
+	test("Change limit starts in the limit", () => {
 		renderDialog("change", "food");
 		expect(limitBox()).toHaveFocus();
+	});
+
+	// AC-F04-33: Stop budgeting has no limit to enter, so focus stays on the dialog, as it
+	// always has; D-583 moved Add's start alone.
+	test("Stop budgeting has no limit box, and focus starts on the dialog itself", () => {
+		renderDialog("stop", "food");
+		expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+		expect(dialog()).toHaveFocus();
+		expect(dialog()).toHaveAccessibleName("Stop budgeting Food");
 	});
 
 	// AC-F04-33

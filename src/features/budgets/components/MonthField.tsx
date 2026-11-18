@@ -52,12 +52,12 @@ export function MonthField({
 		// coming into the chips goes to the one last focused, so the chosen one is focused again
 		// from there.
 		const frame = requestAnimationFrame(() => {
-			// One chip is always chosen.
-			const chosen = root.current!.querySelector<HTMLElement>(
+			// One chip is always chosen; a frame that finds none leaves focus where it is.
+			const chosen = root.current?.querySelector<HTMLElement>(
 				'[role="radio"][aria-checked="true"]',
-			)!;
-			chosen.focus();
-			chosen.focus();
+			);
+			chosen?.focus();
+			chosen?.focus();
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [closes]);

@@ -829,17 +829,23 @@ describe("the selection across months (BR-F04-17, D-249)", () => {
 		expect(rowOf("budget:food")).toHaveAttribute("aria-selected", "true");
 	});
 
-	// AC-F04-29
-	test("housing selected in October clears in August, where it shows nowhere", async () => {
-		const { user } = renderPage("?month=2026-10", {
-			months: (month) =>
-				ok(month === "2026-08" ? nothing(month) : monthAnswer(month)),
-		});
+	// AC-F04-29: on golden, August has rows (food, shopping, entertainment and transportation,
+	// Not active) but no housing, so only the selection can explain housing clearing.
+	test("housing selected in October clears in August, where other rows still show", async () => {
+		const { user } = renderPage("?month=2026-10");
 		await screen.findByText("Not budgeted · 1");
 		await user.click(rowOf("unbudgeted:housing"));
+		expect(rowOf("unbudgeted:housing")).toHaveAttribute("aria-selected", "true");
 		await user.click(monthButton("Previous month"));
 		await user.click(monthButton("Previous month"));
-		expect(await screen.findByText("No Budgets for August 2026.")).toBeVisible();
+		// Food, shopping, entertainment and transportation show as Not active, so this is no
+		// empty month; housing is nowhere, and the selection went with it.
+		expect(
+			await screen.findByRole("button", { name: "Not active this month · 4" }),
+		).toBeVisible();
+		expect(rowOf("unbudgeted:housing")).not.toBeInTheDocument();
+		expect(screen.queryByText("Housing")).not.toBeInTheDocument();
+		// Back in October it is not selected any more.
 		await user.click(monthButton("Next month"));
 		await user.click(monthButton("Next month"));
 		await screen.findByText("Not budgeted · 1");

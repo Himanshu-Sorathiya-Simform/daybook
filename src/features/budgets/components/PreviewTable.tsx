@@ -4,7 +4,11 @@ import { useState } from "react";
 
 import { Button } from "@/components/actions/Button";
 import type { Month } from "@/lib/budgets/months";
-import type { BudgetChange, BudgetPreview } from "@/lib/budgets/preview";
+import type {
+	BudgetChange,
+	BudgetPreview,
+	PreviewMonth,
+} from "@/lib/budgets/preview";
 import { cn } from "@/lib/cn";
 import { STATE_TONES } from "../lib/labels";
 import {
@@ -76,9 +80,8 @@ export function PreviewTable({
 			</thead>
 			<tbody>
 				{shown.map((group) => {
-					const first = preview.months.find(
-						(each) => each.month === group.first,
-					)!;
+					// A group is its first month's figures, which every month in it shares.
+					const first: PreviewMonth = { ...group, month: group.first };
 					const months = groupText(group, formats);
 					const state =
 						figures === "ready" ? newState(first, context) : null;
