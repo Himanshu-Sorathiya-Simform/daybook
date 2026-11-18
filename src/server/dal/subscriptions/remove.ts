@@ -9,6 +9,7 @@ import {
 	subscriptionDeleteSchema,
 } from "@/lib/subscriptions/schemas";
 import { ApiError, fromZodError } from "../../api/errors";
+import { safeInt } from "../../db/safe-int";
 import type { ProfiledContext } from "../context";
 import { lockCurrency } from "../currency";
 import type { Tx } from "../with-user";
@@ -108,7 +109,7 @@ export async function deleteSubscription(
 	return {
 		changeDate,
 		chargesCreated,
-		chargesKept: Number((kept as { kept: string }).kept),
+		chargesKept: safeInt((kept as { kept: string }).kept),
 		chargesDeleted: deleted.length,
 		months: [...months].sort(),
 	};

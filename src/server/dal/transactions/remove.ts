@@ -27,8 +27,9 @@ async function deleteRow(tx: Tx, id: string, version: number): Promise<boolean> 
  * the charge first and was later moved back. The Subscription is locked, then read (D-605).
  * The tombstone is written, and the delete counts as done, when the Subscription still exists
  * and the date is one of its due dates with no charge on it. A date that already has its
- * tombstone counts as done and writes nothing (`writeTombstone`). Anything else is 404, which
- * counts as done too.
+ * tombstone counts as done and writes nothing, whether or not it is still a due date (a schedule
+ * change keeps the tombstones on or before its change date). Anything else is 404, which counts
+ * as done too.
  */
 async function tombstoneForGoneCharge(
 	tx: Tx,
@@ -39,6 +40,8 @@ async function tombstoneForGoneCharge(
 	if (!found) throw new ApiError("not_found");
 	const { dated } = found;
 	if (dated.charged.includes(hint.dueOn)) throw new ApiError("not_found");
+	// A tombstone a schedule change kept is still done, whether or not the date is on the schedule.
+	if (dated.skipped.includes(hint.dueOn)) return;
 	if (!isDueDate(dated, hint.dueOn)) throw new ApiError("not_found");
 	await writeTombstone(tx, ctx, hint.subscriptionId, hint.dueOn);
 }

@@ -443,6 +443,24 @@ describe("a delete whose charge is gone, with a hint", () => {
 		expect(result.after).toEqual(result.before);
 	});
 
+	// F05 BR-F05-11: a schedule change keeps tombstones on or before its change date.
+	test("a tombstone that is off the schedule is done too, and writes nothing", async () => {
+		const { result } = await hinted(
+			{ subscriptionId: golden.subscription("netflix"), dueOn: "2026-10-06" },
+			"netflix",
+			async (tx) => {
+				await tx.execute(
+					sql`INSERT INTO app.subscription_skips (id, user_id, created_at, updated_at,
+						subscription_id, due_on)
+					VALUES (${uuidV7At(GOLDEN_NOW)}, ${golden.userId}, ${GOLDEN_NOW}, ${GOLDEN_NOW},
+						${golden.subscription("netflix")}::uuid, '2026-10-06')`,
+				);
+			},
+		);
+		expect(result.outcome).toBe("done");
+		expect(result.after).toEqual(result.before);
+	});
+
 	test("a date with a charge on it is 404: another charge holds it", async () => {
 		const { result } = await hinted({
 			subscriptionId: golden.subscription("netflix"),

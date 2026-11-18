@@ -229,7 +229,12 @@ export async function changeSubscription(
 			issues.push({ path: ["skipDueOn"], message: M.skipEdited });
 		}
 	}
-	if (body.unskipDueOn !== undefined) {
+	// A date with no tombstone changes nothing, whatever its date (D-612); a tombstone on or
+	// before C stays.
+	if (
+		body.unskipDueOn !== undefined
+		&& stored.skipped.includes(body.unskipDueOn)
+	) {
 		const found = unskipIssue(body.unskipDueOn, changeDate);
 		if (found) issues.push({ path: ["unskipDueOn"], message: found });
 	}

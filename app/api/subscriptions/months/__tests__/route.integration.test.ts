@@ -67,7 +67,7 @@ const read = (query: string, cookie: string | null = golden.cookie) =>
 const errorOf = (body: unknown) =>
 	(
 		body as {
-			error: { code: string; details: { params?: string[] } };
+			error: { code: string; message: string; details: { params?: string[] } };
 		}
 	).error;
 
@@ -124,7 +124,6 @@ describe("GET /api/subscriptions/months", () => {
 		["only from", "?from=2026-10", ["to"]],
 		["a month that is not YYYY-MM", "?from=2026-1&to=2026-12", ["from"]],
 		["a repeated name", "?from=2026-10&from=2026-11&to=2026-12", ["from"]],
-		["a month 121 months away", "?from=2026-10&to=2037-01", ["to"]],
 	])(
 		"%s is 400 bad_request naming the parameter",
 		async (_name, query, params) => {
@@ -136,6 +135,17 @@ describe("GET /api/subscriptions/months", () => {
 			});
 		},
 	);
+
+	// BR-F05-36, D-601
+	test("a month past the window is 400 with the window as the message", async () => {
+		const { status, body } = await read("?from=2036-10&to=2036-12");
+		expect(status).toBe(400);
+		expect(errorOf(body)).toMatchObject({
+			code: "bad_request",
+			message: "Choose months from Nov 2016 to Nov 2036.",
+			details: { params: ["to"] },
+		});
+	});
 
 	test("another user's Subscriptions never appear in the figures", async () => {
 		const { body } = await read("?from=2026-12&to=2026-12", other.cookie);

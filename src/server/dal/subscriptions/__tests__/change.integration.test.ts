@@ -326,16 +326,17 @@ describe("the checks before any change (section 11 order)", () => {
 	});
 
 	test("every refusal comes back at once, one message per field", async () => {
-		const { result } = await asUser(golden.userId, (tx) =>
-			refusal(
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await tombstone(tx, golden.userId, netflix(), "2026-11-01");
+			return refusal(
 				change(tx, goldenContext(golden.userId), netflix(), 1, {
 					startDate: "2015-11-02",
 					endDate: "2015-10-01",
 					pause: { from: "2026-11-06", until: "2026-11-07" },
 					unskipDueOn: "2026-11-01",
 				}),
-			),
-		);
+			);
+		});
 		expect(Object.keys(result.fields ?? {}).sort()).toEqual([
 			"endDate",
 			"pause.from",
@@ -1415,6 +1416,17 @@ describe("unskipDueOn (BR-F05-34)", () => {
 		expect(result.fields).toEqual({
 			unskipDueOn: "This charge date has passed, so it can't be brought back.",
 		});
+	});
+
+	// D-612: the tombstone is checked first, so a date with none is no change, passed or not.
+	test("a date on or before C with no tombstone changes nothing, like the skip's own Undo", async () => {
+		const { result } = await asUser(golden.userId, (tx) =>
+			change(tx, goldenContext(golden.userId), netflix(), 1, {
+				name: "Netflix",
+				unskipDueOn: "2026-11-02",
+			}),
+		);
+		expect(result).toMatchObject({ version: 1, skips: [], chargesCreated: 0 });
 	});
 
 	test("a date with no tombstone changes nothing on its own", async () => {

@@ -272,6 +272,33 @@ describe("PATCH /api/subscriptions/[id]", () => {
 		expect(await stored(other.subscription("netflix"))).toEqual(before);
 	});
 
+	// AC-F05-05: a sync request that carries Daybook-Queue: pending is not caught up first, so
+	// the queued change lands before any lazy charge is made.
+	test("with Daybook-Queue: pending the lazy catch-up does not run first; without it, it does", async () => {
+		const queued = await signedInUser(owner, "sub-id-patch-queue");
+		users.push(queued.id);
+		const loaded = await loadGolden(owner, queued.id, { beforeCatchUp: true });
+		const sunriseCharges = async () => {
+			const { rows } = await owner.query<{ n: number }>(
+				`SELECT count(*)::int AS n FROM app.transactions
+				 WHERE subscription_id = $1 AND due_on = '2026-11-01'`,
+				[loaded.subscription("sunrise")],
+			);
+			return rows[0]!.n;
+		};
+		expect(await sunriseCharges()).toBe(0);
+		const user = { ...loaded, cookie: queued.cookie };
+		const first = await patch(user, change({ note: "Queued" }), {
+			headers: { "daybook-queue": "pending" },
+		});
+		expect(first.status).toBe(200);
+		// Row 27, Sunrise Apartments' 1 November charge, waits for the boot or the next request.
+		expect(await sunriseCharges()).toBe(0);
+		const second = await patch(user, change({ note: "Next" }), { version: "2" });
+		expect(second.status).toBe(200);
+		expect(await sunriseCharges()).toBe(1);
+	});
+
 	test("no If-Match is 400", async () => {
 		const { status, body } = await patch(golden, change({ name: "X" }), {
 			version: null,

@@ -15,7 +15,11 @@ function refusal(query: string) {
 		read(query);
 	} catch (error) {
 		if (!(error instanceof ApiError)) throw error;
-		return { code: error.code, params: error.details["params"] };
+		return {
+			code: error.code,
+			params: error.details["params"],
+			message: error.message,
+		};
 	}
 	throw new Error("The query was not refused.");
 }
@@ -54,6 +58,9 @@ describe("a valid query", () => {
 	});
 });
 
+const GENERIC = "The request could not be read.";
+const WINDOW = "Choose months from Nov 2016 to Nov 2036.";
+
 describe("a refused query is 400 bad_request, naming every refused parameter, from first", () => {
 	test.each([
 		["no parameters", "", ["from", "to"]],
@@ -69,10 +76,25 @@ describe("a refused query is 400 bad_request, naming every refused parameter, fr
 		["a repeated to", "from=2026-10&to=2026-11&to=2026-12", ["to"]],
 		["from after to", "from=2026-12&to=2026-10", ["from"]],
 		["25 months", "from=2026-01&to=2028-01", ["to"]],
+		["a span of 121 months", "from=2026-11&to=2036-12", ["to"]],
+	])("%s says the generic message", (_name, query, params) => {
+		expect(refusal(query)).toEqual({
+			code: "bad_request",
+			params,
+			message: GENERIC,
+		});
+	});
+
+	// BR-F05-36, D-601: a window miss says which months can be asked for.
+	test.each([
 		["from past the window", "from=2036-12&to=2036-12", ["from", "to"]],
-		["to past the window", "from=2026-11&to=2036-12", ["to"]],
+		["to past the window", "from=2036-10&to=2036-12", ["to"]],
 		["from before the window", "from=2016-10&to=2016-10", ["from", "to"]],
-	])("%s", (_name, query, params) => {
-		expect(refusal(query)).toEqual({ code: "bad_request", params });
+	])("%s says the window", (_name, query, params) => {
+		expect(refusal(query)).toEqual({
+			code: "bad_request",
+			params,
+			message: WINDOW,
+		});
 	});
 });

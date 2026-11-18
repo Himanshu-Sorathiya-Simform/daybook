@@ -26,7 +26,7 @@ import {
 	lockSubscriptions,
 } from "../catch-up";
 import { transactionIdOf, waitForWaiterOn } from "../../budgets/__tests__/helpers";
-import { goldenUser } from "./helpers";
+import { goldenUser, on } from "./helpers";
 
 /** Catch-up (F05, BR-F05-02, BR-F05-05, BR-F05-06, JOB-1, JOB-2) through the runtime role and RLS.
  * Subscriptions the scenarios need are inserted inside a transaction that rolls back, so one
@@ -259,14 +259,16 @@ describe("catchUpSubscription: which dates get a charge (BR-F05-02)", () => {
 	// AC-F05-09: a tombstoned date is never recreated.
 	test("never charges a tombstoned date, past or future", async () => {
 		const sub = record();
+		// Today is 31 January 2027, so 5 December, tombstoned while it was still ahead, has passed.
+		const later = chargeContext(on(bare, "2027-01-31"));
 		const { result } = await withSubs([sub], async (tx) => {
-			await catchUpSubscription(tx, ctxOf(), sub, {
+			await catchUpSubscription(tx, later, sub, {
 				through: "2027-01-31",
 				skipped: ["2026-09-05", "2026-12-05"],
 			});
 			return chargesOf(tx, sub.id);
 		});
-		expect(dueOns(result)).toEqual(["2026-10-05"]);
+		expect(dueOns(result)).toEqual(["2026-10-05", "2026-11-05", "2027-01-05"]);
 	});
 
 	test("an upcoming Subscription gets nothing", async () => {
