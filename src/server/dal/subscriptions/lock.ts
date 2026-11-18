@@ -39,3 +39,27 @@ export async function lockSubscription(
 	}
 	return read;
 }
+
+/**
+ * Locks one Subscription by id for a charge delete (BR-F03-17 step 1, SRV-7) and answers
+ * whether the user has it. The profile lock is the caller's. Nothing is read: the delete needs
+ * only to know that the Subscription cannot change or go until it commits.
+ */
+export async function lockSubscriptionRow(tx: Tx, id: string): Promise<boolean> {
+	const { rows } = await tx.execute<{ id: string }>(
+		sql`SELECT id FROM app.subscriptions WHERE id = ${id}::uuid FOR UPDATE`,
+	);
+	return rows.length > 0;
+}
+
+/** `lockSubscriptionRow`, then the Subscription with its charges and tombstones in a second
+ * statement (D-605); `null` when the user has none. */
+export async function lockAndRead(
+	tx: Tx,
+	ctx: ProfiledContext,
+	id: string,
+): Promise<ReadItem | null> {
+	if (!(await lockSubscriptionRow(tx, id))) return null;
+	const [read] = await readItems(tx, ctx, byId(id));
+	return read ?? null;
+}

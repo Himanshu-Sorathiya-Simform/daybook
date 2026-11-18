@@ -137,6 +137,7 @@ test("answers 200 with the edited row and the profile currency, as GET then read
 			source: "manual",
 			demo: false,
 			subscriptionId: null,
+			subscription: null,
 			dueOn: null,
 			edited: false,
 			version: 2,

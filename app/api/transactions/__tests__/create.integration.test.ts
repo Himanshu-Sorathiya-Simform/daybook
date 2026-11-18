@@ -103,6 +103,7 @@ test("creates the row: 201 with the row and the profile currency", async () => {
 			source: "manual",
 			demo: false,
 			subscriptionId: null,
+			subscription: null,
 			dueOn: null,
 			edited: false,
 			version: 1,

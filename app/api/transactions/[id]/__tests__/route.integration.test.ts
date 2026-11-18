@@ -82,6 +82,7 @@ test("answers the row in the API's shape, with the profile's currency", async ()
 			source: "manual",
 			demo: false,
 			subscriptionId: null,
+			subscription: null,
 			dueOn: null,
 			edited: false,
 			version: 1,
@@ -92,11 +93,21 @@ test("answers the row in the API's shape, with the profile's currency", async ()
 	});
 });
 
-// golden #27 is a charge: source subscription, unlinked at M1 (AC-F03-27).
-test("answers a charge with source subscription", async () => {
+// golden #27 is a charge: Sunrise Apartments' 1 November charge (AC-F03-27, D-598).
+test("answers a charge with its link, due date and Subscription", async () => {
 	const { body } = await byId(golden.id(27));
 	expect(body).toMatchObject({
-		data: { source: "subscription", subscriptionId: null, amountMinor: 1800000 },
+		data: {
+			source: "subscription",
+			amountMinor: 1800000,
+			subscriptionId: golden.subscription("sunrise"),
+			subscription: {
+				id: golden.subscription("sunrise"),
+				name: "Sunrise Apartments",
+			},
+			dueOn: "2026-11-01",
+			edited: false,
+		},
 	});
 });
 

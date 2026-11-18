@@ -1,6 +1,6 @@
 import "server-only";
 import { sql } from "drizzle-orm";
-import { isUuid, uuidV7 } from "@/lib/ids";
+import { isUuid } from "@/lib/ids";
 import { isIsoDate } from "@/lib/time";
 import { SUBSCRIPTION_MESSAGES as M } from "@/lib/subscriptions/messages";
 import type { SubscriptionItem } from "@/lib/subscriptions/answers";
@@ -17,6 +17,7 @@ import type { Tx } from "../with-user";
 import { catchUpSubscription, chargeContext } from "./catch-up";
 import { lockSubscription } from "./lock";
 import { getSubscriptionItem } from "./read";
+import { writeTombstone } from "./tombstone";
 
 /** Raises 422 on `field` when `changedAt` is outside its window (D-267). */
 function checkChangedAt(changedAt: string, now: Date): void {
@@ -107,14 +108,7 @@ export async function skipCharge(
 			sql`DELETE FROM app.transactions WHERE id = ${charge.id}::uuid`,
 		);
 	}
-	const now = ctx.now.toISOString();
-	await tx.execute(
-		sql`INSERT INTO app.subscription_skips (id, user_id, created_at, updated_at,
-			subscription_id, due_on)
-		VALUES (${uuidV7(ctx.now.getTime())}, ${ctx.user.id}, ${now}, ${now}, ${id}::uuid,
-			${body.dueOn}::date)`,
-	);
-	await bump(tx, ctx, id);
+	await writeTombstone(tx, ctx, id, body.dueOn);
 	return answer(tx, ctx, id);
 }
 

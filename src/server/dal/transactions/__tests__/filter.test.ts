@@ -52,20 +52,35 @@ describe("filterSql", () => {
 	});
 
 	// D-470
-	test.each([
-		{ goal: "0199a000-0000-7000-8001-000000000001" },
-		{ sub: "0199a000-0000-7000-8002-000000000001" },
-	])("matches nothing for %j until M2 adds the column", (filter) => {
-		expect(clause(filter)).toMatchObject({ sql: "(false)", params: [] });
+	test("matches nothing for a Goal until F06 adds the column", () => {
+		expect(
+			clause({ goal: "0199a000-0000-7000-8001-000000000001" }),
+		).toMatchObject({
+			sql: "(false)",
+			params: [],
+		});
 	});
 
-	test("adds one clause for a Goal and a Subscription together", () => {
+	// D-255
+	test("matches a Subscription's charges by its id, as a parameter", () => {
+		expect(
+			clause({ sub: "0199a000-0000-7000-8002-000000000001" }),
+		).toMatchObject({
+			sql: "(subscription_id = $1::uuid)",
+			params: ["0199a000-0000-7000-8002-000000000001"],
+		});
+	});
+
+	test("adds a clause for a Goal and one for a Subscription together", () => {
 		expect(
 			clause({
 				goal: "0199a000-0000-7000-8001-000000000001",
 				sub: "0199a000-0000-7000-8002-000000000001",
-			}).sql,
-		).toBe("(false)");
+			}),
+		).toMatchObject({
+			sql: "(false AND subscription_id = $1::uuid)",
+			params: ["0199a000-0000-7000-8002-000000000001"],
+		});
 	});
 
 	test("joins every field with AND, in the URL's order (FIL-1)", () => {

@@ -35,17 +35,18 @@ export const PATCH = route(
 );
 
 /** Deletes a Transaction at its `If-Match` version (F03 section 11): 204. The body is `{}`, or a
- * charge's hint, checked for shape only until F05 (D-487). A stale version gets 409 with the
- * current row; a missing one gets 404, which the client counts as done (BR-F03-25). */
+ * charge's hint, which writes the tombstone when the charge is already gone (BR-F03-17, D-608).
+ * A stale version gets 409 with the current row; a missing one gets 404, which the client
+ * counts as done (BR-F03-25). */
 export const DELETE = route(
 	{ body: transactionDeleteSchema, versioned: true },
-	async (ctx, tx, { params, version }) => {
+	async (ctx, tx, { body, params, version }) => {
 		const profiled = requireProfile(ctx);
 		const id = params["id"];
 		// The wrapper refuses a versioned route's request without `If-Match` (400).
 		if (typeof id !== "string" || version === null)
 			throw new ApiError("not_found");
-		await deleteTransaction(tx, profiled, id, version);
+		await deleteTransaction(tx, profiled, id, version, body);
 		return reply(null, { status: 204 });
 	},
 );

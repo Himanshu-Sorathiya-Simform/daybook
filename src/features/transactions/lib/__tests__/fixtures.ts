@@ -23,6 +23,7 @@ export function row(overrides: Partial<TransactionAnswer> = {}): TransactionAnsw
 		source: "manual",
 		demo: false,
 		subscriptionId: null,
+		subscription: null,
 		dueOn: null,
 		edited: false,
 		version: 1,

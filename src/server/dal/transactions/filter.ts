@@ -37,8 +37,8 @@ function searchSql(q: string, currency: CurrencyCode): SQL {
  * only Transactions relation is that table, aliased or not. RLS already limits the rows to
  * the user (SEC-2).
  *
- * Until M2 adds `goal_id` and `subscription_id`, a Goal or Subscription filter matches no
- * rows, as `matchesFilter` does for rows without them (D-470).
+ * `sub` is a Subscription's charges (D-255). Until F06 adds `goal_id`, a Goal filter matches no
+ * rows, as `matchesFilter` does for rows without one (D-470).
  */
 export function filterSql(filter: TransactionFilter, currency: CurrencyCode): SQL {
 	const { from, to, type, cat, goal, sub, src, minMinor, maxMinor, q } = filter;
@@ -48,7 +48,8 @@ export function filterSql(filter: TransactionFilter, currency: CurrencyCode): SQ
 	// `sql.param` sends a list as one array; a bare list would become `($1, $2)`.
 	if (type) clauses.push(sql`type = ANY(${sql.param(type)}::text[])`);
 	if (cat) clauses.push(sql`category = ANY(${sql.param(cat)}::text[])`);
-	if (goal !== undefined || sub !== undefined) clauses.push(sql`false`);
+	if (goal !== undefined) clauses.push(sql`false`);
+	if (sub !== undefined) clauses.push(sql`subscription_id = ${sub}::uuid`);
 	if (src !== undefined) clauses.push(sql`source = ${src}`);
 	if (minMinor !== undefined) clauses.push(sql`amount_minor >= ${minMinor}`);
 	if (maxMinor !== undefined) clauses.push(sql`amount_minor <= ${maxMinor}`);
