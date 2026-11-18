@@ -47,10 +47,8 @@ export function ConflictDialog({
 			title={CONFLICT_TEXT.title}
 			size="lg"
 			isOpen={isOpen}
-			onOpenChange={(next) => {
-				if (!isPending) onOpenChange(next);
-			}}
-			isKeyboardDismissDisabled={isPending}
+			onOpenChange={onOpenChange}
+			isPending={isPending}
 			footer={
 				<>
 					<span className="flex-1" />

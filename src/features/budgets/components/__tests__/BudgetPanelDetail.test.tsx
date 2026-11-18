@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay } from "msw";
 import { setupServer } from "msw/node";
@@ -449,6 +449,32 @@ describe("BudgetPanelDetail: its reads (D-571)", () => {
 		} finally {
 			online();
 		}
+	});
+
+	// Section 10: the history is not kept offline, even one read earlier in the session.
+	test("going offline after Last 6 months was read takes it away, and online brings it back", async () => {
+		serve();
+		renderDetail("food", "2026-10");
+		await screen.findByRole("region", { name: "Last 6 months" });
+
+		const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+		act(() => {
+			window.dispatchEvent(new Event("offline"));
+		});
+		await waitFor(() =>
+			expect(
+				screen.queryByRole("region", { name: "Last 6 months" }),
+			).not.toBeInTheDocument(),
+		);
+		expect(screen.getByRole("region", { name: "Limit history" })).toBeVisible();
+
+		online.mockReturnValue(true);
+		act(() => {
+			window.dispatchEvent(new Event("online"));
+		});
+		expect(
+			await screen.findByRole("region", { name: "Last 6 months" }),
+		).toBeVisible();
 	});
 
 	test("takes the caller's classes", async () => {

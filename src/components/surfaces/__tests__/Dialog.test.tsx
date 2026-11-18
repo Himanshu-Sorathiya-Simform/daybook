@@ -226,17 +226,80 @@ describe("pressing outside", () => {
 	});
 });
 
-describe("Escape can be turned off", () => {
-	test("Escape does nothing, but the Close button still works", async () => {
+describe("while a save is pending", () => {
+	test("Escape, the Close button and a press outside all wait, and nothing is reported", async () => {
 		const user = userEvent.setup();
-		render(<Host isKeyboardDismissDisabled />);
+		const onOpenChange = vi.fn();
+		render(
+			<Host
+				isPending
+				isDismissable
+				onOpenChange={onOpenChange}
+			/>,
+		);
 		await open(user);
 
 		await user.keyboard("{Escape}");
-		expect(screen.getByRole("dialog")).toBeVisible();
-
 		await user.click(screen.getByRole("button", { name: "Close" }));
-		await closed();
+		await user.click(document.body);
+
+		expect(onOpenChange).not.toHaveBeenCalled();
+		expect(screen.getByRole("dialog")).toBeVisible();
+	});
+
+	test("the Close button shows disabled, and stays reachable by keyboard", async () => {
+		const user = userEvent.setup();
+		render(<Host isPending />);
+		await open(user);
+
+		const close = screen.getByRole("button", { name: "Close" });
+		expect(close).toHaveAttribute("aria-disabled", "true");
+		await user.tab();
+		expect(close).toHaveFocus();
+	});
+
+	test("the Close button is enabled when nothing is pending", async () => {
+		const user = userEvent.setup();
+		render(<Host />);
+		await open(user);
+
+		expect(screen.getByRole("button", { name: "Close" })).not.toHaveAttribute(
+			"aria-disabled",
+		);
+	});
+
+	test("closing works again once the save has finished", async () => {
+		const user = userEvent.setup();
+		const onOpenChange = vi.fn();
+		const { rerender } = render(
+			<Dialog
+				title="Saving"
+				isOpen
+				isPending
+				onOpenChange={onOpenChange}
+			>
+				Body
+			</Dialog>,
+		);
+		await screen.findByRole("dialog");
+		await user.keyboard("{Escape}");
+		expect(onOpenChange).not.toHaveBeenCalled();
+
+		rerender(
+			<Dialog
+				title="Saving"
+				isOpen
+				isPending={false}
+				onOpenChange={onOpenChange}
+			>
+				Body
+			</Dialog>,
+		);
+		await user.keyboard("{Escape}");
+		await user.click(screen.getByRole("button", { name: "Close" }));
+
+		expect(onOpenChange).toHaveBeenCalledTimes(2);
+		expect(onOpenChange).toHaveBeenCalledWith(false);
 	});
 });
 

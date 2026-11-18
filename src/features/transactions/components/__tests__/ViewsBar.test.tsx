@@ -1,5 +1,12 @@
 import { onlineManager } from "@tanstack/react-query";
-import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	fireEvent,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -713,6 +720,131 @@ describe("Revert (BR-F03-66)", () => {
 	});
 });
 
+describe("one view write at a time (D-615)", () => {
+	// Each press builds its own idempotency key, so a second press in the same frame, before
+	// React shows the pending state, would be a second, distinct write.
+	test("Save as view pressed twice in the same frame sends one create", async () => {
+		const { store } = renderBar("?cat=food");
+		await screen.findByRole("radio", { name: /Food last month/ });
+		let answer: (() => void) | undefined;
+		const held = new Promise<void>((resolve) => {
+			answer = resolve;
+		});
+		const save = accept(store);
+		const created = route(
+			network,
+			"post",
+			"/api/transaction-views",
+			async (request) => {
+				await held;
+				return save(request);
+			},
+		);
+		const press = button("Save as view");
+		act(() => {
+			fireEvent.click(press);
+			fireEvent.click(press);
+		});
+		await waitFor(() => expect(created).toHaveLength(1));
+		answer!();
+		await screen.findByText("Saved as a new view.");
+		expect(created).toHaveLength(1);
+	});
+
+	test("Update view pressed twice in the same frame sends one edit", async () => {
+		const { store } = renderBar(`?${CHECK_B}&type=expense&view=${FOOD.id}`);
+		await loaded();
+		let answer: (() => void) | undefined;
+		const held = new Promise<void>((resolve) => {
+			answer = resolve;
+		});
+		const patch = patched(store, FOOD.id);
+		const edits = route(
+			network,
+			"patch",
+			`/api/transaction-views/${FOOD.id}`,
+			async (request) => {
+				await held;
+				return patch(request);
+			},
+		);
+		const press = button("Update view");
+		act(() => {
+			fireEvent.click(press);
+			fireEvent.click(press);
+		});
+		await waitFor(() => expect(edits).toHaveLength(1));
+		answer!();
+		await screen.findByText("View updated.");
+		expect(edits).toHaveLength(1);
+	});
+
+	test("Delete pressed twice in the same frame sends one delete", async () => {
+		const { store, user } = renderBar(`?${CHECK_B}&view=${FOOD.id}`);
+		await loaded();
+		let answer: (() => void) | undefined;
+		const held = new Promise<void>((resolve) => {
+			answer = resolve;
+		});
+		const deletes = route(
+			network,
+			"delete",
+			`/api/transaction-views/${FOOD.id}`,
+			async () => {
+				await held;
+				store.items.splice(0, 1);
+				return new HttpResponse(null, { status: 204 });
+			},
+		);
+		const menu = await openMenu(user);
+		await user.click(within(menu).getByRole("menuitem", { name: "Delete" }));
+		const confirm = await screen.findByRole("alertdialog");
+		const press = within(confirm).getByRole("button", { name: "Delete" });
+		act(() => {
+			fireEvent.click(press);
+			fireEvent.click(press);
+		});
+		await waitFor(() => expect(deletes).toHaveLength(1));
+		answer!();
+		await screen.findByText("View deleted.");
+		expect(deletes).toHaveLength(1);
+	});
+
+	test("Enter twice in Rename in the same frame sends one rename", async () => {
+		const { store, user } = renderBar(`?${CHECK_B}&view=${FOOD.id}`);
+		await loaded();
+		let answer: (() => void) | undefined;
+		const held = new Promise<void>((resolve) => {
+			answer = resolve;
+		});
+		const patch = patched(store, FOOD.id);
+		const edits = route(
+			network,
+			"patch",
+			`/api/transaction-views/${FOOD.id}`,
+			async (request) => {
+				await held;
+				return patch(request);
+			},
+		);
+		const menu = await openMenu(user);
+		await user.click(within(menu).getByRole("menuitem", { name: "Rename" }));
+		const dialog = await screen.findByRole("dialog", { name: "Rename view" });
+		const field = within(dialog).getByRole("textbox", { name: "Name" });
+		await user.clear(field);
+		await user.type(field, "Eating out");
+		const form = dialog.querySelector("form")!;
+		act(() => {
+			fireEvent.submit(form);
+			fireEvent.submit(form);
+		});
+		await waitFor(() => expect(edits).toHaveLength(1));
+		answer!();
+		await screen.findByText("View renamed.");
+		expect(edits).toHaveLength(1);
+	});
+});
+
 describe("Update view (BR-F03-68)", () => {
 	// AC-F03-54
 	test("an edited saved view offers Update view and Revert, and no Save as view", async () => {
@@ -1140,7 +1272,7 @@ describe("Rename (BR-F03-69)", () => {
 		expect(screen.queryByText("Log in again.")).toBeNull();
 	});
 
-	test("while it saves, Escape and Cancel wait", async () => {
+	test("while it saves, Escape, Cancel and Close wait", async () => {
 		const { store, user } = renderBar(`?${CHECK_B}&view=${FOOD.id}`);
 		await loaded();
 		let answer: (() => void) | undefined;
@@ -1163,6 +1295,7 @@ describe("Rename (BR-F03-69)", () => {
 		await waitFor(() => expect(cancel).toHaveAttribute("aria-disabled", "true"));
 		await user.keyboard("{Escape}");
 		await user.click(cancel);
+		await user.click(within(dialog).getByRole("button", { name: "Close" }));
 		expect(screen.getByRole("dialog", { name: "Rename view" })).toBe(dialog);
 		answer!();
 		await screen.findByText("View renamed.");

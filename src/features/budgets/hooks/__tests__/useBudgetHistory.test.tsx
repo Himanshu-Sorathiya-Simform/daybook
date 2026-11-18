@@ -1,6 +1,6 @@
-import { waitFor } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import type { ExpenseCategory } from "@/lib/budgets/model";
 import { budgetKeys } from "../../lib/keys";
@@ -96,5 +96,29 @@ describe("useBudgetHistory (BR-F04-35)", () => {
 			"/api/budgets/history?category=transportation&to=2026-10&months=2",
 			"/api/budgets/history?category=health&to=2026-10&months=2",
 		]);
+	});
+
+	// F04 section 10: the history is not kept offline, even one read earlier in the session.
+	test("offline, a history read earlier in the session reads as never read, and comes back online", async () => {
+		route(network, "get", "/api/budgets/history", () => ok(FOOD));
+		const { result } = renderHookInApp(() =>
+			useBudgetHistory("food", "2026-11"),
+		);
+		await waitFor(() => expect(result.current.data).toEqual(FOOD));
+
+		const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+		act(() => {
+			window.dispatchEvent(new Event("offline"));
+		});
+		expect(result.current.data).toBeUndefined();
+		expect(result.current.isError).toBe(false);
+		expect(result.current.fetchStatus).toBe("paused");
+
+		online.mockReturnValue(true);
+		act(() => {
+			window.dispatchEvent(new Event("online"));
+		});
+		await waitFor(() => expect(result.current.data).toEqual(FOOD));
+		online.mockRestore();
 	});
 });

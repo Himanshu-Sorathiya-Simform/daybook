@@ -1,5 +1,5 @@
 import { onlineManager } from "@tanstack/react-query";
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -758,8 +758,33 @@ describe("Save (BR-F03-20, BR-F03-21)", () => {
 		expect(amount()).toBeDisabled();
 		await user.keyboard("{Escape}");
 		expect(onClose).not.toHaveBeenCalled();
+		// The Close button is the only way out on a phone, where Cancel is hidden.
+		await user.click(button("Close"));
+		expect(onClose).not.toHaveBeenCalled();
+		expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
 		await act(async () => answer(ok(row(), 201)));
 		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+	});
+
+	// D-615: each press builds its own idempotency key, so a second press in the same frame,
+	// before React shows the pending state, would be a second, distinct create.
+	test("Save pressed twice in the same frame sends one create", async () => {
+		let answer: (value: Response) => void = () => {};
+		const sent = creates(
+			() => new Promise<Response>((resolve) => (answer = resolve)),
+		);
+		const { user, onClose } = renderDialog();
+
+		await fillValid(user);
+		const save = button("Save");
+		act(() => {
+			fireEvent.click(save);
+			fireEvent.click(save);
+		});
+		await waitFor(() => expect(sent).toHaveLength(1));
+		await act(async () => answer(ok(row(), 201)));
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(sent).toHaveLength(1);
 	});
 
 	test("two quick presses send one create", async () => {
@@ -1372,6 +1397,33 @@ describe("editing a row (BR-F03-23, flow 7.3)", () => {
 		expect(onClose).toHaveBeenCalledOnce();
 		expect(screen.queryByRole("alertdialog")).toBeNull();
 		expect(sent).toEqual([]);
+	});
+
+	// D-615: the edit's key is new on each press too.
+	test("Save pressed twice in the same frame sends one edit", async () => {
+		let release: (value: Response) => void = () => {};
+		const sent = edits(
+			() => new Promise<Response>((resolve) => (release = resolve)),
+		);
+		const { user, onClose } = renderDialog({
+			mode: { kind: "edit", row: ROW_24 },
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+
+		await user.click(amount());
+		await user.clear(amount());
+		await user.keyboard("700");
+		const save = button("Save");
+		act(() => {
+			fireEvent.click(save);
+			fireEvent.click(save);
+		});
+		await waitFor(() => expect(sent).toHaveLength(1));
+		await act(async () =>
+			release(ok({ ...ROW_24, amountMinor: 70000, version: 2 })),
+		);
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(sent).toHaveLength(1);
 	});
 
 	test("Delete waits while a save runs", async () => {

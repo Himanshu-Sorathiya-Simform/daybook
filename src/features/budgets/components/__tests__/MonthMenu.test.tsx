@@ -1,5 +1,5 @@
 import { onlineManager } from "@tanstack/react-query";
-import { screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay } from "msw";
 import { setupServer } from "msw/node";
@@ -232,6 +232,29 @@ describe("while the year's figures load (BR-F04-14, section 6)", () => {
 		} finally {
 			onlineManager.setOnline(true);
 		}
+	});
+});
+
+describe("offline after the year was read (F04 section 10)", () => {
+	test("the figures go while offline, and are back online", async () => {
+		route(network, "get", "/api/budgets/summary", () => ok(YEAR_2026));
+		renderMenu();
+		await screen.findByRole("option", { name: "October 2026, 119.7%" });
+
+		const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+		act(() => {
+			window.dispatchEvent(new Event("offline"));
+		});
+		expect(screen.getByRole("option", { name: "October 2026" })).toBeVisible();
+		expect(screen.queryByRole("option", { name: /119\.7%/ })).toBeNull();
+
+		online.mockReturnValue(true);
+		act(() => {
+			window.dispatchEvent(new Event("online"));
+		});
+		expect(
+			await screen.findByRole("option", { name: "October 2026, 119.7%" }),
+		).toBeVisible();
 	});
 });
 

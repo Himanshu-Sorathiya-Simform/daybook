@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -88,6 +88,24 @@ describe("DeleteBudgetDialog (BR-F04-06)", () => {
 		expect(deletes[0]?.headers.get("if-match")).toBe(`"${food.version}"`);
 		expect(isUuidV7(deletes[0]?.headers.get("idempotency-key"))).toBe(true);
 		expect(onDeleted).toHaveBeenCalledWith(food);
+	});
+
+	// D-615: each press builds its own idempotency key, so a second press in the same frame
+	// would be a second, distinct delete.
+	test("Delete Budget pressed twice in the same frame sends one delete", async () => {
+		const deletes = route(network, "delete", "/api/budgets/:id", async () => {
+			await delay(60);
+			return new HttpResponse(null, { status: 204 });
+		});
+		const { onClose, onDeleted } = renderDelete();
+		const button = confirm();
+		act(() => {
+			fireEvent.click(button);
+			fireEvent.click(button);
+		});
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(deletes).toHaveLength(1);
+		expect(onDeleted).toHaveBeenCalledOnce();
 	});
 
 	// D-569

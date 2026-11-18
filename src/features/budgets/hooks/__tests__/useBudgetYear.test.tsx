@@ -1,6 +1,6 @@
-import { waitFor } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { useBudgetYear } from "../useBudgetYear";
 import { ok, refuse, renderHookInApp, route } from "./helpers";
@@ -65,5 +65,27 @@ describe("useBudgetYear (BR-F04-35)", () => {
 		);
 		const { result } = renderHookInApp(() => useBudgetYear(2022));
 		await waitFor(() => expect(result.current.isError).toBe(true));
+	});
+
+	// F04 section 10: the year summary is not kept offline, even one read earlier in the session.
+	test("offline, a year read earlier in the session reads as never read, and comes back online", async () => {
+		route(network, "get", "/api/budgets/summary", () => ok(YEAR_2026));
+		const { result } = renderHookInApp(() => useBudgetYear(2026));
+		await waitFor(() => expect(result.current.data).toEqual(YEAR_2026));
+
+		const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+		act(() => {
+			window.dispatchEvent(new Event("offline"));
+		});
+		expect(result.current.data).toBeUndefined();
+		expect(result.current.isError).toBe(false);
+		expect(result.current.fetchStatus).toBe("paused");
+
+		online.mockReturnValue(true);
+		act(() => {
+			window.dispatchEvent(new Event("online"));
+		});
+		await waitFor(() => expect(result.current.data).toEqual(YEAR_2026));
+		online.mockRestore();
 	});
 });

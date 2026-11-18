@@ -193,6 +193,24 @@ describe("Undo sends what the notice's plan says", () => {
 		expect(patches).toHaveLength(1);
 		expect(result.current.isUndoing).toBe(false);
 	});
+
+	// BR-F04-29, D-575: a mutation's pending state reaches a render a tick after the press, so
+	// two presses in one frame both see an idle button. Each press has its own key, so the
+	// server would take the second for a new write and refuse it.
+	test("two presses in the same frame send one Undo", async () => {
+		const patches = route(network, "patch", "/api/budgets/:id", async () => {
+			await delay(40);
+			return ok(budgetAnswer("food", { version: 4 }));
+		});
+		const { result } = renderNotices();
+		act(() => result.current.show(change()));
+		act(() => {
+			result.current.undo();
+			result.current.undo();
+		});
+		await waitFor(() => expect(result.current.notice).toBeNull());
+		expect(patches).toHaveLength(1);
+	});
 });
 
 describe("when Undo is refused (BR-F04-29, section 8)", () => {
@@ -221,6 +239,48 @@ describe("when Undo is refused (BR-F04-29, section 8)", () => {
 				"This Budget was deleted on another device.",
 			),
 		);
+	});
+
+	// Section 8: the Budget is gone, so the page reads again, as it does after the dialog's 404.
+	test("a 404 reads the Budgets and the profile again, so the row goes", async () => {
+		route(network, "patch", "/api/budgets/:id", () => refuse(404, "not_found"));
+		const { result, queryClient } = renderNotices();
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		act(() => result.current.show(change()));
+		act(() => result.current.undo());
+		await waitFor(() => expect(result.current.notice?.failure).not.toBeNull());
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ["budgets"] });
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ["profile"] });
+	});
+
+	test("a 404 reads again even when the notice was replaced meanwhile", async () => {
+		route(network, "patch", "/api/budgets/:id", async () => {
+			await delay(40);
+			return refuse(404, "not_found");
+		});
+		const { result, queryClient } = renderNotices();
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		act(() => result.current.show(change()));
+		act(() => result.current.undo());
+		act(() => result.current.show(deletionNotice("shopping", RULES)));
+		await waitFor(() =>
+			expect(invalidate).toHaveBeenCalledWith({ queryKey: ["budgets"] }),
+		);
+		expect(result.current.notice?.text).toBe("Shopping Budget deleted.");
+		expect(result.current.notice?.failure).toBeNull();
+	});
+
+	test.each([
+		["a server error", () => refuse(500, "internal")],
+		["no answer", () => HttpResponse.error()],
+	])("%s reads nothing again", async (_name, answer) => {
+		route(network, "patch", "/api/budgets/:id", answer);
+		const { result, queryClient } = renderNotices();
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		act(() => result.current.show(change()));
+		act(() => result.current.undo());
+		await waitFor(() => expect(result.current.notice?.failure).not.toBeNull());
+		expect(invalidate).not.toHaveBeenCalled();
 	});
 
 	test("a server error reads the failure too", async () => {
@@ -352,6 +412,25 @@ describe("remove (BR-F04-25, BR-F04-29)", () => {
 		});
 	});
 
+	test("a 404 reads the Budgets and the profile again, so the row goes", async () => {
+		route(network, "delete", REMOVE_PATH, () => refuse(404, "not_found"));
+		const { result, queryClient } = renderNotices();
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		act(() => result.current.remove(WITH_LIMIT, "2026-10"));
+		await waitFor(() => expect(result.current.notice?.failure).not.toBeNull());
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ["budgets"] });
+		expect(invalidate).toHaveBeenCalledWith({ queryKey: ["profile"] });
+	});
+
+	test("a server error reads nothing again", async () => {
+		route(network, "delete", REMOVE_PATH, () => refuse(500, "internal"));
+		const { result, queryClient } = renderNotices();
+		const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+		act(() => result.current.remove(WITH_LIMIT, "2026-10"));
+		await waitFor(() => expect(result.current.notice?.failure).not.toBeNull());
+		expect(invalidate).not.toHaveBeenCalled();
+	});
+
 	test("no answer reads the failure", async () => {
 		route(network, "delete", REMOVE_PATH, () => HttpResponse.error());
 		const { result } = renderNotices();
@@ -382,6 +461,34 @@ describe("remove (BR-F04-25, BR-F04-29)", () => {
 		act(() => result.current.remove(WITH_LIMIT, "2026-10"));
 		await waitFor(() => expect(result.current.notice).not.toBeNull());
 		expect(deletes).toHaveLength(1);
+	});
+
+	test("two presses in the same frame send one Remove", async () => {
+		const deletes = route(network, "delete", REMOVE_PATH, async () => {
+			await delay(40);
+			return ok(budgetAnswer("food", { version: 3 }));
+		});
+		const { result } = renderNotices();
+		act(() => {
+			result.current.remove(WITH_LIMIT, "2026-10");
+			result.current.remove(WITH_LIMIT, "2026-10");
+		});
+		await waitFor(() => expect(result.current.notice).not.toBeNull());
+		expect(deletes).toHaveLength(1);
+	});
+
+	test("after a refusal, Remove can be pressed again", async () => {
+		const deletes = route(network, "delete", REMOVE_PATH, (_, index) =>
+			index === 0 ?
+				refuse(500, "internal")
+			:	ok(budgetAnswer("food", { version: 3 })),
+		);
+		const { result } = renderNotices();
+		act(() => result.current.remove(WITH_LIMIT, "2026-10"));
+		await waitFor(() => expect(result.current.notice?.failure).not.toBeNull());
+		act(() => result.current.remove(WITH_LIMIT, "2026-10"));
+		await waitFor(() => expect(deletes).toHaveLength(2));
+		await waitFor(() => expect(result.current.notice?.failure).toBeNull());
 	});
 
 	test("the notice belongs to the month it was shown in", async () => {
@@ -661,6 +768,20 @@ describe("the conflict view after a 409 (BR-F04-23, AC-F04-25, AC-F04-30)", () =
 			expect(seen).toHaveLength(2);
 		});
 
+		test("two presses of Keep mine in the same frame send one write", async () => {
+			const { result, seen } = await undoMet(async (index) => {
+				if (index === 0) return conflict();
+				await delay(40);
+				return ok(budgetAnswer("food", { version: 6 }));
+			});
+			act(() => {
+				result.current.keepMine();
+				result.current.keepMine();
+			});
+			await waitFor(() => expect(result.current.notice).toBeNull());
+			expect(seen).toHaveLength(2);
+		});
+
 		test("a result after the notice was replaced leaves the newer one alone", async () => {
 			const { result } = await undoMet((index) =>
 				index === 0 ? conflict() : (
@@ -723,6 +844,20 @@ describe("the conflict view after a 409 (BR-F04-23, AC-F04-25, AC-F04-30)", () =
 					},
 				},
 			});
+		});
+
+		test("two presses of Keep mine in the same frame send one write", async () => {
+			const { result, seen } = await removeMet(async (index) => {
+				if (index === 0) return conflict();
+				await delay(40);
+				return ok(budgetAnswer("food", { version: 6 }));
+			});
+			act(() => {
+				result.current.keepMine();
+				result.current.keepMine();
+			});
+			await waitFor(() => expect(result.current.notice).not.toBeNull());
+			expect(seen).toHaveLength(2);
 		});
 
 		test("another 409 shows the newer version", async () => {

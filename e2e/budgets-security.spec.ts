@@ -1,5 +1,7 @@
 import { randomUUIDv7 } from "node:crypto";
 
+import type { Browser, Page } from "@playwright/test";
+
 import { insertProfile } from "../seed/load-golden";
 import { open, signUpByApi, userWithGolden } from "./data";
 import { withDatabase } from "./db";
@@ -33,14 +35,16 @@ test("/budgets carries a CSP nonce on every script, and runs with no violation",
 	await expect(page.getByText("Needs attention · 4")).toBeVisible();
 });
 
-// SEC-2, AC-F04-08: another user's Budget ids reveal nothing and change nothing.
-test("another user sees none of a Budget, and its ids answer 404 or 409", async ({
-	page,
-	browser,
-}) => {
-	const { budgets } = await userWithGolden(page, "/budgets?month=2026-10");
-	const food = budgets.find((budget) => budget.category === "food")!;
+type BudgetsAnswer = {
+	data: {
+		budgets: { id: string; version: number; overrides: unknown[] }[];
+		inactive: unknown[];
+		unbudgeted: unknown[];
+	};
+};
 
+/** Runs `run` with a second, signed-up user who has a profile and no data. */
+async function asIntruder(browser: Browser, run: (intruder: Page) => Promise<void>) {
 	const context = await browser.newContext({
 		extraHTTPHeaders: { "x-forwarded-for": clientAddress() },
 		viewport: { width: 1440, height: 1000 },
@@ -53,7 +57,21 @@ test("another user sees none of a Budget, and its ids answer 404 or 409", async 
 		await withDatabase("DATABASE_URL_SYSTEM", (client) =>
 			insertProfile(client, userId),
 		);
+		await run(intruder);
+	} finally {
+		await context.close();
+	}
+}
 
+const originOf = () => test.info().project.use.baseURL!;
+
+// SEC-2: another user's Budgets do not show.
+test("another user sees none of a Budget, on the page or in the API", async ({
+	page,
+	browser,
+}) => {
+	await userWithGolden(page, "/budgets?month=2026-10");
+	await asIntruder(browser, async (intruder) => {
 		await open(intruder, "/budgets?month=2026-10");
 		await expect(
 			intruder.getByText("No Budgets for October 2026."),
@@ -61,73 +79,104 @@ test("another user sees none of a Budget, and its ids answer 404 or 409", async 
 		await expect(intruder.getByText("Food", { exact: true })).toHaveCount(0);
 		await expect(intruder.getByText("₹6,220.00")).toHaveCount(0);
 
-		const origin = test.info().project.use.baseURL!;
-		const headers = () => ({
-			origin,
-			"if-match": '"2"',
-			"idempotency-key": randomUUIDv7(),
-		});
 		const view = await intruder.request.get("/api/budgets?month=2026-10");
 		expect(view.status()).toBe(200);
-		const { data } = (await view.json()) as {
-			data: { budgets: unknown[]; inactive: unknown[]; unbudgeted: unknown[] };
-		};
+		const { data } = (await view.json()) as BudgetsAnswer;
 		expect(data.budgets).toEqual([]);
 		expect(data.inactive).toEqual([]);
 		expect(data.unbudgeted).toEqual([]);
+	});
+});
 
-		const path = `/api/budgets/${food.id}`;
-		const patch = await intruder.request.patch(path, {
-			data: { from: "2026-11", limitMinor: 100, currency: "INR" },
-			headers: headers(),
-		});
-		expect(patch.status(), "PATCH of another user's Budget").toBe(404);
-		const remove = await intruder.request.delete(path, {
-			data: {},
-			headers: headers(),
-		});
-		expect(remove.status(), "DELETE of another user's Budget").toBe(404);
-		const override = await intruder.request.delete(`${path}/overrides/2026-10`, {
-			data: {},
-			headers: headers(),
-		});
-		expect(override.status(), "Remove of another user's one-month limit").toBe(
-			404,
-		);
+// SEC-2: another user's Budget and its one-month limit answer 404 and stay as they were. The
+// golden Budgets have no one-month limit, so the owner makes a Budget of its own with one: a
+// 404 for a month with no limit would be the same answer with or without the ownership check.
+test("another user cannot change or remove a Budget or its one-month limit", async ({
+	page,
+	browser,
+}) => {
+	const { budgets } = await userWithGolden(page, "/budgets?month=2026-10");
+	const food = budgets.find((budget) => budget.category === "food")!;
+	const origin = originOf();
+	const limitMonth = monthAfter(2);
 
-		// A create under an id that is another user's reveals only that it cannot be made. The
-		// golden Budgets' ids are no UUIDv7, so the owner makes one of its own first.
-		const ownerId = randomUUIDv7();
-		const made = await page.request.post("/api/budgets", {
-			data: {
-				id: ownerId,
-				category: "health",
-				from: monthAfter(1),
-				limitMinor: 100,
-				currency: "INR",
-			},
-			headers: { origin, "idempotency-key": randomUUIDv7() },
-		});
-		expect(made.status()).toBe(201);
-		const create = await intruder.request.post("/api/budgets", {
-			data: {
-				id: ownerId,
-				category: "health",
-				from: monthAfter(1),
-				limitMinor: 100,
-				currency: "INR",
-			},
-			headers: { origin, "idempotency-key": randomUUIDv7() },
-		});
-		expect(create.status()).toBe(409);
-		expect(
-			((await create.json()) as { error: { code: string } }).error.code,
-		).toBe("id_conflict");
-	} finally {
-		await context.close();
-	}
+	const ownerId = randomUUIDv7();
+	const made = await page.request.post("/api/budgets", {
+		data: {
+			id: ownerId,
+			category: "health",
+			from: monthAfter(1),
+			limitMinor: 100,
+			currency: "INR",
+		},
+		headers: { origin, "idempotency-key": randomUUIDv7() },
+	});
+	expect(made.status()).toBe(201);
+	const limited = await page.request.patch(`/api/budgets/${ownerId}`, {
+		data: {
+			scope: "month",
+			month: limitMonth,
+			limitMinor: 200,
+			currency: "INR",
+		},
+		headers: {
+			origin,
+			"if-match": '"1"',
+			"idempotency-key": randomUUIDv7(),
+		},
+	});
+	expect(limited.status()).toBe(200);
 
-	// The owner's Budget is untouched.
+	/** The owner's Budget as the month view reads it. */
+	const stored = async (id: string) => {
+		const view = await page.request.get(`/api/budgets?month=${limitMonth}`);
+		const { data } = (await view.json()) as BudgetsAnswer;
+		return data.budgets.find((budget) => budget.id === id);
+	};
+	const before = await stored(ownerId);
+	expect(before).toMatchObject({
+		version: 2,
+		overrides: [{ month: limitMonth, limitMinor: 200 }],
+	});
+
+	await asIntruder(browser, async (intruder) => {
+		const headers = (version: number) => ({
+			origin,
+			"if-match": `"${version}"`,
+			"idempotency-key": randomUUIDv7(),
+		});
+		const change = { from: "2026-11", limitMinor: 100, currency: "INR" };
+
+		// Each at the Budget's current version, so a 409 for a stale one cannot stand in.
+		const answers = {
+			"change of a golden Budget": await intruder.request.patch(
+				`/api/budgets/${food.id}`,
+				{ data: change, headers: headers(2) },
+			),
+			"delete of a golden Budget": await intruder.request.delete(
+				`/api/budgets/${food.id}`,
+				{ data: {}, headers: headers(2) },
+			),
+			"change of the owner's Budget": await intruder.request.patch(
+				`/api/budgets/${ownerId}`,
+				{ data: change, headers: headers(2) },
+			),
+			"delete of the owner's Budget": await intruder.request.delete(
+				`/api/budgets/${ownerId}`,
+				{ data: {}, headers: headers(2) },
+			),
+			"remove of the owner's one-month limit": await intruder.request.delete(
+				`/api/budgets/${ownerId}/overrides/${limitMonth}`,
+				{ data: {}, headers: headers(2) },
+			),
+		};
+		for (const [what, answer] of Object.entries(answers)) {
+			expect(answer.status(), what).toBe(404);
+		}
+	});
+
+	// Nothing changed: same version, and the one-month limit is still there.
+	expect(await stored(ownerId)).toEqual(before);
 	await open(page, "/budgets?month=2026-10");
 	await expect(overviewLine(page)).toHaveText(
 		"of ₹11,000.00 · 119.7% · Over by ₹2,168.00",
@@ -135,6 +184,39 @@ test("another user sees none of a Budget, and its ids answer 404 or 409", async 
 	await expect(row(page, "budget:food")).toHaveAccessibleName(
 		/₹6,220\.00 of ₹5,000\.00/,
 	);
+});
+
+// BR-P2-20: a create under another user's id is refused without saying whose it is.
+test("a create under another user's Budget id is refused as id_conflict", async ({
+	page,
+	browser,
+}) => {
+	await userWithGolden(page, "/budgets?month=2026-10");
+	const origin = originOf();
+	// The golden Budgets' ids are no UUIDv7, so the owner makes one of its own first.
+	const body = {
+		id: randomUUIDv7(),
+		category: "health",
+		from: monthAfter(1),
+		limitMinor: 100,
+		currency: "INR",
+	};
+	const made = await page.request.post("/api/budgets", {
+		data: body,
+		headers: { origin, "idempotency-key": randomUUIDv7() },
+	});
+	expect(made.status()).toBe(201);
+
+	await asIntruder(browser, async (intruder) => {
+		const create = await intruder.request.post("/api/budgets", {
+			data: body,
+			headers: { origin, "idempotency-key": randomUUIDv7() },
+		});
+		expect(create.status()).toBe(409);
+		expect(
+			((await create.json()) as { error: { code: string } }).error.code,
+		).toBe("id_conflict");
+	});
 });
 
 // SEC-1: every Budgets endpoint wants a session.

@@ -1,6 +1,6 @@
 import { userWithGolden } from "./data";
 import { expect, test } from "./fixtures";
-import { expectHeader, expectRows, figure } from "./transactions";
+import { expectHeader, figure } from "./transactions";
 import { group, list, overviewLine, panel, row } from "./budgets";
 
 test.use({
@@ -163,7 +163,6 @@ test("the Table view: the Budgeted total row, sorting, and the remembered choice
 	const utilization = table.getByRole("columnheader", { name: /^Utilization/ });
 	await utilization.click();
 	await expect(utilization).toHaveAttribute("aria-sort", "descending");
-	await expectRows(page, []).catch(() => undefined);
 	await expect(table.getByRole("row").nth(1)).toContainText("Entertainment");
 	await utilization.click();
 	await expect(utilization).toHaveAttribute("aria-sort", "ascending");

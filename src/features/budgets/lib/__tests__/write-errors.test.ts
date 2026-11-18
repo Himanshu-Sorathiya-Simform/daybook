@@ -343,9 +343,9 @@ describe("readBudgetNoticeError (BR-F04-29)", () => {
 		},
 	);
 
-	test("a 404 says the Budget was deleted on another device", () => {
+	test("a 404 says the Budget was deleted on another device, and the page reads again", () => {
 		expect(readBudgetNoticeError(http(404, "not_found"))).toEqual({
-			kind: "failed",
+			kind: "gone",
 			message: GONE,
 		});
 	});

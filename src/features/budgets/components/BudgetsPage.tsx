@@ -155,13 +155,16 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 		open({ kind: "change", category, opened });
 	const onStop = (category: ExpenseCategory) =>
 		open({ kind: "stop", category, opened });
-	// Delete is offered only for a Budget record in the month shown.
-	const onDelete = (category: ExpenseCategory) =>
-		open({
-			kind: "delete",
-			record: recordIn(data as BudgetMonthAnswer, category) as BudgetRecord,
-			opened,
-		});
+	/** A category's Budget record in the month shown, or `null` when the month has not loaded or
+	 * the category has none. */
+	const recordFor = (category: ExpenseCategory) =>
+		data ? recordIn(data, category) : null;
+	// Delete is offered only for a Budget record in the month shown, so a press that finds none
+	// (the Budget went in a read just now) does nothing.
+	const onDelete = (category: ExpenseCategory) => {
+		const record = recordFor(category);
+		if (record) open({ kind: "delete", record, opened });
+	};
 
 	const offOther = !online && url.month !== current;
 	const failed = !data && (query.isError || query.fetchStatus === "paused");
@@ -178,19 +181,14 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 		subject && !isViewOpen ?
 			selectionKeys(subject)
 		:	{ changeLimit: false, stop: false, remove: false };
-	// It is on only while the selection has a record.
-	useShortcut("L", () => onChangeLimit(selected as ExpenseCategory), {
-		enabled: keys.changeLimit,
-	});
-	useShortcut("S", () => onStop(selected as ExpenseCategory), {
-		enabled: keys.stop,
-	});
-	useShortcut("Delete", () => onDelete(selected as ExpenseCategory), {
-		enabled: keys.remove,
-	});
-	useShortcut("Backspace", () => onDelete(selected as ExpenseCategory), {
-		enabled: keys.remove,
-	});
+	// Each is on only while the selection has a record, which needs a selection.
+	const onSelected = (act: (category: ExpenseCategory) => void) => () => {
+		if (selected !== null) act(selected);
+	};
+	useShortcut("L", onSelected(onChangeLimit), { enabled: keys.changeLimit });
+	useShortcut("S", onSelected(onStop), { enabled: keys.stop });
+	useShortcut("Delete", onSelected(onDelete), { enabled: keys.remove });
+	useShortcut("Backspace", onSelected(onDelete), { enabled: keys.remove });
 	const asOf = asOfText(online, query.dataUpdatedAt, locale);
 
 	// The notice shows in the panel while the Budget it is about is selected, else above the list
@@ -212,12 +210,12 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 				onDismiss={notices.dismiss}
 			/>
 		);
-	// Remove is offered only on a Budget record in the month shown.
-	const removeMonthLimit = (category: ExpenseCategory, limitMonth: Month) =>
-		notices.remove(
-			recordIn(data as BudgetMonthAnswer, category) as BudgetRecord,
-			limitMonth,
-		);
+	// Remove is offered only on a Budget record in the month shown, so a press that finds none
+	// does nothing.
+	const removeMonthLimit = (category: ExpenseCategory, limitMonth: Month) => {
+		const record = recordFor(category);
+		if (record) notices.remove(record, limitMonth);
+	};
 
 	const month = (shown: BudgetMonthAnswer) => {
 		const hasBudgets = shown.budgets.length > 0;

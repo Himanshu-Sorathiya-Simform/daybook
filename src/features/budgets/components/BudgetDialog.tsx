@@ -13,6 +13,7 @@ import { CategoryTiles } from "@/components/forms/CategoryTiles";
 import { ChoiceGroup } from "@/components/forms/ChoiceGroup";
 import { Dialog } from "@/components/surfaces/Dialog";
 import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
+import { useOnce } from "@/hooks/useOnce";
 import { useOnline } from "@/hooks/useOnline";
 import { formatAmountInput, parseAmount } from "@/lib/amount";
 import type { BudgetRules, ExpenseCategory } from "@/lib/budgets/model";
@@ -154,6 +155,8 @@ export function BudgetDialog({
 		2,
 	);
 	const busy = create.isPending || edit.isPending;
+	// A second press, Enter included, sends nothing while a write is out (D-575, D-615).
+	const sending = useOnce();
 
 	const stopping = kind === "stop";
 	const typed = parseAmount(amount, locale);
@@ -219,21 +222,24 @@ export function BudgetDialog({
 		version: number,
 		before: BudgetRules | null,
 	) => {
+		const request = sending.run(() =>
+			ready.kind === "create" ?
+				create.mutateAsync({
+					body: ready.body,
+					idempotencyKey: uuidV7(),
+				})
+			:	edit.mutateAsync({
+					id: (record as BudgetRecord).id,
+					version,
+					body: ready.body,
+					idempotencyKey: uuidV7(),
+				}),
+		);
+		if (request === null) return;
 		setFailure(null);
 		setServer({});
 		try {
-			const saved =
-				ready.kind === "create" ?
-					await create.mutateAsync({
-						body: ready.body,
-						idempotencyKey: uuidV7(),
-					})
-				:	await edit.mutateAsync({
-						id: (record as BudgetRecord).id,
-						version,
-						body: ready.body,
-						idempotencyKey: uuidV7(),
-					});
+			const saved = await request;
 			setConflict(null);
 			onSaved?.(
 				saved,
@@ -322,7 +328,7 @@ export function BudgetDialog({
 				// It only ever reports closing.
 				onOpenChange={onClose}
 				size="lg"
-				isKeyboardDismissDisabled={busy}
+				isPending={busy}
 				footer={
 					<>
 						<span className="flex-1" />

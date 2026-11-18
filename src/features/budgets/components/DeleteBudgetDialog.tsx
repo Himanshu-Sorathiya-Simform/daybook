@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { FormAlert } from "@/components/feedback/FormAlert";
 import { ConfirmDialog } from "@/components/surfaces/ConfirmDialog";
+import { useOnce } from "@/hooks/useOnce";
 import type { BudgetRecord } from "@/lib/budgets/view";
 import { uuidV7 } from "@/lib/ids";
 import { useDeleteBudget } from "../hooks/useDeleteBudget";
@@ -44,6 +45,7 @@ export function DeleteBudgetDialog({
 	className,
 }: Readonly<DeleteBudgetDialogProps>) {
 	const remove = useDeleteBudget();
+	const sending = useOnce();
 	const queryClient = useQueryClient();
 	const [failure, setFailure] = useState<string | null>(null);
 	// A 409: the Budget saved now, beside the one the user chose to delete (BR-F04-23).
@@ -53,13 +55,18 @@ export function DeleteBudgetDialog({
 	/** Deletes at `version`: the record's, or after a conflict the saved one ("Delete anyway").
 	 * The Budget deleted, for the notice's Undo, is the one at that version. */
 	const confirm = async (version: number, deleted: BudgetRecord) => {
-		setFailure(null);
-		try {
-			await remove.mutateAsync({
+		// A second press, Enter included, sends nothing while the delete is out (D-615).
+		const request = sending.run(() =>
+			remove.mutateAsync({
 				id: record.id,
 				version,
 				idempotencyKey: uuidV7(),
-			});
+			}),
+		);
+		if (request === null) return;
+		setFailure(null);
+		try {
+			await request;
 			setConflict(null);
 			onDeleted?.(deleted);
 			onClose();

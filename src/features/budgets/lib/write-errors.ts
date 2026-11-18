@@ -142,6 +142,9 @@ export type BudgetNoticeOutcome =
 	| { kind: "conflict"; current: BudgetAnswer }
 	/** Nothing changed; the notice reads this, with Dismiss. */
 	| { kind: "failed"; message: string }
+	/** 404: the Budget was deleted on another device. The notice reads this, with Dismiss, and
+	 * the page reads again, as it does after the dialog's 404 (section 8). */
+	| { kind: "gone"; message: string }
 	| { kind: "handled" };
 
 export function readBudgetNoticeError(error: unknown): BudgetNoticeOutcome {
@@ -151,7 +154,7 @@ export function readBudgetNoticeError(error: unknown): BudgetNoticeOutcome {
 	}
 	if (isHandled(error)) return { kind: "handled" };
 	if (error.status === 404) {
-		return { kind: "failed", message: BUDGETS_TEXT.deletedElsewhere };
+		return { kind: "gone", message: BUDGETS_TEXT.deletedElsewhere };
 	}
 	const current = currentBudget(error);
 	if (

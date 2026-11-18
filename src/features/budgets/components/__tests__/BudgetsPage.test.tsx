@@ -1876,12 +1876,19 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 		});
 
 		test("the buttons rest while it is sent, and it is sent once", async () => {
+			// The answer waits for the test, not for a timer: on a slow run a timer can fire between
+			// the two presses, and the month view still offers Remove, so a second press is then
+			// a second, legitimate write.
+			let answer: () => void = () => {};
+			const answered = new Promise<void>((resolve) => {
+				answer = resolve;
+			});
 			const deletes = route(
 				network,
 				"delete",
 				"/api/budgets/:id/overrides/:month",
 				async () => {
-					await delay(100);
+					await answered;
 					return ok(budgetAnswer("food", { version: 3 }));
 				},
 			);
@@ -1893,6 +1900,7 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 			await user.click(remove());
 			expect(remove()).toHaveAttribute("aria-disabled", "true");
 			await user.click(remove());
+			answer();
 			await within(panel()).findByText(REMOVED);
 			expect(deletes).toHaveLength(1);
 		});
@@ -1913,6 +1921,48 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 			expect(
 				within(panel()).queryByRole("button", { name: "Undo" }),
 			).not.toBeInTheDocument();
+		});
+
+		// Section 8: another device deleted the Budget, so the page reads again and the row goes.
+		test("a Remove that finds the Budget gone reads the month again, and the row and panel go", async () => {
+			route(network, "delete", "/api/budgets/:id/overrides/:month", () =>
+				refuse(404, "not_found"),
+			);
+			let reads = 0;
+			const { user } = renderPage("?month=2026-10", {
+				months: (month) => {
+					reads += 1;
+					const view = withMonthLimit(month);
+					if (reads === 1) return ok(view);
+					// The second read: food is no Budget any more.
+					return ok({
+						...view,
+						budgets: view.budgets.filter(
+							(row) => row.category !== "food",
+						),
+					});
+				},
+			});
+			await screen.findByText("Needs attention · 4");
+			await user.click(rowOf("budget:food"));
+			await user.click(remove());
+			expect(await screen.findByRole("alert")).toHaveTextContent(
+				"This Budget was deleted on another device.",
+			);
+			await waitFor(() =>
+				expect(
+					document.querySelector('[role="row"][data-key="budget:food"]'),
+				).toBeNull(),
+			);
+			// The selection went with the row, so the panel no longer shows food, and the failure
+			// shows above the list.
+			expect(
+				within(panel()).queryByRole("region", { name: "Limit history" }),
+			).not.toBeInTheDocument();
+			expect(within(panel()).queryByRole("alert")).not.toBeInTheDocument();
+			expect(screen.getByRole("alert")).toHaveTextContent(
+				"This Budget was deleted on another device.",
+			);
 		});
 
 		test("no answer reads the failure with Dismiss", async () => {

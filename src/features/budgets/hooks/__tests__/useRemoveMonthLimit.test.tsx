@@ -86,7 +86,7 @@ describe("useRemoveMonthLimit (BR-F04-25, flow 7.3)", () => {
 		const { result } = renderHookInApp(() => useRemoveMonthLimit());
 		await removeLimit(result);
 		expect(readBudgetNoticeError(result.current.error)).toEqual({
-			kind: "failed",
+			kind: "gone",
 			message: "This Budget was deleted on another device.",
 		});
 	});

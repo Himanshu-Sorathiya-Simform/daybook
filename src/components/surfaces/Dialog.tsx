@@ -25,8 +25,9 @@ export type DialogProps = {
 	role?: "dialog" | "alertdialog";
 	/** Whether a press outside closes it. Off by default, so a half-filled form isn't lost. */
 	isDismissable?: boolean;
-	/** Turn off closing with Escape, for example while a save is in flight. */
-	isKeyboardDismissDisabled?: boolean;
+	/** While a save is in flight: Escape, a press outside and the Close button all wait, and the
+	 * Close button shows disabled. A refusal then still lands in a dialog the user can see. */
+	isPending?: boolean;
 	/** Classes for the panel. */
 	className?: string;
 };
@@ -51,15 +52,17 @@ export function Dialog({
 	size = "md",
 	role = "dialog",
 	isDismissable = false,
-	isKeyboardDismissDisabled = false,
+	isPending = false,
 	className,
 }: Readonly<DialogProps>) {
 	return (
 		<AriaModalOverlay
 			isOpen={isOpen}
-			onOpenChange={onOpenChange}
+			onOpenChange={(next) => {
+				if (!isPending) onOpenChange(next);
+			}}
 			isDismissable={isDismissable}
-			isKeyboardDismissDisabled={isKeyboardDismissDisabled}
+			isKeyboardDismissDisabled={isPending}
 			className={cn(
 				"bg-scrim fixed inset-0 z-50 flex h-(--visual-viewport-height) items-start justify-center px-4 pt-12 max-md:items-end max-md:p-0",
 				"entering:opacity-0 exiting:opacity-0 transition-opacity duration-(--dur-base) ease-out",
@@ -92,6 +95,7 @@ export function Dialog({
 							slot="close"
 							icon={X}
 							label="Close"
+							isDisabled={isPending}
 							variant="plain"
 							size="sm"
 						/>

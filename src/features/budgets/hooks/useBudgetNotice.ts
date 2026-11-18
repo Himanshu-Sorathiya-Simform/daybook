@@ -5,6 +5,7 @@ import type { CurrencyCode } from "@/lib/currency";
 import { type BudgetRules, removeMonth } from "@/lib/budgets/model";
 import type { Month } from "@/lib/budgets/months";
 import type { BudgetRecord } from "@/lib/budgets/view";
+import { useOnce } from "@/hooks/useOnce";
 import { uuidV7 } from "@/lib/ids";
 import { CONFLICT_TEXT, keepMineLine } from "../lib/conflict";
 import type { Formats } from "../lib/labels";
@@ -102,6 +103,9 @@ export function useBudgetNotices({
 		(BudgetNoticeConflict & { pending: Pending }) | null
 	>(null);
 	const counter = useRef(0);
+	// One write at a time for Undo and one for Remove, taken on the press itself (D-575).
+	const undoing = useOnce();
+	const removing = useOnce();
 	const create = useCreateBudget();
 	const edit = useEditBudget();
 	const remove = useDeleteBudget();
@@ -207,16 +211,22 @@ export function useBudgetNotices({
 			return;
 		}
 		setConflictOf(null);
-		if (outcome.kind === "failed") fail(id, outcome.message);
+		if (outcome.kind === "handled") return;
+		if (outcome.kind === "gone")
+			void refreshAfterBudgetWrite(queryClient, "count");
+		fail(id, outcome.message);
 	};
 
 	const undo = () => {
-		if (notice === null || notice.undo === null || isUndoing) return;
+		if (notice === null || notice.undo === null) return;
 		const { id, undo: plan } = notice;
-		void send(plan).then(
-			() => clear(id),
-			(error: unknown) => refusedUndo(readBudgetNoticeError(error), id, plan),
-		);
+		void undoing
+			.run(() => send(plan))
+			?.then(
+				() => clear(id),
+				(error: unknown) =>
+					refusedUndo(readBudgetNoticeError(error), id, plan),
+			);
 	};
 
 	/** What a Remove's refusal does: the conflict view, or a failure notice. */
@@ -243,19 +253,22 @@ export function useBudgetNotices({
 		}
 		setConflictOf(null);
 		if (outcome.kind === "handled") return;
+		if (outcome.kind === "gone")
+			void refreshAfterBudgetWrite(queryClient, "count");
 		failRemove(record, outcome.message);
 	};
 
 	const removeOne = (record: BudgetRecord, limitMonth: Month) => {
-		if (removeLimit.isPending) return;
-		void removeLimit
-			.mutateAsync({
-				id: record.id,
-				month: limitMonth,
-				version: record.version,
-				idempotencyKey: uuidV7(),
-			})
-			.then(
+		void removing
+			.run(() =>
+				removeLimit.mutateAsync({
+					id: record.id,
+					month: limitMonth,
+					version: record.version,
+					idempotencyKey: uuidV7(),
+				}),
+			)
+			?.then(
 				(saved) =>
 					show(
 						removalNotice({
@@ -271,29 +284,34 @@ export function useBudgetNotices({
 	};
 
 	const keepMine = () => {
-		if (conflictOf === null || isUndoing || removeLimit.isPending) return;
+		if (conflictOf === null || undoing.isRunning() || removing.isRunning())
+			return;
 		const { pending, current } = conflictOf;
 		if (pending.source === "undo") {
 			const { noticeId, plan } = pending;
-			void send(plan, current).then(
-				() => {
-					setConflictOf(null);
-					clear(noticeId);
-				},
-				(error: unknown) =>
-					refusedUndo(readBudgetNoticeError(error), noticeId, plan),
-			);
+			void undoing
+				.run(() => send(plan, current))
+				?.then(
+					() => {
+						setConflictOf(null);
+						clear(noticeId);
+					},
+					(error: unknown) =>
+						refusedUndo(readBudgetNoticeError(error), noticeId, plan),
+				);
 			return;
 		}
 		const { record, month: limitMonth } = pending;
-		void removeLimit
-			.mutateAsync({
-				id: current.id,
-				month: limitMonth,
-				version: current.version,
-				idempotencyKey: uuidV7(),
-			})
-			.then(
+		void removing
+			.run(() =>
+				removeLimit.mutateAsync({
+					id: current.id,
+					month: limitMonth,
+					version: current.version,
+					idempotencyKey: uuidV7(),
+				}),
+			)
+			?.then(
 				(saved) => {
 					setConflictOf(null);
 					show(

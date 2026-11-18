@@ -10,12 +10,12 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 - **The panel:** beside the list, a summary of what the filter selects, or the selected Transaction with its payee's recent history and its actions.
 - **Pending changes:** changes not yet confirmed show as pending and never enter confirmed totals.
 
-| Item       | Value                                                                                                                                                                                                                                                              |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                            |
-| Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                               |
-| Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows)            |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-559, D-580 to D-582, D-584 to D-588 |
+| Item       | Value                                                                                                                                                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                                   |
+| Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                                      |
+| Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows)                   |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-559, D-580 to D-582, D-584 to D-588, D-614 |
 
 ## 1. User stories
 
@@ -366,7 +366,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **Everywhere:** active filters show as removable chips, each named "Remove <label>" for assistive technology, with Clear all. A chip's label is:
         - a date preset's name, or "5 Oct to 20 Oct" for a custom range (F02 short date);
         - a type's or a category's label;
-        - "₹1,000 to ₹2,500", "From ₹1,000" or "Up to ₹2,500" for amounts, in the user's format, with decimals only when the amount has a fractional part, never a quick range's name, so one URL reads the same before and after the histogram loads;
+        - "₹1,000 to ₹2,500", "From ₹1,000" or "Up to ₹2,500" for amounts, in the user's format, with decimals only when the amount has a fractional part, never a quick range's name, so one URL reads the same before and after the histogram loads (D-614);
         - a source's label; "Netflix charges" for `sub`; the Goal's name for `goal`, and until F05 and F06 bring those names, "Subscription charges" and "Goal" (D-541);
         - the search text in quotes, “swiggy”.
     - **The search box:** the placeholder "Search payee, note or amount" and a `/` key hint. Esc clears the draft and leaves the box.
@@ -1142,7 +1142,7 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
     - Esc clears the selection and removes `txn`;
     - `txn=<id>` of a row outside the loaded pages shows it after `GET /api/transactions/[id]`, and an unknown id shows "We couldn't find that Transaction." and loses `txn`;
     - after a plain Save of a new expense dated today, the new row is selected.
-- **AC-F03-59** (unit) Quick ranges: check B's histogram gives section 5's four ranges and bounds. Three rows give none, and so do four rows of 649.00. Each range's `max` is 1 minor unit below the next edge. A filter whose bounds equal a quick range reads as plain bounds in the chip, the Amount trigger and a saved view's name: `min=400.00&max=799.99` reads "₹400 to ₹799.99" with or without the histogram.
+- **AC-F03-59** (unit) Quick ranges: check B's histogram gives section 5's four ranges and bounds. Three rows give none, and so do four rows of 649.00. Each range's `max` is 1 minor unit below the next edge. A filter whose bounds equal a quick range reads as plain bounds in the chip, the Amount trigger and a saved view's name: `min=400.00&max=799.99` reads "₹400 to ₹799.99" with or without the histogram (D-614).
 - **AC-F03-60** (unit) Labels: on 2026-11-02, every label and every figures text in section 5's labels table reads as shown, each asserted on its own.
 - **AC-F03-61** (client integration) The phone sheet at 375 px wide:
     - choosing Last month and Food reads "Show 4 Transactions" once the draft's summary answers, and the URL stays as it was;

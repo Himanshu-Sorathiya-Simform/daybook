@@ -86,7 +86,8 @@ export function quickRangeLabel(
 }
 
 /** The amount filter as words (BR-F03-39): "₹1,000 to ₹2,500", "From ₹1,000" or "Up to
- * ₹2,500", the same whichever quick ranges the histogram offers; `null` without bounds. */
+ * ₹2,500", the same whichever quick ranges the histogram offers (D-614); `null` without
+ * bounds. */
 export function amountLabel(
 	bounds: AmountBounds,
 	locale: FilterLocale,

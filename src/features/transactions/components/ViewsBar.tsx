@@ -21,6 +21,7 @@ import {
 	VIEW_LIMIT,
 	viewName,
 } from "@/lib/transactions/views";
+import { useOnce } from "@/hooks/useOnce";
 import { useCreateView } from "../hooks/useCreateView";
 import { useDeleteView } from "../hooks/useDeleteView";
 import { useEditView } from "../hooks/useEditView";
@@ -105,6 +106,8 @@ export function ViewsBar({
 	const create = useCreateView();
 	const edit = useEditView();
 	const remove = useDeleteView();
+	// One view write at a time, from the press itself: a second press sends nothing (D-615).
+	const writing = useOnce();
 	const noteId = useId();
 	const items = views.data?.items;
 	const context = { today: locale.today, currency: locale.currency };
@@ -146,10 +149,14 @@ export function ViewsBar({
 		for (;;) {
 			const name = viewName(chips, [...names, ...tried]);
 			try {
-				const view = await create.mutateAsync({
-					body: { id, name, ...fields },
-					idempotencyKey: uuidV7(),
-				});
+				const request = writing.run(() =>
+					create.mutateAsync({
+						body: { id, name, ...fields },
+						idempotencyKey: uuidV7(),
+					}),
+				);
+				if (request === null) return;
+				const view = await request;
 				onMark(view.id);
 				showToast(VIEW_TEXT.saved);
 				return;
@@ -165,13 +172,17 @@ export function ViewsBar({
 	};
 
 	const updateView = async (view: SavedView) => {
-		try {
-			await edit.mutateAsync({
+		const request = writing.run(() =>
+			edit.mutateAsync({
 				id: view.id,
 				version: view.version,
 				changes: viewFields(current, context),
 				idempotencyKey: uuidV7(),
-			});
+			}),
+		);
+		if (request === null) return;
+		try {
+			await request;
 			showToast(VIEW_TEXT.updated);
 		} catch (error) {
 			report(error);
@@ -179,12 +190,16 @@ export function ViewsBar({
 	};
 
 	const deleteView = async (view: SavedView) => {
-		try {
-			await remove.mutateAsync({
+		const request = writing.run(() =>
+			remove.mutateAsync({
 				id: view.id,
 				version: view.version,
 				idempotencyKey: uuidV7(),
-			});
+			}),
+		);
+		if (request === null) return;
+		try {
+			await request;
 			onDialogChange(null);
 			onMark(null);
 			showToast(VIEW_TEXT.deleted);

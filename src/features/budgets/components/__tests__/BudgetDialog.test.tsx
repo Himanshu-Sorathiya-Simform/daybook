@@ -1017,6 +1017,129 @@ describe("refusals and states (sections 6 and 8)", () => {
 		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
 	});
 
+	// D-575, D-615: each press builds its own idempotency key, so a second press in the same
+	// frame, before React shows the pending state, would be a second, distinct write.
+	test("Enter twice in the same frame sends one change", async () => {
+		const patches = route(network, "patch", "/api/budgets/:id", async () => {
+			await delay(60);
+			return ok(budgetAnswer("food", { version: 3 }));
+		});
+		const { user, onClose } = renderDialog("change", "food");
+		await user.clear(limitBox());
+		await user.type(limitBox(), "7000");
+		const form = screen.getByRole("form");
+		act(() => {
+			fireEvent.submit(form);
+			fireEvent.submit(form);
+		});
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(patches).toHaveLength(1);
+	});
+
+	test("the Save button pressed twice in the same frame sends one change", async () => {
+		const patches = route(network, "patch", "/api/budgets/:id", async () => {
+			await delay(60);
+			return ok(budgetAnswer("food", { version: 3 }));
+		});
+		const { user, onClose } = renderDialog("change", "food");
+		await user.clear(limitBox());
+		await user.type(limitBox(), "7000");
+		const save = button("Change from November");
+		act(() => {
+			fireEvent.click(save);
+			fireEvent.click(save);
+		});
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(patches).toHaveLength(1);
+	});
+
+	test("Enter twice in the same frame sends one create", async () => {
+		const posts = route(network, "post", "/api/budgets", async () => {
+			await delay(60);
+			return ok(
+				budgetAnswer("food", {
+					id: "0192f1a0-0000-7000-8000-0000000000aa",
+					category: "health",
+					schedule: [{ from: "2026-11", limitMinor: 150000 }],
+				}),
+				201,
+			);
+		});
+		const { user, onClose } = renderDialog("add", null);
+		await user.click(screen.getByText("Health"));
+		await user.type(limitBox(), "1500");
+		const form = screen.getByRole("form");
+		act(() => {
+			fireEvent.submit(form);
+			fireEvent.submit(form);
+		});
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(posts).toHaveLength(1);
+	});
+
+	test("a write that got no answer can be sent again with Enter", async () => {
+		const patches = route(network, "patch", "/api/budgets/:id", (_, index) =>
+			index === 0 ?
+				HttpResponse.error()
+			:	ok(budgetAnswer("food", { version: 3 })),
+		);
+		const { user, onClose } = renderDialog("change", "food");
+		await user.clear(limitBox());
+		await user.type(limitBox(), "7000");
+		// A press on Save moves focus off the box first, which formats it.
+		act(() => limitBox().blur());
+		const form = screen.getByRole("form");
+		fireEvent.submit(form);
+		await screen.findByText(/The Budget could not be saved/);
+		fireEvent.submit(form);
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(patches).toHaveLength(2);
+	});
+
+	test("while it saves, Escape and the Close button do not close it", async () => {
+		let answer: (value: Response) => void = () => {};
+		route(
+			network,
+			"patch",
+			"/api/budgets/:id",
+			() => new Promise<Response>((resolve) => (answer = resolve)),
+		);
+		const { user, onClose } = renderDialog("change", "food");
+		await changeFood(user);
+		expect(button("Cancel")).toHaveAttribute("aria-disabled", "true");
+		expect(button("Close")).toHaveAttribute("aria-disabled", "true");
+		await user.keyboard("{Escape}");
+		await user.click(button("Close"));
+		expect(onClose).not.toHaveBeenCalled();
+		expect(dialog()).toBeVisible();
+		await act(async () => answer(ok(budgetAnswer("food", { version: 2 }))));
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+	});
+
+	test("a refusal after a press of Close mid-save still shows its line in the open dialog", async () => {
+		let answer: (value: Response) => void = () => {};
+		route(
+			network,
+			"patch",
+			"/api/budgets/:id",
+			() => new Promise<Response>((resolve) => (answer = resolve)),
+		);
+		const { user, onClose } = renderDialog("change", "food");
+		await changeFood(user);
+		await user.click(button("Close"));
+		await act(async () => answer(refuse(404, "not_found")));
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			"This Budget was deleted on another device.",
+		);
+		expect(onClose).not.toHaveBeenCalled();
+	});
+
+	test("the Close button closes it when nothing is saving", async () => {
+		const { user, onClose } = renderDialog("change", "food");
+		await user.click(button("Close"));
+		expect(onClose).toHaveBeenCalledOnce();
+	});
+
 	// D-241, section 6
 	test("offline, it says so and Save is disabled, even with a change to save", async () => {
 		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
@@ -1378,6 +1501,33 @@ describe("What changes and its notes (BR-F04-26, BR-F04-27)", () => {
 		expect(
 			screen.getByText("This also changes September and October 2026."),
 		).toBeVisible();
+	});
+
+	// Section 10: the history is not kept offline, even one read earlier in the session.
+	// AC-F04-31
+	test("going offline after the spending was read takes the states and the hint away, and online brings them back", async () => {
+		const { user } = renderDialog("change", "food");
+		await typeLimit(user, "7000");
+		await pickMonth(user, 2026, /September/, 0);
+		await stateShown("84.2% Nearing limit → 72.1% · On track");
+		await hint();
+
+		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+		act(() => {
+			window.dispatchEvent(new Event("offline"));
+		});
+		await waitFor(() =>
+			expect(screen.queryByText(/On track/)).not.toBeInTheDocument(),
+		);
+		expect(screen.queryByText(/^Spent /)).not.toBeInTheDocument();
+		expect(cardsOf()[0]).toHaveTextContent("Was ₹6,000.00");
+		expect(cardsOf()[0]).toHaveTextContent("Now ₹7,000.00");
+
+		vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+		act(() => {
+			window.dispatchEvent(new Event("online"));
+		});
+		await stateShown("84.2% Nearing limit → 72.1% · On track");
 	});
 
 	test("a category's Budget record decides the gains note: a stopped Budget that restarts", async () => {
