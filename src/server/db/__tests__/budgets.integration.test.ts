@@ -1,16 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { Client, DatabaseError, Pool, type PoolClient } from "pg";
+import type { Client, Pool, PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { GOLDEN_NOW } from "../../../../seed/golden";
-import { parseOwnerEnv, parseServerEnv } from "../../env";
+import { failure, openRuntime, type Row, rolledBack } from "./constraints";
+import { connectOwner } from "./owner";
 import { createUser } from "./private-rows";
 
 /** The `app.budgets` table (F04 section 3, D-563): one Budget per expense category, its
  * schedule and one-month limits as JSON arrays, written through the runtime role with the user
  * context set. Each test rolls back. */
-
-type Row = Record<string, string | number | boolean | null>;
 
 let owner: Client;
 let runtime: Pool;
@@ -18,14 +17,8 @@ let user: string;
 let other: string;
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
-	runtime = new Pool({
-		connectionString: parseServerEnv(process.env).DATABASE_URL_RUNTIME,
-		max: 2,
-	});
+	owner = await connectOwner();
+	runtime = openRuntime();
 	user = await createUser(owner, "budgets");
 	other = await createUser(owner, "budgets-other");
 });
@@ -65,29 +58,8 @@ function insert(client: Client | PoolClient, row: Row) {
 	);
 }
 
-async function asUser<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
-	const client = await runtime.connect();
-	try {
-		await client.query("BEGIN");
-		await client.query("SELECT set_config('app.user_id', $1, true)", [user]);
-		return await fn(client);
-	} finally {
-		await client.query("ROLLBACK").catch(() => {});
-		client.release();
-	}
-}
-
-type Refusal = { code: string; constraint: string | null } | null;
-
-async function failure(promise: Promise<unknown>): Promise<Refusal> {
-	try {
-		await promise;
-		return null;
-	} catch (error) {
-		if (!(error instanceof DatabaseError)) throw error;
-		return { code: error.code ?? "", constraint: error.constraint ?? null };
-	}
-}
+const asUser = <T>(fn: (client: PoolClient) => Promise<T>): Promise<T> =>
+	rolledBack(runtime, user, fn);
 
 /** The SQLSTATE and constraint an insert of `rows`, in order, ends with, or null. */
 const refusal = (...rows: Row[]) =>

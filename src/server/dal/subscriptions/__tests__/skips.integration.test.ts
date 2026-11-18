@@ -1,12 +1,10 @@
 import { sql } from "drizzle-orm";
-import { Client } from "pg";
+import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { GOLDEN_NOW } from "../../../../../seed/golden";
-import { insertProfile, type LoadedGolden } from "../../../../../seed/load-golden";
-import { createUser } from "../../../db/__tests__/private-rows";
-import { runtimePool } from "../../../db/pools";
-import { parseOwnerEnv } from "../../../env";
+import type { LoadedGolden } from "../../../../../seed/load-golden";
+import { closeOwner } from "../../../db/__tests__/owner";
 import { refusal } from "../../budgets/__tests__/helpers";
 import type { ProfiledContext } from "../../context";
 import {
@@ -27,7 +25,9 @@ import {
 	holdingLock,
 	laterCharge,
 	on,
+	refusedAfterHolderMoves,
 	skipsOf,
+	subscriptionUsers,
 	tombstone,
 	when,
 } from "./helpers";
@@ -41,25 +41,14 @@ let owner: Client;
 let golden: LoadedGolden;
 let neighbour: LoadedGolden;
 let custom: string;
-const users: string[] = [];
+let users: string[];
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
-	golden = await goldenUser(owner, "sub-skips");
-	neighbour = await goldenUser(owner, "sub-skips-neighbour");
-	custom = await createUser(owner, "sub-skips-custom");
-	await insertProfile(owner, custom);
-	users.push(golden.userId, neighbour.userId, custom);
+	({ owner, golden, neighbour, custom, users } =
+		await subscriptionUsers("sub-skips"));
 }, 60_000);
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [users]);
-	await owner?.end();
-	await runtimePool().end();
-});
+afterAll(() => closeOwner(owner, users));
 
 const netflix = () => golden.subscription("netflix");
 const cultGym = () => golden.subscription("cultGym");
@@ -756,29 +745,16 @@ describe("locks (SRV-7, BR-F05-08 step 1)", () => {
 	test("a skip that waits for a lock is 409 when the holder changed the Subscription", async () => {
 		const user = await goldenUser(owner, "sub-skips-lock-version");
 		users.push(user.userId);
-		const ctx = goldenContext(user.userId);
-		const id = user.subscription("netflix");
-		const refused = await holdingLock(
+		const refused = await refusedAfterHolderMoves(
 			owner,
-			user.userId,
-			id,
-			async (holder) => {
-				await holder.query(
-					"UPDATE app.subscriptions SET version = version + 1 WHERE id = $1",
-					[id],
-				);
-			},
-			() =>
-				refusal(
-					withUser({ user: ctx.user }, "write", (tx) =>
-						skip(tx, ctx, id, 1, { dueOn: "2026-11-05" }),
-					),
-				),
+			user,
+			"UPDATE app.subscriptions SET version = version + 1 WHERE id = $1",
+			(tx, ctx, id) => skip(tx, ctx, id, 1, { dueOn: "2026-11-05" }),
 		);
 		expect(refused.code).toBe("version_conflict");
 		const { rows } = await owner.query(
 			"SELECT 1 FROM app.subscription_skips WHERE subscription_id = $1",
-			[id],
+			[user.subscription("netflix")],
 		);
 		expect(rows).toHaveLength(0);
 	}, 60_000);

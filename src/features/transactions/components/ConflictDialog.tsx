@@ -1,9 +1,6 @@
 "use client";
 
-import { Button } from "@/components/actions/Button";
-import { Badge } from "@/components/data/Badge";
-import { Dialog } from "@/components/surfaces/Dialog";
-import { cn } from "@/lib/cn";
+import { ConflictView } from "@/components/surfaces/ConflictView";
 import { CONFLICT_TEXT, type ConflictRow } from "../lib/conflict";
 
 export type ConflictDialogProps = {
@@ -43,98 +40,35 @@ export function ConflictDialog({
 	className,
 }: Readonly<ConflictDialogProps>) {
 	return (
-		<Dialog
+		<ConflictView
 			title={CONFLICT_TEXT.title}
-			size="lg"
+			intro={isDelete ? CONFLICT_TEXT.deleteIntro : CONFLICT_TEXT.intro}
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
-			isPending={isPending}
-			footer={
-				<>
-					<span className="flex-1" />
-					<Button
-						variant="secondary"
-						isDisabled={isPending}
-						onPress={onKeepTheirs}
-					>
-						{isDelete ? CONFLICT_TEXT.keepIt : CONFLICT_TEXT.keepTheirs}
-					</Button>
-					<Button
-						isPending={isPending}
-						onPress={onKeepMine}
-					>
-						{isDelete ?
-							CONFLICT_TEXT.deleteAnyway
-						:	CONFLICT_TEXT.keepMine}
-					</Button>
-				</>
+			headings={{
+				row: CONFLICT_TEXT.field,
+				mine: isDelete ? CONFLICT_TEXT.deletedMine : CONFLICT_TEXT.mine,
+				theirs: CONFLICT_TEXT.theirs,
+			}}
+			rows={rows.map((row) => ({
+				key: row.field,
+				label: row.label,
+				differs: row.differs,
+				mine: row.mine,
+				theirs: row.theirs,
+			}))}
+			differsLabel={CONFLICT_TEXT.differs}
+			keepMineLabel={
+				isDelete ? CONFLICT_TEXT.deleteAnyway : CONFLICT_TEXT.keepMine
 			}
+			keepTheirsLabel={
+				isDelete ? CONFLICT_TEXT.keepIt : CONFLICT_TEXT.keepTheirs
+			}
+			onKeepMine={onKeepMine}
+			onKeepTheirs={onKeepTheirs}
+			keepMineLine={keepMineLine}
+			isPending={isPending}
 			{...(className ? { className } : {})}
-		>
-			<p className="text-body text-ink-2">
-				{isDelete ? CONFLICT_TEXT.deleteIntro : CONFLICT_TEXT.intro}
-			</p>
-			<table className="text-body w-full table-fixed border-collapse">
-				<thead>
-					<tr className="text-label text-ink-2 text-left">
-						<th
-							scope="col"
-							className="w-[30%] pb-1.5 font-normal"
-						>
-							{CONFLICT_TEXT.field}
-						</th>
-						<th
-							scope="col"
-							className="pb-1.5 font-normal"
-						>
-							{isDelete ?
-								CONFLICT_TEXT.deletedMine
-							:	CONFLICT_TEXT.mine}
-						</th>
-						<th
-							scope="col"
-							className="pb-1.5 font-normal"
-						>
-							{CONFLICT_TEXT.theirs}
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					{rows.map((row) => (
-						<tr
-							key={row.field}
-							data-differs={row.differs || undefined}
-							className={cn(
-								"border-line border-t align-top",
-								row.differs && "bg-accent-soft",
-							)}
-						>
-							<th
-								scope="row"
-								className="text-ink-2 py-2.5 pr-2 pl-1.5 text-left font-normal"
-							>
-								<span className="flex flex-wrap items-center gap-1.5">
-									{row.label}
-									{row.differs && (
-										<Badge tone="outline">
-											{CONFLICT_TEXT.differs}
-										</Badge>
-									)}
-								</span>
-							</th>
-							<td className="text-ink py-2.5 pr-2 break-words whitespace-pre-line">
-								{row.mine}
-							</td>
-							<td className="text-ink py-2.5 pr-1.5 break-words whitespace-pre-line">
-								{row.theirs}
-							</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
-			{keepMineLine && (
-				<p className="text-caption text-ink-2">{keepMineLine}</p>
-			)}
-		</Dialog>
+		/>
 	);
 }

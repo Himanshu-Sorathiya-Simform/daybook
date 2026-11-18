@@ -11,6 +11,7 @@ import {
 	GOLDEN_TODAY,
 } from "../../../../../seed/golden";
 import {
+	insertProfile,
 	insertSubscriptionSkips,
 	insertSubscriptions,
 	insertTransactions,
@@ -19,12 +20,17 @@ import {
 	type LoadedSubscription,
 	type LoadOptions,
 } from "../../../../../seed/load-golden";
+import { connectOwner } from "../../../db/__tests__/owner";
 import { createUser } from "../../../db/__tests__/private-rows";
-import { transactionIdOf, waitForWaiterOn } from "../../budgets/__tests__/helpers";
+import {
+	refusal,
+	transactionIdOf,
+	waitForWaiterOn,
+} from "../../budgets/__tests__/helpers";
 import type { ProfiledContext } from "../../context";
 import { goldenContext, uuidV7At } from "../../transactions/__tests__/helpers";
 import { runtimePool } from "../../../db/pools";
-import type { Tx } from "../../with-user";
+import { type Tx, withUser } from "../../with-user";
 
 export { GOLDEN_TODAY };
 
@@ -36,6 +42,24 @@ export async function goldenUser(
 	options: LoadOptions = {},
 ): Promise<LoadedGolden> {
 	return loadGolden(owner, await createUser(owner, label), options);
+}
+
+/** The users a Subscription DAL test file works with, committed by the owner: a golden user,
+ * its golden neighbour, and `custom`, a user with a profile and nothing else. `users` holds
+ * their ids for the file's cleanup (`closeOwner`); a test that adds more pushes them there. */
+export async function subscriptionUsers(label: string) {
+	const owner = await connectOwner();
+	const golden = await goldenUser(owner, label);
+	const neighbour = await goldenUser(owner, `${label}-neighbour`);
+	const custom = await createUser(owner, `${label}-custom`);
+	await insertProfile(owner, custom);
+	return {
+		owner,
+		golden,
+		neighbour,
+		custom,
+		users: [golden.userId, neighbour.userId, custom],
+	};
 }
 
 /** A Subscription row for `insertSubscriptions`: Netflix's fields unless `fields` change them. A
@@ -256,6 +280,31 @@ export async function holdingLock<T>(
 		await holder.query("ROLLBACK").catch(() => {});
 		holder.release();
 	}
+}
+
+/** A write refused after it waited for a held lock: another session holds `user`'s Netflix
+ * lock, runs `holderSql` (the Subscription's id is `$1`) and commits, while `write` waits for
+ * the lock. Answers what the refusal was. */
+export async function refusedAfterHolderMoves(
+	owner: Client,
+	user: LoadedGolden,
+	holderSql: string,
+	write: (tx: Tx, ctx: ProfiledContext, id: string) => Promise<unknown>,
+) {
+	const ctx = goldenContext(user.userId);
+	const id = user.subscription("netflix");
+	return holdingLock(
+		owner,
+		user.userId,
+		id,
+		async (holder) => {
+			await holder.query(holderSql, [id]);
+		},
+		() =>
+			refusal(
+				withUser({ user: ctx.user }, "write", (tx) => write(tx, ctx, id)),
+			),
+	);
 }
 
 // AC-F05-32

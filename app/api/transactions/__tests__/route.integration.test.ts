@@ -1,22 +1,16 @@
 import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { GOLDEN_NOW } from "../../../../seed/golden";
 import { loadGolden, type LoadedGolden } from "../../../../seed/load-golden";
 import type { Transaction } from "@/lib/transactions/model";
 import { call } from "@/server/api/__tests__/call";
+import {
+	closeOwner,
+	connectOwner,
+	freezeGoldenClock,
+} from "@/server/api/__tests__/endpoint";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
-import { parseOwnerEnv } from "@/server/env";
 import type { GroupTotal } from "@/lib/transactions/answers";
 import { GET } from "../route";
 
@@ -43,10 +37,7 @@ async function goldenUser(label: string) {
 }
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
+	owner = await connectOwner();
 	golden = await goldenUser("list-route");
 	other = await goldenUser("list-route-other");
 	await owner.query("UPDATE app.profile SET currency = 'USD' WHERE user_id = $1", [
@@ -55,21 +46,14 @@ beforeAll(async () => {
 	noProfile = await signedInUser(owner, "list-route-new");
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [
+afterAll(() =>
+	closeOwner(
+		owner,
 		[golden?.userId, other?.userId, noProfile?.id].filter(Boolean),
-	]);
-	await owner?.end();
-	await runtimePool().end();
-});
+	),
+);
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
+freezeGoldenClock();
 
 const list = (query: string, cookie = golden.cookie) =>
 	call(GET, `/api/transactions${query ? `?${query}` : ""}`, { cookie });

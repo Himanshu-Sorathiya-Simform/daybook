@@ -1,31 +1,31 @@
 import { randomUUIDv7 } from "node:crypto";
-import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import type { Client } from "pg";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { GOLDEN_NOW } from "../../../../seed/golden";
 import { insertProfile, loadGolden } from "../../../../seed/load-golden";
 import { call } from "@/server/api/__tests__/call";
+import {
+	closeOwner,
+	connectOwner,
+	dataOf,
+	errorOf,
+	expectCrossOriginRefused,
+	expectSessionRefusals,
+	freezeGoldenClock,
+	sentTwiceWithOneKey,
+	type SignedIn,
+} from "@/server/api/__tests__/endpoint";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
 import { addSubscription } from "@/server/dal/subscriptions/__tests__/helpers";
 import { uuidV7At } from "@/server/dal/transactions/__tests__/helpers";
-import { parseOwnerEnv, serverEnv } from "@/server/env";
 import { GET, POST } from "../route";
 
 /** `GET` and `POST /api/subscriptions` (F05 section 11) through the route wrapper, real sessions
  * and the golden clock. The rules themselves are tested on `listSubscriptions` and
  * `createSubscription`; these show each answer the wrapper gives. */
 
-type User = { id: string; cookie: string };
+type User = SignedIn;
 
 let owner: Client;
 let golden: User;
@@ -35,10 +35,7 @@ let noProfile: User;
 const users: string[] = [];
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
+	owner = await connectOwner();
 	golden = await signedInUser(owner, "subs-route");
 	goldenNetflix = (await loadGolden(owner, golden.id)).subscription("netflix");
 	other = await signedInUser(owner, "subs-route-other");
@@ -47,19 +44,9 @@ beforeAll(async () => {
 	users.push(golden.id, other.id, noProfile.id);
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [users]);
-	await owner?.end();
-	await runtimePool().end();
-});
+afterAll(() => closeOwner(owner, users));
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
+freezeGoldenClock();
 
 /** A signed-in user with the golden profile and no Subscriptions, for a test that writes. */
 async function freshUser(label: string): Promise<User> {
@@ -68,20 +55,6 @@ async function freshUser(label: string): Promise<User> {
 	await insertProfile(owner, user.id);
 	return user;
 }
-
-const errorOf = (body: unknown) =>
-	(
-		body as {
-			error: {
-				code: string;
-				fields: Record<string, string>;
-				details: Record<string, unknown>;
-			};
-		}
-	).error;
-
-const dataOf = <T = Record<string, unknown>>(body: unknown) =>
-	(body as { data: T }).data;
 
 const read = (cookie: string | null = golden.cookie) =>
 	call(GET, "/api/subscriptions", cookie === null ? {} : { cookie });
@@ -252,16 +225,11 @@ describe("POST /api/subscriptions", () => {
 
 	test("the same key and body twice answer the same, with one Subscription", async () => {
 		const user = await freshUser("subs-route-replay");
-		const input = body();
-		const key = randomUUIDv7();
-		const first = await create(input, {
-			cookie: user.cookie,
-			headers: { "idempotency-key": key },
-		});
-		const again = await create(input, {
-			cookie: user.cookie,
-			headers: { "idempotency-key": key },
-		});
+		const { first, again } = await sentTwiceWithOneKey(
+			create,
+			body(),
+			user.cookie,
+		);
 		expect(first.status).toBe(201);
 		expect(again).toMatchObject({ status: 201, body: first.body });
 		expect(await counts(user.id)).toEqual({ subscriptions: 1, charges: 0 });
@@ -338,24 +306,12 @@ describe("POST /api/subscriptions", () => {
 		expect(await counts(user.id)).toEqual({ subscriptions: 0, charges: 0 });
 	});
 
-	test("no session is 401, and no profile 403 profile_required", async () => {
-		expect((await create(body(), { cookie: null })).status).toBe(401);
-		const { status, body: answer } = await create(body(), {
-			cookie: noProfile.cookie,
-		});
-		expect(status).toBe(403);
-		expect(errorOf(answer).code).toBe("profile_required");
-	});
+	test("no session is 401, and no profile 403 profile_required", () =>
+		expectSessionRefusals(create, body(), noProfile.cookie));
 
 	test("a request from another origin is 403 cross_origin", async () => {
 		const user = await freshUser("subs-route-origin");
-		const { status, body: answer } = await create(body(), {
-			cookie: user.cookie,
-			headers: { origin: "https://evil.example" },
-		});
-		expect(status).toBe(403);
-		expect(errorOf(answer).code).toBe("cross_origin");
-		expect(serverEnv().APP_ORIGIN).not.toBe("https://evil.example");
+		await expectCrossOriginRefused(create, body(), user.cookie);
 		expect(await counts(user.id)).toEqual({ subscriptions: 0, charges: 0 });
 	});
 });

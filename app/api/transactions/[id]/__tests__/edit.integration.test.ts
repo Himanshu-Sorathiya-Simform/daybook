@@ -1,23 +1,18 @@
 import { randomUUIDv7 } from "node:crypto";
 import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { GOLDEN_NOW } from "../../../../../seed/golden";
 import { loadGolden, type LoadedGolden } from "../../../../../seed/load-golden";
 import { call } from "@/server/api/__tests__/call";
+import {
+	closeOwner,
+	connectOwner,
+	errorOf,
+	freezeGoldenClock,
+} from "@/server/api/__tests__/endpoint";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
 import { uuidV7At } from "@/server/dal/transactions/__tests__/helpers";
-import { parseOwnerEnv } from "@/server/env";
 import { GET, PATCH } from "../route";
 
 /** `PATCH /api/transactions/[id]` (F03 section 11, BR-F03-23) through the route wrapper, a real
@@ -35,30 +30,20 @@ async function goldenUser(label: string) {
 }
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
+	owner = await connectOwner();
 	golden = await goldenUser("edit-route");
 	other = await goldenUser("edit-route-other");
 	noProfile = await signedInUser(owner, "edit-route-new");
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [
+afterAll(() =>
+	closeOwner(
+		owner,
 		[golden?.userId, other?.userId, noProfile?.id].filter(Boolean),
-	]);
-	await owner?.end();
-	await runtimePool().end();
-});
+	),
+);
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
+freezeGoldenClock();
 
 /** A committed expense of the golden user's, recorded at the golden clock: Chai Point, 300.00
  * of food at 11:40 IST on 2 November, at version 1. */
@@ -101,17 +86,6 @@ const read = async (id: string) =>
 			params: { id },
 		})) as { body: { data: Record<string, unknown> } }
 	).body.data;
-
-const errorOf = (body: unknown) =>
-	(
-		body as {
-			error: {
-				code: string;
-				fields: Record<string, string>;
-				details: Record<string, unknown>;
-			};
-		}
-	).error;
 
 test("answers 200 with the edited row and the profile currency, as GET then reads it", async () => {
 	const id = await fresh();

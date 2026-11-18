@@ -1,22 +1,20 @@
 import { randomUUIDv7 } from "node:crypto";
-import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import type { Client } from "pg";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { GOLDEN_NOW } from "../../../../../../seed/golden";
-import { loadGolden, type LoadedGolden } from "../../../../../../seed/load-golden";
 import { call } from "@/server/api/__tests__/call";
-import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
-import { parseOwnerEnv } from "@/server/env";
+import {
+	closeOwner,
+	connectOwner,
+	dataOf,
+	errorOf,
+	type GoldenSignedIn,
+	goldenSignedIn,
+	freezeGoldenClock,
+	routeUsers,
+	type WriteOptions as Options,
+} from "@/server/api/__tests__/endpoint";
 import { DELETE as unskip } from "../[dueOn]/route";
 import { POST as skip } from "../route";
 
@@ -25,7 +23,7 @@ import { POST as skip } from "../route";
  * clock. The skip rules are tested on `skipCharge` and `unskipCharge`; these show each answer,
  * header and refusal the wrapper gives. Every test that writes has a golden user of its own. */
 
-type User = LoadedGolden & { cookie: string };
+type User = GoldenSignedIn;
 
 let owner: Client;
 let golden: User;
@@ -33,58 +31,20 @@ let other: User;
 let noProfile: { id: string; cookie: string };
 const users: string[] = [];
 
-async function goldenUser(label: string): Promise<User> {
-	const user = await signedInUser(owner, label);
-	users.push(user.id);
-	return { ...(await loadGolden(owner, user.id)), cookie: user.cookie };
-}
+const goldenUser = (label: string) => goldenSignedIn(owner, users, label);
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
-	golden = await goldenUser("sub-skips-route");
-	other = await goldenUser("sub-skips-route-other");
-	noProfile = await signedInUser(owner, "sub-skips-route-new");
-	users.push(noProfile.id);
+	owner = await connectOwner();
+	({ golden, other, noProfile } = await routeUsers(
+		owner,
+		users,
+		"sub-skips-route",
+	));
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [users]);
-	await owner?.end();
-	await runtimePool().end();
-});
+afterAll(() => closeOwner(owner, users));
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
-
-const errorOf = (body: unknown) =>
-	(
-		body as {
-			error: {
-				code: string;
-				fields: Record<string, string>;
-				details: Record<string, unknown>;
-			};
-		}
-	).error;
-
-const dataOf = <T = Record<string, unknown>>(body: unknown) =>
-	(body as { data: T }).data;
-
-type Options = {
-	id?: string;
-	version?: string | null;
-	cookie?: string | null;
-	key?: string;
-	headers?: Record<string, string | null>;
-};
+freezeGoldenClock();
 
 const headersOf = ({ version = "1", key, headers = {} }: Options) => ({
 	"if-match": version === null ? null : `"${version}"`,

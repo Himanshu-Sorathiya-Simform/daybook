@@ -1,16 +1,21 @@
 import { randomUUID } from "node:crypto";
-import { Client, DatabaseError, Pool, type PoolClient } from "pg";
+import type { Client, Pool, PoolClient } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { GOLDEN_NOW, GOLDEN_SUBSCRIPTIONS } from "../../../../seed/golden";
-import { parseOwnerEnv, parseServerEnv } from "../../env";
+import {
+	failure,
+	indexesOf,
+	openRuntime,
+	type Row,
+	rolledBack,
+} from "./constraints";
+import { connectOwner } from "./owner";
 import { createUser } from "./private-rows";
 
 /** The `app.subscriptions` and `app.subscription_skips` tables and the charge link on
  * `app.transactions` (F05 section 3, D-598): every row a user writes goes through the runtime
  * role with the user context set, as the data access layer sets it. Each test rolls back. */
-
-type Row = Record<string, string | number | boolean | null>;
 
 let owner: Client;
 let runtime: Pool;
@@ -18,14 +23,8 @@ let user: string;
 let other: string;
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
-	runtime = new Pool({
-		connectionString: parseServerEnv(process.env).DATABASE_URL_RUNTIME,
-		max: 2,
-	});
+	owner = await connectOwner();
+	runtime = openRuntime();
 	user = await createUser(owner, "subscriptions");
 	other = await createUser(owner, "subscriptions-other");
 });
@@ -112,41 +111,29 @@ const manual = (changes: Row = {}, userId = user): Row => ({
 
 type Table = "subscriptions" | "subscription_skips" | "transactions";
 
-function insert(client: Client | PoolClient, table: Table, row: Row) {
+function insert(client: Client | PoolClient, table: Table, row: Row, suffix = "") {
 	const columns = Object.keys(row);
 	return client.query(
 		`INSERT INTO app.${table} (${columns.join(", ")})
-		 VALUES (${columns.map((_, index) => `$${index + 1}`).join(", ")})`,
+		 VALUES (${columns.map((_, index) => `$${index + 1}`).join(", ")}) ${suffix}`,
 		Object.values(row),
 	);
 }
 
-async function asUser<T>(
+/** A repeated insert with ON CONFLICT DO NOTHING and no target, as a create and a catch-up make
+ * it (BR-F05-02): answers how many rows it inserted and how many the table holds. */
+async function insertIgnoringConflict(client: PoolClient, table: Table, row: Row) {
+	const result = await insert(client, table, row, "ON CONFLICT DO NOTHING");
+	const total = await client.query<{ n: number }>(
+		`SELECT count(*)::int AS n FROM app.${table}`,
+	);
+	return [result.rowCount, total.rows[0]?.n];
+}
+
+const asUser = <T>(
 	fn: (client: PoolClient) => Promise<T>,
 	userId = user,
-): Promise<T> {
-	const client = await runtime.connect();
-	try {
-		await client.query("BEGIN");
-		await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
-		return await fn(client);
-	} finally {
-		await client.query("ROLLBACK").catch(() => {});
-		client.release();
-	}
-}
-
-type Refusal = { code: string; constraint: string | null } | null;
-
-async function failure(promise: Promise<unknown>): Promise<Refusal> {
-	try {
-		await promise;
-		return null;
-	} catch (error) {
-		if (!(error instanceof DatabaseError)) throw error;
-		return { code: error.code ?? "", constraint: error.constraint ?? null };
-	}
-}
+): Promise<T> => rolledBack(runtime, userId, fn);
 
 /** Runs `setup` as the user, then reports what `last` ends with: null, or the SQLSTATE and
  * constraint of its failure. */
@@ -313,18 +300,11 @@ describe("a Subscription", () => {
 		const counts = await asUser(async (client) => {
 			const first = subscription();
 			await insert(client, "subscriptions", first);
-			const row = subscription({ id: first["id"] as string });
-			const columns = Object.keys(row);
-			const again = await client.query(
-				`INSERT INTO app.subscriptions (${columns.join(", ")})
-				 VALUES (${columns.map((_, index) => `$${index + 1}`).join(", ")})
-				 ON CONFLICT DO NOTHING`,
-				Object.values(row),
+			return insertIgnoringConflict(
+				client,
+				"subscriptions",
+				subscription({ id: first["id"] as string }),
 			);
-			const total = await client.query<{ n: number }>(
-				"SELECT count(*)::int AS n FROM app.subscriptions",
-			);
-			return [again.rowCount, total.rows[0]?.n];
 		});
 		expect(counts).toEqual([0, 1]);
 	});
@@ -634,13 +614,7 @@ describe("a Subscription", () => {
 	});
 
 	test("the primary key and the key on user and id are the only indexes", async () => {
-		const result = await owner.query<{ indexname: string; indexdef: string }>(
-			`SELECT indexname, indexdef FROM pg_indexes
-			 WHERE schemaname = 'app' AND tablename = 'subscriptions' ORDER BY indexname`,
-		);
-		const indexes = Object.fromEntries(
-			result.rows.map((row) => [row.indexname, row.indexdef]),
-		);
+		const indexes = await indexesOf(owner, "subscriptions");
 		expect(Object.keys(indexes)).toEqual([
 			"subscriptions_pkey",
 			"subscriptions_user_id_id_key",
@@ -739,18 +713,11 @@ describe("a skipped charge (D-93)", () => {
 			const parent = subscription();
 			await insert(client, "subscriptions", parent);
 			await insert(client, "subscription_skips", skip(parent));
-			const again = skip(parent);
-			const columns = Object.keys(again);
-			const result = await client.query(
-				`INSERT INTO app.subscription_skips (${columns.join(", ")})
-				 VALUES (${columns.map((_, index) => `$${index + 1}`).join(", ")})
-				 ON CONFLICT DO NOTHING`,
-				Object.values(again),
+			return insertIgnoringConflict(
+				client,
+				"subscription_skips",
+				skip(parent),
 			);
-			const total = await client.query<{ n: number }>(
-				"SELECT count(*)::int AS n FROM app.subscription_skips",
-			);
-			return [result.rowCount, total.rows[0]?.n];
 		});
 		expect(counts).toEqual([0, 1]);
 	});
@@ -1146,18 +1113,11 @@ describe("a charge's link to its Subscription (BR-F05-02, D-96)", () => {
 		test("ON CONFLICT DO NOTHING with no target inserts nothing for a charged date", async () => {
 			const counts = await asUser(async (client) => {
 				await setup(client);
-				const again = charge(parent);
-				const columns = Object.keys(again);
-				const result = await client.query(
-					`INSERT INTO app.transactions (${columns.join(", ")})
-					 VALUES (${columns.map((_, index) => `$${index + 1}`).join(", ")})
-					 ON CONFLICT DO NOTHING`,
-					Object.values(again),
+				return insertIgnoringConflict(
+					client,
+					"transactions",
+					charge(parent),
 				);
-				const total = await client.query<{ n: number }>(
-					"SELECT count(*)::int AS n FROM app.transactions",
-				);
-				return [result.rowCount, total.rows[0]?.n];
 			});
 			expect(counts).toEqual([0, 1]);
 		});

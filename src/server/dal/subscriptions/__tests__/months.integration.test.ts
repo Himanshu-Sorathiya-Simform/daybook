@@ -138,34 +138,34 @@ describe("what changes a month", () => {
 		]);
 	});
 
-	test("a paused date leaves the expected figure and resumes after the pause", async () => {
-		const loaded = await goldenUser(owner, "sub-months-pause");
-		users.push(loaded.userId);
-		await ownerExec(
-			owner,
+	// An end date of 4 December: Netflix charges on 5 November but not on 5 December.
+	test.each([
+		[
+			"a paused date leaves the expected figure and resumes after the pause",
+			"sub-months-pause",
 			"UPDATE app.subscriptions SET pause_from = '2026-11-05', pause_until = '2027-01-05' WHERE id = $1",
-			[loaded.subscription("netflix")],
-		);
-		expect(await rows("2026-11", "2027-01", loaded.userId)).toEqual([
-			["2026-11", 1800000, 150000],
-			["2026-12", 0, 1950000],
-			["2027-01", 0, 1950000 + 64900],
-		]);
-	});
-
-	test("an end date stops a month's expected figure at that date", async () => {
-		const loaded = await goldenUser(owner, "sub-months-end");
-		users.push(loaded.userId);
-		await ownerExec(
-			owner,
+			"2027-01",
+			[
+				["2026-11", 1800000, 150000],
+				["2026-12", 0, 1950000],
+				["2027-01", 0, 1950000 + 64900],
+			],
+		],
+		[
+			"an end date stops a month's expected figure at that date",
+			"sub-months-end",
 			"UPDATE app.subscriptions SET end_date = '2026-12-04' WHERE id = $1",
-			[loaded.subscription("netflix")],
-		);
-		// Netflix charges on 5 November but not on 5 December.
-		expect(await rows("2026-11", "2026-12", loaded.userId)).toEqual([
-			["2026-11", 1800000, 214900],
-			["2026-12", 0, 1950000],
-		]);
+			"2026-12",
+			[
+				["2026-11", 1800000, 214900],
+				["2026-12", 0, 1950000],
+			],
+		],
+	])("%s", async (_title, label, update, to, expected) => {
+		const loaded = await goldenUser(owner, label);
+		users.push(loaded.userId);
+		await ownerExec(owner, update, [loaded.subscription("netflix")]);
+		expect(await rows("2026-11", to, loaded.userId)).toEqual(expected);
 	});
 
 	test("a charged date is not expected twice: the date is charged, so only its charge counts", async () => {

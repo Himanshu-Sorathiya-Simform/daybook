@@ -1,28 +1,22 @@
-import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import type { Client } from "pg";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
-import { GOLDEN_NOW } from "../../../../../seed/golden";
 import { insertProfile, loadGolden } from "../../../../../seed/load-golden";
 import { call } from "@/server/api/__tests__/call";
+import {
+	closeOwner,
+	connectOwner,
+	type SignedIn,
+	freezeGoldenClock,
+} from "@/server/api/__tests__/endpoint";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
-import { parseOwnerEnv } from "@/server/env";
 import { GET } from "../route";
 
 /** `GET /api/subscriptions/months` (F05 section 11, BR-F05-36) through the route wrapper, real
  * sessions and the golden clock. The figures are tested on `subscriptionMonths`; the query's
  * refusals on `readMonthsQuery`; these show the answers and the wrapper's refusals. */
 
-type User = { id: string; cookie: string };
+type User = SignedIn;
 
 let owner: Client;
 let golden: User;
@@ -31,10 +25,7 @@ let noProfile: User;
 const users: string[] = [];
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
+	owner = await connectOwner();
 	golden = await signedInUser(owner, "sub-months-route");
 	await loadGolden(owner, golden.id);
 	other = await signedInUser(owner, "sub-months-route-other");
@@ -43,19 +34,9 @@ beforeAll(async () => {
 	users.push(golden.id, other.id, noProfile.id);
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [users]);
-	await owner?.end();
-	await runtimePool().end();
-});
+afterAll(() => closeOwner(owner, users));
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
+freezeGoldenClock();
 
 const read = (query: string, cookie: string | null = golden.cookie) =>
 	call(

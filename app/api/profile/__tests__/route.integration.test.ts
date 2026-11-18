@@ -1,23 +1,18 @@
 import { randomUUIDv7 } from "node:crypto";
 import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { GOLDEN_NOW } from "../../../../seed/golden";
 import { loadGolden } from "../../../../seed/load-golden";
 import { PROFILE_MESSAGES } from "@/lib/profile";
 import { call } from "@/server/api/__tests__/call";
+import {
+	closeOwner,
+	connectOwner,
+	freezeGoldenClock,
+} from "@/server/api/__tests__/endpoint";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
-import { parseOwnerEnv, serverEnv } from "@/server/env";
+import { serverEnv } from "@/server/env";
 import { GET as listTransactions } from "../../transactions/route";
 import { GET, POST } from "../route";
 
@@ -31,25 +26,12 @@ let owner: Client;
 const users: string[] = [];
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
+	owner = await connectOwner();
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [users]);
-	await owner?.end();
-	await runtimePool().end();
-});
+afterAll(() => closeOwner(owner, users));
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
+freezeGoldenClock();
 
 async function newUser(label: string): Promise<User> {
 	const signedIn = await signedInUser(owner, label);

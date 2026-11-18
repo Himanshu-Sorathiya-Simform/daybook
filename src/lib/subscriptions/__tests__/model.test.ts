@@ -735,37 +735,36 @@ describe("monthItems and monthTotals (BR-F05-38, AC-F05-24)", () => {
 			amountMinor: row.amountMinor,
 		}));
 
-	// golden: check E, October charges 20,148.00, with Cult Gym's 10 October skipped.
-	test("golden October: three charges and Cult Gym's skipped date, charged 20,148.00", () => {
-		const items = monthItems(golden(), charges(), "2026-10", TODAY);
+	// golden: check E, October charges 20,148.00, with Cult Gym's 10 October skipped; November
+	// charged 18,000.00 (#27), still to come 2,149.00.
+	test.each([
+		[
+			"golden October: three charges and Cult Gym's skipped date, charged 20,148.00",
+			"2026-10",
+			[
+				["2026-10-01", "charged", "Sunrise Apartments", 1800000],
+				["2026-10-05", "charged", "Netflix", 64900],
+				["2026-10-10", "skipped", "Cult Gym", 150000],
+				["2026-10-12", "charged", "Amazon Prime", 149900],
+			],
+			{ chargedMinor: 2014800, toComeMinor: 0 },
+		],
+		[
+			"golden November: #27 charged, Netflix and Cult Gym due",
+			"2026-11",
+			[
+				["2026-11-01", "charged", "Sunrise Apartments", 1800000],
+				["2026-11-05", "due", "Netflix", 64900],
+				["2026-11-10", "due", "Cult Gym", 150000],
+			],
+			{ chargedMinor: 1800000, toComeMinor: 214900 },
+		],
+	])("%s", (_title, month, expected, totals) => {
+		const items = monthItems(golden(), charges(), month, TODAY);
 		expect(
 			items.map((item) => [item.date, item.kind, item.name, item.amountMinor]),
-		).toEqual([
-			["2026-10-01", "charged", "Sunrise Apartments", 1800000],
-			["2026-10-05", "charged", "Netflix", 64900],
-			["2026-10-10", "skipped", "Cult Gym", 150000],
-			["2026-10-12", "charged", "Amazon Prime", 149900],
-		]);
-		expect(monthTotals(items)).toEqual({
-			chargedMinor: 2014800,
-			toComeMinor: 0,
-		});
-	});
-
-	// golden: November charged 18,000.00 (#27), still to come 2,149.00.
-	test("golden November: #27 charged, Netflix and Cult Gym due", () => {
-		const items = monthItems(golden(), charges(), "2026-11", TODAY);
-		expect(
-			items.map((item) => [item.date, item.kind, item.name, item.amountMinor]),
-		).toEqual([
-			["2026-11-01", "charged", "Sunrise Apartments", 1800000],
-			["2026-11-05", "due", "Netflix", 64900],
-			["2026-11-10", "due", "Cult Gym", 150000],
-		]);
-		expect(monthTotals(items)).toEqual({
-			chargedMinor: 1800000,
-			toComeMinor: 214900,
-		});
+		).toEqual(expected);
+		expect(monthTotals(items)).toEqual(totals);
 	});
 
 	// golden: December expects 20,149.00.

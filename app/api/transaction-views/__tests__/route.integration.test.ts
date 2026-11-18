@@ -1,23 +1,17 @@
 import { randomUUIDv7 } from "node:crypto";
 import { Client } from "pg";
-import {
-	afterAll,
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	test,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { GOLDEN_NOW } from "../../../../seed/golden";
 import { loadGolden } from "../../../../seed/load-golden";
 import { call } from "@/server/api/__tests__/call";
+import {
+	closeOwner,
+	connectOwner,
+	freezeGoldenClock,
+} from "@/server/api/__tests__/endpoint";
 import { signedInUser } from "@/server/auth/__tests__/sessions";
-import { runtimePool } from "@/server/db/pools";
 import { viewBody } from "@/server/dal/transaction-views/__tests__/helpers";
-import { parseOwnerEnv } from "@/server/env";
 import { GET, POST } from "../route";
 
 /** `GET` and `POST /api/transaction-views` (F03 section 11, BR-F03-63, BR-F03-64; D-488)
@@ -33,28 +27,15 @@ let noProfile: User;
 let shared: User;
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
+	owner = await connectOwner();
 	noProfile = await signedInUser(owner, "views-route-new");
 	users.push(noProfile.id);
 	shared = await user("views-shared");
 });
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [users]);
-	await owner?.end();
-	await runtimePool().end();
-});
+afterAll(() => closeOwner(owner, users));
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"], now: new Date(GOLDEN_NOW) });
-});
-
-afterEach(() => {
-	vi.useRealTimers();
-});
+freezeGoldenClock();
 
 /** A signed-in user with the golden profile (INR, India) and `views` committed views named
  * "View 1" and on. */

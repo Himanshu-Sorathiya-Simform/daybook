@@ -1,12 +1,10 @@
 import { sql } from "drizzle-orm";
-import { Client } from "pg";
+import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
 import { GOLDEN_NOW } from "../../../../../seed/golden";
-import { insertProfile, type LoadedGolden } from "../../../../../seed/load-golden";
-import { createUser } from "../../../db/__tests__/private-rows";
-import { runtimePool } from "../../../db/pools";
-import { parseOwnerEnv } from "../../../env";
+import type { LoadedGolden } from "../../../../../seed/load-golden";
+import { closeOwner } from "../../../db/__tests__/owner";
 import { refusal } from "../../budgets/__tests__/helpers";
 import type { ProfiledContext } from "../../context";
 import {
@@ -27,7 +25,9 @@ import {
 	holdingLock,
 	laterCharge,
 	on,
+	refusedAfterHolderMoves,
 	skipsOf,
+	subscriptionUsers,
 	tombstone,
 	when,
 } from "./helpers";
@@ -41,25 +41,14 @@ let owner: Client;
 let golden: LoadedGolden;
 let neighbour: LoadedGolden;
 let custom: string;
-const users: string[] = [];
+let users: string[];
 
 beforeAll(async () => {
-	owner = new Client({
-		connectionString: parseOwnerEnv(process.env).DATABASE_URL_OWNER,
-	});
-	await owner.connect();
-	golden = await goldenUser(owner, "sub-change");
-	neighbour = await goldenUser(owner, "sub-change-neighbour");
-	custom = await createUser(owner, "sub-change-custom");
-	await insertProfile(owner, custom);
-	users.push(golden.userId, neighbour.userId, custom);
+	({ owner, golden, neighbour, custom, users } =
+		await subscriptionUsers("sub-change"));
 }, 60_000);
 
-afterAll(async () => {
-	await owner?.query(`DELETE FROM auth."user" WHERE id = ANY($1)`, [users]);
-	await owner?.end();
-	await runtimePool().end();
-});
+afterAll(() => closeOwner(owner, users));
 
 const netflix = () => golden.subscription("netflix");
 const cultGym = () => golden.subscription("cultGym");
@@ -75,6 +64,36 @@ const change = (
 	body: Record<string, unknown>,
 ): Promise<Result> =>
 	changeSubscription(tx, ctx, id, version, { changedAt: GOLDEN_NOW, ...body });
+
+/** On 20 November Netflix has a charge on 5 November; then a change of 2 November sets
+ * `cadence`. Answers the change and the due dates left. */
+const cadenceChange = (cadence: { unit: "week" | "month"; every: number }) =>
+	asUser(golden.userId, async (tx) => {
+		await laterCharge(tx, golden.userId, netflix(), "2026-11-05");
+		const answer = await change(
+			tx,
+			on(golden.userId, "2026-11-20"),
+			netflix(),
+			1,
+			{ changedAt: when("2026-11-02"), cadence },
+		);
+		return { answer, dues: await dueOns(tx, netflix()) };
+	});
+
+/** Netflix with an unedited charge on 5 November and an edited one on 5 December, then `body`
+ * as a change of 2 November made on `today`. Answers the change and the charges left. */
+const changedWithLaterCharges = (today: string, body: Record<string, unknown>) =>
+	asUser(golden.userId, async (tx) => {
+		await laterCharge(tx, golden.userId, netflix(), "2026-11-05");
+		await laterCharge(tx, golden.userId, netflix(), "2026-12-05", {
+			edited: true,
+		});
+		const answer = await change(tx, on(golden.userId, today), netflix(), 1, {
+			changedAt: when("2026-11-02"),
+			...body,
+		});
+		return { answer, rows: await charges(tx, netflix()) };
+	});
 
 describe("the checks before any change (section 11 order)", () => {
 	test("an id that is not a UUID is 404 before any statement", async () => {
@@ -245,49 +264,63 @@ describe("the checks before any change (section 11 order)", () => {
 	});
 
 	// AC-F05-11: a startDate 11 years back, an endDate before startDate.
-	test("a startDate 11 years back is 422, and 10 years back is accepted", async () => {
+	test.each<
+		[
+			string,
+			string,
+			Record<string, unknown>,
+			Record<string, unknown>,
+			(accepted: Result) => unknown,
+			unknown,
+		]
+	>([
+		[
+			"a startDate 11 years back is 422, and 10 years back is accepted",
+			"startDate",
+			{ startDate: "2015-11-02" },
+			{ startDate: "2016-11-02" },
+			(accepted) => accepted.startDate,
+			"2016-11-02",
+		],
+		[
+			"a startDate more than a year after the change date is 422, and exactly a year is accepted",
+			"startDate",
+			{ startDate: "2027-11-03" },
+			{ startDate: "2027-11-02" },
+			(accepted) => accepted.status,
+			"upcoming",
+		],
+		[
+			"an endDate before the start date is 422, and the start date itself is accepted",
+			"endDate",
+			{ endDate: "2026-09-04" },
+			{ endDate: "2026-09-05" },
+			(accepted) => accepted.endDate,
+			"2026-09-05",
+		],
+		[
+			"an endDate more than ten years after the change date is 422, and ten years is accepted",
+			"endDate",
+			{ endDate: "2036-11-03" },
+			{ endDate: "2036-11-02" },
+			(accepted) => accepted.endDate,
+			"2036-11-02",
+		],
+	])("%s", async (_title, field, refusedBody, acceptedBody, pick, expected) => {
 		const { result } = await asUser(golden.userId, async (tx) => ({
 			refused: await refusal(
-				change(tx, goldenContext(golden.userId), netflix(), 1, {
-					startDate: "2015-11-02",
-				}),
+				change(tx, goldenContext(golden.userId), netflix(), 1, refusedBody),
 			),
-			accepted: await change(tx, goldenContext(golden.userId), netflix(), 1, {
-				startDate: "2016-11-02",
-			}),
-		}));
-		expect(result.refused.fields).toHaveProperty("startDate");
-		expect(result.accepted.startDate).toBe("2016-11-02");
-	});
-
-	test("a startDate more than a year after the change date is 422, and exactly a year is accepted", async () => {
-		const { result } = await asUser(golden.userId, async (tx) => ({
-			refused: await refusal(
-				change(tx, goldenContext(golden.userId), netflix(), 1, {
-					startDate: "2027-11-03",
-				}),
+			accepted: await change(
+				tx,
+				goldenContext(golden.userId),
+				netflix(),
+				1,
+				acceptedBody,
 			),
-			accepted: await change(tx, goldenContext(golden.userId), netflix(), 1, {
-				startDate: "2027-11-02",
-			}),
 		}));
-		expect(result.refused.fields).toHaveProperty("startDate");
-		expect(result.accepted.status).toBe("upcoming");
-	});
-
-	test("an endDate before the start date is 422, and the start date itself is accepted", async () => {
-		const { result } = await asUser(golden.userId, async (tx) => ({
-			refused: await refusal(
-				change(tx, goldenContext(golden.userId), netflix(), 1, {
-					endDate: "2026-09-04",
-				}),
-			),
-			accepted: await change(tx, goldenContext(golden.userId), netflix(), 1, {
-				endDate: "2026-09-05",
-			}),
-		}));
-		expect(result.refused.fields).toHaveProperty("endDate");
-		expect(result.accepted.endDate).toBe("2026-09-05");
+		expect(result.refused.fields).toHaveProperty(field);
+		expect(pick(result.accepted)).toBe(expected);
 	});
 
 	test("a new start date after the stored end date makes the end date the field in error", async () => {
@@ -308,21 +341,6 @@ describe("the checks before any change (section 11 order)", () => {
 			);
 		});
 		expect(result.fields).toHaveProperty("endDate");
-	});
-
-	test("an endDate more than ten years after the change date is 422, and ten years is accepted", async () => {
-		const { result } = await asUser(golden.userId, async (tx) => ({
-			refused: await refusal(
-				change(tx, goldenContext(golden.userId), netflix(), 1, {
-					endDate: "2036-11-03",
-				}),
-			),
-			accepted: await change(tx, goldenContext(golden.userId), netflix(), 1, {
-				endDate: "2036-11-02",
-			}),
-		}));
-		expect(result.refused.fields).toHaveProperty("endDate");
-		expect(result.accepted.endDate).toBe("2036-11-02");
 	});
 
 	test("every refusal comes back at once, one message per field", async () => {
@@ -1164,15 +1182,7 @@ describe("a change to the start or cadence (BR-F05-11, BR-F05-31)", () => {
 	});
 
 	test("a weekly cadence deletes the monthly charge after C that is off it and creates the weekly ones up to today", async () => {
-		const ctx = on(golden.userId, "2026-11-20");
-		const { result } = await asUser(golden.userId, async (tx) => {
-			await laterCharge(tx, golden.userId, netflix(), "2026-11-05");
-			const answer = await change(tx, ctx, netflix(), 1, {
-				changedAt: when("2026-11-02"),
-				cadence: { unit: "week", every: 1 },
-			});
-			return { answer, dues: await dueOns(tx, netflix()) };
-		});
+		const { result } = await cadenceChange({ unit: "week", every: 1 });
 		// Weekly from Saturday 5 Sep 2026: 7 and 14 November. 5 November is off the schedule.
 		expect(result.dues.filter((d) => d > "2026-11-02")).toEqual([
 			"2026-11-07",
@@ -1186,30 +1196,14 @@ describe("a change to the start or cadence (BR-F05-11, BR-F05-31)", () => {
 	});
 
 	test("a cadence change that drops a charge after C deletes it", async () => {
-		const ctx = on(golden.userId, "2026-11-20");
-		const { result } = await asUser(golden.userId, async (tx) => {
-			await laterCharge(tx, golden.userId, netflix(), "2026-11-05");
-			const answer = await change(tx, ctx, netflix(), 1, {
-				changedAt: when("2026-11-02"),
-				cadence: { unit: "month", every: 2 },
-			});
-			return { answer, dues: await dueOns(tx, netflix()) };
-		});
+		const { result } = await cadenceChange({ unit: "month", every: 2 });
 		// Every 2 months from 5 Sep: 5 Sep, 5 Nov. So 5 Nov stays; use quarterly to drop it.
 		expect(result.dues).toContain("2026-11-05");
 		expect(result.answer.chargesDeleted).toBe(0);
 	});
 
 	test("every 3 months drops 5 November, which is not a due date of the new schedule", async () => {
-		const ctx = on(golden.userId, "2026-11-20");
-		const { result } = await asUser(golden.userId, async (tx) => {
-			await laterCharge(tx, golden.userId, netflix(), "2026-11-05");
-			const answer = await change(tx, ctx, netflix(), 1, {
-				changedAt: when("2026-11-02"),
-				cadence: { unit: "month", every: 3 },
-			});
-			return { answer, dues: await dueOns(tx, netflix()) };
-		});
+		const { result } = await cadenceChange({ unit: "month", every: 3 });
 		expect(result.dues).toEqual(["2026-09-05", "2026-10-05"]);
 		expect(result.answer).toMatchObject({
 			chargesDeleted: 1,
@@ -1581,17 +1575,8 @@ describe("end dates, cancel and resume (BR-F05-12, BR-F05-13, BR-F05-32)", () =>
 	});
 
 	test("an end date sets only the charges after it: unedited ones are deleted, edited ones stay linked", async () => {
-		const ctx = on(golden.userId, "2026-11-20");
-		const { result } = await asUser(golden.userId, async (tx) => {
-			await laterCharge(tx, golden.userId, netflix(), "2026-11-05");
-			await laterCharge(tx, golden.userId, netflix(), "2026-12-05", {
-				edited: true,
-			});
-			const answer = await change(tx, ctx, netflix(), 1, {
-				changedAt: when("2026-11-02"),
-				endDate: "2026-10-20",
-			});
-			return { answer, rows: await charges(tx, netflix()) };
+		const { result } = await changedWithLaterCharges("2026-11-20", {
+			endDate: "2026-10-20",
 		});
 		expect(result.rows.map((r) => [r.dueOn, r.edited])).toEqual([
 			["2026-09-05", false],
@@ -1864,6 +1849,10 @@ describe("end dates, cancel and resume (BR-F05-12, BR-F05-13, BR-F05-32)", () =>
 describe("pause (BR-F05-28, BR-F05-29, AC-F05-19, AC-F05-28)", () => {
 	const PAUSE = { from: "2026-11-05", until: "2027-01-05" };
 
+	/** Sets PAUSE on Netflix with a change at the golden clock. */
+	const setPause = (tx: Tx) =>
+		change(tx, goldenContext(golden.userId), netflix(), 1, { pause: PAUSE });
+
 	test("a pause from the next due date: status paused, next due 5 January, monthly cost unchanged", async () => {
 		const { result } = await asUser(golden.userId, (tx) =>
 			change(tx, goldenContext(golden.userId), netflix(), 1, { pause: PAUSE }),
@@ -1971,13 +1960,7 @@ describe("pause (BR-F05-28, BR-F05-29, AC-F05-19, AC-F05-28)", () => {
 	test("a pause equal to the stored one is no change and is not judged again", async () => {
 		const ctx = on(golden.userId, "2026-12-10");
 		const { result } = await asUser(golden.userId, async (tx) => {
-			const set = await change(
-				tx,
-				goldenContext(golden.userId),
-				netflix(),
-				1,
-				{ pause: PAUSE },
-			);
+			const set = await setPause(tx);
 			return change(tx, ctx, netflix(), set.version, {
 				changedAt: when("2026-12-10"),
 				pause: PAUSE,
@@ -1987,17 +1970,8 @@ describe("pause (BR-F05-28, BR-F05-29, AC-F05-19, AC-F05-28)", () => {
 	});
 
 	test("setting a pause deletes the unedited charges on its dates from C on, and keeps edited ones", async () => {
-		const ctx = on(golden.userId, "2026-12-10");
-		const { result } = await asUser(golden.userId, async (tx) => {
-			await laterCharge(tx, golden.userId, netflix(), "2026-11-05");
-			await laterCharge(tx, golden.userId, netflix(), "2026-12-05", {
-				edited: true,
-			});
-			const answer = await change(tx, ctx, netflix(), 1, {
-				changedAt: when("2026-11-02"),
-				pause: PAUSE,
-			});
-			return { answer, rows: await charges(tx, netflix()) };
+		const { result } = await changedWithLaterCharges("2026-12-10", {
+			pause: PAUSE,
 		});
 		expect(result.rows.map((r) => [r.dueOn, r.edited])).toEqual([
 			["2026-09-05", false],
@@ -2013,13 +1987,7 @@ describe("pause (BR-F05-28, BR-F05-29, AC-F05-19, AC-F05-28)", () => {
 	test("Resume now on 10 November ends the pause there: 5 November is never charged and next due is 5 December", async () => {
 		const ctx = on(golden.userId, "2026-11-10");
 		const { result } = await asUser(golden.userId, async (tx) => {
-			const set = await change(
-				tx,
-				goldenContext(golden.userId),
-				netflix(),
-				1,
-				{ pause: PAUSE },
-			);
+			const set = await setPause(tx);
 			const resumed = await change(tx, ctx, netflix(), set.version, {
 				changedAt: when("2026-11-10"),
 				pause: { from: "2026-11-05", until: "2026-11-10" },
@@ -2037,13 +2005,7 @@ describe("pause (BR-F05-28, BR-F05-29, AC-F05-19, AC-F05-28)", () => {
 	test("Resume now on 5 December charges 5 December, and its Undo the same day puts the pause back and deletes that charge", async () => {
 		const ctx = on(golden.userId, "2026-12-05");
 		const { result } = await asUser(golden.userId, async (tx) => {
-			const set = await change(
-				tx,
-				goldenContext(golden.userId),
-				netflix(),
-				1,
-				{ pause: PAUSE },
-			);
+			const set = await setPause(tx);
 			const resumed = await change(tx, ctx, netflix(), set.version, {
 				changedAt: when("2026-12-05"),
 				pause: { from: "2026-11-05", until: "2026-12-05" },
@@ -2069,13 +2031,7 @@ describe("pause (BR-F05-28, BR-F05-29, AC-F05-19, AC-F05-28)", () => {
 	test("Resume now on 5 November itself clears the pause and charges 5 November", async () => {
 		const ctx = on(golden.userId, "2026-11-05");
 		const { result } = await asUser(golden.userId, async (tx) => {
-			const set = await change(
-				tx,
-				goldenContext(golden.userId),
-				netflix(),
-				1,
-				{ pause: PAUSE },
-			);
+			const set = await setPause(tx);
 			const resumed = await change(tx, ctx, netflix(), set.version, {
 				changedAt: when("2026-11-05"),
 				pause: null,
@@ -2093,13 +2049,7 @@ describe("pause (BR-F05-28, BR-F05-29, AC-F05-19, AC-F05-28)", () => {
 	test("clearing a pause before it starts changes no chargesFrom", async () => {
 		const ctx = on(golden.userId, "2026-11-03");
 		const { result } = await asUser(golden.userId, async (tx) => {
-			const set = await change(
-				tx,
-				goldenContext(golden.userId),
-				netflix(),
-				1,
-				{ pause: PAUSE },
-			);
+			const set = await setPause(tx);
 			return change(tx, ctx, netflix(), set.version, {
 				changedAt: when("2026-11-03"),
 				pause: null,
@@ -2115,13 +2065,7 @@ describe("pause (BR-F05-28, BR-F05-29, AC-F05-19, AC-F05-28)", () => {
 	test("a later pause that replaces a started one never charges 5 November (AC-F05-19)", async () => {
 		const ctx = on(golden.userId, "2026-11-10");
 		const { result } = await asUser(golden.userId, async (tx) => {
-			const set = await change(
-				tx,
-				goldenContext(golden.userId),
-				netflix(),
-				1,
-				{ pause: PAUSE },
-			);
+			const set = await setPause(tx);
 			const replaced = await change(tx, ctx, netflix(), set.version, {
 				changedAt: when("2026-11-10"),
 				pause: { from: "2026-12-05", until: "2027-02-05" },
@@ -2139,13 +2083,7 @@ describe("pause (BR-F05-28, BR-F05-29, AC-F05-19, AC-F05-28)", () => {
 	test("Change pause moves only the end: it keeps from and may be any date from C on", async () => {
 		const ctx = on(golden.userId, "2026-11-10");
 		const { result } = await asUser(golden.userId, async (tx) => {
-			const set = await change(
-				tx,
-				goldenContext(golden.userId),
-				netflix(),
-				1,
-				{ pause: PAUSE },
-			);
+			const set = await setPause(tx);
 			return {
 				early: await refusal(
 					change(tx, ctx, netflix(), set.version, {
@@ -2169,13 +2107,7 @@ describe("pause (BR-F05-28, BR-F05-29, AC-F05-19, AC-F05-28)", () => {
 	test("a pause in force cannot have another start: that is a new pause and needs the next due date", async () => {
 		const ctx = on(golden.userId, "2026-11-10");
 		const { result } = await asUser(golden.userId, async (tx) => {
-			const set = await change(
-				tx,
-				goldenContext(golden.userId),
-				netflix(),
-				1,
-				{ pause: PAUSE },
-			);
+			const set = await setPause(tx);
 			return refusal(
 				change(tx, ctx, netflix(), set.version, {
 					changedAt: when("2026-11-10"),
@@ -2243,24 +2175,11 @@ describe("locks (SRV-7, BR-F05-08 step 1)", () => {
 	test("waits for a held lock, then is 409 when the holder changed the Subscription", async () => {
 		const user = await goldenUser(owner, "sub-change-lock-version");
 		users.push(user.userId);
-		const ctx = goldenContext(user.userId);
-		const id = user.subscription("netflix");
-		const refused = await holdingLock(
+		const refused = await refusedAfterHolderMoves(
 			owner,
-			user.userId,
-			id,
-			async (holder) => {
-				await holder.query(
-					"UPDATE app.subscriptions SET name = 'Netflix HD', version = version + 1 WHERE id = $1",
-					[id],
-				);
-			},
-			() =>
-				refusal(
-					withUser({ user: ctx.user }, "write", (tx) =>
-						change(tx, ctx, id, 1, { name: "Netflix 4K" }),
-					),
-				),
+			user,
+			"UPDATE app.subscriptions SET name = 'Netflix HD', version = version + 1 WHERE id = $1",
+			(tx, ctx, id) => change(tx, ctx, id, 1, { name: "Netflix 4K" }),
 		);
 		expect(refused.code).toBe("version_conflict");
 		expect(refused.details).toMatchObject({

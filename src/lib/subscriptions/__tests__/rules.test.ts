@@ -52,50 +52,48 @@ describe("changeDateOf (F05 section 3, BR-F05-08)", () => {
 		timezone = KOLKATA,
 	) => changeDateOf({ changedAt, lastChangeOn, timezone, now });
 
-	test("a change made now has today's date", () => {
-		expect(change(NOW.toISOString(), "2026-09-05")).toBe("2026-11-02");
-	});
+	const SYNCED = new Date("2026-11-06T06:30:00Z");
 
-	// F05 section 5: "changedAt on 4 November ... syncs at 6 November".
-	test("a change made on 4 November and synced on 6 November is a 4 November change", () => {
-		expect(
-			change(
-				"2026-11-04T10:00:00Z",
-				"2026-09-05",
-				new Date("2026-11-06T06:30:00Z"),
-			),
-		).toBe("2026-11-04");
-	});
-
-	test("the same change made on 5 November is a 5 November change", () => {
-		expect(
-			change(
-				"2026-11-05T10:00:00Z",
-				"2026-09-05",
-				new Date("2026-11-06T06:30:00Z"),
-			),
-		).toBe("2026-11-05");
-	});
-
-	// A queued change never reaches back past one applied before it.
-	test("lastChangeOn after the date of changedAt wins", () => {
-		expect(
-			change(
-				"2026-10-20T10:00:00Z",
-				"2026-10-25",
-				new Date("2026-11-06T06:30:00Z"),
-			),
-		).toBe("2026-10-25");
-	});
-
-	test("lastChangeOn equal to the date of changedAt gives that date", () => {
-		expect(
-			change(
-				"2026-10-25T01:00:00Z",
-				"2026-10-25",
-				new Date("2026-11-06T06:30:00Z"),
-			),
-		).toBe("2026-10-25");
+	// F05 section 5: "changedAt on 4 November ... syncs at 6 November". A queued change never
+	// reaches back past one applied before it.
+	test.each([
+		[
+			"a change made now has today's date",
+			NOW.toISOString(),
+			"2026-09-05",
+			NOW,
+			"2026-11-02",
+		],
+		[
+			"a change made on 4 November and synced on 6 November is a 4 November change",
+			"2026-11-04T10:00:00Z",
+			"2026-09-05",
+			SYNCED,
+			"2026-11-04",
+		],
+		[
+			"the same change made on 5 November is a 5 November change",
+			"2026-11-05T10:00:00Z",
+			"2026-09-05",
+			SYNCED,
+			"2026-11-05",
+		],
+		[
+			"lastChangeOn after the date of changedAt wins",
+			"2026-10-20T10:00:00Z",
+			"2026-10-25",
+			SYNCED,
+			"2026-10-25",
+		],
+		[
+			"lastChangeOn equal to the date of changedAt gives that date",
+			"2026-10-25T01:00:00Z",
+			"2026-10-25",
+			SYNCED,
+			"2026-10-25",
+		],
+	])("%s", (_title, changedAt, lastChangeOn, now, expected) => {
+		expect(change(changedAt, lastChangeOn, now)).toBe(expected);
 	});
 
 	// F05 section 5, several queued changes: both items get C = 4 November.
@@ -351,42 +349,35 @@ describe("backfillPreview (BR-F05-04)", () => {
 });
 
 describe("chargesFromAfterSchedule (BR-F05-11)", () => {
-	test("a new start after the change date is the new chargesFrom", () => {
-		// created 2 Nov to start 5 Dec, moved on 3 Nov to 1 Dec.
-		expect(
-			chargesFromAfterSchedule({
-				startDate: "2026-12-01",
-				changeDate: "2026-11-03",
-			}),
-		).toBe("2026-12-01");
-	});
-
-	// F05 section 5: the late schedule change, C = 2 November, new start 8 September.
-	test("a new start before the change date gives the day after it", () => {
-		expect(
-			chargesFromAfterSchedule({
-				startDate: "2026-09-08",
-				changeDate: "2026-11-02",
-			}),
-		).toBe("2026-11-03");
-	});
-
-	test("a new start on the change date gives the day after it: the change date keeps the old schedule", () => {
-		expect(
-			chargesFromAfterSchedule({
-				startDate: "2026-11-02",
-				changeDate: "2026-11-02",
-			}),
-		).toBe("2026-11-03");
-	});
-
-	test("a new start the day after the change date is itself", () => {
-		expect(
-			chargesFromAfterSchedule({
-				startDate: "2026-11-03",
-				changeDate: "2026-11-02",
-			}),
-		).toBe("2026-11-03");
+	// Created 2 Nov to start 5 Dec, moved on 3 Nov to 1 Dec; and F05 section 5's late schedule
+	// change, C = 2 November, new start 8 September.
+	test.each([
+		[
+			"a new start after the change date is the new chargesFrom",
+			"2026-12-01",
+			"2026-11-03",
+			"2026-12-01",
+		],
+		[
+			"a new start before the change date gives the day after it",
+			"2026-09-08",
+			"2026-11-02",
+			"2026-11-03",
+		],
+		[
+			"a new start on the change date gives the day after it: the change date keeps the old schedule",
+			"2026-11-02",
+			"2026-11-02",
+			"2026-11-03",
+		],
+		[
+			"a new start the day after the change date is itself",
+			"2026-11-03",
+			"2026-11-02",
+			"2026-11-03",
+		],
+	])("%s", (_title, startDate, changeDate, expected) => {
+		expect(chargesFromAfterSchedule({ startDate, changeDate })).toBe(expected);
 	});
 
 	test("crosses a month and a year end", () => {
@@ -469,44 +460,42 @@ describe("nextChargeDates", () => {
 });
 
 describe("scheduleChangeNote (BR-F05-31, AC-F05-20)", () => {
-	// F05 section 5: on 6 November, after the 5 November charge, the start moves to 2026-09-15.
-	test("a day moved later: 15 Nov is less than a month after 5 Nov, so it is offered for a skip", () => {
-		const next = sub({ startDate: "2026-09-15", chargesFrom: "2026-11-07" });
-		expect(
-			scheduleChangeNote({
-				next,
+	// F05 section 5: on 6 November, after the 5 November charge, the start moves to 2026-09-15;
+	// made instead on 2 November, to 2026-09-20; and the late schedule change (start 8
+	// September, C = 2 November) names 8 October as passed.
+	test.each<
+		[string, { startDate: string; chargesFrom: string }, string, string, object]
+	>([
+		[
+			"a day moved later: 15 Nov is less than a month after 5 Nov, so it is offered for a skip",
+			{ startDate: "2026-09-15", chargesFrom: "2026-11-07" },
+			"2026-11-05",
+			"2026-11-06",
+			{
+				kind: "doubleCharge",
+				skipOn: "2026-11-15",
 				lastChargeOn: "2026-11-05",
-				changeDate: "2026-11-06",
-			}),
-		).toEqual({
-			kind: "doubleCharge",
-			skipOn: "2026-11-15",
-			lastChargeOn: "2026-11-05",
-			nextAfterSkip: "2026-12-15",
-		});
-	});
-
-	// F05 section 5: made instead on 2 November, the start moves to 2026-09-20.
-	test("a day moved later whose first date has passed: nothing is charged until 20 Nov", () => {
-		const next = sub({ startDate: "2026-09-20", chargesFrom: "2026-11-03" });
+				nextAfterSkip: "2026-12-15",
+			},
+		],
+		[
+			"a day moved later whose first date has passed: nothing is charged until 20 Nov",
+			{ startDate: "2026-09-20", chargesFrom: "2026-11-03" },
+			"2026-10-05",
+			"2026-11-02",
+			{ kind: "passed", passedOn: "2026-10-20", nextOn: "2026-11-20" },
+		],
+		[
+			"the late schedule change of section 5 (start 8 September, C = 2 November) names 8 October as passed",
+			{ startDate: "2026-09-08", chargesFrom: "2026-11-03" },
+			"2026-10-05",
+			"2026-11-02",
+			{ kind: "passed", passedOn: "2026-10-08", nextOn: "2026-11-08" },
+		],
+	])("%s", (_title, next, lastChargeOn, changeDate, expected) => {
 		expect(
-			scheduleChangeNote({
-				next,
-				lastChargeOn: "2026-10-05",
-				changeDate: "2026-11-02",
-			}),
-		).toEqual({ kind: "passed", passedOn: "2026-10-20", nextOn: "2026-11-20" });
-	});
-
-	test("the late schedule change of section 5 (start 8 September, C = 2 November) names 8 October as passed", () => {
-		const next = sub({ startDate: "2026-09-08", chargesFrom: "2026-11-03" });
-		expect(
-			scheduleChangeNote({
-				next,
-				lastChargeOn: "2026-10-05",
-				changeDate: "2026-11-02",
-			}),
-		).toEqual({ kind: "passed", passedOn: "2026-10-08", nextOn: "2026-11-08" });
+			scheduleChangeNote({ next: sub(next), lastChargeOn, changeDate }),
+		).toEqual(expected);
 	});
 
 	test("a first date exactly one period after the last charge needs no note", () => {
@@ -813,106 +802,98 @@ describe("chargesFromAfterEnd (BR-F05-13, BR-F05-32, AC-F05-07, AC-F05-22, AC-F0
 		startDate?: string;
 	}) => chargesFromAfterEnd({ ...base, ...changes });
 
-	test("cancelling a running Subscription moves nothing", () => {
-		expect(after({ storedEndDate: null, newEndDate: "2026-09-30" })).toBe(
+	// Section 7.5: "Restart from today" moves chargesFrom to 2 November. "It never actually
+	// stopped" keeps the gap chargeable (AC-F05-22); after a restart and its Undo, a backfill
+	// still creates 5 October (AC-F05-30).
+	test.each<[string, Parameters<typeof after>[0], string]>([
+		[
+			"cancelling a running Subscription moves nothing",
+			{ storedEndDate: null, newEndDate: "2026-09-30" },
 			"2026-09-05",
-		);
-	});
-
-	// Section 7.5: "Restart from today" moves chargesFrom to 2 November.
-	test("a resume from an ended Subscription restarts from the change date", () => {
-		expect(after({ storedEndDate: "2026-09-30", newEndDate: null })).toBe(
+		],
+		[
+			"a resume from an ended Subscription restarts from the change date",
+			{ storedEndDate: "2026-09-30", newEndDate: null },
 			"2026-11-02",
-		);
-	});
-
-	test("a resume with a new end date after C restarts from the change date too", () => {
-		expect(
-			after({ storedEndDate: "2026-09-30", newEndDate: "2026-12-31" }),
-		).toBe("2026-11-02");
-	});
-
-	test("an end date moved to the change date or earlier means it ran longer: nothing moves", () => {
-		expect(
-			after({ storedEndDate: "2026-09-30", newEndDate: "2026-10-15" }),
-		).toBe("2026-09-05");
-		expect(
-			after({ storedEndDate: "2026-09-30", newEndDate: "2026-11-02" }),
-		).toBe("2026-09-05");
-	});
-
-	test("an end date moved to the day after C is a resume", () => {
-		expect(
-			after({ storedEndDate: "2026-09-30", newEndDate: "2026-11-03" }),
-		).toBe("2026-11-02");
-	});
-
-	// Section 7.5 and AC-F05-22: "It never actually stopped" keeps the gap chargeable.
-	test("backfillGap keeps chargesFrom where it was when that is already earlier", () => {
-		expect(
-			after({
-				storedEndDate: "2026-09-30",
-				newEndDate: null,
-				backfillGap: true,
-			}),
-		).toBe("2026-09-05");
-	});
-
-	// AC-F05-30: after a "Restart from today" and its Undo, a backfill still creates 5 October.
-	test("backfillGap puts chargesFrom back to the day after the stored end after an earlier resume moved it", () => {
-		expect(
-			after({
+		],
+		[
+			"a resume with a new end date after C restarts from the change date too",
+			{ storedEndDate: "2026-09-30", newEndDate: "2026-12-31" },
+			"2026-11-02",
+		],
+		[
+			"an end date moved to before the change date means it ran longer: nothing moves",
+			{ storedEndDate: "2026-09-30", newEndDate: "2026-10-15" },
+			"2026-09-05",
+		],
+		[
+			"an end date moved to the change date means it ran longer: nothing moves",
+			{ storedEndDate: "2026-09-30", newEndDate: "2026-11-02" },
+			"2026-09-05",
+		],
+		[
+			"an end date moved to the day after C is a resume",
+			{ storedEndDate: "2026-09-30", newEndDate: "2026-11-03" },
+			"2026-11-02",
+		],
+		[
+			"backfillGap keeps chargesFrom where it was when that is already earlier",
+			{ storedEndDate: "2026-09-30", newEndDate: null, backfillGap: true },
+			"2026-09-05",
+		],
+		[
+			"backfillGap puts chargesFrom back to the day after the stored end after an earlier resume moved it",
+			{
 				storedEndDate: "2026-09-30",
 				newEndDate: null,
 				chargesFrom: "2026-11-02",
 				backfillGap: true,
-			}),
-		).toBe("2026-10-01");
-	});
-
-	test("backfillGap never goes before the start date", () => {
-		expect(
-			after({
+			},
+			"2026-10-01",
+		],
+		[
+			"backfillGap never goes before the start date",
+			{
 				storedEndDate: "2026-09-30",
 				newEndDate: null,
 				chargesFrom: "2026-01-01",
 				startDate: "2026-09-05",
 				backfillGap: true,
-			}),
-		).toBe("2026-09-05");
-	});
-
-	test("backfillGap applies to a later end date that is still on or before C", () => {
-		expect(
-			after({
+			},
+			"2026-09-05",
+		],
+		[
+			"backfillGap applies to a later end date that is still on or before C",
+			{
 				storedEndDate: "2026-09-30",
 				newEndDate: "2026-10-15",
 				chargesFrom: "2026-11-02",
 				backfillGap: true,
-			}),
-		).toBe("2026-10-01");
-	});
-
-	test("backfillGap applies to a later end date after C", () => {
-		expect(
-			after({
+			},
+			"2026-10-01",
+		],
+		[
+			"backfillGap applies to a later end date after C",
+			{
 				storedEndDate: "2026-09-30",
 				newEndDate: "2026-12-31",
 				chargesFrom: "2026-11-02",
 				backfillGap: true,
-			}),
-		).toBe("2026-10-01");
-	});
-
-	test("backfillGap with the same end date sent again changes nothing: it is not a later end", () => {
-		expect(
-			after({
+			},
+			"2026-10-01",
+		],
+		[
+			"backfillGap with the same end date sent again changes nothing: it is not a later end",
+			{
 				storedEndDate: "2026-09-30",
 				newEndDate: "2026-09-30",
 				chargesFrom: "2026-11-02",
 				backfillGap: true,
-			}),
-		).toBe("2026-11-02");
+			},
+			"2026-11-02",
+		],
+	])("%s", (_title, changes, expected) => {
+		expect(after(changes)).toBe(expected);
 	});
 
 	test("backfillGap with no stored end date changes nothing", () => {
