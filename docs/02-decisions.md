@@ -205,6 +205,7 @@ Every decision behind the specs, with its status, reason and source. D-01 to D-6
 | D-185 | Negatives: tables, bar and line charts draw below zero; donut charts and heat maps clamp to zero with a footnote                                                                                                                                   | Decided       | Donuts cannot show negatives honestly                                   | Root spec         |
 | D-613 | A dialog cannot be closed while its save is in flight: Escape, a press outside and the Close button wait, and Close shows disabled. The shared `Dialog` does it from one `isPending` prop, so no dialog repeats the guard                          | Decided       | A mid-save Close hid a failed save; on phones it is the only way out    | Build             |
 | D-615 | A write is sent once however often it is pressed, even twice in one frame. Each control that sends one takes a flag on the press itself (`useOnce`): a mutation's pending state comes a render later, and every press builds its own key           | Decided       | A same-frame second press sent a second, distinct write                 | Build             |
+| D-616 | Every form keeps its fields in TanStack Form with the shared checks (D-169), the Budget dialogs included. A filter control that edits the URL is no form: its draft text stays component state (root spec 7.4)                                     | Decided       | The Budget dialogs alone kept their fields in plain state               | Build             |
 
 ## Data and state
 

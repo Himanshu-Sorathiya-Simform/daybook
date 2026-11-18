@@ -24,6 +24,7 @@ Shared components live in `src/components`; a feature's own live in `src/feature
 
 ## Building them
 
+- A form's fields (a dialog or page that collects values and submits them with one action) live in TanStack Form: `useForm` with `revalidateLogic()`, each field in a `form.Field`, checks that share the server's Zod schemas, and `onSubmitInvalid` moving focus to the first message (D-169, D-616). Server refusals for a field stay in component state beside it. A filter control that edits the URL is not a form: its unsubmitted text is component state (root spec 7.4).
 - Interactive behavior comes from `react-aria-components` (D-168). Never hand-roll focus handling, keyboard support or ARIA attributes that it already provides. Components with no behavior of their own (badge, section, banner) stay plain markup.
 - Import every `react-aria-components` name, types included, with an `Aria` prefix: `import { Button as AriaButton, type ButtonProps as AriaButtonProps } from "react-aria-components"`. It keeps our `Button` and React Aria's apart, and shows at a glance which part brings the behavior.
 - Don't write a React Aria component from memory. Read its types in `node_modules/react-aria-components/dist/types/src/<Name>.d.ts` for props and render props. The types list its parts too; when behaviour is still unclear, read its source in `node_modules`. Ask me to paste a docs page only when both leave a real question, and name that one page and the question.

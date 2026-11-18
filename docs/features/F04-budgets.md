@@ -9,7 +9,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 | Milestone  | M2. Before M5, writes are online only, with F03's stand-ins: Save disabled offline, and a failed save keeps the dialog open (D-241)                                                                                                                 |
 | Plan       | Free and Premium, with no gating; one-month limits included (D-560)                                                                                                                                                                                 |
 | Depends on | [F03](F03-transactions.md) (category spending, summary, drill-down), [F02](F02-onboarding-profile-settings.md) (month, locale), [P2](../platform/P2-data-access-and-security.md); P1 (write queue, from M5); F08, F09, F10, F11 read Budget figures |
-| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-580, D-583                                                                                                         |
+| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-580, D-583, D-616                                                                                                  |
 
 ## 1. User stories
 
@@ -165,6 +165,8 @@ Examples in this spec write amounts without the currency symbol and months as `e
     - **Focus:** it starts on the first category tile, or in the limit when the dialog opens with a category already chosen, from a Not budgeted row (D-583).
 
     For a category with no Budget record it sends `POST /api/budgets`. For a category with a record (one that starts later, is stopped, or has a `null` one-month limit in M), it sends `PATCH`.
+
+    The three dialogs keep their fields (category, limit, For how long, month) in one TanStack Form (D-169, D-616). Save checks them, then again on each change, as F01's forms do, and moves focus to the first message.
 
 - **BR-F04-20** Change limit, titled "Change the Food limit", asks for:
     - **New limit:** filled in with the limit in force in the viewed month, else in the current month, else the latest limit in the schedule. Its hint reads "Spent 6,220.00 in October and 5,050.00 in September." for the viewed month and the one before.

@@ -433,7 +433,7 @@ The browser never touches the database. Every private read and write passes the 
 | --------------------------------------------- | ----------------------------------------------------------- |
 | Server data                                   | TanStack Query; allow-listed queries persisted to IndexedDB |
 | Profile, plan, capabilities                   | The `/api/me` query, persisted                              |
-| Form state                                    | TanStack Form with Zod schemas shared with the server       |
+| Form state                                    | TanStack Form, Zod shared with the server (D-616)           |
 | Committed filters and period                  | URL search params                                           |
 | Unsubmitted text (search drafts)              | Component state                                             |
 | UI chrome: palette, dialogs, layout edit mode | Zustand `ui` store                                          |

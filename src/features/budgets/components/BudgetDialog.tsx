@@ -1,5 +1,11 @@
 "use client";
 
+import {
+	type AnyFieldApi,
+	revalidateLogic,
+	useForm,
+	useSelector,
+} from "@tanstack/react-form";
 import { useQueryClient } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import { useRef, useState } from "react";
@@ -74,17 +80,24 @@ export type BudgetDialogProps = {
 	onSaved?: (budget: BudgetAnswer, notice: WriteNotice) => void;
 };
 
-/** What the dialog is about: its kind, category and Budget record, which a `budget_exists`
- * refusal changes to Change limit on the existing Budget (flow 7.1). */
+/** What the dialog is about: its kind and the Budget record it found, which a `budget_exists`
+ * refusal changes to Change limit on the existing Budget (flow 7.1). The category is a field. */
 type Subject = {
 	kind: DialogKind;
-	category: ExpenseCategory | null;
 	/** The Budget the refusal found, ahead of the month's view. */
 	found: BudgetRecord | null;
 	notice: string | null;
 };
 
 const FOR_HOW_LONG: DialogScope[] = ["onward", "month"];
+
+/** The fields the user fills in: the form's values (D-169). The limit is the text as typed. */
+type BudgetFormValues = {
+	category: ExpenseCategory | null;
+	amount: string;
+	scope: DialogScope;
+	month: Month;
+};
 
 /**
  * Add a Budget, Change limit and Stop budgeting (BR-F04-19 to BR-F04-21, BR-F04-28). Add asks
@@ -122,21 +135,25 @@ export function BudgetDialog({
 	const current = monthOf(locale.today);
 	const [subject, setSubject] = useState<Subject>({
 		kind: openedAs,
-		category: openedWith,
 		found: null,
 		notice: null,
 	});
-	const { kind, category } = subject;
-	const record =
-		subject.found ?? (category === null ? null : recordIn(view, category));
+	const { kind } = subject;
 	const [id] = useState(() => uuidV7());
-	const [amount, setAmount] = useState(() => {
-		const start = record && startLimit(record, view.month, current);
-		return kind === "change" && start ? formatAmountInput(start, locale) : "";
+	// The fields start as the dialog opens: a Change limit on the month's limit, the rest empty.
+	const [start] = useState<BudgetFormValues>(() => {
+		const opened = openedWith === null ? null : recordIn(view, openedWith);
+		const limit = opened && startLimit(opened, view.month, current);
+		return {
+			category: openedWith,
+			amount:
+				openedAs === "change" && limit ?
+					formatAmountInput(limit, locale)
+				:	"",
+			scope: "onward",
+			month: current,
+		};
 	});
-	const [scope, setScope] = useState<DialogScope>("onward");
-	const [month, setMonth] = useState<Month>(current);
-	const [tried, setTried] = useState(false);
 	const [server, setServer] = useState<Partial<Record<BudgetField, string>>>({});
 	const [failure, setFailure] = useState<string | null>(null);
 	// A 409: the Budget saved now beside the user's version, with the write to resend
@@ -149,28 +166,58 @@ export function BudgetDialog({
 	} | null>(null);
 	const formRef = useRef<HTMLFormElement>(null);
 	const focusInvalid = useFocusFirstInvalid(formRef);
+	const busy = create.isPending || edit.isPending;
+	// A second press, Enter included, sends nothing while a write is out (D-575, D-615).
+	const sending = useOnce();
+
+	const form = useForm({
+		defaultValues: start,
+		validationLogic: revalidateLogic(),
+		validators: {
+			onDynamic: ({ value }) => {
+				const messages = fieldMessages(
+					{
+						server: {},
+						kind,
+						category: value.category,
+						typed: parseAmount(value.amount, locale),
+					},
+					locale,
+				);
+				const fields: Partial<Record<"category" | "amount", string>> = {};
+				if (messages.category) fields.category = messages.category;
+				if (messages.limitMinor) fields.amount = messages.limitMinor;
+				return Object.keys(fields).length > 0 ? { fields } : undefined;
+			},
+		},
+		onSubmitInvalid: focusInvalid,
+		onSubmit: ({ value }) => save(value),
+	});
+	const values = useSelector(form.store, (state) => state.values);
+	const { category, amount, scope, month } = values;
+	const record =
+		subject.found ?? (category === null ? null : recordIn(view, category));
 	const history = useBudgetHistory(
 		kind === "stop" ? null : category,
 		view.month,
 		2,
 	);
-	const busy = create.isPending || edit.isPending;
-	// A second press, Enter included, sends nothing while a write is out (D-575, D-615).
-	const sending = useOnce();
 
 	const stopping = kind === "stop";
 	const typed = parseAmount(amount, locale);
-	const messages = fieldMessages({ server, kind, category, typed }, locale);
-	const plan = planOf({
-		kind,
-		record,
-		category,
-		typed,
-		scope,
-		month,
-		id,
-		currency: locale.currency,
-	});
+	/** What Save would send for `entered`, or `null` while a field cannot make one. */
+	const planFor = (entered: BudgetFormValues) =>
+		planOf({
+			kind,
+			record,
+			category: entered.category,
+			typed: parseAmount(entered.amount, locale),
+			scope: entered.scope,
+			month: entered.month,
+			id,
+			currency: locale.currency,
+		});
+	const plan = planFor(values);
 	const blocked = plan?.kind === "edit" && plan.blocked;
 	const unchanged = plan?.kind === "edit" && plan.unchanged;
 
@@ -282,13 +329,12 @@ export function BudgetDialog({
 			} else if (outcome.kind === "exists") {
 				setSubject({
 					kind: "change",
-					category: outcome.current.category,
 					found: outcome.current,
 					notice: budgetExistsMessage(
 						categoryLabel(outcome.current.category),
 					),
 				});
-				setScope("onward");
+				form.setFieldValue("scope", "onward");
 			} else if (outcome.kind === "gone") {
 				setFailure(outcome.message);
 				void refreshAfterBudgetWrite(queryClient, "count");
@@ -298,27 +344,26 @@ export function BudgetDialog({
 		}
 	};
 
-	const save = async () => {
-		setTried(true);
+	/** Save, once the fields check out. */
+	const save = async (entered: BudgetFormValues) => {
+		const planned = planFor(entered);
 		// Only a stop on a Budget record can be blocked.
-		if (blocked) {
+		if (planned?.kind === "edit" && planned.blocked) {
 			onDeleteInstead(record as BudgetRecord);
-			return;
-		}
-		if (messages.category || messages.limitMinor) {
-			focusInvalid();
 			return;
 		}
 		// Fields without a message always make a plan; the button and Enter refuse one that
 		// changes nothing.
 		await submit(
-			plan as DialogPlan,
+			planned as DialogPlan,
 			(record as BudgetRecord | null)?.version ?? 0,
 			record,
 		);
 	};
 
-	const shown = (field: BudgetField) => (tried ? messages[field] : server[field]);
+	/** A field's message: the server's refusal of it, else the first of its own checks. */
+	const messageOf = (field: AnyFieldApi, key: BudgetField) =>
+		server[key] ?? (field.state.meta.errors as (string | undefined)[])[0];
 	const title = dialogTitle(kind, category);
 	return (
 		<>
@@ -344,7 +389,7 @@ export function BudgetDialog({
 							variant={blocked ? "danger" : "primary"}
 							isDisabled={!online || unchanged}
 							isPending={busy}
-							onPress={() => void save()}
+							onPress={() => void form.handleSubmit()}
 						>
 							{blocked ?
 								DIALOG_TEXT.deleteInstead
@@ -360,7 +405,8 @@ export function BudgetDialog({
 					className="flex flex-col gap-4"
 					onSubmit={(event) => {
 						event.preventDefault();
-						if (online && !unchanged) void save();
+						event.stopPropagation();
+						if (online && !unchanged) void form.handleSubmit();
 					}}
 				>
 					{!online && <OfflineNote>{DIALOG_TEXT.offline}</OfflineNote>}
@@ -369,90 +415,113 @@ export function BudgetDialog({
 						<FormNote icon={Info}>{subject.notice}</FormNote>
 					)}
 					{kind === "add" && (
-						<CategoryTiles
-							autoFocus={openedWith === null}
-							tiles={addCategories(view)}
-							captions={tileCaptions(view, locale)}
-							value={category}
-							onChange={(next) => {
-								setSubject((was) => ({
-									...was,
-									category: next as ExpenseCategory,
-								}));
-								setScope("onward");
-								changed("category");
-							}}
-							error={shown("category")}
-							isDisabled={busy}
-						/>
+						<form.Field name="category">
+							{(field) => (
+								<CategoryTiles
+									autoFocus={openedWith === null}
+									tiles={addCategories(view)}
+									captions={tileCaptions(view, locale)}
+									value={field.state.value}
+									onChange={(next) => {
+										field.handleChange(next as ExpenseCategory);
+										form.setFieldValue("scope", "onward");
+										changed("category");
+									}}
+									error={messageOf(field, "category")}
+									isDisabled={busy}
+								/>
+							)}
+						</form.Field>
 					)}
 					{!stopping && (
-						<AmountInput
-							label={
-								kind === "add" ?
-									DIALOG_TEXT.monthlyLimit
-								:	DIALOG_TEXT.newLimit
-							}
-							name="limit"
-							// Where the first entry is: the limit, unless an Add still needs its
-							// category (BR-F04-19).
-							autoFocus={kind !== "add" || openedWith !== null}
-							currency={locale.currency}
-							numberLocale={locale.numberLocale}
-							value={amount}
-							onChange={(text) => {
-								setAmount(text);
-								changed("limitMinor");
-							}}
-							onBlur={() => {
-								if (typed.ok)
-									setAmount(
-										formatAmountInput(typed.minor, locale),
-									);
-							}}
-							hint={
-								history.data ?
-									spentHint(history.data.months, locale)
-								:	undefined
-							}
-							error={shown("limitMinor")}
-							isDisabled={busy}
-						/>
+						<form.Field name="amount">
+							{(field) => (
+								<AmountInput
+									label={
+										kind === "add" ?
+											DIALOG_TEXT.monthlyLimit
+										:	DIALOG_TEXT.newLimit
+									}
+									name="limit"
+									// Where the first entry is: the limit, unless an Add still needs its
+									// category (BR-F04-19).
+									autoFocus={kind !== "add" || openedWith !== null}
+									currency={locale.currency}
+									numberLocale={locale.numberLocale}
+									value={field.state.value}
+									onChange={(text) => {
+										field.handleChange(text);
+										changed("limitMinor");
+									}}
+									onBlur={() => {
+										if (typed.ok)
+											field.handleChange(
+												formatAmountInput(
+													typed.minor,
+													locale,
+												),
+											);
+									}}
+									hint={
+										history.data ?
+											spentHint(history.data.months, locale)
+										:	undefined
+									}
+									error={messageOf(field, "limitMinor")}
+									isDisabled={busy}
+								/>
+							)}
+						</form.Field>
 					)}
 					{/* A category with no Budget record always applies from a month (BR-F04-19,
 				    D-560), and choosing one sets For how long back to that. */}
 					{record && (
-						<ChoiceGroup
-							label={DIALOG_TEXT.forHowLong}
-							value={scope}
-							onChange={(next) => setScope(next as DialogScope)}
-							options={FOR_HOW_LONG.map((value) => ({
-								value,
-								label:
-									value === "onward" ?
-										DIALOG_TEXT.onward
-									:	DIALOG_TEXT.oneMonth,
-								description:
-									value === "onward" ?
-										DIALOG_TEXT.onwardDetail
-									:	oneMonthDetail(record, month, current, locale),
-							}))}
-							isDisabled={busy}
-						/>
+						<form.Field name="scope">
+							{(field) => (
+								<ChoiceGroup
+									label={DIALOG_TEXT.forHowLong}
+									value={field.state.value}
+									onChange={(next) =>
+										field.handleChange(next as DialogScope)
+									}
+									options={FOR_HOW_LONG.map((value) => ({
+										value,
+										label:
+											value === "onward" ?
+												DIALOG_TEXT.onward
+											:	DIALOG_TEXT.oneMonth,
+										description:
+											value === "onward" ?
+												DIALOG_TEXT.onwardDetail
+											:	oneMonthDetail(
+													record,
+													month,
+													current,
+													locale,
+												),
+									}))}
+									isDisabled={busy}
+								/>
+							)}
+						</form.Field>
 					)}
-					<MonthField
-						label={monthLabel(kind, scope)}
-						value={month}
-						onChange={(next) => {
-							setMonth(next);
-							changed("month");
-						}}
-						current={current}
-						viewed={view.month}
-						formats={locale}
-						isDisabled={busy}
-					/>
-					{shown("month") && <FormAlert>{shown("month")}</FormAlert>}
+					<form.Field name="month">
+						{(field) => (
+							<MonthField
+								label={monthLabel(kind, scope)}
+								value={field.state.value}
+								onChange={(next) => {
+									field.handleChange(next);
+									changed("month");
+								}}
+								current={current}
+								viewed={view.month}
+								formats={locale}
+								isDisabled={busy}
+							/>
+						)}
+					</form.Field>
+					{server.month && <FormAlert>{server.month}</FormAlert>}
 					{change && preview && !preview.blocked && category !== null && (
 						<WhatChanges
 							preview={preview}
