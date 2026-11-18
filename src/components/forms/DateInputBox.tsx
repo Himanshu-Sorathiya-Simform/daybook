@@ -15,6 +15,7 @@ export type DateInputBoxProps = {
  * The box of a DateField or TimeField: its parts (day, month and year, or hour, minute and am
  * or pm) in the locale's order, each focusable and typed into, with the separators between
  * them. It looks like a TextInput's box. An empty part shows its placeholder in the third ink.
+ * Every part is at least 24 by 24 px, the smallest target WCAG 2.2 allows.
  */
 export function DateInputBox({ className }: Readonly<DateInputBoxProps>) {
 	return (
@@ -30,8 +31,9 @@ export function DateInputBox({ className }: Readonly<DateInputBoxProps>) {
 				<AriaDateSegment
 					segment={segment}
 					className={cn(
-						"figures rounded-sm px-0.5 outline-none",
-						"type-literal:px-0 placeholder:text-ink-3",
+						// Each part is a target of at least 24 by 24 px (WCAG 2.5.8); the separators are not.
+						"figures inline-flex min-h-6 min-w-6 items-center justify-center rounded-sm px-0.5 outline-none",
+						"type-literal:min-h-0 type-literal:min-w-0 type-literal:px-0 placeholder:text-ink-3",
 						"focused:bg-accent focused:text-on-accent",
 					)}
 				/>

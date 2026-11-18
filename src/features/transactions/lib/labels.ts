@@ -10,7 +10,7 @@ import {
 	type Transaction,
 	type TxnType,
 } from "@/lib/transactions/model";
-import type { GroupTotal } from "@/server/dal/transactions/list";
+import type { GroupTotal } from "@/lib/transactions/answers";
 import { FILTER_TEXT } from "./messages";
 
 /** How the profile formats dates, times and money (BR-F02-18, BR-F02-19), and its today

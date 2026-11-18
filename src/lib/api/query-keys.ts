@@ -9,6 +9,7 @@ export const QUERY_ROOTS = {
 	transactions: "transactions",
 	payees: "payees",
 	transactionViews: "transactionViews",
+	budgets: "budgets",
 } as const;
 
 export type QueryRoot = (typeof QUERY_ROOTS)[keyof typeof QUERY_ROOTS];

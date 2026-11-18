@@ -79,11 +79,23 @@ describe("default", () => {
 });
 
 describe("variants", () => {
+	test("on hover, a row button takes the page colour and an edge, apart from its row's tint", () => {
+		render(<Button variant="row">Change limit</Button>);
+		expect(screen.getByRole("button", { name: "Change limit" })).toHaveClass(
+			"not-aria-disabled:hover:bg-page",
+			"not-aria-disabled:hover:border-line-strong",
+		);
+		expect(screen.getByRole("button", { name: "Change limit" })).not.toHaveClass(
+			"not-aria-disabled:hover:bg-soft",
+		);
+	});
+
 	test.each([
 		["primary", ["bg-accent", "text-on-accent", "border-transparent"]],
 		["secondary", ["bg-page", "text-ink", "border-line-strong"]],
 		["ghost", ["bg-transparent", "text-accent", "border-transparent"]],
 		["danger", ["bg-page", "text-neg", "border-neg"]],
+		["row", ["bg-transparent", "text-accent", "border-transparent"]],
 	] as [NonNullable<ButtonProps["variant"]>, string[]][])(
 		"%s has its own colours",
 		(variant, classes) => {
@@ -95,7 +107,7 @@ describe("variants", () => {
 		},
 	);
 
-	test.each(["primary", "secondary", "ghost", "danger"] as const)(
+	test.each(["primary", "secondary", "ghost", "danger", "row"] as const)(
 		"a disabled %s button drops its colours for the dashed outline and grey text",
 		(variant) => {
 			render(

@@ -25,6 +25,8 @@ export type FilterChipsProps = {
 	onRemove: (id: string) => void;
 	/** Removes them all. */
 	onClearAll: () => void;
+	/** The words of the button that removes them all, "Show all" on Budgets (BR-F04-31). */
+	clearAllLabel?: string;
 	className?: string;
 };
 
@@ -39,6 +41,7 @@ export function FilterChips({
 	chips,
 	onRemove,
 	onClearAll,
+	clearAllLabel = "Clear all",
 	className,
 }: Readonly<FilterChipsProps>) {
 	if (chips.length === 0) return null;
@@ -78,7 +81,7 @@ export function FilterChips({
 				onPress={onClearAll}
 				className="rounded-control text-caption text-accent inline-flex h-7 cursor-pointer items-center px-1.5 font-semibold max-md:min-h-11"
 			>
-				Clear all
+				{clearAllLabel}
 			</AriaButton>
 		</div>
 	);

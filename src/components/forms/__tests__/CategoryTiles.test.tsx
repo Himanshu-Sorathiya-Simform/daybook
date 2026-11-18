@@ -3,12 +3,33 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, test, vi } from "vitest";
 
-import type { CategoryKey } from "@/lib/categories";
-import { categoryTiles } from "../../lib/entry";
-import { GOLDEN_CATEGORIES } from "../../lib/__tests__/fixtures";
+import {
+	type CategoryKey,
+	EXPENSE_CATEGORIES,
+	INCOME_CATEGORIES,
+} from "@/lib/categories";
 import { CategoryTiles, type CategoryTilesProps } from "../CategoryTiles";
 
-/** The tiles of golden data's expense counts, as the dialog wires them. */
+/** The 7 tiles Transactions' entry dialog shows for golden data's expense counts. */
+const TOP: CategoryKey[] = [
+	"food",
+	"entertainment",
+	"housing",
+	"shopping",
+	"transportation",
+	"health",
+	"utilities",
+];
+const REST = EXPENSE_CATEGORIES.filter((key) => !TOP.includes(key));
+
+/** The tiles shown: the 7, then the rest when expanded, or a chosen one of the rest. */
+function tilesOf(chosen: CategoryKey | null, expanded: boolean) {
+	if (expanded) return { tiles: [...TOP, ...REST], rest: REST.length };
+	const extra = chosen !== null && REST.includes(chosen as never) ? [chosen] : [];
+	return { tiles: [...TOP, ...extra], rest: REST.length - extra.length };
+}
+
+/** The tiles as Transactions' entry dialog wires them. */
 function Harness({
 	initial = null,
 	onChange,
@@ -19,12 +40,7 @@ function Harness({
 }) {
 	const [value, setValue] = useState(initial);
 	const [expanded, setExpanded] = useState(false);
-	const { tiles, rest } = categoryTiles(
-		"expense",
-		GOLDEN_CATEGORIES,
-		value,
-		expanded,
-	);
+	const { tiles, rest } = tilesOf(value, expanded);
 	return (
 		<CategoryTiles
 			tiles={tiles}
@@ -92,6 +108,22 @@ describe("the tiles (BR-F03-75)", () => {
 
 		for (const radio of screen.getAllByRole("radio"))
 			expect(radio).not.toBeChecked();
+	});
+
+	test("focus stays where it was unless asked for", () => {
+		render(<Harness />);
+
+		expect(
+			screen
+				.getAllByRole("radio")
+				.some((tile) => tile === document.activeElement),
+		).toBe(false);
+	});
+
+	test("autoFocus puts focus on the first tile when it opens", () => {
+		render(<Harness autoFocus />);
+
+		expect(screen.getAllByRole("radio")[0]).toHaveFocus();
 	});
 
 	test("a press chooses a tile and says which", async () => {
@@ -223,10 +255,9 @@ describe("+ N more and Show fewer (D-550)", () => {
 	});
 
 	test("with nothing left out there is no button", () => {
-		const { tiles } = categoryTiles("income", GOLDEN_CATEGORIES, null, false);
 		render(
 			<CategoryTiles
-				tiles={tiles}
+				tiles={INCOME_CATEGORIES}
 				rest={0}
 				isExpanded={false}
 				onExpandedChange={vi.fn()}
@@ -298,6 +329,49 @@ describe("disabled", () => {
 		expect(screen.getByRole("radio", { name: "Food" })).toBeDisabled();
 		expect(more).toBeDisabled();
 		expect(tileNames()).toHaveLength(7);
+	});
+});
+
+describe("captions (BR-F04-19)", () => {
+	test("a caption shows under its tile's label and is read with it; tiles without one have none", () => {
+		render(
+			<CategoryTiles
+				tiles={["health", "housing"]}
+				captions={{ health: "₹1,500.00 in Sept" }}
+				value={null}
+				onChange={vi.fn()}
+			/>,
+		);
+
+		expect(
+			screen.getByRole("radio", { name: "Health, ₹1,500.00 in Sept" }),
+		).toBeInTheDocument();
+		expect(screen.getByRole("radio", { name: "Housing" })).toBeInTheDocument();
+		expect(screen.getByText("₹1,500.00 in Sept", { exact: false })).toHaveClass(
+			"text-small",
+			"text-ink-2",
+		);
+	});
+
+	test("without + N more's props there is no button, and a choice still works", async () => {
+		const user = userEvent.setup();
+		const onChange = vi.fn();
+		render(
+			<CategoryTiles
+				tiles={["health", "housing"]}
+				value={null}
+				onChange={onChange}
+			/>,
+		);
+
+		expect(screen.queryByRole("button")).toBeNull();
+		await user.click(tile("Housing"));
+		expect(onChange).toHaveBeenCalledExactlyOnceWith("housing");
+	});
+
+	test("a tile is at least as tall as before and grows with a caption", () => {
+		render(<Harness />);
+		expect(tile("Food")).toHaveClass("min-h-14.5");
 	});
 });
 

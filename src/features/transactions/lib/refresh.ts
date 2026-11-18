@@ -16,9 +16,10 @@ export type TransactionWrite =
  *   refetches nor asks for a row that is gone;
  * - every other Transactions read (lists, summaries, counts, histograms, other rows);
  * - payees, their searches and histories;
- * - on a create or delete, the profile, whose currency lock counts Transactions.
- * Budgets, Goals, the dashboard, Analytics, Insights and Subscriptions join when their roots
- * exist. The answer settles once every refetch has.
+ * - on a create or delete, the profile, whose currency lock counts Transactions;
+ * - every Budgets read, whose spending a Transaction moves (F04 section 12).
+ * Goals, the dashboard, Analytics, Insights and Subscriptions join when their roots exist. The
+ * answer settles once every refetch has.
  */
 export async function refreshAfterTransactionWrite(
 	queryClient: QueryClient,
@@ -40,6 +41,7 @@ export async function refreshAfterTransactionWrite(
 			predicate: (query) => query.queryHash !== written,
 		}),
 		queryClient.invalidateQueries({ queryKey: payeeKeys.all }),
+		queryClient.invalidateQueries({ queryKey: [QUERY_ROOTS.budgets] }),
 		write.kind === "edit" ?
 			undefined
 		:	queryClient.invalidateQueries({ queryKey: [QUERY_ROOTS.profile] }),

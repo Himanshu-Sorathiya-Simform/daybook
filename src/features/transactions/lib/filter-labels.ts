@@ -6,7 +6,7 @@ import type { DatePreset, Source, TxnType } from "@/lib/transactions/model";
 import { presetOf } from "@/lib/transactions/presets";
 import type { TransactionFilter } from "@/lib/transactions/url";
 
-import type { AmountBounds, QuickRange } from "./quick-ranges";
+import type { AmountBounds } from "./quick-ranges";
 
 /** What filter labels need from the profile: its today (TIME-5) and its formats. */
 export type FilterLocale = {
@@ -85,18 +85,15 @@ export function quickRangeLabel(
 	return `${money(minMinor)} to ${money(maxMinor + 1)}`;
 }
 
-/** The amount filter as words (BR-F03-39): a quick range's own name when the bounds are one,
- * otherwise "₹1,000 to ₹2,500", "From ₹1,000" or "Up to ₹2,500"; `null` without bounds. */
+/** The amount filter as words (BR-F03-39): "₹1,000 to ₹2,500", "From ₹1,000" or "Up to
+ * ₹2,500", the same whichever quick ranges the histogram offers (D-614); `null` without
+ * bounds. */
 export function amountLabel(
 	bounds: AmountBounds,
 	locale: FilterLocale,
-	quick: readonly QuickRange[] = [],
 ): string | null {
 	const { minMinor, maxMinor } = bounds;
 	if (minMinor === undefined && maxMinor === undefined) return null;
-	if (quick.some((range) => sameBounds(range, bounds))) {
-		return quickRangeLabel(bounds, locale);
-	}
 	const money = (minor: number) =>
 		formatMoneyShort(minor, locale.currency, locale.numberLocale);
 	if (minMinor === undefined) return `Up to ${money(maxMinor!)}`;
@@ -148,7 +145,6 @@ function withoutValue<K extends "type" | "cat">(
 export function activeChips(
 	filter: TransactionFilter,
 	locale: FilterLocale,
-	quick: readonly QuickRange[] = [],
 ): ActiveChip[] {
 	const chips: ActiveChip[] = [];
 	const add = (id: string, label: string, without: TransactionFilter) =>
@@ -167,7 +163,7 @@ export function activeChips(
 			withoutValue(filter, "cat", category),
 		);
 	}
-	const amount = amountLabel(filter, locale, quick);
+	const amount = amountLabel(filter, locale);
 	if (amount !== null)
 		add("amount", amount, omitFields(filter, "minMinor", "maxMinor"));
 	if (filter.src !== undefined) {

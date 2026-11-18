@@ -400,6 +400,69 @@ describe("one-month limits a change from a month onward keeps (BR-F04-25)", () =
 	});
 });
 
+describe("a month's own one-month limit (BR-F04-26)", () => {
+	const raised = setMonth(rulesOf("food"), "2026-10", 800000);
+
+	test("marks the months that hold one before the change", () => {
+		const result = open(
+			preview(
+				"food",
+				{ scope: "from", month: "2026-09", limitMinor: 700000 },
+				raised,
+			),
+		);
+		expect(result.months.map((each) => [each.month, each.own])).toEqual([
+			["2026-09", false],
+			["2026-10", true],
+			["2026-11", false],
+		]);
+	});
+
+	test("a one-month limit set now is not marked, only one already stored", () => {
+		const result = open(
+			preview("food", {
+				scope: "month",
+				month: "2026-10",
+				limitMinor: 800000,
+			}),
+		);
+		expect(result.months.map((each) => each.own)).toEqual([false, false, false]);
+	});
+
+	test("marks a stored `null` one-month limit too", () => {
+		const skipped = setMonth(rulesOf("food"), "2026-11", null);
+		const result = open(
+			preview(
+				"food",
+				{ scope: "month", month: "2026-10", limitMinor: 800000 },
+				skipped,
+			),
+		);
+		expect(result.months.map((each) => each.own)).toEqual([false, false, true]);
+	});
+
+	test("months with equal figures but different owners are not grouped", () => {
+		const rules: BudgetRules = {
+			schedule: [{ from: "2026-05", limitMinor: 100 }],
+			overrides: [{ month: "2026-07", limitMinor: 100 }],
+		};
+		// A stored limit equal to the schedule's is normal here: the rules come from a restore.
+		const result = previewChange({
+			rules,
+			change: { scope: "from", month: "2026-05", limitMinor: 200 },
+			spending: () => 0,
+			current: "2026-08",
+		});
+		expect(
+			open(result).groups.map((group) => [group.first, group.last, group.own]),
+		).toEqual([
+			["2026-05", "2026-06", false],
+			["2026-07", "2026-07", true],
+			["2026-08", "2026-08", false],
+		]);
+	});
+});
+
 describe("other changes", () => {
 	test("a later month lists that month alone and no past months", () => {
 		const result = open(

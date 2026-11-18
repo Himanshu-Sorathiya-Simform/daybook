@@ -3,7 +3,7 @@
 import { Button } from "@/components/actions/Button";
 import { FilterPopover } from "@/components/forms/FilterPopover";
 import { amountLabel, type FilterLocale } from "../lib/filter-labels";
-import { type AmountBounds, quickRanges } from "../lib/quick-ranges";
+import type { AmountBounds } from "../lib/quick-ranges";
 import type { HistogramAnswer } from "../lib/types";
 import { AmountBlock } from "./AmountBlock";
 
@@ -35,11 +35,7 @@ export function AmountMenu({
 	onOpenChange,
 	className,
 }: Readonly<AmountMenuProps>) {
-	const label = amountLabel(
-		bounds,
-		locale,
-		histogram ? quickRanges(histogram) : [],
-	);
+	const label = amountLabel(bounds, locale);
 	return (
 		<FilterPopover
 			label="Amount"

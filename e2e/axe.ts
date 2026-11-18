@@ -10,6 +10,14 @@ export async function scan(page: Page, what: string) {
 			.getAnimations()
 			.every((animation) => animation.playState !== "running"),
 	);
+	// React Aria announces a button finishing its pending state in a live region whose message
+	// is an empty `role="img"`, which axe's role-img-alt flags; the announcer clears itself after
+	// about 7 seconds, and the page is checked once it has.
+	await page.waitForFunction(
+		() => !document.querySelector('[role="log"] [role="img"]'),
+		undefined,
+		{ timeout: 15_000 },
+	);
 	const { violations } = await new AxeBuilder({ page })
 		.withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
 		.analyze();

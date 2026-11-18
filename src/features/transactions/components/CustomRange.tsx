@@ -64,11 +64,24 @@ export function CustomRange({
 		if (start === value?.start && end === value.end) return;
 		onChange({ start, end });
 	};
-	const typed = useDebouncer(commit, { wait: DATE_COMMIT_MS });
+	// Typed dates commit when the wait ends, when focus leaves both fields, and when the
+	// control closes within the wait, so a typed date is never lost to Escape or Show (D-543).
+	const typed = useDebouncer(commit, {
+		wait: DATE_COMMIT_MS,
+		onUnmount: (pending) => pending.flush(),
+	});
 
 	return (
 		<div className={cn("flex flex-col gap-2.5", className)}>
-			<div className="grid grid-cols-2 gap-2">
+			<div
+				className="grid grid-cols-2 gap-2"
+				// Leaving both fields commits at once; going from From to To does not, so the
+				// pair is one change.
+				onBlur={(event) => {
+					if (!event.currentTarget.contains(event.relatedTarget))
+						typed.flush();
+				}}
+			>
 				<DateField
 					label="From"
 					value={from}

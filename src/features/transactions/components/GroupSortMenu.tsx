@@ -18,17 +18,20 @@ export type GroupSortMenuProps = {
 	list: ListParams;
 	/** A new grouping or sort, committed at once (BR-F03-39). */
 	onChange: (list: ListParams) => void;
+	/** Opening starts a visit: its first change adds a history entry (D-547). */
+	onOpenChange?: (isOpen: boolean) => void;
 	className?: string;
 };
 
 /**
  * The Group · Sort menu (BR-F03-39, BR-F03-40, D-529): a trigger reading "Day · Newest first"
  * that opens the groupings, then the sorts. Each choice commits at once and the menu stays
- * open, so both can be changed in one visit.
+ * open, so both can be changed in one visit, which is one history entry (D-547).
  */
 export function GroupSortMenu({
 	list,
 	onChange,
+	onOpenChange,
 	className,
 }: Readonly<GroupSortMenuProps>) {
 	return (
@@ -38,6 +41,7 @@ export function GroupSortMenu({
 			value={groupSortLabel(list)}
 			align="end"
 			width="sm"
+			{...(onOpenChange ? { onOpenChange } : {})}
 			{...(className ? { className } : {})}
 		>
 			<ChoiceGroup

@@ -11,7 +11,7 @@ Free includes 3 active Goals; Premium is unlimited. When Premium lapses, nothing
 | Milestone  | M2 (Goals, states, the cap). Stand-ins (D-241): before M3 the Goal page has no chart (F09); before M4 the limit message has no Upgrade button and no lapse can happen (F12); before M5, writes are online only, as in F03      |
 | Plan       | Free: 3 active Goals. Premium: unlimited (`goals.active.max`)                                                                                                                                                                  |
 | Depends on | [F03](F03-transactions.md) (contributions and withdrawals), [P4](../platform/P4-capabilities.md) (the limit and its lock), [P2](../platform/P2-data-access-and-security.md); F12 (plan changes); F08, F09, F11, F13 read Goals |
-| Decisions  | D-21, D-25, D-29, D-97 to D-103, D-198, D-213, D-223, D-237, D-241, D-258 to D-269                                                                                                                                             |
+| Decisions  | D-21, D-25, D-29, D-97 to D-103, D-198, D-213, D-223, D-237, D-241, D-258 to D-269, D-580                                                                                                                                      |
 
 ## 1. User stories
 
@@ -348,6 +348,7 @@ Each item carries:
 - **AC-F06-11** (E2E) Fund a Goal and hit the Free cap (root TST-4): a fourth New Goal shows the limit message, with Upgrade from M4.
 - **AC-F06-12** (accessibility) `/goals`, `/goals/[id]` and the choose dialog pass axe with no serious or critical violations and work by keyboard alone. Locked and read-only states are announced in text.
 - **AC-F06-13** (integration) Archiving an archived Goal, or completing an archived one, returns 422 `validation_failed` on `state`. Completing a locked Goal returns `goal_read_only` (M4). Reopen clears `completedAt` and `archivedAt`. A queued archive synced after an edit keeps its own `changedAt` as `archivedAt`.
+- **AC-F06-14** (performance) On the stress account, saving a Goal and using Add money on one each stay within INP 200 ms (root 11.1, D-580).
 
 ## 15. Illustrations
 

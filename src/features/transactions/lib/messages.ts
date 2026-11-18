@@ -36,6 +36,7 @@ export function deleteViewTitle(name: string): string {
  * BR-F03-39). */
 export const FILTER_TEXT = {
 	searchTooShort: "Type at least 3 characters, or an amount.",
+	searchCharacters: "Remove unsupported characters.",
 	searchOffline: "Search needs a connection",
 	categoryNote: "Category filters hide Goal Transactions.",
 	fromAfterTo: "Choose a From date on or before To.",

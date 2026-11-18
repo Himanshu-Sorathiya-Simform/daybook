@@ -10,6 +10,7 @@ import { showToast } from "@/components/feedback/showToast";
 import { TextInput } from "@/components/forms/TextInput";
 import { Dialog } from "@/components/surfaces/Dialog";
 import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
+import { useOnce } from "@/hooks/useOnce";
 import { uuidV7 } from "@/lib/ids";
 import type { SavedView } from "@/lib/transactions/views";
 import { useEditView } from "../hooks/useEditView";
@@ -48,6 +49,7 @@ export function RenameViewDialog({
 	const formRef = useRef<HTMLFormElement>(null);
 	const focusInvalid = useFocusFirstInvalid(formRef);
 	const busy = edit.isPending;
+	const sending = useOnce();
 
 	const form = useForm({
 		defaultValues: { name: view.name },
@@ -68,15 +70,20 @@ export function RenameViewDialog({
 				onClose();
 				return;
 			}
-			setServer(null);
-			setFailure(null);
-			try {
-				await edit.mutateAsync({
+			// A second press, Enter included, sends nothing while the rename is out (D-615).
+			const request = sending.run(() =>
+				edit.mutateAsync({
 					id: view.id,
 					version: view.version,
 					changes: { name: checked.name },
 					idempotencyKey: uuidV7(),
-				});
+				}),
+			);
+			if (request === null) return;
+			setServer(null);
+			setFailure(null);
+			try {
+				await request;
 				showToast(VIEW_TEXT.renamed);
 				onClose();
 			} catch (error) {
@@ -108,10 +115,9 @@ export function RenameViewDialog({
 			title={VIEW_TEXT.renameTitle}
 			size="sm"
 			isOpen
-			onOpenChange={(next) => {
-				if (!next && !busy) onClose();
-			}}
-			isKeyboardDismissDisabled={busy}
+			// It only ever reports closing.
+			onOpenChange={onClose}
+			isPending={busy}
 			footer={
 				<>
 					<span className="flex-1" />

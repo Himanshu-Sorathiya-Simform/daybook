@@ -160,6 +160,7 @@ describe("the presets", () => {
 		expect(radio("Year to date")).toBeChecked();
 	});
 
+	// AC-F03-76
 	test.each([
 		["This month", { from: "2026-11-01", to: "2026-11-30" }],
 		["Last month", { from: "2026-10-01", to: "2026-10-31" }],
@@ -176,6 +177,7 @@ describe("the presets", () => {
 		await closed();
 	});
 
+	// AC-F03-76
 	test("All time drops the dates and closes", async () => {
 		const { user, onChange } = renderMenu({
 			filter: { from: "2026-10-01", to: "2026-10-31" },
@@ -457,6 +459,7 @@ describe("Custom range (BR-F03-39, D-538)", () => {
 		expect(screen.queryByRole("group", { name: "From" })).toBeNull();
 	});
 
+	// AC-F03-76
 	test("a preset chosen after Custom range commits and closes", async () => {
 		const { user, onChange } = renderMenu();
 

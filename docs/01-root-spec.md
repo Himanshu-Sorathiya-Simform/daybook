@@ -433,7 +433,7 @@ The browser never touches the database. Every private read and write passes the 
 | --------------------------------------------- | ----------------------------------------------------------- |
 | Server data                                   | TanStack Query; allow-listed queries persisted to IndexedDB |
 | Profile, plan, capabilities                   | The `/api/me` query, persisted                              |
-| Form state                                    | TanStack Form with Zod schemas shared with the server       |
+| Form state                                    | TanStack Form, Zod shared with the server (D-616)           |
 | Committed filters and period                  | URL search params                                           |
 | Unsubmitted text (search drafts)              | Component state                                             |
 | UI chrome: palette, dialogs, layout edit mode | Zustand `ui` store                                          |
@@ -686,18 +686,18 @@ The core codes are below. The full registry, including the codes added for Stret
 
 ### 11.1 Performance (D-63, D-161, D-379)
 
-| Measure               | Budget                    | Where                                                    |
-| --------------------- | ------------------------- | -------------------------------------------------------- |
-| LCP                   | 2.5 s or less             | Dashboard, mobile emulation, warm database               |
-| CLS                   | 0.1 or less               | Dashboard                                                |
-| INP                   | 200 ms or less            | Applying a filter; saving a Transaction                  |
-| First-load JavaScript | 200 KB compressed or less | Dashboard route, charts lazy                             |
-| Server time           | p95 under 300 ms          | API with a warm database; `Server-Timing` `app;dur` (P2) |
-| PDF render            | p95 under 5 s             | The previous month's report, Chromium warm (F11, P3)     |
+| Measure               | Budget                    | Where                                                                     |
+| --------------------- | ------------------------- | ------------------------------------------------------------------------- |
+| LCP                   | 2.5 s or less             | Dashboard, mobile emulation, warm database                                |
+| CLS                   | 0.1 or less               | Dashboard                                                                 |
+| INP                   | 200 ms or less            | Applying a filter, sort, range or search; selecting a row; saving (D-580) |
+| First-load JavaScript | 200 KB compressed or less | Dashboard route, charts lazy                                              |
+| Server time           | p95 under 300 ms          | API with a warm database; `Server-Timing` `app;dur` (P2)                  |
+| PDF render            | p95 under 5 s             | The previous month's report, Chromium warm (F11, P3)                      |
 
 - **NFR-1** Measured on a production build against the stress account, in the manual CI workflow `perf.yml`, with the app, its database and the browser on one runner (P3, D-379):
     - Lighthouse for LCP and CLS.
-    - A scripted Playwright interaction for INP.
+    - A scripted Playwright interaction for INP. `perf.yml` runs Transactions' two (P3); every other feature's interactions are acceptance criteria checked by a lab test in `e2e/` and by hand (D-580).
     - Web vitals also go to Sentry.
 - **NFR-2** Every measurement starts with a warm-up request, because Neon's free compute sleeps after 5 minutes idle. Database time is reported separately through `Server-Timing`. Server time is held to its budget when the app runs in the database's region (P3 sets up the run, D-294). A local run against a remote database reports it but is not held to the budget, since each transaction needs several round trips.
 - **NFR-3** Results are recorded before and after each optimization.

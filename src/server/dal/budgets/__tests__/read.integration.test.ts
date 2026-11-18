@@ -14,11 +14,11 @@ import {
 } from "../../transactions/__tests__/helpers";
 import {
 	budgetHistory,
-	type BudgetMonthAnswer,
 	budgetMonth,
 	budgetMonths,
 	budgetYearSummary,
 } from "../read";
+import type { BudgetMonthAnswer } from "@/lib/budgets/answers";
 import { goldenBudgetUser } from "./helpers";
 
 /** The Budget reads (F04 section 11, BR-F04-34, BR-F04-35) through the runtime role and RLS,

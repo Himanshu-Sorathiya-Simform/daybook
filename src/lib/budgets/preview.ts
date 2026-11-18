@@ -36,6 +36,9 @@ export type PreviewMonth = {
 	oldTenths: number | null;
 	newTenths: number | null;
 	changed: boolean;
+	/** The month holds a one-month limit of its own before the change, `null` included: the
+	 * card reads "Keeps its one-month limit", or "Unchanged" for one month only (BR-F04-26). */
+	own: boolean;
 };
 
 /** Consecutive months with the same old limit, new limit and spending, as one row of "Months
@@ -97,6 +100,7 @@ function groupMonths(months: readonly PreviewMonth[]): PreviewGroup[] {
 			last?.oldLimitMinor === rest.oldLimitMinor
 			&& last.newLimitMinor === rest.newLimitMinor
 			&& last.spentMinor === rest.spentMinor
+			&& last.own === rest.own
 		) {
 			last.last = month;
 			last.count += 1;
@@ -197,6 +201,7 @@ export function previewChange(input: {
 			oldTenths: tenthsOf(spentMinor, oldLimitMinor),
 			newTenths: tenthsOf(spentMinor, newLimitMinor),
 			changed: oldLimitMinor !== newLimitMinor,
+			own: base.overrides.some((each) => each.month === month),
 		};
 	});
 

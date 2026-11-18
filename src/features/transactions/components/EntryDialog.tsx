@@ -9,6 +9,7 @@ import { Button } from "@/components/actions/Button";
 import { FormAlert } from "@/components/feedback/FormAlert";
 import { OfflineNote } from "@/components/feedback/OfflineNote";
 import { AmountInput } from "@/components/forms/AmountInput";
+import { CategoryTiles } from "@/components/forms/CategoryTiles";
 import { DatePicker } from "@/components/forms/DatePicker";
 import { Segmented } from "@/components/forms/Segmented";
 import { TextInput } from "@/components/forms/TextInput";
@@ -16,6 +17,7 @@ import { TimeField } from "@/components/forms/TimeField";
 import { ConfirmDialog } from "@/components/surfaces/ConfirmDialog";
 import { Dialog } from "@/components/surfaces/Dialog";
 import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
+import { useOnce } from "@/hooks/useOnce";
 import { useOnline } from "@/hooks/useOnline";
 import { shortcutLabel, useShortcut } from "@/hooks/useShortcut";
 import { formatDayHeader, formatTime } from "@/lib/date-format";
@@ -61,7 +63,6 @@ import { TRANSACTIONS_TEXT } from "../lib/messages";
 import { refreshAfterTransactionWrite } from "../lib/refresh";
 import type { TransactionAnswer } from "../lib/types";
 import { readWriteError } from "../lib/write-errors";
-import { CategoryTiles } from "./CategoryTiles";
 import { ConflictDialog } from "./ConflictDialog";
 import { PayeeField } from "./PayeeField";
 
@@ -147,6 +148,7 @@ export function EntryDialog({
 	const kind = useRef<SaveKind>("save");
 	const focusInvalid = useFocusFirstInvalid(formRef);
 	const busy = create.isPending || edit.isPending;
+	const sending = useOnce();
 	const editing = mode.kind === "edit" ? mode.row : null;
 	const fixed = editing !== null && hasFixedDate(editing);
 	const charge = editing?.source === "subscription";
@@ -191,11 +193,16 @@ export function EntryDialog({
 				return;
 			}
 			const saving = kind.current;
-			try {
-				const row = await create.mutateAsync({
+			// A second press, Enter included, sends nothing while the create is out (D-615).
+			const request = sending.run(() =>
+				create.mutateAsync({
 					body: createBody(value, checked, locale, now),
 					idempotencyKey: uuidV7(),
-				});
+				}),
+			);
+			if (request === null) return;
+			try {
+				const row = await request;
 				onCreated(row, saving);
 				if (saving === "save") {
 					onClose();
@@ -219,13 +226,17 @@ export function EntryDialog({
 	 * the conflict view, a 404 closes it, and anything else shows in the dialog. */
 	async function sendEdit(change: TransactionEditInput, version: number) {
 		const row = editing!;
-		try {
-			const saved = await edit.mutateAsync({
+		const request = sending.run(() =>
+			edit.mutateAsync({
 				id: row.id,
 				version,
 				changes: change,
 				idempotencyKey: uuidV7(),
-			});
+			}),
+		);
+		if (request === null) return;
+		try {
+			const saved = await request;
 			setConflict(null);
 			onEdited?.(saved);
 			onClose();
@@ -322,7 +333,6 @@ export function EntryDialog({
 	};
 
 	const requestClose = () => {
-		if (busy) return;
 		if (isChanged(form.state.values, start)) setConfirming(true);
 		else onClose();
 	};
@@ -368,7 +378,7 @@ export function EntryDialog({
 				onOpenChange={(next) => {
 					if (!next) requestClose();
 				}}
-				isKeyboardDismissDisabled={busy}
+				isPending={busy}
 				footer={
 					<>
 						{editing && onDelete && (

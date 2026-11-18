@@ -1,0 +1,27 @@
+import type { CurrencyCode } from "@/lib/currency";
+import type { Budget } from "@/lib/budgets/answers";
+import type { SummaryAnswer } from "@/lib/transactions/answers";
+
+export type {
+	BudgetHistory as BudgetHistoryAnswer,
+	BudgetMonthAnswer,
+	BudgetYearSummary as BudgetYearAnswer,
+} from "@/lib/budgets/answers";
+
+/** The answers of F04 section 11's reads and writes, as the routes send them. The types are
+ * shared with the data access layer that builds each answer, so the two cannot drift. */
+export type BudgetAnswer = Budget & { currency: CurrencyCode };
+
+/** F03's summary for one category and month with `by=payee`, which the panel's "Where it
+ * went" reads (BR-F04-30). */
+export type PayeeSummaryAnswer = SummaryAnswer;
+
+/** The profile's formats and its today, from the server render (TIME-5): what every figure,
+ * month and time on the page is written with. */
+export type BudgetsLocale = {
+	today: string;
+	currency: CurrencyCode;
+	numberLocale: string;
+	dateLocale: string;
+	timezone: string;
+};

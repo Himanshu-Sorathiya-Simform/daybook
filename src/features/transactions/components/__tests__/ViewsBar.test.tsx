@@ -1,5 +1,12 @@
 import { onlineManager } from "@tanstack/react-query";
-import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	fireEvent,
+	screen,
+	waitFor,
+	within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -21,7 +28,6 @@ import { renderInApp } from "@/components/app/__tests__/helpers";
 import { Toaster } from "@/components/feedback/Toaster";
 import { useOnline } from "@/hooks/useOnline";
 import { isUuidV7 } from "@/lib/ids";
-import { readFilterParams } from "@/lib/transactions/url";
 import type { SavedView } from "@/lib/transactions/views";
 import {
 	ok,
@@ -33,7 +39,6 @@ import {
 import { useTransactionsUrl } from "../../hooks/useTransactionsUrl";
 import { idOf } from "../../lib/__tests__/fixtures";
 import type { LabelLocale } from "../../lib/labels";
-import { histogramOptions } from "../../lib/queries";
 import { type ViewDialog, ViewsBar } from "../ViewsBar";
 
 const network = setupServer();
@@ -480,24 +485,10 @@ describe("Save as view (BR-F03-67)", () => {
 		});
 	});
 
-	test("an amount that is a quick range is named as its chip reads", async () => {
+	// AC-F03-59
+	test("an amount that equals a quick range is named by its plain bounds, as its chip reads", async () => {
 		const search = `?${CHECK_B}&min=400&max=799.99`;
-		const { queryClient, store, user } = renderBar(search);
-		const { filter } = readFilterParams(new URLSearchParams(search), {
-			currency: "INR",
-		});
-		// Check B's histogram (F03 section 5), cached as the Amount control left it.
-		queryClient.setQueryData(
-			histogramOptions({ filter, currency: "INR" }).queryKey,
-			{
-				edges: [
-					31500, 40000, 50000, 63000, 80000, 100000, 125000, 160000,
-					200000, 250000, 315000,
-				],
-				counts: [1, 0, 0, 1, 0, 0, 0, 0, 1, 1],
-				currency: "INR",
-			},
-		);
+		const { store, user } = renderBar(search);
 		await loaded();
 		const created = route(
 			network,
@@ -508,7 +499,7 @@ describe("Save as view (BR-F03-67)", () => {
 		await user.click(button("Save as view"));
 		await screen.findByText("Saved as a new view.");
 		expect(created[0]?.body).toMatchObject({
-			name: "Last month, Food, ₹400 to ₹800",
+			name: "Last month, Food, ₹400 to ₹799.99",
 			filter: { minMinor: 40000, maxMinor: 79999 },
 		});
 	});
@@ -726,6 +717,131 @@ describe("Revert (BR-F03-66)", () => {
 		await loaded();
 		await user.click(button("Revert"));
 		expect(calls).toEqual([{ mode: "push", href: "/transactions" }]);
+	});
+});
+
+describe("one view write at a time (D-615)", () => {
+	// Each press builds its own idempotency key, so a second press in the same frame, before
+	// React shows the pending state, would be a second, distinct write.
+	test("Save as view pressed twice in the same frame sends one create", async () => {
+		const { store } = renderBar("?cat=food");
+		await screen.findByRole("radio", { name: /Food last month/ });
+		let answer: (() => void) | undefined;
+		const held = new Promise<void>((resolve) => {
+			answer = resolve;
+		});
+		const save = accept(store);
+		const created = route(
+			network,
+			"post",
+			"/api/transaction-views",
+			async (request) => {
+				await held;
+				return save(request);
+			},
+		);
+		const press = button("Save as view");
+		act(() => {
+			fireEvent.click(press);
+			fireEvent.click(press);
+		});
+		await waitFor(() => expect(created).toHaveLength(1));
+		answer!();
+		await screen.findByText("Saved as a new view.");
+		expect(created).toHaveLength(1);
+	});
+
+	test("Update view pressed twice in the same frame sends one edit", async () => {
+		const { store } = renderBar(`?${CHECK_B}&type=expense&view=${FOOD.id}`);
+		await loaded();
+		let answer: (() => void) | undefined;
+		const held = new Promise<void>((resolve) => {
+			answer = resolve;
+		});
+		const patch = patched(store, FOOD.id);
+		const edits = route(
+			network,
+			"patch",
+			`/api/transaction-views/${FOOD.id}`,
+			async (request) => {
+				await held;
+				return patch(request);
+			},
+		);
+		const press = button("Update view");
+		act(() => {
+			fireEvent.click(press);
+			fireEvent.click(press);
+		});
+		await waitFor(() => expect(edits).toHaveLength(1));
+		answer!();
+		await screen.findByText("View updated.");
+		expect(edits).toHaveLength(1);
+	});
+
+	test("Delete pressed twice in the same frame sends one delete", async () => {
+		const { store, user } = renderBar(`?${CHECK_B}&view=${FOOD.id}`);
+		await loaded();
+		let answer: (() => void) | undefined;
+		const held = new Promise<void>((resolve) => {
+			answer = resolve;
+		});
+		const deletes = route(
+			network,
+			"delete",
+			`/api/transaction-views/${FOOD.id}`,
+			async () => {
+				await held;
+				store.items.splice(0, 1);
+				return new HttpResponse(null, { status: 204 });
+			},
+		);
+		const menu = await openMenu(user);
+		await user.click(within(menu).getByRole("menuitem", { name: "Delete" }));
+		const confirm = await screen.findByRole("alertdialog");
+		const press = within(confirm).getByRole("button", { name: "Delete" });
+		act(() => {
+			fireEvent.click(press);
+			fireEvent.click(press);
+		});
+		await waitFor(() => expect(deletes).toHaveLength(1));
+		answer!();
+		await screen.findByText("View deleted.");
+		expect(deletes).toHaveLength(1);
+	});
+
+	test("Enter twice in Rename in the same frame sends one rename", async () => {
+		const { store, user } = renderBar(`?${CHECK_B}&view=${FOOD.id}`);
+		await loaded();
+		let answer: (() => void) | undefined;
+		const held = new Promise<void>((resolve) => {
+			answer = resolve;
+		});
+		const patch = patched(store, FOOD.id);
+		const edits = route(
+			network,
+			"patch",
+			`/api/transaction-views/${FOOD.id}`,
+			async (request) => {
+				await held;
+				return patch(request);
+			},
+		);
+		const menu = await openMenu(user);
+		await user.click(within(menu).getByRole("menuitem", { name: "Rename" }));
+		const dialog = await screen.findByRole("dialog", { name: "Rename view" });
+		const field = within(dialog).getByRole("textbox", { name: "Name" });
+		await user.clear(field);
+		await user.type(field, "Eating out");
+		const form = dialog.querySelector("form")!;
+		act(() => {
+			fireEvent.submit(form);
+			fireEvent.submit(form);
+		});
+		await waitFor(() => expect(edits).toHaveLength(1));
+		answer!();
+		await screen.findByText("View renamed.");
+		expect(edits).toHaveLength(1);
 	});
 });
 
@@ -1156,7 +1272,7 @@ describe("Rename (BR-F03-69)", () => {
 		expect(screen.queryByText("Log in again.")).toBeNull();
 	});
 
-	test("while it saves, Escape and Cancel wait", async () => {
+	test("while it saves, Escape, Cancel and Close wait", async () => {
 		const { store, user } = renderBar(`?${CHECK_B}&view=${FOOD.id}`);
 		await loaded();
 		let answer: (() => void) | undefined;
@@ -1179,6 +1295,7 @@ describe("Rename (BR-F03-69)", () => {
 		await waitFor(() => expect(cancel).toHaveAttribute("aria-disabled", "true"));
 		await user.keyboard("{Escape}");
 		await user.click(cancel);
+		await user.click(within(dialog).getByRole("button", { name: "Close" }));
 		expect(screen.getByRole("dialog", { name: "Rename view" })).toBe(dialog);
 		answer!();
 		await screen.findByText("View renamed.");

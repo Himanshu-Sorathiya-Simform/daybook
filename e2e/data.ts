@@ -1,6 +1,12 @@
 import { type Page, test } from "@playwright/test";
 
-import { insertProfile, loadGolden, type LoadedGolden } from "../seed/load-golden";
+import {
+	insertProfile,
+	type LoadedBudget,
+	loadGolden,
+	loadGoldenBudgets,
+	type LoadedGolden,
+} from "../seed/load-golden";
 import { type LoadedStress, loadStress } from "../seed/load-stress";
 import { todayIn } from "@/lib/time";
 import { type Account, newAccount } from "./accounts";
@@ -51,37 +57,56 @@ export async function signUpByApi(
 }
 
 /**
- * A new user holding golden's profile and its 22 M1 Transactions (D-471), on `/transactions`
- * at `path`. The rows go straight into the database, since their September and October dates
- * lie outside the API's 10-day window. Golden's figures hold on any day for filters with
- * explicit dates (checks A to E, G and H); "Today" and presets follow the real clock.
+ * A new user holding golden's profile, its 22 M1 Transactions (D-471) and its four Budgets, on
+ * `/transactions` at `path`. The rows go straight into the database, since their September and
+ * October dates lie outside the API's 10-day window. Golden's figures hold on any day for
+ * filters with explicit dates (checks A to E, G and H) and for the Budgets of September to
+ * November 2026; "Today" and presets follow the real clock.
  */
 export async function userWithGolden(
 	page: Page,
 	path = "/transactions",
-): Promise<{ account: Account; golden: LoadedGolden }> {
+): Promise<{
+	account: Account;
+	golden: LoadedGolden;
+	budgets: readonly LoadedBudget[];
+}> {
 	const { account, userId } = await signUpByApi(page);
-	const golden = await withDatabase("DATABASE_URL_SYSTEM", (client) =>
-		loadGolden(client, userId),
+	const { golden, budgets } = await withDatabase(
+		"DATABASE_URL_SYSTEM",
+		async (client) => {
+			const loaded = await loadGolden(client, userId);
+			return {
+				golden: loaded,
+				budgets: await loadGoldenBudgets(client, userId),
+			};
+		},
 	);
 	await open(page, path);
-	return { account, golden };
+	return { account, golden, budgets };
 }
 
 /** A new user holding the stress rows (`seed/stress.ts`), 1,000 unless `count` says, ending on
- * today in India, on `/transactions` at `path`. */
+ * today in India, on `/transactions` at `path`. With `budgets`, golden's four Budgets too, for
+ * the Budgets page's own measurements (F04, AC-F04-32). */
 export async function userWithStress(
 	page: Page,
-	{ count, path = "/transactions" }: { count?: number; path?: string } = {},
+	{
+		count,
+		path = "/transactions",
+		budgets = false,
+	}: { count?: number; path?: string; budgets?: boolean } = {},
 ): Promise<{ account: Account; stress: LoadedStress }> {
 	const { account, userId } = await signUpByApi(page);
 	const today = todayIn("Asia/Kolkata", new Date());
-	const stress = await withDatabase("DATABASE_URL_SYSTEM", (client) =>
-		loadStress(client, userId, {
+	const stress = await withDatabase("DATABASE_URL_SYSTEM", async (client) => {
+		const loaded = await loadStress(client, userId, {
 			today,
 			...(count === undefined ? {} : { count }),
-		}),
-	);
+		});
+		if (budgets) await loadGoldenBudgets(client, userId);
+		return loaded;
+	});
 	await open(page, path);
 	return { account, stress };
 }

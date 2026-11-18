@@ -1,17 +1,15 @@
 import "server-only";
-import type { CurrencyCode } from "@/lib/currency";
+import type {
+	Breakdown,
+	ListAnswer,
+	SummaryAnswer,
+} from "@/lib/transactions/answers";
 import type { TransactionFilter } from "@/lib/transactions/url";
 import type { ProfiledContext } from "../context";
 import type { Tx } from "../with-user";
-import { listTransactions, type TransactionPage } from "./list";
-import type { Breakdown, ListQuery } from "./query";
-import { type Summary, transactionSummary } from "./summary";
-
-/** An answer that carries the profile currency (API-6). */
-export type WithCurrency<T> = T & { currency: CurrencyCode };
-
-export type ListAnswer = WithCurrency<TransactionPage>;
-export type SummaryAnswer = WithCurrency<Summary>;
+import { listTransactions } from "./list";
+import type { ListQuery } from "./query";
+import { transactionSummary } from "./summary";
 
 /**
  * `GET /api/transactions`'s answer for a read query: one page, its group totals and order

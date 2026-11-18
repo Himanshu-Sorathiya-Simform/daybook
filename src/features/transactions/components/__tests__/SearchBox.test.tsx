@@ -220,6 +220,35 @@ describe("clearing (BR-F03-38, BR-F03-39)", () => {
 	});
 });
 
+describe("unsupported characters (section 8)", () => {
+	// AC-F03-76
+	test("a control character commits nothing and says to remove it, once typing stops", async () => {
+		const { user, onCommit } = renderBox();
+
+		await user.click(box());
+		await user.paste("swiggy\u0007");
+		await wait(SEARCH_COMMIT_MS);
+
+		expect(onCommit).not.toHaveBeenCalled();
+		expect(message()).toHaveTextContent("Remove unsupported characters.");
+		expect(box()).toHaveAccessibleDescription("Remove unsupported characters.");
+	});
+
+	test("Enter shows it at once, and typing again hides it", async () => {
+		const { user, onCommit } = renderBox();
+
+		await user.click(box());
+		await user.paste("swiggy\u0007");
+		await user.keyboard("{Enter}");
+		expect(message()).toHaveTextContent("Remove unsupported characters.");
+		await user.keyboard("{Backspace}");
+
+		expect(message()).toBeEmptyDOMElement();
+		await wait(SEARCH_COMMIT_MS);
+		expect(onCommit).toHaveBeenCalledExactlyOnceWith("swiggy");
+	});
+});
+
 describe("too short (BR-F03-34, section 8)", () => {
 	// AC-F03-68
 	test("two letters are never committed; the message shows once typing stops", async () => {

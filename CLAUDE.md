@@ -19,8 +19,8 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 
 ## Stack
 
-- **Installed:** Next.js 16 (App Router, React Compiler), React 19, TypeScript (strict), Tailwind 4, Vitest with Testing Library, ESLint, Prettier, pnpm.
-- **Planned:** Neon Postgres with Drizzle, Better Auth, Stripe (test mode), TanStack Query, Form and Table, Zustand, React Aria, ECharts, Serwist, Sanity, Sentry, Playwright. Check `package.json` before assuming a planned package exists.
+- **Installed:** Next.js 16 (App Router, React Compiler), React 19, TypeScript (strict), Tailwind 4, TanStack Query, Form, Table, Hotkeys and Pacer, Vitest with Testing Library, ESLint, Prettier, pnpm.
+- **Planned:** Neon Postgres with Drizzle, Better Auth, Stripe (test mode), Zustand, React Aria, ECharts, Serwist, Sanity, Sentry, Playwright. Check `package.json` before assuming a planned package exists.
 
 ## Commands
 
@@ -47,6 +47,7 @@ A multi-user personal finance and investment dashboard (POC 4): real backend, pe
 - **Dates** go through date-fns 4 with `@date-fns/tz`. Never `Date` local getters (TIME-10).
 - **No Server Actions.** Every mutation is a route handler (SRV-3).
 - **Authorization lives in the data access layer**, where data is read or written. `proxy.ts` is never the only check (D-16).
+- **One TanStack library per job** (D-169, D-171, D-542). Data fetching and server state: TanStack Query. Forms, meaning fields that one action submits: TanStack Form (`useForm`, `form.Field`) with the shared Zod checks. Data tables: TanStack Table (lists use React Aria's GridList, D-171). Keyboard shortcuts: TanStack Hotkeys, through `useShortcut`. Waiting until typing stops, debouncing and throttling: TanStack Pacer. Never hand-roll a `useEffect` fetch, form fields in `useState`, a `keydown` listener or a `setTimeout` debounce. Committed filters live in the URL and their unsubmitted text stays component state (root spec 7.4, D-616). Read the installed version's types before using an API.
 - **Names:** "Subscription" means a recurring bill the user tracks. Anything billed by Stripe is "Premium" or "Daybook Premium" (NAM-1).
 - **No Docker and no local Postgres.** The database is Neon; database tests run in CI on a service container (D-02, D-03).
 - **Database roles are created only by the bootstrap script's SQL**, never in the Neon Console or by a migration (D-14).

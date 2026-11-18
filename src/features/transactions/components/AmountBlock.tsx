@@ -125,7 +125,12 @@ export function AmountBlock({
 		};
 		if (!sameBounds(next, bounds)) onChange(next);
 	};
-	const debouncer = useDebouncer(settle, { wait: AMOUNT_COMMIT_MS });
+	// What was typed commits when the wait ends, when focus leaves both boxes, and when the
+	// control closes within the wait, so a typed Min is never lost to Escape or Show (D-543).
+	const debouncer = useDebouncer(settle, {
+		wait: AMOUNT_COMMIT_MS,
+		onUnmount: (pending) => pending.flush(),
+	});
 
 	const edges = histogram?.edges ?? [];
 	const ranges = histogram ? quickRanges(histogram) : [];
@@ -209,7 +214,15 @@ export function AmountBlock({
 					</div>
 				</>
 			)}
-			<div className="grid grid-cols-2 gap-2">
+			<div
+				className="grid grid-cols-2 gap-2"
+				// Leaving both boxes commits at once; going from Min to Max does not, so the
+				// pair is one change.
+				onBlur={(event) => {
+					if (!event.currentTarget.contains(event.relatedTarget))
+						debouncer.flush();
+				}}
+			>
 				<AmountInput
 					label="Min"
 					size="md"

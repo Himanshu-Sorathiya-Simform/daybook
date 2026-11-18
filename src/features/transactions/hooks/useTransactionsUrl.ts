@@ -125,7 +125,10 @@ export function useTransactionsUrl(currency: CurrencyCode) {
 			setNotice(false);
 			go(mode, (state) => ({ ...state, filter, list: list ?? state.list }));
 		},
-		setList: (list: ListParams) => go("push", (state) => ({ ...state, list })),
+		/** New list parameters, as a new history entry or, for a later change in the same visit to
+		 * the Group · Sort menu, in place of the current one (D-547). */
+		setList: (list: ListParams, mode: "push" | "replace" = "push") =>
+			go(mode, (state) => ({ ...state, list })),
 		/** Applies a view: its filter and list replace the URL's, with `view=<id>`, or none for
 		 * All Transactions (BR-F03-65). The selected row stays. */
 		applyView: (

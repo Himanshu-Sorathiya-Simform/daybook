@@ -144,9 +144,9 @@ export async function insertBudgets(
 
 /**
  * Loads the four golden Budgets for `userId` (docs/03-golden-dataset.md, Setup), who already
- * has the golden profile, in one statement. Kept apart from `loadGolden` until the Budgets page
- * needs them in every load, so the Transactions tests' data stays as it was. Returns the
- * loaded Budgets with this load's ids.
+ * has the golden profile, in one statement. Kept apart from `loadGolden`, so the integration
+ * tests that count a user's rows keep the data they were written for; the E2E golden user
+ * loads both. Returns the loaded Budgets with this load's ids.
  */
 export async function loadGoldenBudgets(
 	client: ClientBase,

@@ -37,6 +37,7 @@ import {
 	TYPE_LABELS,
 } from "../lib/filter-labels";
 import { showLabel } from "../lib/labels";
+import { FILTER_TEXT } from "../lib/messages";
 import { transactionSummaryOptions } from "../lib/queries";
 import { PAGE_BREAKDOWNS } from "../lib/types";
 import { AmountBlock } from "./AmountBlock";
@@ -119,8 +120,11 @@ export function FilterSheet({
 	const set = (next: TransactionFilter) => setDraft(next);
 	const preset = presetOfFilter(draft, locale.today);
 	const counted = online && settled === draft ? summary.data?.count : undefined;
-	// While online, the count is on its way until the draft settles and its summary answers.
-	const counting = online && counted === undefined;
+	// While online, the count is on its way until the draft settles and its summary answers; an
+	// answer that failed leaves no count to wait for, so Show reads "Show Transactions" and
+	// applies, as it does offline.
+	const failed = online && settled === draft && summary.isError;
+	const counting = online && counted === undefined && !failed;
 
 	const showCustom = custom || preset === "custom";
 	const dateOptions = [
@@ -161,7 +165,11 @@ export function FilterSheet({
 						<Button
 							variant="secondary"
 							size="lg"
-							onPress={() => set(omitFields(draft, ...SHEET_FIELDS))}
+							onPress={() => {
+								set(omitFields(draft, ...SHEET_FIELDS));
+								// Custom range shows only while it is the choice; All time is again.
+								setCustom(false);
+							}}
 							className="flex-1 justify-center"
 						>
 							Clear all
@@ -270,6 +278,9 @@ export function FilterSheet({
 							set(withList(draft, "cat", cats as CategoryKey[]))
 						}
 					/>
+					<p className="text-caption text-ink-3">
+						{FILTER_TEXT.categoryNote}
+					</p>
 				</div>
 				<AmountBlock
 					bounds={draft}

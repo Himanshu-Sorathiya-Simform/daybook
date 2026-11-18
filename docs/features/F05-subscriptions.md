@@ -11,7 +11,7 @@ The Subscriptions page shows monthly and yearly cost, renewals over the next 30 
 | Milestone  | M2. Before M5, writes are online only: Save is disabled offline with "You are offline. Connect to save.", a failed save keeps the dialog open, and the app calls the boot endpoint once at start. From M5 the write queue (P1) adds offline writes, and boot step 5 calls the endpoint (D-241) |
 | Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                                          |
 | Depends on | [F03](F03-transactions.md) (charges are Transactions), [F02](F02-onboarding-profile-settings.md) (time zone, today), [P2](../platform/P2-data-access-and-security.md) (catch-up check, locks, request clock); P1 (write queue and boot sequence); F08, F10, F11, F13 read Subscriptions        |
-| Decisions  | D-26, D-27, D-70 to D-72, D-90 to D-96, D-181, D-213, D-219, D-224, D-236, D-239, D-241, D-244, D-250 to D-257, D-265, D-267, D-269, D-270                                                                                                                                                     |
+| Decisions  | D-26, D-27, D-70 to D-72, D-90 to D-96, D-181, D-213, D-219, D-224, D-236, D-239, D-241, D-244, D-250 to D-257, D-265, D-267, D-269, D-270, D-580                                                                                                                                              |
 
 ## 1. User stories
 
@@ -447,6 +447,7 @@ The request clock is frozen per test. Steps that need a later day move it explic
 - **AC-F05-13** (integration) `/api/transactions?sub=<golden Netflix id>` returns #5 and #16, with Out 1,298.00.
 - **AC-F05-14** (integration) A charge deleted from a stale device after a reprice returns 409. Keep mine deletes it and writes the tombstone, and catch-up never recreates it.
 - **AC-F05-15** (accessibility) The page and dialogs pass axe with no serious or critical violations and work by keyboard alone.
+- **AC-F05-16** (performance) On the stress account, saving a new Subscription and saving a change to one each stay within INP 200 ms (root 11.1, D-580).
 
 ## 15. Illustrations
 

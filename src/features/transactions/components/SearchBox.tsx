@@ -31,7 +31,8 @@ export type SearchBoxProps = {
  * ms after typing stops; Enter commits at once, and so does clearing it, with the clear button
  * or Escape, which also leaves the box. A draft under 3 characters that is not an amount is
  * never sent: once typing stops, the box says "Type at least 3 characters, or an amount." and
- * the committed search stays. A new search from elsewhere, such as its chip removed, replaces
+ * the committed search stays. A draft with a control character, which a paste can bring, is
+ * not sent either, and says "Remove unsupported characters." A new search from elsewhere, such as its chip removed, replaces
  * the draft. `/` focuses the box from anywhere on the page but another text field.
  */
 export function SearchBox({
@@ -46,7 +47,8 @@ export function SearchBox({
 	const hintId = useId();
 	const [draft, setDraft] = useState(q ?? "");
 	const [committed, setCommitted] = useState(q);
-	const [tooShort, setTooShort] = useState(false);
+	// What the box says about a draft it will not send, or nothing.
+	const [problem, setProblem] = useState<"too_short" | "characters" | null>(null);
 
 	// The draft follows a search committed from elsewhere while rendering, React's pattern for
 	// state that follows a prop; the box's own commit already matches its draft.
@@ -55,17 +57,22 @@ export function SearchBox({
 		const check = checkQuery(draft, currency);
 		if (!check.ok || check.q !== q) {
 			setDraft(q ?? "");
-			setTooShort(false);
+			setProblem(null);
 		}
 	}
 
 	const settle = (text: string) => {
 		const check = checkQuery(text, currency);
 		if (!check.ok) {
-			setTooShort(check.reason === "too_short");
+			// Over 100 characters cannot be typed: the box stops at the limit.
+			setProblem(
+				check.reason === "too_short" || check.reason === "characters" ?
+					check.reason
+				:	null,
+			);
 			return;
 		}
-		setTooShort(false);
+		setProblem(null);
 		if (check.q !== q) onCommit(check.q);
 	};
 	const debouncer = useDebouncer(settle, { wait: SEARCH_COMMIT_MS });
@@ -85,10 +92,10 @@ export function SearchBox({
 				maxLength={100}
 				isDisabled={isOffline}
 				{...(onFocusChange ? { onFocusChange } : {})}
-				{...(tooShort ? { "aria-describedby": hintId } : {})}
+				{...(problem ? { "aria-describedby": hintId } : {})}
 				onChange={(text) => {
 					setDraft(text);
-					setTooShort(false);
+					setProblem(null);
 					if (text.trim() === "") {
 						debouncer.cancel();
 						settle(text);
@@ -107,10 +114,11 @@ export function SearchBox({
 				role="status"
 				className={cn(
 					"text-caption text-ink-2 px-0.5",
-					!tooShort && "sr-only",
+					!problem && "sr-only",
 				)}
 			>
-				{tooShort && FILTER_TEXT.searchTooShort}
+				{problem === "too_short" && FILTER_TEXT.searchTooShort}
+				{problem === "characters" && FILTER_TEXT.searchCharacters}
 			</p>
 		</div>
 	);

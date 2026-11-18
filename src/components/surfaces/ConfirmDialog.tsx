@@ -48,9 +48,8 @@ export function ConfirmDialog({
 			role="alertdialog"
 			size="sm"
 			isOpen={isOpen}
-			onOpenChange={(next) => {
-				if (!isPending) onOpenChange(next);
-			}}
+			onOpenChange={onOpenChange}
+			isPending={isPending}
 			footer={
 				<>
 					<span className="flex-1" />

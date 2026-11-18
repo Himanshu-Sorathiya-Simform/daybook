@@ -101,6 +101,21 @@ describe("TransactionPanel docked (BR-F03-70)", () => {
 		expect(onRetry).toHaveBeenCalledOnce();
 	});
 
+	// AC-F03-75
+	test.each([
+		["loading", { state: "loading" } as const],
+		["failed", { state: "failed", onRetry: () => {} } as const],
+	])("a row %s alone still shows the heading and Close", async (_, selection) => {
+		const { user, onClose } = renderPanel({ selection });
+
+		expect(
+			screen.getByRole("heading", { name: "Transaction" }),
+		).toBeInTheDocument();
+		await user.click(screen.getByRole("button", { name: "Close details" }));
+
+		expect(onClose).toHaveBeenCalledOnce();
+	});
+
 	test("Close, Edit and Duplicate hand the row to the page", async () => {
 		const { user, onClose, onEdit, onDuplicate } = renderPanel({
 			selection: SHOWN,
