@@ -97,6 +97,7 @@ export function TransactionDeletesHost({
 				version,
 				idempotencyKey: uuidV7(),
 				hint: hintOf(row),
+				charge: row.source === "subscription",
 			});
 		} catch (error) {
 			const outcome = readDeleteError(error);

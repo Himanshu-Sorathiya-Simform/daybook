@@ -35,6 +35,8 @@ function matchSql(q: string): SQL {
  * - Without `q`: up to 200 payees, and `categories`, each category's row count, by count then
  *   key. Goal rows have no category, so they add nothing.
  * - With `q`: up to 8 matching payees, without `categories`.
+ * Each payee also carries `lastExpense`, its newest expense in the window as the amount and
+ * category, or null when it has none (D-451); the route adds the profile currency (API-6).
  */
 export async function listPayees(
 	tx: Tx,
@@ -49,7 +51,10 @@ export async function listPayees(
 				FROM (SELECT category, count(*) AS n FROM w GROUP BY category) AS c)`
 		:	sql`NULL::json`;
 	const { rows } = await tx.execute<{
-		items: (Omit<PayeeItem, "count"> & { count: string })[];
+		items: (Omit<PayeeItem, "count" | "lastExpense"> & {
+			count: string;
+			lastExpense: { amountMinor: string; category: CategoryKey } | null;
+		})[];
 		categories: { key: CategoryKey; count: string }[] | null;
 	}>(sql`WITH w AS (
 		SELECT * FROM app.transactions
@@ -58,19 +63,33 @@ export async function listPayees(
 		SELECT lower(payee) AS key, count(*) AS n, max(occurred_on) AS last_on,
 			(array_agg(payee ${NEWEST}))[1] AS payee,
 			(array_agg(type ${NEWEST}))[1] AS last_type,
-			(array_agg(category ${NEWEST}))[1] AS last_category
+			(array_agg(category ${NEWEST}))[1] AS last_category,
+			-- The newest expense only: a refund or income row is never it (D-451).
+			(array_agg(json_build_object('amountMinor', amount_minor::text, 'category', category)
+				${NEWEST}) FILTER (WHERE type = 'expense'))[1] AS last_expense
 		FROM w WHERE ${match} GROUP BY 1
 		-- An output name cannot carry COLLATE here, so the key is written out.
 		ORDER BY n DESC, last_on DESC, lower(payee) COLLATE "C"
 		LIMIT ${q === undefined ? LIST_SIZE : SEARCH_SIZE})
 	SELECT
 		(SELECT coalesce(json_agg(json_build_object('payee', payee, 'count', n::text,
-			'lastUsedOn', last_on::text, 'lastType', last_type, 'lastCategory', last_category)
+			'lastUsedOn', last_on::text, 'lastType', last_type, 'lastCategory', last_category,
+			'lastExpense', last_expense)
 			ORDER BY n DESC, last_on DESC, key COLLATE "C"), '[]'::json) FROM p) AS items,
 		${categories} AS categories`);
 	// A SELECT without FROM returns exactly one row.
 	const row = rows[0] as (typeof rows)[number];
-	const items = row.items.map((item) => ({ ...item, count: safeInt(item.count) }));
+	const items = row.items.map(({ lastExpense, ...item }) => ({
+		...item,
+		count: safeInt(item.count),
+		lastExpense:
+			lastExpense === null ? null : (
+				{
+					amountMinor: safeInt(lastExpense.amountMinor),
+					category: lastExpense.category,
+				}
+			),
+	}));
 	if (q !== undefined) return { items };
 	return {
 		items,

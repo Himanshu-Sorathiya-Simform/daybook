@@ -21,6 +21,7 @@ import {
 	renderInApp,
 } from "@/components/app/__tests__/helpers";
 import { Toaster } from "@/components/feedback/Toaster";
+import { QUERY_ROOTS } from "@/lib/api/query-keys";
 import { isUuidV7 } from "@/lib/ids";
 import { ok, refuse, route } from "../../hooks/__tests__/helpers";
 import {
@@ -349,6 +350,53 @@ describe("delete with Undo (BR-F03-26)", () => {
 			dueOn: "2026-10-05",
 		});
 		expect(second[0]!.body).toEqual({});
+	});
+
+	// F03 section 12: Subscriptions refresh only when a charge changed.
+	describe("what the confirmed delete refreshes", () => {
+		const SUBSCRIPTIONS = [QUERY_ROOTS.subscriptions, "list"];
+		const LINKED = row({
+			id: idOf(16),
+			payee: "Netflix",
+			source: "subscription",
+			subscriptionId: idOf(900),
+			dueOn: "2026-10-05",
+		});
+		const UNLINKED = row({
+			id: idOf(5),
+			payee: "Hotstar",
+			source: "subscription",
+			subscriptionId: null,
+			dueOn: "2026-09-05",
+		});
+
+		/** Deletes the row, and answers whether Subscriptions were marked stale. */
+		async function staleAfterDeleting(target: TransactionAnswer, payee: string) {
+			const sent = deletes(target.id);
+			const { user, queryClient } = renderHost([target]);
+			queryClient.setQueryData(SUBSCRIPTIONS, { seeded: true });
+			await confirmDelete(user, payee);
+			endWindow();
+			await waitFor(() => expect(sent).toHaveLength(1));
+			await waitFor(() =>
+				expect(screen.queryByText("Transaction deleted.")).toBeNull(),
+			);
+			return queryClient.getQueryState(SUBSCRIPTIONS)?.isInvalidated;
+		}
+
+		test.each([
+			["a linked charge", LINKED, "Netflix"],
+			["a charge whose Subscription was deleted", UNLINKED, "Hotstar"],
+		])(
+			"the delete of %s refreshes Subscriptions",
+			async (_what, target, payee) => {
+				expect(await staleAfterDeleting(target, payee)).toBe(true);
+			},
+		);
+
+		test("the delete of a manual row leaves them alone", async () => {
+			expect(await staleAfterDeleting(SWIGGY, "Swiggy")).toBe(false);
+		});
 	});
 
 	test("two deletes run apart: undoing one leaves the other", async () => {

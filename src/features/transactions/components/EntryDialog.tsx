@@ -255,6 +255,7 @@ export function EntryDialog({
 				void refreshAfterTransactionWrite(queryClient, {
 					kind: "delete",
 					id: row.id,
+					charge: row.source === "subscription",
 				});
 				onGone?.(row.id);
 				onClose();

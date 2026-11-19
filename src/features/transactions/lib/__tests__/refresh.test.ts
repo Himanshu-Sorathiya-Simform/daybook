@@ -34,6 +34,8 @@ const KEYS = {
 	profile: [QUERY_ROOTS.profile],
 	budgetMonth: [QUERY_ROOTS.budgets, "month", "2026-10"],
 	budgetHistory: [QUERY_ROOTS.budgets, "history", "food", "2026-10", 6],
+	subscriptions: [QUERY_ROOTS.subscriptions, "list"],
+	subscriptionCharges: [QUERY_ROOTS.subscriptions, "charges", "abc"],
 } as const;
 
 type Name = keyof typeof KEYS;
@@ -175,6 +177,102 @@ describe("refreshAfterTransactionWrite (F03 section 12, STATE-5)", () => {
 		expect(fetched.get("payees")).toBe(1);
 		expect(fetched.get("profile")).toBe(1);
 		expect(fetched.get("views")).toBeUndefined();
+	});
+
+	describe("Subscriptions refresh only when a charge changed (F03 section 12)", () => {
+		const CHARGE = row({
+			id: idOf(24),
+			source: "subscription",
+			subscriptionId: "0199a000-0000-7000-8002-000000000002",
+			dueOn: "2026-10-05",
+			edited: true,
+			version: 2,
+		});
+		const UNLINKED_CHARGE = row({
+			id: idOf(24),
+			source: "subscription",
+			subscriptionId: null,
+			dueOn: "2026-10-05",
+			version: 2,
+		});
+
+		// AC-F03-77, AC-F05-13
+		test.each([
+			["a linked charge", CHARGE],
+			["a charge whose Subscription was deleted", UNLINKED_CHARGE],
+		])(
+			"an edit of %s refetches the Subscriptions reads",
+			async (_what, edited) => {
+				const { queryClient, fetched } = seeded();
+				await refreshAfterTransactionWrite(queryClient, {
+					kind: "edit",
+					row: edited,
+				});
+				expect(fetched.get("subscriptions")).toBe(1);
+				expect(fetched.get("subscriptionCharges")).toBe(1);
+			},
+		);
+
+		test("an edit of a manual row leaves them alone", async () => {
+			const { queryClient, fetched } = seeded();
+			await refreshAfterTransactionWrite(queryClient, {
+				kind: "edit",
+				row: WRITTEN,
+			});
+			expect(fetched.get("subscriptions")).toBeUndefined();
+			expect(fetched.get("subscriptionCharges")).toBeUndefined();
+		});
+
+		test("a create never refreshes them: a new row is no charge", async () => {
+			const { queryClient, fetched } = seeded();
+			await refreshAfterTransactionWrite(queryClient, {
+				kind: "create",
+				row: WRITTEN,
+			});
+			expect(fetched.get("subscriptions")).toBeUndefined();
+			// Not even for a row that says it is a charge, which a create cannot make.
+			await refreshAfterTransactionWrite(queryClient, {
+				kind: "create",
+				row: CHARGE,
+			});
+			expect(fetched.get("subscriptions")).toBeUndefined();
+		});
+
+		// BR-F03-17: the delete wrote a tombstone, which its Subscription's figures follow.
+		test("the delete of a charge refetches them", async () => {
+			const { queryClient, fetched } = seeded();
+			await refreshAfterTransactionWrite(queryClient, {
+				kind: "delete",
+				id: idOf(24),
+				charge: true,
+			});
+			expect(fetched.get("subscriptions")).toBe(1);
+			expect(fetched.get("subscriptionCharges")).toBe(1);
+		});
+
+		test.each([
+			[
+				"says it is no charge",
+				{ kind: "delete", id: idOf(24), charge: false },
+			],
+			["says nothing", { kind: "delete", id: idOf(24) }],
+		] as const)("a delete that %s leaves them alone", async (_what, write) => {
+			const { queryClient, fetched } = seeded();
+			await refreshAfterTransactionWrite(queryClient, write);
+			expect(fetched.get("subscriptions")).toBeUndefined();
+		});
+
+		test("a charge's edit still refreshes everything else the same way", async () => {
+			const { queryClient, fetched } = seeded();
+			await refreshAfterTransactionWrite(queryClient, {
+				kind: "edit",
+				row: CHARGE,
+			});
+			expect(fetched.get("list")).toBe(1);
+			expect(fetched.get("payees")).toBe(1);
+			expect(fetched.get("budgetMonth")).toBe(1);
+			expect(fetched.get("profile")).toBeUndefined();
+		});
 	});
 
 	test("settles only once every refetch has", async () => {

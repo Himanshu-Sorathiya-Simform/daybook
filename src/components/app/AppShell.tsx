@@ -9,6 +9,7 @@ import {
 
 import { Toaster } from "@/components/feedback/Toaster";
 import { type AddSlot, AddSlotContext } from "@/hooks/useAddSlot";
+import { useBootCatchUp } from "@/hooks/useBootCatchUp";
 import { useLogout } from "@/hooks/useLogout";
 import { useMe } from "@/hooks/useMe";
 import { writeSidebarChoice } from "@/lib/sidebar";
@@ -38,7 +39,8 @@ export type AppShellProps = {
  * The frame of every logged-in page (root section 4): the session check and its banner, the
  * sidebar from 768px up, the header, the page, the bottom bar below 768px, and the toasts.
  * React Aria links navigate through Next's router, so the shell stays mounted between pages,
- * and React Aria formats dates in the profile's locale. The header's and the bottom bar's Add
+ * and React Aria formats dates in the profile's locale. It also makes the boot catch-up call, which
+ * creates the Subscription charges that are due (root 5.2). The header's and the bottom bar's Add
  * call what the page's entry dialog put in the Add slot (D-548).
  */
 export function AppShell({
@@ -52,6 +54,7 @@ export function AppShell({
 	const router = useRouter();
 	const [rail, setRail] = useState(railAtLoad);
 	const { data: me } = useMe();
+	useBootCatchUp();
 	const { state: logout, logout: startLogout } = useLogout();
 	const shown = me?.user ?? user;
 	const addRef = useRef<(() => void) | null>(null);

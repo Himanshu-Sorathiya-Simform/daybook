@@ -17,6 +17,7 @@ import {
 } from "vitest";
 
 import { renderInApp } from "@/components/app/__tests__/helpers";
+import { QUERY_ROOTS } from "@/lib/api/query-keys";
 import { isUuidV7 } from "@/lib/ids";
 import { ok, refuse, route } from "../../hooks/__tests__/helpers";
 import type { EntryLocale } from "../../lib/entry";
@@ -1687,6 +1688,42 @@ describe("editing a row (BR-F03-23, flow 7.3)", () => {
 		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
 		expect(onGone).toHaveBeenCalledWith(ROW_24.id);
 		expect(onEdited).not.toHaveBeenCalled();
+	});
+
+	// F03 section 12: a row gone elsewhere refreshes Subscriptions only if it was a charge.
+	describe("a 404 on a row that is gone", () => {
+		const SUBSCRIPTIONS = [QUERY_ROOTS.subscriptions, "list"];
+		const CHARGE = row({
+			source: "subscription",
+			subscriptionId: "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c99",
+			subscription: {
+				id: "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c99",
+				name: "Netflix",
+			},
+			dueOn: "2026-10-19",
+		});
+
+		async function staleAfterGone(target: typeof ROW_24) {
+			edits(() => refuse(404, "not_found"));
+			const onGone = vi.fn();
+			const { user, queryClient } = renderDialog({
+				mode: { kind: "edit", row: target },
+				onGone,
+			});
+			queryClient.setQueryData(SUBSCRIPTIONS, { seeded: true });
+			await screen.findByRole("heading", { name: "Edit Transaction" });
+			await raiseAmount(user);
+			await waitFor(() => expect(onGone).toHaveBeenCalledWith(target.id));
+			return queryClient.getQueryState(SUBSCRIPTIONS)?.isInvalidated;
+		}
+
+		test("a charge refreshes Subscriptions", async () => {
+			expect(await staleAfterGone(CHARGE)).toBe(true);
+		});
+
+		test("a manual row leaves them alone", async () => {
+			expect(await staleAfterGone(ROW_24)).toBe(false);
+		});
 	});
 
 	test("offline, Save is disabled with the message", async () => {

@@ -12,6 +12,9 @@ export type DeleteVariables = {
 	idempotencyKey: string;
 	/** A charge's `{ subscriptionId, dueOn }` (BR-F03-17); `{}` otherwise. */
 	hint?: TransactionDeleteInput;
+	/** The row is a Subscription's charge, linked or not: its delete also refreshes
+	 * Subscriptions (F03 section 12). */
+	charge?: boolean;
 };
 
 /**
@@ -45,8 +48,12 @@ export function useDeleteTransaction() {
 				throw error;
 			}
 		},
-		onSuccess: (_done, { id }) => {
-			void refreshAfterTransactionWrite(queryClient, { kind: "delete", id });
+		onSuccess: (_done, { id, charge }) => {
+			void refreshAfterTransactionWrite(queryClient, {
+				kind: "delete",
+				id,
+				charge: charge === true,
+			});
 		},
 	});
 }

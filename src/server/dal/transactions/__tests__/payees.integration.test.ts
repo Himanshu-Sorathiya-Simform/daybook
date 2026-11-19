@@ -55,6 +55,7 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-11-01",
 				lastType: "expense",
 				lastCategory: "food",
+				lastExpense: { amountMinor: 42000, category: "food" },
 			},
 			{
 				payee: "Sunrise Apartments",
@@ -62,6 +63,7 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-11-01",
 				lastType: "expense",
 				lastCategory: "housing",
+				lastExpense: { amountMinor: 1800000, category: "housing" },
 			},
 			{
 				payee: "BigBasket",
@@ -69,6 +71,7 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-10-14",
 				lastType: "expense",
 				lastCategory: "food",
+				lastExpense: { amountMinor: 290000, category: "food" },
 			},
 			// golden #18, Croma's refund, is newer than its expense #17.
 			{
@@ -77,6 +80,7 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-10-09",
 				lastType: "refund",
 				lastCategory: "shopping",
+				lastExpense: { amountMinor: 450000, category: "shopping" },
 			},
 			{
 				payee: "Netflix",
@@ -84,6 +88,7 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-10-05",
 				lastType: "expense",
 				lastCategory: "entertainment",
+				lastExpense: { amountMinor: 64900, category: "entertainment" },
 			},
 			{
 				payee: "Acme Corp",
@@ -91,6 +96,7 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-10-01",
 				lastType: "income",
 				lastCategory: "salary",
+				lastExpense: null,
 			},
 			{
 				payee: "Amazon Prime",
@@ -98,6 +104,7 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-10-12",
 				lastType: "expense",
 				lastCategory: "entertainment",
+				lastExpense: { amountMinor: 149900, category: "entertainment" },
 			},
 			{
 				payee: "Indian Oil",
@@ -105,6 +112,7 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-10-11",
 				lastType: "expense",
 				lastCategory: "transportation",
+				lastExpense: { amountMinor: 180000, category: "transportation" },
 			},
 			{
 				payee: "Zomato",
@@ -112,6 +120,7 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-10-04",
 				lastType: "expense",
 				lastCategory: "food",
+				lastExpense: { amountMinor: 230000, category: "food" },
 			},
 			{
 				payee: "Studio Nine",
@@ -119,6 +128,7 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-09-25",
 				lastType: "income",
 				lastCategory: "freelance",
+				lastExpense: null,
 			},
 			{
 				payee: "Uber",
@@ -126,6 +136,7 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-09-20",
 				lastType: "expense",
 				lastCategory: "transportation",
+				lastExpense: { amountMinor: 45000, category: "transportation" },
 			},
 			{
 				payee: "Cult Gym",
@@ -133,6 +144,7 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-09-10",
 				lastType: "expense",
 				lastCategory: "health",
+				lastExpense: { amountMinor: 150000, category: "health" },
 			},
 			{
 				payee: "Myntra",
@@ -140,8 +152,180 @@ describe("the list (BR-F03-44)", () => {
 				lastUsedOn: "2026-09-08",
 				lastType: "expense",
 				lastCategory: "shopping",
+				lastExpense: { amountMinor: 240000, category: "shopping" },
 			},
 		]);
+	});
+
+	// AC-F03-44, D-451; golden: #26, #18/#17, #16, #2/#13.
+	test("lastExpense is each payee's newest expense: never a refund or income row", async () => {
+		const { result } = await asUser(golden.userId, (tx) =>
+			listPayees(tx, ctx()),
+		);
+		const last = (payee: string) =>
+			result.items.find((item) => item.payee === payee)?.lastExpense;
+		// Swiggy's newest row, #26 (1 Nov, 420.00), is an expense; #25 is older.
+		expect(last("Swiggy")).toEqual({ amountMinor: 42000, category: "food" });
+		// Croma's newest row is the refund #18, so its last expense is #17 (4,500.00).
+		expect(last("Croma")).toEqual({ amountMinor: 450000, category: "shopping" });
+		// Netflix's rows are charges: a charge is an expense.
+		expect(last("Netflix")).toEqual({
+			amountMinor: 64900,
+			category: "entertainment",
+		});
+		// Payees with income only have none.
+		expect(last("Acme Corp")).toBeNull();
+		expect(last("Studio Nine")).toBeNull();
+	});
+
+	// AC-F03-44, D-451
+	test("lastExpense follows the date, then the time, then the id, of the newest expense", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			// Later date wins over a later time on an earlier date.
+			await addExpense(tx, golden.userId, {
+				payee: "By Date",
+				amountMinor: 111,
+				occurredOn: "2026-10-30",
+				occurredAt: "2026-10-30T10:00:00Z",
+			});
+			await addExpense(tx, golden.userId, {
+				payee: "By Date",
+				amountMinor: 222,
+				occurredOn: "2026-10-31",
+				occurredAt: "2026-10-31T01:00:00Z",
+			});
+			// The same day: the later time wins, whatever the insert order.
+			await addExpense(tx, golden.userId, {
+				payee: "By Time",
+				amountMinor: 333,
+				occurredOn: "2026-10-31",
+				occurredAt: "2026-10-31T09:00:00Z",
+			});
+			await addExpense(tx, golden.userId, {
+				payee: "By Time",
+				amountMinor: 444,
+				occurredOn: "2026-10-31",
+				occurredAt: "2026-10-31T03:00:00Z",
+			});
+			// The same instant: the larger id wins.
+			await addExpense(tx, golden.userId, {
+				id: "00000000-0000-4000-8000-000000000002",
+				payee: "By Id",
+				amountMinor: 555,
+				occurredOn: "2026-10-31",
+				occurredAt: "2026-10-31T05:00:00Z",
+			});
+			await addExpense(tx, golden.userId, {
+				id: "00000000-0000-4000-8000-000000000001",
+				payee: "By Id",
+				amountMinor: 666,
+				occurredOn: "2026-10-31",
+				occurredAt: "2026-10-31T05:00:00Z",
+			});
+			return listPayees(tx, ctx());
+		});
+		const amount = (payee: string) =>
+			result.items.find((item) => item.payee === payee)?.lastExpense
+				?.amountMinor;
+		expect(amount("By Date")).toBe(222);
+		expect(amount("By Time")).toBe(333);
+		expect(amount("By Id")).toBe(555);
+	});
+
+	// AC-F03-44, D-451: lastCategory is the newest row's, lastExpense's the newest expense's.
+	test("lastExpense keeps its own category when a newer refund or income row has another", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "Mixed",
+				amountMinor: 700,
+				occurredOn: "2026-10-30",
+				category: "food",
+			});
+			await addExpense(tx, golden.userId, {
+				payee: "Mixed",
+				amountMinor: 900,
+				occurredOn: "2026-11-01",
+				category: "shopping",
+				type: "refund",
+			});
+			await addExpense(tx, golden.userId, {
+				payee: "Mixed",
+				amountMinor: 1100,
+				occurredOn: "2026-11-02",
+				category: "salary",
+				type: "income",
+			});
+			return listPayees(tx, ctx());
+		});
+		expect(result.items.find((item) => item.payee === "Mixed")).toMatchObject({
+			count: 3,
+			lastType: "income",
+			lastCategory: "salary",
+			lastExpense: { amountMinor: 700, category: "food" },
+		});
+	});
+
+	// AC-F03-44, D-451: the window is the same 365 days as the payee's other fields.
+	test("lastExpense is null when the payee's only expense is older than the window", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "Lapsed",
+				amountMinor: 800,
+				occurredOn: "2025-11-02",
+			});
+			await addExpense(tx, golden.userId, {
+				payee: "Lapsed",
+				amountMinor: 50,
+				occurredOn: "2026-10-30",
+				type: "refund",
+			});
+			await addExpense(tx, golden.userId, {
+				payee: "Edge",
+				amountMinor: 810,
+				occurredOn: "2025-11-03",
+			});
+			return listPayees(tx, ctx());
+		});
+		const find = (payee: string) =>
+			result.items.find((item) => item.payee === payee);
+		expect(find("Lapsed")?.lastExpense).toBeNull();
+		// The window's first day still counts.
+		expect(find("Edge")?.lastExpense).toEqual({
+			amountMinor: 810,
+			category: "food",
+		});
+	});
+
+	// AC-F03-21, D-451: the spelling and the expense come from the same newest row.
+	test("lastExpense follows the case-folded group's newest expense", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "swiggy",
+				amountMinor: 999,
+				occurredOn: "2026-11-02",
+				category: "shopping",
+			});
+			return listPayees(tx, ctx());
+		});
+		expect(result.items[0]).toMatchObject({
+			payee: "swiggy",
+			lastExpense: { amountMinor: 999, category: "shopping" },
+		});
+	});
+
+	// AC-F03-44, D-451, MON-6: an amount past 2^31 comes back as a number, not a string.
+	test("lastExpense reads a large amount exactly", async () => {
+		const { result } = await asUser(golden.userId, async (tx) => {
+			await addExpense(tx, golden.userId, {
+				payee: "Big Spender",
+				amountMinor: 99_999_999_999,
+				occurredOn: "2026-11-02",
+			});
+			return listPayees(tx, ctx());
+		});
+		expect(
+			result.items.find((item) => item.payee === "Big Spender")?.lastExpense,
+		).toEqual({ amountMinor: 99_999_999_999, category: "food" });
 	});
 
 	// AC-F03-44; golden: section 5's category counts.
@@ -318,9 +502,25 @@ describe("the search (BR-F03-61)", () => {
 					lastUsedOn: "2026-11-01",
 					lastType: "expense",
 					lastCategory: "housing",
+					lastExpense: { amountMinor: 1800000, category: "housing" },
 				},
 			],
 		});
+	});
+
+	// AC-F03-44, D-451: a search answers lastExpense too, null for a payee with none.
+	test("a search carries lastExpense, null for income only", async () => {
+		const { result } = await search("acme");
+		expect(result.items).toEqual([
+			{
+				payee: "Acme Corp",
+				count: 2,
+				lastUsedOn: "2026-10-01",
+				lastType: "income",
+				lastCategory: "salary",
+				lastExpense: null,
+			},
+		]);
 	});
 
 	// AC-F03-44
@@ -613,6 +813,10 @@ describe("another user's rows add nothing", () => {
 		const after = await withOtherRows(async () => (await mine()).result);
 		expect(after).toEqual(before);
 		expect(after.search.items).toEqual([]);
+		// The other user's 5,555.00 Swiggy expense, newer than any of this user's, never shows.
+		expect(
+			after.list.items.find((item) => item.payee === "Swiggy")?.lastExpense,
+		).toEqual({ amountMinor: 42000, category: "food" });
 		expect(after.list.items.map((item) => item.payee)).not.toContain(
 			"Zebra Zone",
 		);
