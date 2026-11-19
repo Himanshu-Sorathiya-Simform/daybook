@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
+	formatDateYear,
 	formatDayHeader,
+	formatDayMonth,
 	formatFullDay,
 	formatMonth,
 	formatShortDate,
 	formatTime,
+	formatWeekday,
 	formatYear,
 } from "../date-format";
 
@@ -231,4 +234,101 @@ describe("formatYear", () => {
 	test("a year with fewer than four digits keeps its own number", () => {
 		expect(formatYear(999, { dateLocale: "en-IN" })).toBe("999");
 	});
+});
+
+describe("formatDateYear (BR-F05-22)", () => {
+	test("always writes the year, with no weekday", () => {
+		expect(formatDateYear("2026-09-30", IN)).toBe("30 Sept 2026");
+		expect(formatDateYear("2026-12-31", IN)).toBe("31 Dec 2026");
+		expect(formatDateYear("2027-10-12", IN)).toBe("12 Oct 2027");
+	});
+
+	test("the year does not depend on today, unlike the short date", () => {
+		expect(formatDateYear("2026-10-06", { dateLocale: "en-IN" })).toBe(
+			"6 Oct 2026",
+		);
+	});
+
+	test.each([
+		["en-US", "Sep 30, 2026"],
+		["en-GB", "30 Sept 2026"],
+		["de-DE", "30. Sept. 2026"],
+		["ja-JP", "2026年9月30日"],
+	])("follows the locale: %s", (dateLocale, expected) => {
+		expect(formatDateYear("2026-09-30", { dateLocale })).toBe(expected);
+	});
+
+	test.each(["Pacific/Kiritimati", "Pacific/Pago_Pago", "America/New_York"])(
+		"never moves in a device zone such as %s",
+		(zone) => {
+			vi.stubEnv("TZ", zone);
+			expect(formatDateYear("2026-03-08", IN)).toBe("8 Mar 2026");
+			expect(formatDateYear("2026-11-01", IN)).toBe("1 Nov 2026");
+		},
+	);
+
+	test("a leap day formats", () => {
+		expect(formatDateYear("2028-02-29", IN)).toBe("29 Feb 2028");
+	});
+});
+
+describe("formatDayMonth (BR-F05-24)", () => {
+	test("writes the day and month and never a year", () => {
+		expect(formatDayMonth("2026-10-12", IN)).toBe("12 Oct");
+		expect(formatDayMonth("2027-10-12", IN)).toBe("12 Oct");
+		expect(formatDayMonth("2028-02-29", IN)).toBe("29 Feb");
+	});
+
+	test.each([
+		["en-US", "Oct 12"],
+		["de-DE", "12. Okt."],
+		["ja-JP", "10月12日"],
+	])("follows the locale: %s", (dateLocale, expected) => {
+		expect(formatDayMonth("2026-10-12", { dateLocale })).toBe(expected);
+	});
+
+	test.each(["Pacific/Kiritimati", "America/New_York"])(
+		"never moves in a device zone such as %s",
+		(zone) => {
+			vi.stubEnv("TZ", zone);
+			expect(formatDayMonth("2026-03-08", IN)).toBe("8 Mar");
+		},
+	);
+});
+
+describe("formatWeekday", () => {
+	// 5 November 2026 is a Thursday.
+	test("writes the weekday's name in full, or short", () => {
+		expect(formatWeekday("2026-11-05", IN)).toBe("Thursday");
+		expect(formatWeekday("2026-11-05", IN, "long")).toBe("Thursday");
+		expect(formatWeekday("2026-11-05", IN, "short")).toBe("Thu");
+	});
+
+	test.each([
+		["2026-11-01", "Sunday"],
+		["2026-11-02", "Monday"],
+		["2026-11-07", "Saturday"],
+		["2028-02-29", "Tuesday"],
+	])("%s is %s", (date, expected) => {
+		expect(formatWeekday(date, IN)).toBe(expected);
+	});
+
+	test("follows the locale", () => {
+		expect(formatWeekday("2026-11-05", { dateLocale: "de-DE" })).toBe(
+			"Donnerstag",
+		);
+		expect(formatWeekday("2026-11-05", { dateLocale: "de-DE" }, "short")).toBe(
+			"Do",
+		);
+		expect(formatWeekday("2026-11-05", { dateLocale: "ja-JP" })).toBe("木曜日");
+	});
+
+	test.each(["Pacific/Kiritimati", "Pacific/Pago_Pago", "America/New_York"])(
+		"never moves to the day before or after in a device zone such as %s",
+		(zone) => {
+			vi.stubEnv("TZ", zone);
+			expect(formatWeekday("2026-11-05", IN)).toBe("Thursday");
+			expect(formatWeekday("2026-11-01", IN)).toBe("Sunday");
+		},
+	);
 });

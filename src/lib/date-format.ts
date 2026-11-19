@@ -56,6 +56,46 @@ export function formatFullDay(
 	}).format(asInstant(date));
 }
 
+/** A date with its year and no weekday, as "30 Sept 2026" for `en-IN` and "Sep 30, 2026" for
+ * `en-US`: the date of an event that is not tied to a year on the page, such as the day a
+ * Subscription ended (BR-F05-22). The words are the locale's own. */
+export function formatDateYear(
+	date: string,
+	{ dateLocale }: { dateLocale: string },
+): string {
+	return new Intl.DateTimeFormat(dateLocale, {
+		day: "numeric",
+		month: "short",
+		year: "numeric",
+		timeZone: "UTC",
+	}).format(asInstant(date));
+}
+
+/** The day and month alone, as "5 Nov" or "Nov 5": a date that comes round every year, as a
+ * yearly Subscription's day does (BR-F05-24). */
+export function formatDayMonth(
+	date: string,
+	{ dateLocale }: { dateLocale: string },
+): string {
+	return new Intl.DateTimeFormat(dateLocale, {
+		day: "numeric",
+		month: "short",
+		timeZone: "UTC",
+	}).format(asInstant(date));
+}
+
+/** The name of a date's weekday in `dateLocale`: "Thursday", or "Thu" when `short`. */
+export function formatWeekday(
+	date: string,
+	{ dateLocale }: { dateLocale: string },
+	style: "long" | "short" = "long",
+): string {
+	return new Intl.DateTimeFormat(dateLocale, {
+		weekday: style,
+		timeZone: "UTC",
+	}).format(asInstant(date));
+}
+
 /** F02's time (BR-F02-19): `{ hour: 'numeric', minute: '2-digit' }` in `dateLocale`'s hour
  * cycle, read in the profile zone (TIME-4), as "11:40 am" for `en-IN`. `instant` is an ISO
  * 8601 instant or a `Date`. */
