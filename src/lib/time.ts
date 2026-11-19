@@ -4,6 +4,7 @@ import {
 	addMonths,
 	differenceInCalendarDays,
 	format,
+	getDay,
 	isValid,
 	parse,
 	subMonths,
@@ -39,6 +40,12 @@ export function isIsoDate(text: string): boolean {
  * read and written in UTC, so the machine's zone never moves them (TIME-10). */
 export function shiftDays(date: string, days: number): string {
 	return writeDate(addDays(readDate(date), days, { in: UTC }));
+}
+
+/** The weekday of `date`: 0 for Sunday to 6 for Saturday. Read in UTC, so the machine's zone
+ * never moves it (TIME-10). */
+export function weekdayIndex(date: string): number {
+	return getDay(readDate(date), { in: UTC });
 }
 
 /** How many calendar days run from `from` to `to`, both counted: 1 for the same day, 16 for

@@ -106,6 +106,29 @@ export function formatMoneyShort(
 }
 
 /**
+ * An amount rounded half away from zero to a whole unit of its currency and written without
+ * decimals: 2,014,900 minor units of INR are `₹20,149`, 12,492 are `₹125`, and −12,450 are
+ * `−₹125`. For figures in tight spaces, such as a calendar's month cells (BR-F05-38). Like
+ * `formatMoney`, the number reaches `Intl` as an exact decimal string.
+ */
+export function formatMoneyWhole(
+	minor: number,
+	currency: CurrencyCode,
+	numberLocale: string,
+): string {
+	const unit = BigInt(10) ** BigInt(currencyExponent(currency));
+	const magnitude = BigInt(Math.abs(minor));
+	const whole = (magnitude * BigInt(2) + unit) / (unit * BigInt(2));
+	const text = new Intl.NumberFormat(numberLocale, {
+		style: "currency",
+		currency,
+		minimumFractionDigits: 0,
+		maximumFractionDigits: 0,
+	}).format(String(whole) as `${number}`);
+	return (minor < 0 && whole !== BigInt(0) ? MINUS : "") + text;
+}
+
+/**
  * `numerator ÷ denominator` in tenths of a percent, from two integers, rounded half away from
  * zero once (MON-7, MON-8): 239850 of 300000 is 800, and −1 of 3 is −333. The denominator is
  * not zero.

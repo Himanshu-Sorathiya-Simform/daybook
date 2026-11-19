@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+
 import {
 	daysInRange,
 	isIsoDate,
@@ -7,7 +8,12 @@ import {
 	shiftMonths,
 	todayIn,
 	utcDate,
+	weekdayIndex,
 } from "../time";
+
+afterEach(() => {
+	vi.unstubAllEnvs();
+});
 
 // The golden clock (TST-3): 2026-11-02T12:00:00+05:30.
 const GOLDEN = new Date("2026-11-02T06:30:00.000Z");
@@ -182,4 +188,30 @@ describe("shiftMonths (BR-F05-01)", () => {
 		expect(shiftMonths("2026-10-31", 1)).toBe("2026-11-30");
 		expect(shiftMonths("2026-03-29", 1)).toBe("2026-04-29");
 	});
+});
+
+describe("weekdayIndex", () => {
+	// 1 November 2026 is a Sunday.
+	test.each([
+		["2026-11-01", 0],
+		["2026-11-02", 1],
+		["2026-11-05", 4],
+		["2026-11-07", 6],
+		["2026-12-01", 2],
+		["2028-02-29", 2],
+		["2000-01-01", 6],
+		["2027-01-01", 5],
+	])("%s is weekday %i", (date, expected) => {
+		expect(weekdayIndex(date)).toBe(expected);
+	});
+
+	test.each(["Pacific/Kiritimati", "Pacific/Pago_Pago", "America/New_York"])(
+		"never moves to the day before or after in a device zone such as %s",
+		(zone) => {
+			vi.stubEnv("TZ", zone);
+			expect(weekdayIndex("2026-11-01")).toBe(0);
+			expect(weekdayIndex("2026-03-08")).toBe(0);
+			expect(weekdayIndex("2026-11-05")).toBe(4);
+		},
+	);
 });

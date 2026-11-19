@@ -25,6 +25,20 @@ export type MenuItem = {
 	separatorBefore?: true;
 };
 
+/** Whether Pause is offered (BR-F05-22, BR-F05-40, BR-F05-43): an active or ending Subscription
+ * with a next due date that is before the 24-month limit, since a pause starts on that date and
+ * must end after it, within 24 months of today. */
+export function canPause(
+	item: Pick<SubscriptionItem, "status" | "nextDueOn">,
+	today: string,
+): boolean {
+	return (
+		(item.status === "active" || item.status === "ending")
+		&& item.nextDueOn !== null
+		&& item.nextDueOn < pauseLimit(today)
+	);
+}
+
 /**
  * The items of a row's "Actions for Netflix" menu, in order and as the status allows
  * (BR-F05-22): Resume (ended); Edit; "Skip the 5 Nov charge" and Pause (active or ending, with a
@@ -47,7 +61,7 @@ export function rowMenu(
 			action: "skip",
 			label: `Skip the ${shortDate(nextDueOn, f)} charge`,
 		});
-		if (nextDueOn < pauseLimit(f.today)) {
+		if (canPause(item, f.today)) {
 			items.push({ action: "pause", label: "Pause" });
 		}
 	}

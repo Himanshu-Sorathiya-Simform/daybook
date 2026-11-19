@@ -4,6 +4,7 @@ import {
 	MINUS,
 	formatMoney,
 	formatMoneyShort,
+	formatMoneyWhole,
 	formatPercent,
 	moneyParts,
 	percentTenths,
@@ -392,5 +393,52 @@ describe("formatPercent", () => {
 		[1, Infinity],
 	])("refuses %s over %s", (numerator, denominator) => {
 		expect(() => formatPercent(numerator, denominator, IN)).toThrow(RangeError);
+	});
+});
+
+describe("formatMoneyWhole (BR-F05-38)", () => {
+	// Section 5's month figures: November expects 20,149.00 in all.
+	test("writes a whole amount without decimals", () => {
+		expect(formatMoneyWhole(2014900, "INR", IN)).toBe("₹20,149");
+		expect(formatMoneyWhole(0, "INR", IN)).toBe("₹0");
+	});
+
+	test("rounds half away from zero to the whole unit", () => {
+		expect(formatMoneyWhole(12492, "INR", IN)).toBe("₹125");
+		expect(formatMoneyWhole(12450, "INR", IN)).toBe("₹125");
+		expect(formatMoneyWhole(12449, "INR", IN)).toBe("₹124");
+		expect(formatMoneyWhole(50, "INR", IN)).toBe("₹1");
+		expect(formatMoneyWhole(49, "INR", IN)).toBe("₹0");
+		expect(formatMoneyWhole(99, "INR", IN)).toBe("₹1");
+	});
+
+	test("a negative amount rounds away from zero and keeps its minus", () => {
+		expect(formatMoneyWhole(-12450, "INR", IN)).toBe("−₹125");
+		expect(formatMoneyWhole(-12449, "INR", IN)).toBe("−₹124");
+		expect(formatMoneyWhole(-100, "INR", IN)).toBe("−₹1");
+	});
+
+	test("an amount that rounds to zero has no minus", () => {
+		expect(formatMoneyWhole(-49, "INR", IN)).toBe("₹0");
+	});
+
+	test("uses the currency's own decimals", () => {
+		// Yen has none; dinars have three, so 1,500 minor units are 1.5 and round to 2.
+		expect(formatMoneyWhole(1234, "JPY", US)).toBe("¥1,234");
+		expect(formatMoneyWhole(1500, "KWD", US)).toBe("KWD\u00A02");
+		expect(formatMoneyWhole(1499, "KWD", US)).toBe("KWD\u00A01");
+		expect(formatMoneyWhole(150, "EUR", DE)).toBe("2\u00A0\u20AC");
+	});
+
+	test("follows the number locale's grouping", () => {
+		expect(formatMoneyWhole(99_999_999_999, "INR", IN)).toBe("₹1,00,00,00,000");
+		expect(formatMoneyWhole(123456700, "INR", US)).toBe("₹1,234,567");
+	});
+
+	test("reads a large amount exactly, with no float in between", () => {
+		// 9,007,199,254,740,991 minor units is past what a float rounds correctly.
+		expect(formatMoneyWhole(Number.MAX_SAFE_INTEGER, "INR", US)).toBe(
+			"₹90,071,992,547,410",
+		);
 	});
 });
