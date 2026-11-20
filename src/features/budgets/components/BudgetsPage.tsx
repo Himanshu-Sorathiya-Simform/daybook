@@ -7,6 +7,7 @@ import { Banner } from "@/components/feedback/Banner";
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Section } from "@/components/surfaces/Section";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useWideWindow } from "@/hooks/useWideWindow";
 import { useOnline } from "@/hooks/useOnline";
 import { useShortcut } from "@/hooks/useShortcut";
 import type { ExpenseCategory } from "@/lib/budgets/model";
@@ -48,6 +49,10 @@ import { UndoNotice } from "./UndoNotice";
 export type BudgetsPageProps = {
 	/** The profile's formats and its today, from the server render (TIME-5). */
 	locale: BudgetsLocale;
+	/** The view this device remembers and whether its window was last wide, from the cookies
+	 * the server reads, so the first draw is the right one (D-629). */
+	initialView?: BudgetsView;
+	initialWide?: boolean;
 	className?: string;
 };
 
@@ -56,9 +61,6 @@ export type BudgetsPageProps = {
 type OpenDialog =
 	| { kind: DialogKind; category: ExpenseCategory | null; opened: number }
 	| { kind: "delete"; record: BudgetRecord; opened: number };
-
-/** From here up, List or Table shows in the header (BR-F04-14, D-512). */
-const WIDE = "(min-width: 48rem)";
 
 /** From here up the panel docks beside the list (BR-F04-30); the `dock` breakpoint. */
 const DOCKED = "(min-width: 1180px)";
@@ -110,7 +112,12 @@ function arrowsFor(isCovered: boolean, isDocked: boolean): RowArrows {
  * - **The dialogs** (BR-F04-19 to BR-F04-21, BR-F04-06) open from the header, the empty
  *   message, the rows, the panel and L, over the page; while one is open the page's keys rest.
  */
-export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
+export function BudgetsPage({
+	locale,
+	initialView = "list",
+	initialWide = false,
+	className,
+}: Readonly<BudgetsPageProps>) {
 	const current = monthOf(locale.today);
 	const url = useBudgetsUrl(current);
 	const online = useOnline();
@@ -118,8 +125,11 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 		VIEW_KEY,
 		BUDGET_VIEWS,
 		"list",
+		initialView,
 	);
-	const wide = useMediaQuery(WIDE, false);
+	// The server knows the window class the device last had, from a cookie, and the browser
+	// corrects it where it was wrong (D-629).
+	const wide = useWideWindow(initialWide);
 	// The server can't know the width: it renders the docked panel, which CSS hides below 1180 px.
 	const docked = useMediaQuery(DOCKED, true);
 	const query = useBudgetMonth(url.month);

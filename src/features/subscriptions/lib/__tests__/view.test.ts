@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { offeredViews, shownView, SUBSCRIPTION_VIEWS, VIEW_KEY } from "../view";
+import { shownView, SUBSCRIPTION_VIEWS, VIEW_KEY } from "../view";
 
 describe("the view switch (BR-F05-21)", () => {
 	test("the key is daybook.subscriptions.view", () => {
@@ -9,14 +9,6 @@ describe("the view switch (BR-F05-21)", () => {
 
 	test("the views are List, Calendar and Table, List first", () => {
 		expect(SUBSCRIPTION_VIEWS).toEqual(["list", "calendar", "table"]);
-	});
-
-	test("from 768 px all three are offered", () => {
-		expect(offeredViews(true)).toEqual(["list", "calendar", "table"]);
-	});
-
-	test("below 768 px Table is not offered", () => {
-		expect(offeredViews(false)).toEqual(["list", "calendar"]);
 	});
 
 	test.each([

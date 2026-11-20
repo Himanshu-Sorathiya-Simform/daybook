@@ -1,3 +1,5 @@
+import type { SortingState } from "@tanstack/react-table";
+
 import { CATEGORY_LABELS } from "@/lib/categories";
 import { compareCodeUnits } from "@/lib/compare";
 import { formatPercent, percentTenths } from "@/lib/money";
@@ -44,9 +46,17 @@ export const DEFAULT_SORT = {
 	direction: "desc",
 } as const satisfies { column: TableColumn; direction: SortDirection };
 
+/** The same sort as the table's library holds it. */
+export const DEFAULT_SORTING: SortingState = [
+	{ id: DEFAULT_SORT.column, desc: DEFAULT_SORT.direction === "desc" },
+];
+
 /** "Ended Subscriptions aren't in the table or the totals. Select a column heading to sort." */
 export const TABLE_CAPTION =
 	"Ended Subscriptions aren't in the table or the totals. Select a column heading to sort.";
+
+/** What the table says with no Subscription that is not ended (BR-F05-39, D-628). */
+export const TABLE_EMPTY = "No running Subscriptions. Resume one in the List view.";
 
 /** The Status column's words (BR-F05-39). Ended Subscriptions are not in the table. */
 export const STATUS_LABELS: Record<Exclude<SubscriptionStatus, "ended">, string> = {

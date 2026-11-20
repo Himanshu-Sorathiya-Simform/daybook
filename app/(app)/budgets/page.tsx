@@ -1,12 +1,15 @@
 import { dehydrate, HydrationBoundary } from "@tanstack/react-query";
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { BudgetsPage } from "@/features/budgets/components/BudgetsPage";
 import { budgetKeys } from "@/features/budgets/lib/keys";
 import { readMonthParam } from "@/features/budgets/lib/url";
+import { BUDGET_VIEWS, VIEW_KEY } from "@/features/budgets/lib/view";
 import { createQueryClient } from "@/lib/api/query-client";
 import { monthOf } from "@/lib/budgets/months";
+import { choiceOf, isWideValue, WIDE_COOKIE } from "@/lib/device-cookies";
 import { profileBlock } from "@/lib/profile";
 import { toSearchParams } from "@/lib/search-params";
 import { budgetMonth } from "@/server/dal/budgets/read";
@@ -20,7 +23,8 @@ export const metadata: Metadata = { title: "Budgets" };
  * view prefetched through the same function as `GET /api/budgets`, then hydrated, so the
  * browser asks for none of it again (STATE-5). A `month` that is invalid or outside the range
  * shows the current month here as in the browser, which then removes it from the URL with the
- * notice (D-566).
+ * notice (D-566). The view this device remembers and its last window class come from cookies,
+ * so the first draw is the right one (D-629).
  */
 export default async function Page({ searchParams }: PageProps<"/budgets">) {
 	const query = toSearchParams(await searchParams);
@@ -38,9 +42,16 @@ export default async function Page({ searchParams }: PageProps<"/budgets">) {
 	if (!prefetched) redirect("/onboarding");
 
 	const { profile, today } = prefetched;
+	const jar = await cookies();
 	return (
 		<HydrationBoundary state={dehydrate(queryClient)}>
 			<BudgetsPage
+				initialView={choiceOf(
+					jar.get(VIEW_KEY)?.value,
+					BUDGET_VIEWS,
+					"list",
+				)}
+				initialWide={isWideValue(jar.get(WIDE_COOKIE)?.value)}
 				locale={{
 					today,
 					currency: profile.currency,

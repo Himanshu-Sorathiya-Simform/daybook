@@ -14,7 +14,6 @@ function renderHeader(props: Partial<SubscriptionsHeaderProps> = {}) {
 		<SubscriptionsHeader
 			asOf={null}
 			view="list"
-			isWide
 			hasSwitch
 			onViewChange={onViewChange}
 			{...props}
@@ -41,19 +40,19 @@ describe("SubscriptionsHeader (BR-F05-21)", () => {
 		).toBeTruthy();
 	});
 
-	test("from 768 px the switch offers List, Calendar and Table", () => {
+	test("the switch always draws List, Calendar and Table, in that order", () => {
 		renderHeader();
-		expect(screen.getAllByRole("radio")).toHaveLength(3);
-		for (const name of ["List", "Calendar", "Table"])
-			expect(screen.getByRole("radio", { name })).toBeInTheDocument();
+		expect(choices()).toEqual(["list", "calendar", "table"]);
 	});
 
-	test("below 768 px Table is not offered", () => {
-		renderHeader({ isWide: false });
-		expect(screen.getAllByRole("radio")).toHaveLength(2);
-		for (const name of ["List", "Calendar"])
-			expect(screen.getByRole("radio", { name })).toBeInTheDocument();
-		expect(screen.queryByRole("radio", { name: "Table" })).toBeNull();
+	// D-629
+	test("Table is hidden below 768 px by CSS, so the server draws the final switch", () => {
+		renderHeader();
+		const hiddenBelow768 = (name: string) =>
+			screen.getByRole("radio", { name }).closest(".max-md\\:hidden") !== null;
+		expect(hiddenBelow768("Table")).toBe(true);
+		expect(hiddenBelow768("List")).toBe(false);
+		expect(hiddenBelow768("Calendar")).toBe(false);
 	});
 
 	test.each(["list", "calendar", "table"] as const)(
@@ -76,15 +75,11 @@ describe("SubscriptionsHeader (BR-F05-21)", () => {
 		expect(onViewChange).toHaveBeenLastCalledWith("table");
 	});
 
-	test("the arrow keys move between the offered views only", async () => {
-		const { user, onViewChange } = renderHeader({
-			isWide: false,
-			view: "calendar",
-		});
+	test("the arrow keys move from one view to the next", async () => {
+		const { user, onViewChange } = renderHeader({ view: "calendar" });
 		await user.tab();
 		await user.keyboard("{ArrowRight}");
-		expect(onViewChange).toHaveBeenLastCalledWith("list");
-		expect(choices()).toEqual(["list", "calendar"]);
+		expect(onViewChange).toHaveBeenLastCalledWith("table");
 	});
 
 	test("choosing the checked view again changes nothing", async () => {

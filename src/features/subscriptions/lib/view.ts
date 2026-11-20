@@ -14,8 +14,3 @@ export function shownView(
 ): SubscriptionsView {
 	return view === "table" && !isWide ? "list" : view;
 }
-
-/** The views the switch offers: no Table below 768 px (BR-F05-21). */
-export function offeredViews(isWide: boolean): SubscriptionsView[] {
-	return SUBSCRIPTION_VIEWS.filter((view) => isWide || view !== "table");
-}

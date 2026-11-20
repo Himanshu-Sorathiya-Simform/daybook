@@ -8,7 +8,15 @@ import {
 
 import { cn } from "@/lib/cn";
 
-export type SegmentedOption = string | { value: string; label: string };
+export type SegmentedOption =
+	| string
+	| {
+			value: string;
+			label: string;
+			/** Classes for this option alone, such as `max-md:hidden` for one that a narrow window
+			 * does not offer: CSS decides, so the server draws the final group (D-629). */
+			className?: string;
+	  };
 
 export type SegmentedProps = {
 	options: SegmentedOption[];
@@ -68,16 +76,20 @@ export function Segmented({
 			)}
 		>
 			{options.map((option) => {
-				const { value: id, label: text } =
+				const {
+					value: id,
+					label: text,
+					className: optionClass,
+				} =
 					typeof option === "string" ?
-						{ value: option, label: option }
-					:	option;
+						{ value: option, label: option, className: undefined }
+					:	{ className: undefined, ...option };
 				return (
 					<AriaRadioField
 						key={id}
 						value={id}
 
-						className={cn("flex", fill && "flex-1")}
+						className={cn("flex", fill && "flex-1", optionClass)}
 					>
 						<AriaRadioButton
 							className={cn(

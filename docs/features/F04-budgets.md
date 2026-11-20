@@ -9,7 +9,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 | Milestone  | M2. Before M5, writes are online only, with F03's stand-ins: Save disabled offline, and a failed save keeps the dialog open (D-241)                                                                                                                 |
 | Plan       | Free and Premium, with no gating; one-month limits included (D-560)                                                                                                                                                                                 |
 | Depends on | [F03](F03-transactions.md) (category spending, summary, drill-down), [F02](F02-onboarding-profile-settings.md) (month, locale), [P2](../platform/P2-data-access-and-security.md); P1 (write queue, from M5); F08, F09, F10, F11 read Budget figures |
-| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-580, D-583, D-616, D-621                                                                                           |
+| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-580, D-583, D-616, D-621, D-629                                                                                    |
 
 ## 1. User stories
 
@@ -118,7 +118,7 @@ Examples in this spec write amounts without the currency symbol and months as `e
 - **BR-F04-14** `/budgets?month=YYYY-MM` shows one month, defaulting to the current month. A `month` that is invalid or outside the range (BR-F04-07) is dropped with the FIL-5 notice. The header holds, in order:
     1. **The title** "Budgets", with "as of 14:05" beside it when offline (section 10).
     2. **The month control:** Previous month and Next month buttons, disabled at the ends of the range, around the month's name ("October 2026"; the current month reads "November 2026 · to date"). The name opens a month grid: the year with Previous year and Next year, twelve months with those outside the range disabled, each in-range month showing its overall utilization ("81.0%") or nothing when it has no Budget (BR-F04-35), every month keeping a line for the figure so the names never move, with a skeleton bar in it while the year's figures load (D-577), the caption "Figures: overall use of the month's limits", and a This month button.
-    3. **"Show Budgets as":** List or Table, remembered on the device (`daybook.budgets.view`).
+    3. **"Show Budgets as":** List or Table, remembered on the device (`daybook.budgets.view`), also in a cookie of that name and with the window's last class (`daybook_wide`), which the server reads so a remembered Table is drawn at once (D-629).
     4. **Add a Budget.**
 
     Below 768 px, the phone layout (D-512), Add a Budget is an icon button, List or Table leaves the header and the list shows (D-570), and the month control moves to its own row with 44 px targets.
@@ -535,6 +535,7 @@ F08's widget, F09's chart, F10's threshold detector and F11's report all call th
 - **AC-F04-31** (client integration, MSW) In the dialog on golden, Change limit for food at 7,000.00 from September shows three cards and "Dec 2026 onward", "84.2% Nearing limit → 72.1% · On track" in September, and the two notes of section 5; shopping at 4,000.00 from November 2023 shows the strip's caption, the four groups of section 5 and its three notes; food at 8,000.00 for October only shows September "Unchanged", October "124.4% Over budget → 77.8% · On track", November "Back to the schedule" and one note; stopping entertainment from October adds "October's spending moves to Not budgeted."; food at 5,000.00 for November only says "Nothing changes." with no notes; offline, or after a failed history read, the cards show limits without states.
 - **AC-F04-32** (performance) On the stress account with golden's four Budgets, pressing a state count, pressing a table heading, selecting a row and saving a change of limit each stay within INP 200 ms (root 11.1, D-580).
 - **AC-F04-33** (unit) Add a Budget's first focus (D-583): opened with no category, focus is on the first category tile and not in the limit; opened from a Not budgeted row for Health, Health is chosen and focus is in the limit; Change limit keeps starting in the limit, and Stop budgeting, which has no limit to enter, keeps starting on the dialog itself.
+- **AC-F04-34** (client integration) What the server draws from the device's cookies (BR-F04-14, D-629): with the view cookie `table` and the window class `wide` the page is the table at once and not the list; with `narrow` it is the list; with no cookies, the list. The browser keeps the server's view where storage holds none, follows storage where it holds a choice, and writes the view and the window class to their cookies.
 
 ## 15. Illustrations
 

@@ -11,9 +11,24 @@ type View = (typeof VIEWS)[number];
 const renderChoice = (key = KEY) =>
 	renderHook(() => useStoredChoice<View>(key, VIEWS, "list"));
 
-beforeEach(() => window.localStorage.clear());
+const cookieOf = (key = KEY) =>
+	document.cookie
+		.split("; ")
+		.find((entry) => entry.startsWith(`${key}=`))
+		?.split("=")[1];
+const clearCookies = () => {
+	for (const key of [KEY, "daybook.other.view"]) {
+		document.cookie = `${key}=; Max-Age=0; Path=/`;
+	}
+};
+
+beforeEach(() => {
+	window.localStorage.clear();
+	clearCookies();
+});
 afterEach(() => {
 	vi.restoreAllMocks();
+	clearCookies();
 	resetUnsavedChoices();
 	window.localStorage.clear();
 });
@@ -152,5 +167,121 @@ describe("useStoredChoice", () => {
 			return <span>{useStoredChoice<View>(KEY, VIEWS, "list")[0]}</span>;
 		}
 		expect(renderToString(<Probe />)).toContain("list");
+	});
+});
+
+describe("the cookie and the server's choice (D-629)", () => {
+	function Probe({ serverChoice }: { serverChoice?: View }) {
+		return (
+			<span>{useStoredChoice<View>(KEY, VIEWS, "list", serverChoice)[0]}</span>
+		);
+	}
+
+	test("the server renders the choice it is given, from the cookie it read", () => {
+		expect(renderToString(<Probe serverChoice="table" />)).toContain("table");
+		expect(renderToString(<Probe serverChoice="calendar" />)).toContain(
+			"calendar",
+		);
+	});
+
+	test("with none given the server renders the fallback", () => {
+		expect(renderToString(<Probe />)).toContain("list");
+	});
+
+	test("the browser's first draw is the server's, before storage says anything else", () => {
+		const seen: View[] = [];
+		window.localStorage.setItem(KEY, "table");
+		renderHook(() => {
+			const [choice] = useStoredChoice<View>(KEY, VIEWS, "list", "calendar");
+			seen.push(choice);
+		});
+		// Storage is the truth where it is readable, so the choice the browser reads wins.
+		expect(seen.at(-1)).toBe("table");
+	});
+
+	test("storage that holds a choice outranks the server's", () => {
+		window.localStorage.setItem(KEY, "table");
+		const { result } = renderHook(() =>
+			useStoredChoice<View>(KEY, VIEWS, "list", "calendar"),
+		);
+		expect(result.current[0]).toBe("table");
+	});
+
+	test("empty storage leaves the server's choice standing, so nothing is redrawn", () => {
+		const { result } = renderHook(() =>
+			useStoredChoice<View>(KEY, VIEWS, "list", "calendar"),
+		);
+		expect(result.current[0]).toBe("calendar");
+	});
+
+	test("so does storage holding something that is not a choice", () => {
+		window.localStorage.setItem(KEY, "grid");
+		const { result } = renderHook(() =>
+			useStoredChoice<View>(KEY, VIEWS, "list", "calendar"),
+		);
+		expect(result.current[0]).toBe("calendar");
+	});
+
+	test("so does storage that cannot be read", () => {
+		vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+			throw new DOMException("denied", "SecurityError");
+		});
+		const { result } = renderHook(() =>
+			useStoredChoice<View>(KEY, VIEWS, "list", "calendar"),
+		);
+		expect(result.current[0]).toBe("calendar");
+	});
+
+	test("keeps the choice in a cookie named by its key", () => {
+		window.localStorage.setItem(KEY, "calendar");
+		renderChoice();
+		expect(cookieOf()).toBe("calendar");
+	});
+
+	test("gives a device that chose before cookies one", () => {
+		window.localStorage.setItem(KEY, "table");
+		expect(cookieOf()).toBeUndefined();
+		renderChoice();
+		expect(cookieOf()).toBe("table");
+	});
+
+	test("writes the fallback when nothing was chosen", () => {
+		renderChoice();
+		expect(cookieOf()).toBe("list");
+	});
+
+	test("a new choice rewrites the cookie", () => {
+		const { result } = renderChoice();
+		act(() => result.current[1]("table"));
+		expect(cookieOf()).toBe("table");
+		act(() => result.current[1]("calendar"));
+		expect(cookieOf()).toBe("calendar");
+	});
+
+	test("a choice storage refused is still kept in the cookie", () => {
+		vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+			throw new DOMException("full", "QuotaExceededError");
+		});
+		const { result } = renderChoice();
+		act(() => result.current[1]("table"));
+		expect(cookieOf()).toBe("table");
+	});
+
+	test("a choice made in another tab reaches the cookie here", () => {
+		const { result } = renderChoice();
+		act(() => {
+			window.localStorage.setItem(KEY, "table");
+			window.dispatchEvent(new StorageEvent("storage", { key: KEY }));
+		});
+		expect(result.current[0]).toBe("table");
+		expect(cookieOf()).toBe("table");
+	});
+
+	test("each key has its own cookie", () => {
+		const first = renderChoice();
+		renderChoice("daybook.other.view");
+		act(() => first.result.current[1]("table"));
+		expect(cookieOf()).toBe("table");
+		expect(cookieOf("daybook.other.view")).toBe("list");
 	});
 });

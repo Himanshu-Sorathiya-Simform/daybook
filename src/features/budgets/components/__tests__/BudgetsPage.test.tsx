@@ -1,4 +1,5 @@
 import { onlineManager } from "@tanstack/react-query";
+import { renderToString } from "react-dom/server";
 import {
 	act,
 	fireEvent,
@@ -66,6 +67,9 @@ beforeEach(() => {
 	route(network, "get", "/api/transactions/summary", () => ok(payeeSummary()));
 });
 afterEach(() => {
+	for (const name of [VIEW_KEY, "daybook_wide"]) {
+		document.cookie = `${name}=; Max-Age=0; Path=/`;
+	}
 	network.resetHandlers();
 	onlineManager.setOnline(true);
 	vi.useRealTimers();
@@ -320,6 +324,143 @@ describe("List or Table (BR-F04-14)", () => {
 		window.localStorage.setItem(VIEW_KEY, "table");
 		renderPage("?month=2026-10");
 		expect(screen.getByRole("radio", { name: "Table" })).toBeChecked();
+	});
+});
+
+describe("what the server draws from the device's cookies (D-629)", () => {
+	/** The page as the server renders it, the month in the cache as the prefetch leaves it. */
+	function serverHtml(props: {
+		initialView?: "list" | "table";
+		initialWide?: boolean;
+	}) {
+		const queryClient = testClient();
+		queryClient.setQueryData(
+			budgetKeys.month("2026-11"),
+			monthAnswer("2026-11"),
+		);
+		const { Url } = urlHarness("");
+		return renderToString(
+			<AppProviders
+				navigate={vi.fn()}
+				queryClient={queryClient}
+			>
+				<Url>
+					<BudgetsPage
+						locale={IN}
+						{...props}
+					/>
+				</Url>
+			</AppProviders>,
+		);
+	}
+	const CAPTION = "Select a column heading to sort";
+	/** Only the list is a list box named Budgets. */
+	const LIST = 'aria-label="Budgets"';
+
+	// AC-F04-34
+	test("a remembered Table in a wide window is drawn as the table at once", () => {
+		const html = serverHtml({ initialView: "table", initialWide: true });
+		expect(html).toContain(CAPTION);
+		expect(html).not.toContain(LIST);
+	});
+
+	// AC-F04-34
+	test("a remembered Table in a narrow window is drawn as the list, as it was last shown", () => {
+		const html = serverHtml({ initialView: "table", initialWide: false });
+		expect(html).not.toContain(CAPTION);
+		expect(html).toContain(LIST);
+	});
+
+	test("a remembered List is the list in either window", () => {
+		for (const initialWide of [true, false]) {
+			const html = serverHtml({ initialView: "list", initialWide });
+			expect(html).not.toContain(CAPTION);
+			expect(html).toContain(LIST);
+		}
+	});
+
+	test("with no cookies the server draws the list", () => {
+		const html = serverHtml({});
+		expect(html).not.toContain(CAPTION);
+		expect(html).toContain(LIST);
+	});
+
+	test("the server checks Table in the switch when the cookie said so", () => {
+		const html = serverHtml({ initialView: "table", initialWide: true });
+		const tag = /<input[^>]*value="table"[^>]*>/.exec(html)![0];
+		expect(tag).toContain("checked");
+	});
+
+	// AC-F04-34
+	test("the browser keeps the server's view where storage holds none", () => {
+		media({ wide: true, docked: true });
+		const queryClient = testClient();
+		queryClient.setQueryData(
+			budgetKeys.month("2026-11"),
+			monthAnswer("2026-11"),
+		);
+		const { Url } = urlHarness("");
+		render(
+			<AppProviders
+				navigate={vi.fn()}
+				queryClient={queryClient}
+			>
+				<Url>
+					<BudgetsPage
+						locale={IN}
+						initialView="table"
+						initialWide
+					/>
+				</Url>
+			</AppProviders>,
+		);
+		expect(screen.getByRole("radio", { name: "Table" })).toBeChecked();
+	});
+
+	test("storage outranks the cookie where it holds a choice", () => {
+		media({ wide: true, docked: true });
+		window.localStorage.setItem(VIEW_KEY, "list");
+		const queryClient = testClient();
+		queryClient.setQueryData(
+			budgetKeys.month("2026-11"),
+			monthAnswer("2026-11"),
+		);
+		const { Url } = urlHarness("");
+		render(
+			<AppProviders
+				navigate={vi.fn()}
+				queryClient={queryClient}
+			>
+				<Url>
+					<BudgetsPage
+						locale={IN}
+						initialView="table"
+						initialWide
+					/>
+				</Url>
+			</AppProviders>,
+		);
+		expect(screen.getByRole("radio", { name: "List" })).toBeChecked();
+	});
+
+	// AC-F04-34
+	test("the page keeps the view and the window class in cookies for the next visit", async () => {
+		media({ wide: true, docked: true });
+		const { user } = renderPage("?month=2026-10");
+		await user.click(screen.getByRole("radio", { name: "Table" }));
+		expect(document.cookie).toContain(`${VIEW_KEY}=table`);
+		expect(document.cookie).toContain("daybook_wide=wide");
+	});
+
+	test("a narrow window is kept as narrow", () => {
+		media({ wide: false });
+		renderPage("?month=2026-10");
+		expect(document.cookie).toContain("daybook_wide=narrow");
+	});
+
+	test("the list or table switch is hidden below 768 px by CSS, whatever the cookie said", () => {
+		const html = serverHtml({ initialView: "table", initialWide: false });
+		expect(html).toContain("max-md:hidden");
 	});
 });
 

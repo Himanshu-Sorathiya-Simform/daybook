@@ -45,6 +45,9 @@ const network = setupServer();
 beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
 beforeEach(() => window.localStorage.clear());
 afterEach(() => {
+	for (const name of [VIEW_KEY, "daybook_wide"]) {
+		document.cookie = `${name}=; Max-Age=0; Path=/`;
+	}
 	// Sonner keeps its toasts in a module, so one test's toast would reach the next.
 	toast.dismiss();
 	network.resetHandlers();
@@ -350,11 +353,13 @@ describe("the view (BR-F05-21)", () => {
 		expect(screen.getByRole("radio", { name: "Table" })).toBeVisible();
 	});
 
-	test("below 768 px offers List and Calendar only", () => {
+	test("below 768 px Table is still in the switch, hidden by CSS", () => {
 		media({ wide: false });
 		renderPage({ seed: subscriptionList() });
-		expect(screen.getAllByRole("radio")).toHaveLength(2);
-		expect(screen.queryByRole("radio", { name: "Table" })).toBeNull();
+		expect(screen.getAllByRole("radio")).toHaveLength(3);
+		expect(
+			screen.getByRole("radio", { name: "Table" }).closest(".max-md\\:hidden"),
+		).not.toBeNull();
 	});
 
 	test("a choice shows at once and is remembered under daybook.subscriptions.view", async () => {
@@ -443,7 +448,7 @@ describe("the view (BR-F05-21)", () => {
 		).toBeVisible();
 	});
 
-	test("the server renders the narrow header, as it cannot know the width, and the stored view as List", () => {
+	test("the server renders the list for a device it has no cookie for, whatever storage holds", () => {
 		window.localStorage.setItem(VIEW_KEY, "table");
 		const queryClient = testClient();
 		queryClient.setQueryData(subscriptionKeys.list(), subscriptionList());
@@ -464,9 +469,8 @@ describe("the view (BR-F05-21)", () => {
 			</InRouter>,
 		);
 		expect(html).toContain("Calendar");
-		expect(html).not.toContain(">Table<");
 		expect(html).toContain("Netflix");
-		expect(html).not.toContain("coming soon");
+		expect(html).toContain("Within 7 days");
 	});
 });
 
@@ -1570,5 +1574,469 @@ describe("the calendar in the page (BR-F05-38, BR-F05-45, D-626)", () => {
 		expect(
 			screen.getByRole("heading", { name: "Your Subscriptions" }),
 		).toBeVisible();
+	});
+});
+
+describe("the table in the page (BR-F05-39, BR-F05-45, BR-F05-50, D-570, D-627)", () => {
+	const golden = subscriptionList();
+	const [netflix] = golden.items;
+	const inTable = () => {
+		window.localStorage.setItem(VIEW_KEY, "table");
+	};
+	const table = () => screen.getByRole("grid", { name: /^Ended Subscriptions/ });
+	const rowNamed = (name: string) =>
+		within(table()).getByRole("row", { name: new RegExp(`^${name}`) });
+	const names = () =>
+		within(table())
+			.getAllByRole("row")
+			.slice(1, -1)
+			.map((row) => within(row).getByRole("rowheader").textContent);
+
+	// AC-F05-41
+	test("choosing Table shows the table under the summary, and no list", async () => {
+		media({ wide: true, docked: true });
+		const { user } = renderPage({ seed: golden });
+		await user.click(screen.getByRole("radio", { name: "Table" }));
+		expect(table()).toBeVisible();
+		expect(screen.getByText("Monthly cost")).toBeVisible();
+		expect(screen.queryByRole("grid", { name: "Subscriptions" })).toBeNull();
+		expect(window.localStorage.getItem(VIEW_KEY)).toBe("table");
+	});
+
+	// AC-F05-35
+	test("lists the four, by Per month, with the Total row", () => {
+		media({ wide: true, docked: true });
+		inTable();
+		renderPage({ seed: golden });
+		expect(names()).toEqual([
+			"Sunrise Apartments",
+			"Cult Gym",
+			"Netflix",
+			"Amazon Prime",
+		]);
+		expect(within(table()).getAllByRole("row").at(-1)).toHaveTextContent(
+			"Total · 4",
+		);
+	});
+
+	// AC-F05-41
+	test("starts sorted by Per month, largest first", () => {
+		media({ wide: true, docked: true });
+		inTable();
+		renderPage({ seed: golden });
+		expect(
+			screen.getByRole("columnheader", { name: /^Per month/ }),
+		).toHaveAttribute("aria-sort", "descending");
+	});
+
+	test("below 768 px a remembered Table shows the list", () => {
+		media({ wide: false });
+		inTable();
+		renderPage({ seed: golden });
+		expect(
+			screen.queryByRole("grid", { name: /^Ended Subscriptions/ }),
+		).toBeNull();
+		expect(screen.getByRole("grid", { name: "Subscriptions" })).toBeVisible();
+	});
+
+	// AC-F05-41
+	test("a row selects its Subscription in the panel, and again clears it", async () => {
+		media({ wide: true, docked: true });
+		inTable();
+		const { user } = renderPage({ seed: golden });
+		await user.click(rowNamed("Netflix"));
+		expect(
+			await screen.findByRole("heading", { name: "Netflix" }),
+		).toBeVisible();
+		expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "true");
+		await user.click(rowNamed("Netflix"));
+		expect(
+			screen.getByRole("heading", { name: "Your Subscriptions" }),
+		).toBeVisible();
+	});
+
+	test("the selection is the same one in the List view", async () => {
+		media({ wide: true, docked: true });
+		inTable();
+		const { user } = renderPage({ seed: golden });
+		await user.click(rowNamed("Netflix"));
+		await user.click(screen.getByRole("radio", { name: "List" }));
+		expect(screen.getByRole("row", { name: /^Netflix/ })).toHaveAttribute(
+			"aria-selected",
+			"true",
+		);
+	});
+
+	test("Escape and Close details clear the selection", async () => {
+		media({ wide: true, docked: true });
+		inTable();
+		const { user } = renderPage({ seed: golden });
+		await user.click(rowNamed("Netflix"));
+		await screen.findByRole("heading", { name: "Netflix" });
+		await user.keyboard("{Escape}");
+		expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
+		await user.click(rowNamed("Netflix"));
+		await user.click(
+			await screen.findByRole("button", { name: "Close details" }),
+		);
+		expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
+	});
+
+	// AC-F05-41
+	test("Down selects through the rows in the sort shown, docked", async () => {
+		media({ wide: true, docked: true });
+		inTable();
+		const { user } = renderPage({ seed: golden });
+		await user.click(screen.getByRole("columnheader", { name: /^Name/ }));
+		await user.keyboard("{ArrowDown}");
+		expect(rowNamed("Amazon Prime")).toHaveAttribute("aria-selected", "true");
+		await user.keyboard("{ArrowDown}");
+		expect(rowNamed("Cult Gym")).toHaveAttribute("aria-selected", "true");
+	});
+
+	// AC-F05-41
+	test("below 1180 px Down only moves focus, and a pressed row opens the drawer", async () => {
+		media({ wide: true, docked: false });
+		inTable();
+		const { user } = renderPage({ seed: golden });
+		await user.keyboard("{ArrowDown}");
+		expect(rowNamed("Sunrise")).toHaveFocus();
+		expect(rowNamed("Sunrise")).toHaveAttribute("aria-selected", "false");
+		await user.click(rowNamed("Netflix"));
+		expect(
+			await screen.findByRole("dialog", { name: "Subscription" }),
+		).toBeVisible();
+	});
+
+	// AC-F05-41
+	test("the sort survives a visit to the List view", async () => {
+		media({ wide: true, docked: true });
+		inTable();
+		const { user } = renderPage({ seed: golden });
+		await user.click(screen.getByRole("columnheader", { name: /^Name/ }));
+		await user.click(screen.getByRole("radio", { name: "List" }));
+		await user.click(screen.getByRole("radio", { name: "Table" }));
+		expect(names()[0]).toBe("Amazon Prime");
+		expect(screen.getByRole("columnheader", { name: /^Name/ })).toHaveAttribute(
+			"aria-sort",
+			"ascending",
+		);
+	});
+
+	test("the sort survives a visit to the Calendar", async () => {
+		media({ wide: true, docked: true });
+		inTable();
+		const { user } = renderPage({ seed: golden });
+		await user.click(screen.getByRole("columnheader", { name: /^Next due/ }));
+		await user.click(screen.getByRole("radio", { name: "Calendar" }));
+		await screen.findByRole("heading", { name: "November 2026" });
+		await user.click(screen.getByRole("radio", { name: "Table" }));
+		expect(names()[0]).toBe("Netflix");
+	});
+
+	// AC-F05-41
+	test("pressing a category of the panel narrows the table, keeping the Total row", async () => {
+		media({ wide: true, docked: true });
+		inTable();
+		const { user } = renderPage({ seed: golden });
+		await user.click(screen.getByRole("button", { name: "Health" }));
+		expect(names()).toEqual(["Cult Gym"]);
+		expect(screen.getByRole("grid", { name: "Showing" })).toHaveTextContent(
+			"Health",
+		);
+		expect(within(table()).getAllByRole("row").at(-1)).toHaveTextContent(
+			"Total · 4",
+		);
+		expect(
+			screen.getByText("₹2,43,287.00 a year · 4 Subscriptions"),
+		).toBeVisible();
+	});
+
+	test("Show all brings the other rows back", async () => {
+		media({ wide: true, docked: true });
+		inTable();
+		const { user } = renderPage({ seed: golden });
+		await user.click(screen.getByRole("button", { name: "Health" }));
+		await user.click(screen.getByRole("button", { name: "Show all" }));
+		expect(names()).toHaveLength(4);
+	});
+
+	// AC-F05-41
+	test("an ended Subscription is not in it, and the line stands when all are ended", async () => {
+		media({ wide: true, docked: true });
+		inTable();
+		renderPage({
+			seed: {
+				...golden,
+				items: golden.items.map((each) => ({
+					...each,
+					status: "ended" as const,
+					nextDueOn: null,
+				})),
+			},
+		});
+		expect(
+			screen.getByText(
+				"No running Subscriptions. Resume one in the List view.",
+			),
+		).toBeVisible();
+	});
+
+	test("a Subscription gone from the list while selected leaves the table's selection clear", async () => {
+		media({ wide: true, docked: true });
+		inTable();
+		const { user, queryClient } = renderPage({ seed: golden });
+		await user.click(rowNamed("Netflix"));
+		await screen.findByRole("heading", { name: "Netflix" });
+		queryClient.setQueryData(subscriptionKeys.list(), {
+			...golden,
+			items: golden.items.filter((each) => each.id !== netflix!.id),
+		});
+		expect(
+			await screen.findByRole("heading", { name: "Your Subscriptions" }),
+		).toBeVisible();
+	});
+
+	test("the server's own draw of a remembered Table is the list", () => {
+		window.localStorage.setItem(VIEW_KEY, "table");
+		const queryClient = testClient();
+		queryClient.setQueryData(subscriptionKeys.list(), golden);
+		const { Url } = urlHarness("");
+		const html = renderToString(
+			<InRouter
+				pathname="/subscriptions"
+				router={routerFake()}
+			>
+				<Url>
+					<AppProviders
+						navigate={vi.fn()}
+						queryClient={queryClient}
+					>
+						<SubscriptionsPage locale={IN} />
+					</AppProviders>
+				</Url>
+			</InRouter>,
+		);
+		expect(html).toContain("Within 7 days");
+		expect(html).not.toContain("Ended Subscriptions aren");
+	});
+});
+
+describe("what the server draws from the device's cookies (D-629)", () => {
+	const golden = subscriptionList();
+	/** The page as the server renders it, the list in the cache as the prefetch leaves it. */
+	function serverHtml(props: {
+		initialView?: "list" | "calendar" | "table";
+		initialWide?: boolean;
+	}) {
+		const queryClient = testClient();
+		queryClient.setQueryData(subscriptionKeys.list(), golden);
+		const { Url } = urlHarness("");
+		return renderToString(
+			<InRouter
+				pathname="/subscriptions"
+				router={routerFake()}
+			>
+				<Url>
+					<AppProviders
+						navigate={vi.fn()}
+						queryClient={queryClient}
+					>
+						<SubscriptionsPage
+							locale={IN}
+							{...props}
+						/>
+					</AppProviders>
+				</Url>
+			</InRouter>,
+		);
+	}
+	const TABLE = "Select a column heading to sort";
+	const LIST = "Within 7 days";
+	const CALENDAR = "November 2026";
+
+	// AC-F05-42
+	test("a remembered Table in a wide window is the table at once", () => {
+		const html = serverHtml({ initialView: "table", initialWide: true });
+		expect(html).toContain(TABLE);
+		expect(html).not.toContain(LIST);
+	});
+
+	// AC-F05-42
+	test("a remembered Table in a narrow window is the list, as it was last shown", () => {
+		const html = serverHtml({ initialView: "table", initialWide: false });
+		expect(html).not.toContain(TABLE);
+		expect(html).toContain(LIST);
+	});
+
+	// AC-F05-42
+	test("a remembered Calendar is the calendar in either window, loading its month", () => {
+		for (const initialWide of [true, false]) {
+			const html = serverHtml({ initialView: "calendar", initialWide });
+			expect(html).toContain(CALENDAR);
+			expect(html).not.toContain(LIST);
+			expect(html).toContain('aria-busy="true"');
+		}
+	});
+
+	// AC-F05-42
+	test("a remembered Calendar draws the grid wide and the days narrow", () => {
+		expect(serverHtml({ initialView: "calendar", initialWide: true })).toContain(
+			"<table",
+		);
+		expect(
+			serverHtml({ initialView: "calendar", initialWide: false }),
+		).not.toContain("<table");
+	});
+
+	test("a remembered List is the list in either window", () => {
+		for (const initialWide of [true, false]) {
+			const html = serverHtml({ initialView: "list", initialWide });
+			expect(html).toContain(LIST);
+			expect(html).not.toContain(TABLE);
+		}
+	});
+
+	test("with no cookies the server draws the list", () => {
+		const html = serverHtml({});
+		expect(html).toContain(LIST);
+	});
+
+	// D-629
+	test("the switch always has all three options, Table hidden below 768 px by CSS", () => {
+		for (const initialWide of [true, false]) {
+			const html = serverHtml({ initialWide });
+			for (const value of ["list", "calendar", "table"]) {
+				expect(html).toContain(`value="${value}"`);
+			}
+			const page = document.createElement("div");
+			page.innerHTML = html;
+			expect(
+				page
+					.querySelector('input[value="table"]')!
+					.closest(".max-md\\:hidden"),
+			).not.toBeNull();
+		}
+	});
+
+	test("the server draws the same switch whatever the window", () => {
+		const options = (html: string) =>
+			[...html.matchAll(/value="(list|calendar|table)"/g)].map((m) => m[1]);
+		expect(options(serverHtml({ initialWide: true }))).toEqual(
+			options(serverHtml({ initialWide: false })),
+		);
+	});
+
+	test("the server checks the remembered view in the switch", () => {
+		const tag = /<input[^>]*value="calendar"[^>]*>/.exec(
+			serverHtml({ initialView: "calendar", initialWide: true }),
+		)![0];
+		expect(tag).toContain("checked");
+	});
+
+	// AC-F05-42
+	test("the browser keeps the server's view where storage holds none", () => {
+		media({ wide: true, docked: true });
+		const queryClient = testClient();
+		queryClient.setQueryData(subscriptionKeys.list(), golden);
+		const { Url } = urlHarness("");
+		render(
+			<InRouter
+				pathname="/subscriptions"
+				router={routerFake()}
+			>
+				<Url>
+					<AppProviders
+						navigate={vi.fn()}
+						queryClient={queryClient}
+					>
+						<SubscriptionsPage
+							locale={IN}
+							initialView="table"
+							initialWide
+						/>
+					</AppProviders>
+				</Url>
+			</InRouter>,
+		);
+		expect(screen.getByRole("radio", { name: "Table" })).toBeChecked();
+		expect(
+			screen.getByRole("grid", { name: /^Ended Subscriptions/ }),
+		).toBeVisible();
+	});
+
+	test("storage outranks the cookie where it holds a choice", () => {
+		media({ wide: true, docked: true });
+		window.localStorage.setItem(VIEW_KEY, "list");
+		const queryClient = testClient();
+		queryClient.setQueryData(subscriptionKeys.list(), golden);
+		const { Url } = urlHarness("");
+		render(
+			<InRouter
+				pathname="/subscriptions"
+				router={routerFake()}
+			>
+				<Url>
+					<AppProviders
+						navigate={vi.fn()}
+						queryClient={queryClient}
+					>
+						<SubscriptionsPage
+							locale={IN}
+							initialView="table"
+							initialWide
+						/>
+					</AppProviders>
+				</Url>
+			</InRouter>,
+		);
+		expect(screen.getByRole("radio", { name: "List" })).toBeChecked();
+	});
+
+	test("the page keeps the view and the window class in cookies for the next visit", async () => {
+		media({ wide: true, docked: true });
+		const { user } = renderPage({ seed: golden });
+		await user.click(screen.getByRole("radio", { name: "Calendar" }));
+		expect(document.cookie).toContain(`${VIEW_KEY}=calendar`);
+		expect(document.cookie).toContain("daybook_wide=wide");
+	});
+
+	test("a narrow window is kept as narrow", () => {
+		media({ wide: false });
+		renderPage({ seed: golden });
+		expect(document.cookie).toContain("daybook_wide=narrow");
+	});
+
+	// AC-F05-42
+	test("a window the cookie got wrong is corrected once the browser knows", () => {
+		media({ wide: false });
+		const queryClient = testClient();
+		queryClient.setQueryData(subscriptionKeys.list(), golden);
+		const { Url } = urlHarness("");
+		window.localStorage.setItem(VIEW_KEY, "table");
+		render(
+			<InRouter
+				pathname="/subscriptions"
+				router={routerFake()}
+			>
+				<Url>
+					<AppProviders
+						navigate={vi.fn()}
+						queryClient={queryClient}
+					>
+						<SubscriptionsPage
+							locale={IN}
+							initialView="table"
+							initialWide
+						/>
+					</AppProviders>
+				</Url>
+			</InRouter>,
+		);
+		expect(
+			screen.queryByRole("grid", { name: /^Ended Subscriptions/ }),
+		).toBeNull();
+		expect(screen.getByRole("grid", { name: "Subscriptions" })).toBeVisible();
+		expect(document.cookie).toContain("daybook_wide=narrow");
 	});
 });

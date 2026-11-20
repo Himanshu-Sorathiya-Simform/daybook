@@ -3,10 +3,12 @@ import { describe, expect, test } from "vitest";
 import type { Formats } from "../labels";
 import {
 	DEFAULT_SORT,
+	DEFAULT_SORTING,
 	sortTableRows,
 	STATUS_LABELS,
 	TABLE_CAPTION,
 	TABLE_COLUMNS,
+	TABLE_EMPTY,
 	type TableColumn,
 	tableRows,
 	tableTotal,
@@ -96,6 +98,17 @@ describe("the columns and the default sort (BR-F05-39)", () => {
 
 	test("starts sorted by Per month, largest first", () => {
 		expect(DEFAULT_SORT).toEqual({ column: "perMonth", direction: "desc" });
+	});
+
+	test("the library holds the same default sort", () => {
+		expect(DEFAULT_SORTING).toEqual([{ id: "perMonth", desc: true }]);
+		expect(DEFAULT_SORTING[0]!.id).toBe(DEFAULT_SORT.column);
+	});
+
+	test("says what an empty table says", () => {
+		expect(TABLE_EMPTY).toBe(
+			"No running Subscriptions. Resume one in the List view.",
+		);
 	});
 
 	test("has the caption", () => {

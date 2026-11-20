@@ -9,13 +9,10 @@ import {
 	GridList as AriaGridList,
 	GridListHeader as AriaGridListHeader,
 	GridListSection as AriaGridListSection,
-	type Key as AriaKey,
-	type Selection as AriaSelection,
 } from "react-aria-components";
 
 import { Button } from "@/components/actions/Button";
 import { GroupHeader } from "@/components/data/GroupHeader";
-import { FilterChips } from "@/components/forms/FilterChips";
 import { Section } from "@/components/surfaces/Section";
 import { type RowArrows, useRowArrows } from "@/hooks/useRowArrows";
 import { cn } from "@/lib/cn";
@@ -28,11 +25,12 @@ import {
 	NO_RUNNING,
 	shownRows,
 } from "../lib/groups";
-import { categoryChip, FILTER_TEXT } from "../lib/category-filter";
 import type { Formats } from "../lib/labels";
 import type { MenuAction } from "../lib/menu";
 import { LIST_TEXT } from "../lib/messages";
+import { pickedId, selectedIn } from "../lib/selection";
 import type { SubscriptionList as SubscriptionListData } from "../lib/types";
+import { CategoryFilterRow } from "./CategoryFilterRow";
 import { SubscriptionRow } from "./SubscriptionRow";
 
 export type SubscriptionListProps = {
@@ -55,16 +53,6 @@ export type SubscriptionListProps = {
 	onClearCategory?: () => void;
 	className?: string;
 };
-
-/** The id a selection change chose, or `null` for a cleared one. Single selection never
- * reports "all". */
-const pickedId = (keys: AriaSelection) => {
-	const [key] = keys as Set<AriaKey>;
-	return key === undefined ? null : String(key);
-};
-
-const selectedIn = (ids: readonly string[], selected: string | null) =>
-	selected !== null && ids.includes(selected) ? [selected] : [];
 
 /**
  * The Subscriptions as a list (BR-F05-37): the groups that are not ended under their headers,
@@ -123,18 +111,10 @@ export function SubscriptionList({
 	return (
 		<Section className={cn("px-5 pt-1 pb-3 max-md:px-4", className)}>
 			{category !== null && (
-				<div className="flex flex-wrap items-center gap-2 pt-3">
-					<span className="text-label text-ink-2">
-						{FILTER_TEXT.showing}
-					</span>
-					<FilterChips
-						label={FILTER_TEXT.showing}
-						chips={[{ id: category, label: categoryChip(category) }]}
-						onRemove={() => onClearCategory?.()}
-						onClearAll={() => onClearCategory?.()}
-						clearAllLabel={FILTER_TEXT.showAll}
-					/>
-				</div>
+				<CategoryFilterRow
+					category={category}
+					onClear={() => onClearCategory?.()}
+				/>
 			)}
 			<div ref={setHolder}>
 				{!hasRunning && (

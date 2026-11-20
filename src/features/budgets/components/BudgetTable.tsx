@@ -28,6 +28,7 @@ import {
 } from "react-aria-components";
 
 import { CategoryTag } from "@/components/data/CategoryTag";
+import { RING_INSIDE, ROW_RING } from "@/components/data/tableRings";
 import { Money } from "@/components/data/Money";
 import { Section } from "@/components/surfaces/Section";
 import {
@@ -134,19 +135,6 @@ const FIGURES = new Set([
 	"remainingMinor",
 	"utilizationTenths",
 ]);
-
-/** A focus ring inside its own box, rounded, so the table's scroll box never clips it. The
- * base style's ring outside the box is turned off. */
-const RING_INSIDE =
-	"outline-none focus-visible:rounded-control focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus";
-
-/** A focused row's ring, drawn on its cells: top and bottom on each, and the ends on the
- * first and last, which round the row's corners. */
-const ROW_RING = [
-	"group-focus-visible:shadow-[inset_0_2px_var(--color-focus),inset_0_-2px_var(--color-focus)]",
-	"group-focus-visible:first:shadow-[inset_2px_0_var(--color-focus),inset_0_2px_var(--color-focus),inset_0_-2px_var(--color-focus)]",
-	"group-focus-visible:last:shadow-[inset_-2px_0_var(--color-focus),inset_0_2px_var(--color-focus),inset_0_-2px_var(--color-focus)]",
-];
 
 const cellClass = (id: string) =>
 	cn(

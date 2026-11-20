@@ -1,5 +1,6 @@
 "use client";
 
+import type { SortingState } from "@tanstack/react-table";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -7,6 +8,7 @@ import { EmptyState } from "@/components/feedback/EmptyState";
 import { showToast } from "@/components/feedback/showToast";
 import { Section } from "@/components/surfaces/Section";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useWideWindow } from "@/hooks/useWideWindow";
 import { useOnline } from "@/hooks/useOnline";
 import type { RowArrows } from "@/hooks/useRowArrows";
 import { useShortcut } from "@/hooks/useShortcut";
@@ -20,6 +22,7 @@ import { filterByCategory, isFilterable } from "../lib/category-filter";
 import { chargesHref, type OpenTarget } from "../lib/deep-link";
 import type { MenuAction } from "../lib/menu";
 import { asOfText, PAGE_TEXT } from "../lib/messages";
+import { DEFAULT_SORTING } from "../lib/table";
 import type { SubscriptionsLocale } from "../lib/types";
 import {
 	shownView,
@@ -33,15 +36,17 @@ import { SubscriptionPanel } from "./SubscriptionPanel";
 import { SubscriptionsHeader } from "./SubscriptionsHeader";
 import { SubscriptionsSkeleton } from "./SubscriptionsSkeleton";
 import { SubscriptionsSummary } from "./SubscriptionsSummary";
+import { SubscriptionTable } from "./SubscriptionTable";
 
 export type SubscriptionsPageProps = {
 	/** The profile's formats and its today, from the server render (TIME-5). */
 	locale: SubscriptionsLocale;
+	/** The view this device remembers and whether its window was last wide, from the cookies
+	 * the server reads, so the first draw is the right one (D-629). */
+	initialView?: SubscriptionsView;
+	initialWide?: boolean;
 	className?: string;
 };
-
-/** From here up the Table shows in the switch (BR-F05-21, D-512). */
-const WIDE = "(min-width: 48rem)";
 
 /** From here up the panel docks beside the list (BR-F05-40); the `dock` breakpoint. */
 const DOCKED = "(min-width: 1180px)";
@@ -67,6 +72,8 @@ function arrowsFor(isCovered: boolean, isDocked: boolean): RowArrows {
  */
 export function SubscriptionsPage({
 	locale,
+	initialView = "list",
+	initialWide = false,
 	className,
 }: Readonly<SubscriptionsPageProps>) {
 	const online = useOnline();
@@ -75,9 +82,11 @@ export function SubscriptionsPage({
 		VIEW_KEY,
 		SUBSCRIPTION_VIEWS,
 		"list",
+		initialView,
 	);
-	// The server can't know the width: it renders the narrow header, and the browser follows.
-	const isWide = useMediaQuery(WIDE, false);
+	// The server knows the window class the device last had, from a cookie, and the browser
+	// corrects it where it was wrong.
+	const isWide = useWideWindow(initialWide);
 	const view = shownView(stored, isWide);
 	const list = query.data;
 	const router = useRouter();
@@ -87,6 +96,8 @@ export function SubscriptionsPage({
 	const [marked, setMarked] = useState<{ id: string; date: string } | null>(null);
 	const [endedOpen, setEndedOpen] = useState(false);
 	const [endedAll, setEndedAll] = useState(false);
+	// The table's sort lives here, so it outlives the table while the view changes (D-570).
+	const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
 	const [filtered, setFiltered] = useState<ExpenseCategory | null>(null);
 	// A Subscription that is gone from the list is no longer selected, and stays unselected if
 	// it comes back (BR-F05-21). Set while rendering, React's pattern for state that follows
@@ -201,12 +212,17 @@ export function SubscriptionsPage({
 							markedDue={markedDue}
 							onSelectItem={openItem}
 						/>
-						// The table replaces this when it arrives.
-					:	<Section>
-							<p className="text-body text-ink-2">
-								{`${PAGE_TEXT.viewNames[view]} is coming soon.`}
-							</p>
-						</Section>
+					:	<SubscriptionTable
+							list={shown ?? list}
+							formats={locale}
+							sorting={sorting}
+							onSortingChange={setSorting}
+							selected={selected}
+							onSelect={choose}
+							arrows={arrowsFor(drawerOpen, docked)}
+							category={category}
+							onClearCategory={() => setFiltered(null)}
+						/>
 					}
 				</>
 			);
@@ -250,7 +266,6 @@ export function SubscriptionsPage({
 					asOf={asOfText(online, query.dataUpdatedAt, locale)}
 					view={view}
 					onViewChange={setStored}
-					isWide={isWide}
 					hasSwitch={!failed && !isEmpty}
 				/>
 				{body()}
