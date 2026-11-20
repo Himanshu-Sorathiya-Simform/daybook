@@ -22,6 +22,7 @@ import {
 	readyPanelActions,
 	readyStatusActions,
 	statusBox,
+	TIMELINE_PREVIEW,
 } from "../lib/panel";
 import type { SubscriptionItem } from "../lib/types";
 import { ChargeTimeline } from "./ChargeTimeline";
@@ -35,6 +36,8 @@ export type PanelDetailProps = {
 	onClose: () => void;
 	/** View charges: Transactions filtered to this Subscription (BR-F05-23). */
 	onViewCharges: () => void;
+	/** The date the calendar's selection marks in the timeline (BR-F05-38). */
+	selectedDue?: string | null;
 	className?: string;
 };
 
@@ -52,17 +55,26 @@ export function PanelDetail({
 	formats,
 	onClose,
 	onViewCharges,
+	selectedDue = null,
 	className,
 }: Readonly<PanelDetailProps>) {
 	const charges = useSubscriptionCharges(item.id);
 	const [showAll, setShowAll] = useState(false);
+	// A marked date past the first 7 lines opens the rest, until Show fewer is pressed for it.
+	const [foldedFor, setFoldedFor] = useState<string | null>(null);
 	const failed =
 		!charges.data && (charges.isError || charges.fetchStatus === "paused");
 	const badges = rowBadges(item, formats);
 	const box = statusBox(item, formats);
 	const paid = paidSummary(item, formats);
 	const footer = readyPanelActions(item, formats);
-	const lines = charges.data ? chargeTimeline(item, charges.data, formats) : null;
+	const lines =
+		charges.data ?
+			chargeTimeline(item, charges.data, formats, { selectedDue })
+		:	null;
+	const markedBeyond =
+		lines?.some((line, at) => line.marked && at >= TIMELINE_PREVIEW) ?? false;
+	const timelineOpen = showAll || (markedBeyond && foldedFor !== selectedDue);
 
 	const chargesBody = () => {
 		if (failed) {
@@ -99,8 +111,11 @@ export function PanelDetail({
 		return (
 			<ChargeTimeline
 				lines={lines}
-				showAll={showAll}
-				onShowAllChange={setShowAll}
+				showAll={timelineOpen}
+				onShowAllChange={(all) => {
+					setShowAll(all);
+					setFoldedFor(all ? null : selectedDue);
+				}}
 				canUndoSkip={READY_PANEL.undoSkip}
 				onUndoSkip={() => {}}
 			/>

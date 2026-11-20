@@ -8,7 +8,9 @@ import {
 	CALENDAR_TEXT,
 	calendarItems,
 	calendarTitle,
+	canMoveMonths,
 	chipAmount,
+	chipColor,
 	chipLabel,
 	countedMinor,
 	dayPopover,
@@ -16,12 +18,17 @@ import {
 	isStruck,
 	itemWord,
 	LEGEND,
+	MONTH_REACH,
 	MONTH_STEP,
-	MONTHS_BEFORE,
-	MONTHS_BEFORE_COMPACT,
-	MONTHS_SHOWN,
-	MONTHS_SHOWN_COMPACT,
+	MONTH_CELL_WIDTH,
+	MONTH_ROW_CHROME,
+	MONTHS_DEFAULT,
+	MONTHS_MAX,
+	MONTHS_MIN,
+	monthsBefore,
+	monthsFit,
 	monthCells,
+	monthSpan,
 	monthWindow,
 	phoneRows,
 	phoneWeekHint,
@@ -87,12 +94,13 @@ const item = (
 });
 
 describe("the constants (BR-F05-38)", () => {
-	test("13 months from 3 before, 5 from 1 before on phones, moving by 3", () => {
-		expect(MONTHS_SHOWN).toBe(13);
-		expect(MONTHS_BEFORE).toBe(3);
-		expect(MONTHS_SHOWN_COMPACT).toBe(5);
-		expect(MONTHS_BEFORE_COMPACT).toBe(1);
+	test("4 to 8 months by the row's width, moving by 3", () => {
+		expect(MONTHS_MIN).toBe(4);
+		expect(MONTHS_MAX).toBe(8);
+		expect(MONTHS_DEFAULT).toBe(5);
 		expect(MONTH_STEP).toBe(3);
+		expect(MONTH_CELL_WIDTH).toBe(88);
+		expect(MONTH_ROW_CHROME).toBe(96);
 	});
 
 	test("the words", () => {
@@ -103,6 +111,7 @@ describe("the constants (BR-F05-38)", () => {
 			weekColumn: "Week",
 			popoverHint: "Select one to open it in the panel.",
 			nothingDue: "Nothing due · Show days",
+			loading: "Loading the month",
 			deletedCharge:
 				"This charge belongs to a deleted Subscription. It stays in Transactions as an ordinary expense.",
 		});
@@ -121,35 +130,98 @@ describe("the constants (BR-F05-38)", () => {
 	});
 });
 
-describe("monthWindow (BR-F05-38)", () => {
-	// AC-F05-38
-	test("13 months from 3 before the current one", () => {
-		const months = monthWindow("2026-11", 0, false);
-		expect(months).toHaveLength(13);
-		expect(months[0]).toBe("2026-08");
-		expect(months[3]).toBe("2026-11");
-		expect(months.at(-1)).toBe("2027-08");
+describe("monthsFit (BR-F05-38)", () => {
+	const row = (months: number) => MONTH_ROW_CHROME + months * MONTH_CELL_WIDTH;
+
+	test("shows as many months as fit, each at least 88 px wide", () => {
+		expect(monthsFit(row(5))).toBe(5);
+		expect(monthsFit(row(6))).toBe(6);
+		expect(monthsFit(row(7))).toBe(7);
+		expect(monthsFit(row(8))).toBe(8);
 	});
 
-	test("5 months from 1 before below 768 px", () => {
-		expect(monthWindow("2026-11", 0, true)).toEqual([
-			"2026-10",
-			"2026-11",
-			"2026-12",
-			"2027-01",
-			"2027-02",
-		]);
+	test("one pixel short of a month does not show it", () => {
+		expect(monthsFit(row(6) - 1)).toBe(5);
+		expect(monthsFit(row(7) - 1)).toBe(6);
+	});
+
+	test("never fewer than 4, however narrow", () => {
+		expect(monthsFit(row(4))).toBe(4);
+		expect(monthsFit(row(3))).toBe(4);
+		expect(monthsFit(120)).toBe(4);
+		expect(monthsFit(1)).toBe(4);
+	});
+
+	test("never more than 8, however wide", () => {
+		expect(monthsFit(row(9))).toBe(8);
+		expect(monthsFit(5000)).toBe(8);
+	});
+
+	test("an unknown width shows the default", () => {
+		expect(monthsFit(null)).toBe(5);
+	});
+
+	test("a width of 0, as before the page is laid out, shows the default", () => {
+		expect(monthsFit(0)).toBe(5);
+		expect(monthsFit(-10)).toBe(5);
+	});
+});
+
+describe("monthsBefore (BR-F05-38)", () => {
+	test("1 before for 4 and 5 months, 2 for 6 and 7, 3 for 8", () => {
+		expect([4, 5, 6, 7, 8].map(monthsBefore)).toEqual([1, 1, 2, 2, 3]);
+	});
+});
+
+describe("monthWindow (BR-F05-38)", () => {
+	test.each([
+		[4, ["2026-10", "2026-11", "2026-12", "2027-01"]],
+		[5, ["2026-10", "2026-11", "2026-12", "2027-01", "2027-02"]],
+		[6, ["2026-09", "2026-10", "2026-11", "2026-12", "2027-01", "2027-02"]],
+		[
+			7,
+			[
+				"2026-09",
+				"2026-10",
+				"2026-11",
+				"2026-12",
+				"2027-01",
+				"2027-02",
+				"2027-03",
+			],
+		],
+		[
+			8,
+			[
+				"2026-08",
+				"2026-09",
+				"2026-10",
+				"2026-11",
+				"2026-12",
+				"2027-01",
+				"2027-02",
+				"2027-03",
+			],
+		],
+	])("%i months around the current one", (count, expected) => {
+		expect(monthWindow("2026-11", 0, count)).toEqual(expected);
+	});
+
+	test("the current month is always in it", () => {
+		for (const count of [4, 5, 6, 7, 8]) {
+			expect(monthWindow("2026-11", 0, count)).toContain("2026-11");
+		}
 	});
 
 	test("Later months moves it 3 on, Earlier months 3 back", () => {
-		expect(monthWindow("2026-11", MONTH_STEP, false)[0]).toBe("2026-11");
-		expect(monthWindow("2026-11", -MONTH_STEP, false)[0]).toBe("2026-05");
-		expect(monthWindow("2026-11", 2 * MONTH_STEP, false)[0]).toBe("2027-02");
-		expect(monthWindow("2026-11", MONTH_STEP, true)[0]).toBe("2027-01");
+		expect(monthWindow("2026-11", MONTH_STEP, 5)[0]).toBe("2027-01");
+		expect(monthWindow("2026-11", -MONTH_STEP, 5)[0]).toBe("2026-07");
+		expect(monthWindow("2026-11", 2 * MONTH_STEP, 8)[0]).toBe("2027-02");
+		expect(monthWindow("2026-11", -MONTH_STEP, 8)[0]).toBe("2026-05");
 	});
 
 	test("crosses a year end in order, with no gap", () => {
-		expect(monthWindow("2026-01", 0, false)).toEqual([
+		expect(monthWindow("2026-01", 0, 8)).toEqual([
 			"2025-10",
 			"2025-11",
 			"2025-12",
@@ -158,11 +230,6 @@ describe("monthWindow (BR-F05-38)", () => {
 			"2026-03",
 			"2026-04",
 			"2026-05",
-			"2026-06",
-			"2026-07",
-			"2026-08",
-			"2026-09",
-			"2026-10",
 		]);
 	});
 });
@@ -1236,5 +1303,120 @@ describe("empty weeks and today (BR-F05-38)", () => {
 				);
 			}
 		}
+	});
+});
+
+describe("the months the row reads (BR-F05-36, BR-F05-38)", () => {
+	test("the reach is 120 months", () => {
+		expect(MONTH_REACH).toBe(120);
+	});
+
+	test("a read covers the widest window, 8 months from 3 before the current one", () => {
+		expect(monthSpan("2026-11", 0)).toEqual({ from: "2026-08", to: "2027-03" });
+	});
+
+	test("a read follows the row's offset", () => {
+		expect(monthSpan("2026-11", 3)).toEqual({ from: "2026-11", to: "2027-06" });
+		expect(monthSpan("2026-11", -6)).toEqual({ from: "2026-02", to: "2026-09" });
+	});
+
+	test("a read is 8 months, under the API's span of 24", () => {
+		const { from, to } = monthSpan("2026-11", 0);
+		expect(monthWindow("2026-11", 0, MONTHS_MAX)).toHaveLength(8);
+		expect(from).toBe(monthWindow("2026-11", 0, MONTHS_MAX)[0]);
+		expect(to).toBe(monthWindow("2026-11", 0, MONTHS_MAX).at(-1));
+	});
+
+	test("every narrower window lies inside the read, at any offset", () => {
+		for (const offset of [-9, 0, 3, 12]) {
+			const { from, to } = monthSpan("2026-11", offset);
+			for (const count of [4, 5, 6, 7]) {
+				for (const month of monthWindow("2026-11", offset, count)) {
+					expect(month >= from && month <= to).toBe(true);
+				}
+			}
+		}
+	});
+
+	test("both arrows work at first", () => {
+		expect(canMoveMonths("2026-11", 0, -1)).toBe(true);
+		expect(canMoveMonths("2026-11", 0, 1)).toBe(true);
+	});
+
+	test("Earlier months stops when its first month would be over 120 months back", () => {
+		// The read's first month is 3 before the anchor: one step from -114 reaches 120 back,
+		// still allowed; the next step is 123 back.
+		expect(canMoveMonths("2026-11", -114, -1)).toBe(true);
+		expect(canMoveMonths("2026-11", -117, -1)).toBe(false);
+	});
+
+	test("Later months stops when its last month would be over 120 months ahead", () => {
+		// The read's last month is 4 after the anchor: 111 moves to 114, whose last is 118 ahead,
+		// allowed; 114 moves to 117, whose last is 121.
+		expect(canMoveMonths("2026-11", 111, 1)).toBe(true);
+		expect(canMoveMonths("2026-11", 114, 1)).toBe(false);
+	});
+
+	test("the edge month itself is allowed", () => {
+		expect(monthSpan("2026-11", -117).from).toBe("2016-11");
+		expect(canMoveMonths("2026-11", -114, -1)).toBe(true);
+	});
+});
+
+describe("monthCells with no figures (BR-F05-38)", () => {
+	const months = ["2026-10", "2026-11", "2026-12"];
+	const cells = () =>
+		monthCells(
+			months,
+			undefined,
+			{ current: "2026-11", selected: "2026-11" },
+			F,
+		);
+
+	test("each month is named by its month alone", () => {
+		expect(cells().map((cell) => cell.label)).toEqual([
+			"October 2026",
+			"November 2026",
+			"December 2026",
+		]);
+	});
+
+	test("each figure is a dash and none is known", () => {
+		expect(cells().map((cell) => cell.figure)).toEqual(["—", "—", "—"]);
+		expect(cells().map((cell) => cell.hasFigure)).toEqual([false, false, false]);
+	});
+
+	test("the current month has no bar", () => {
+		expect(cells().map((cell) => cell.chargedTenths)).toEqual([
+			null,
+			null,
+			null,
+		]);
+	});
+
+	test("the marks that need no figure stay", () => {
+		expect(cells().map((cell) => cell.past)).toEqual([true, false, false]);
+		expect(cells().map((cell) => cell.current)).toEqual([false, true, false]);
+		expect(cells().map((cell) => cell.selected)).toEqual([false, true, false]);
+	});
+
+	test("with figures every cell has one, even a month the answer lacks", () => {
+		const known = monthCells(
+			months,
+			[{ month: "2026-10", chargedMinor: 100, expectedMinor: 0 }],
+			{ current: "2026-11", selected: "2026-11" },
+			F,
+		);
+		expect(known.map((cell) => cell.hasFigure)).toEqual([true, true, true]);
+	});
+});
+
+describe("chipColor (BR-F05-38)", () => {
+	test("is the category's colour variable", () => {
+		expect(chipColor("entertainment")).toBe("var(--cat-entertainment)");
+	});
+
+	test("turns underscores into dashes", () => {
+		expect(chipColor("fees_taxes")).toBe("var(--cat-fees-taxes)");
 	});
 });

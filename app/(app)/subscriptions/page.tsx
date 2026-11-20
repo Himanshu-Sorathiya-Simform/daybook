@@ -40,6 +40,7 @@ export default async function Page() {
 					numberLocale: profile.numberLocale,
 					dateLocale: profile.dateLocale,
 					timezone: profile.timezone,
+					weekStart: profile.weekStart,
 				}}
 			/>
 		</HydrationBoundary>

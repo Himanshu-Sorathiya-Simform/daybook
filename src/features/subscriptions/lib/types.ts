@@ -1,3 +1,4 @@
+import type { WeekStart } from "@/lib/geo";
 import type { Formats } from "./labels";
 
 /** The answers of F05 section 11's reads and writes, as the routes send them. The types are
@@ -18,4 +19,6 @@ export type {
  * and the time zone "as of" is read in. */
 export type SubscriptionsLocale = Formats & {
 	timezone: string;
+	/** The first day of the week, for the calendar's weeks (BR-F05-38, F02). */
+	weekStart: WeekStart;
 };

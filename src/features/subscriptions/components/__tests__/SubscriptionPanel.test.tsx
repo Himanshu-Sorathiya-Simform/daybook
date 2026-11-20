@@ -118,6 +118,32 @@ describe("docked (BR-F05-40)", () => {
 	});
 });
 
+describe("the date the calendar marks (BR-F05-38)", () => {
+	// AC-F05-40
+	test("docked, the selected Subscription's timeline tints that date", async () => {
+		setup({ selected: NETFLIX!.id, selectedDue: "2026-10-05" }, [
+			charge({ subscriptionId: NETFLIX!.id, dueOn: "2026-10-05" }),
+		]);
+		const line = (await screen.findByText("5 Oct 2026")).closest("li");
+		expect(line).toHaveClass("bg-accent-soft");
+	});
+
+	test("with no date given nothing is tinted", async () => {
+		setup({ selected: NETFLIX!.id });
+		const line = (await screen.findByText("5 Oct 2026")).closest("li");
+		expect(line).not.toHaveClass("bg-accent-soft");
+	});
+
+	test("in the drawer too", async () => {
+		setup(
+			{ isDocked: false, selected: NETFLIX!.id, selectedDue: "2026-10-05" },
+			[charge({ subscriptionId: NETFLIX!.id, dueOn: "2026-10-05" })],
+		);
+		const line = (await screen.findByText("5 Oct 2026")).closest("li");
+		expect(line).toHaveClass("bg-accent-soft");
+	});
+});
+
 describe("below 1180 px, a drawer (BR-F05-40)", () => {
 	test("shows nothing with no selection", () => {
 		setup({ isDocked: false });

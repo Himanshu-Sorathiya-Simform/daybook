@@ -46,6 +46,7 @@ function setup(
 		paid(NETFLIX, "2026-09-05"),
 		paid(NETFLIX, "2026-10-05"),
 	],
+	selectedDue: string | null = null,
 ) {
 	const reads = route(
 		network,
@@ -55,20 +56,29 @@ function setup(
 	);
 	const onClose = vi.fn();
 	const onViewCharges = vi.fn();
-	render(
+	const client = testClient();
+	const element = (due: string | null) => (
 		<AppProviders
 			navigate={vi.fn()}
-			queryClient={testClient()}
+			queryClient={client}
 		>
 			<PanelDetail
 				item={item}
 				formats={IN}
 				onClose={onClose}
 				onViewCharges={onViewCharges}
+				selectedDue={due}
 			/>
-		</AppProviders>,
+		</AppProviders>
 	);
-	return { reads, onClose, onViewCharges, user: userEvent.setup() };
+	const view = render(element(selectedDue));
+	return {
+		reads,
+		onClose,
+		onViewCharges,
+		again: (due: string | null) => view.rerender(element(due)),
+		user: userEvent.setup(),
+	};
 }
 
 const lines = () => within(screen.getByRole("list")).getAllByRole("listitem");
@@ -402,6 +412,119 @@ describe("the charges (BR-F05-40, BR-F05-48, AC-F05-33)", () => {
 		setup(subscriptionItem("netflix", { skips: ["2026-11-05"] }), []);
 		await screen.findByText("You skipped it.");
 		expect(screen.queryByRole("button", { name: "Undo skip" })).toBeNull();
+	});
+});
+
+describe("the date the calendar marks (BR-F05-38)", () => {
+	const marked = () =>
+		lines().filter((line) => line.classList.contains("bg-accent-soft"));
+
+	// AC-F05-40
+	test("tints the line of that date", async () => {
+		setup(NETFLIX, undefined, "2026-10-05");
+		await screen.findByRole("list");
+		expect(marked()).toHaveLength(1);
+		expect(marked()[0]).toHaveTextContent("5 Oct 2026");
+	});
+
+	test("with no date marked no line is tinted", async () => {
+		setup();
+		await screen.findByRole("list");
+		expect(marked()).toHaveLength(0);
+	});
+
+	test("a date the timeline does not hold marks nothing", async () => {
+		setup(NETFLIX, undefined, "2026-10-06");
+		await screen.findByRole("list");
+		expect(marked()).toHaveLength(0);
+	});
+
+	test("a mark within the first 7 lines leaves the rest folded", async () => {
+		const many = Array.from({ length: 9 }, (_, i) =>
+			paid(NETFLIX, `2026-0${i + 1}-05`),
+		);
+		setup(NETFLIX, many, "2026-09-05");
+		await screen.findByRole("list");
+		expect(lines()).toHaveLength(7);
+		expect(screen.getByRole("button", { name: /^Show all/ })).toBeVisible();
+	});
+
+	// AC-F05-40
+	test("a mark past the first 7 lines opens the rest so it shows", async () => {
+		const many = Array.from({ length: 9 }, (_, i) =>
+			paid(NETFLIX, `2026-0${i + 1}-05`),
+		);
+		setup(NETFLIX, many, "2026-01-05");
+		await screen.findByRole("list");
+		expect(lines().length).toBeGreaterThan(7);
+		expect(marked()).toHaveLength(1);
+		expect(marked()[0]).toHaveTextContent("5 Jan 2026");
+		expect(screen.getByRole("button", { name: "Show fewer" })).toBeVisible();
+	});
+
+	test("a mark on the 8th line, the first folded one, opens the rest", async () => {
+		const many = Array.from({ length: 9 }, (_, i) =>
+			paid(NETFLIX, `2026-0${i + 1}-05`),
+		);
+		setup(NETFLIX, many, "2026-04-05");
+		await screen.findByRole("list");
+		expect(marked()[0]).toHaveTextContent("5 Apr 2026");
+		expect(screen.getByRole("button", { name: "Show fewer" })).toBeVisible();
+	});
+
+	test("a mark on the 7th line, the last shown, leaves it folded", async () => {
+		const many = Array.from({ length: 9 }, (_, i) =>
+			paid(NETFLIX, `2026-0${i + 1}-05`),
+		);
+		setup(NETFLIX, many, "2026-05-05");
+		await screen.findByRole("list");
+		expect(lines()).toHaveLength(7);
+		expect(marked()[0]).toHaveTextContent("5 May 2026");
+	});
+
+	test("Show fewer folds it and it stays folded for that date", async () => {
+		const many = Array.from({ length: 9 }, (_, i) =>
+			paid(NETFLIX, `2026-0${i + 1}-05`),
+		);
+		const { user, again } = setup(NETFLIX, many, "2026-01-05");
+		await screen.findByRole("list");
+		await user.click(screen.getByRole("button", { name: "Show fewer" }));
+		expect(lines()).toHaveLength(7);
+		again("2026-01-05");
+		expect(lines()).toHaveLength(7);
+	});
+
+	test("another date past the 7 lines opens it again after a fold", async () => {
+		const many = Array.from({ length: 9 }, (_, i) =>
+			paid(NETFLIX, `2026-0${i + 1}-05`),
+		);
+		const { user, again } = setup(NETFLIX, many, "2026-01-05");
+		await screen.findByRole("list");
+		await user.click(screen.getByRole("button", { name: "Show fewer" }));
+		again("2026-02-05");
+		expect(lines().length).toBeGreaterThan(7);
+		expect(marked()[0]).toHaveTextContent("5 Feb 2026");
+	});
+
+	test("clearing the mark leaves what was opened as it is", async () => {
+		const many = Array.from({ length: 9 }, (_, i) =>
+			paid(NETFLIX, `2026-0${i + 1}-05`),
+		);
+		const { again } = setup(NETFLIX, many, "2026-01-05");
+		await screen.findByRole("list");
+		again(null);
+		expect(marked()).toHaveLength(0);
+		expect(lines()).toHaveLength(7);
+	});
+
+	test("Show all still works with no mark", async () => {
+		const many = Array.from({ length: 9 }, (_, i) =>
+			paid(NETFLIX, `2026-0${i + 1}-05`),
+		);
+		const { user } = setup(NETFLIX, many);
+		await screen.findByRole("list");
+		await user.click(screen.getByRole("button", { name: /^Show all/ }));
+		expect(lines().length).toBeGreaterThan(7);
 	});
 });
 

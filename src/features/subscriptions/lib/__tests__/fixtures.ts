@@ -1,10 +1,13 @@
 import { GOLDEN_SUBSCRIPTIONS } from "../../../../../seed/golden";
 import type { ListAnswer } from "@/lib/transactions/answers";
 import type { Transaction } from "@/lib/transactions/model";
+import { type Month, shiftMonth } from "@/lib/budgets/months";
 import type {
 	SubscriptionAnswer,
 	SubscriptionItem,
 	SubscriptionList,
+	SubscriptionMonthRow,
+	SubscriptionMonthsAnswer,
 } from "../types";
 
 export type GoldenName = keyof typeof GOLDEN_SUBSCRIPTIONS;
@@ -166,6 +169,22 @@ export function subscriptionList(
 		currency: "INR",
 		...changes,
 	};
+}
+
+/** `GET /api/subscriptions/months` for the months from `from` to `to`: section 5's golden
+ * figures for October, November and December 2026 (AC-F05-24), nothing for the rest. */
+export function monthsAnswer(from: Month, to: Month): SubscriptionMonthsAnswer {
+	const known: Record<string, [number, number]> = {
+		"2026-10": [2014800, 0],
+		"2026-11": [1800000, 214900],
+		"2026-12": [0, 2014900],
+	};
+	const months: SubscriptionMonthRow[] = [];
+	for (let month = from; month <= to; month = shiftMonth(month, 1)) {
+		const [chargedMinor, expectedMinor] = known[month] ?? [0, 0];
+		months.push({ month, chargedMinor, expectedMinor });
+	}
+	return { months, currency: "INR" };
 }
 
 /** A new user's list: nothing yet. */

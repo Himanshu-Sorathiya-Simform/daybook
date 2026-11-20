@@ -19,6 +19,8 @@ export type SubscriptionPanelProps = {
 	/** Clears the selection: Close details, and the drawer's Escape and scrim. */
 	onClose: () => void;
 	onViewCharges: (id: string) => void;
+	/** The date the calendar's selection marks in the timeline, or `null` (BR-F05-38). */
+	selectedDue?: string | null;
 	/** The category the list is filtered to, and a press on a category of the summary (D-622). */
 	activeCategory?: ExpenseCategory | null;
 	onCategory?: (category: ExpenseCategory) => void;
@@ -39,6 +41,7 @@ export function SubscriptionPanel({
 	formats,
 	onClose,
 	onViewCharges,
+	selectedDue = null,
 	activeCategory,
 	onCategory,
 	className,
@@ -52,6 +55,7 @@ export function SubscriptionPanel({
 				formats={formats}
 				onClose={onClose}
 				onViewCharges={() => onViewCharges(item.id)}
+				selectedDue={selectedDue}
 			/>
 		);
 	if (!isDocked) {

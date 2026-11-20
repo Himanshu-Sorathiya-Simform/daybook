@@ -1,7 +1,8 @@
 import { onlineManager } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderToString } from "react-dom/server";
+import { toast } from "sonner";
 import { delay } from "msw";
 import { setupServer } from "msw/node";
 import {
@@ -16,6 +17,7 @@ import {
 } from "vitest";
 
 import { AppProviders } from "@/components/app/AppProviders";
+import { Toaster } from "@/components/feedback/Toaster";
 import { InRouter, routerFake } from "@/components/app/__tests__/router";
 import { resetUnsavedChoices } from "@/hooks/useStoredChoice";
 import {
@@ -28,9 +30,12 @@ import {
 import { subscriptionKeys } from "../../lib/keys";
 import type { SubscriptionList, SubscriptionsLocale } from "../../lib/types";
 import { VIEW_KEY } from "../../lib/view";
+import type { Transaction } from "@/lib/transactions/model";
 import {
+	charge,
 	emptyList,
 	listPage,
+	monthsAnswer,
 	subscriptionItem,
 	subscriptionList,
 } from "../../lib/__tests__/fixtures";
@@ -40,6 +45,8 @@ const network = setupServer();
 beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
 beforeEach(() => window.localStorage.clear());
 afterEach(() => {
+	// Sonner keeps its toasts in a module, so one test's toast would reach the next.
+	toast.dismiss();
 	network.resetHandlers();
 	onlineManager.setOnline(true);
 	vi.useRealTimers();
@@ -72,6 +79,7 @@ const IN: SubscriptionsLocale = {
 	numberLocale: "hi-IN-u-nu-latn",
 	dateLocale: "en-IN",
 	timezone: "Asia/Kolkata",
+	weekStart: "monday",
 };
 
 /** Serves `/api/subscriptions` with `answer` and renders the page. With `seed`, the list is in
@@ -80,15 +88,35 @@ function renderPage({
 	answer = () => ok(subscriptionList()),
 	seed,
 	search = "",
+	charges = [],
 }: {
 	answer?: () => Response | Promise<Response>;
+	/** The charges Transactions holds: a month's read gets those dated in it. */
+	charges?: Transaction[];
 	seed?: SubscriptionList;
 	/** The URL's query, such as "?open=<id>". */
 	search?: string;
 } = {}) {
 	const reads = route(network, "get", "/api/subscriptions", answer);
-	// The panel reads the selected Subscription's charges.
-	route(network, "get", "/api/transactions", () => ok(listPage([])));
+	// The panel reads the selected Subscription's charges, the calendar a month's.
+	route(network, "get", "/api/transactions", (request) => {
+		const query = new URL(request.path, "http://localhost").searchParams;
+		const [from, to] = [query.get("from"), query.get("to")];
+		return ok(
+			listPage(
+				charges.filter(
+					(each) =>
+						from === null
+						|| to === null
+						|| (each.occurredOn >= from && each.occurredOn <= to),
+				),
+			),
+		);
+	});
+	route(network, "get", "/api/subscriptions/months", (request) => {
+		const query = new URL(request.path, "http://localhost").searchParams;
+		return ok(monthsAnswer(query.get("from")!, query.get("to")!));
+	});
 	const queryClient = testClient();
 	if (seed) queryClient.setQueryData(subscriptionKeys.list(), seed);
 	const router = routerFake();
@@ -104,6 +132,7 @@ function renderPage({
 					queryClient={queryClient}
 				>
 					<SubscriptionsPage locale={IN} />
+					<Toaster />
 				</AppProviders>
 			</Url>
 		</InRouter>,
@@ -335,7 +364,9 @@ describe("the view (BR-F05-21)", () => {
 		expect(
 			screen.getByRole("radio", { name: "Calendar", checked: true }),
 		).toBeVisible();
-		expect(screen.getByText("Calendar is coming soon.")).toBeVisible();
+		expect(
+			await screen.findByRole("heading", { name: "November 2026" }),
+		).toBeVisible();
 		expect(window.localStorage.getItem("daybook.subscriptions.view")).toBe(
 			"calendar",
 		);
@@ -456,12 +487,14 @@ describe("the list view in the page (BR-F05-21, BR-F05-22, BR-F05-37)", () => {
 		expect(screen.queryByText(/coming soon/)).toBeNull();
 	});
 
-	test("shows no list in the Calendar and Table views, which arrive later", async () => {
+	test("shows no list in the Calendar and Table views", async () => {
 		media({ wide: true, docked: true });
 		window.localStorage.setItem(VIEW_KEY, "calendar");
 		renderPage({ seed: golden });
 		expect(screen.queryByRole("grid", { name: "Subscriptions" })).toBeNull();
-		expect(screen.getByText("Calendar is coming soon.")).toBeVisible();
+		expect(
+			await screen.findByRole("heading", { name: "November 2026" }),
+		).toBeVisible();
 	});
 
 	test("pressing a row selects it, and pressing it again clears it", async () => {
@@ -669,7 +702,9 @@ describe("the deep link ?open=<id> (BR-F05-21, D-593)", () => {
 			seed: golden,
 			search: `?open=${netflix!.id}`,
 		});
-		expect(screen.getByText("Calendar is coming soon.")).toBeVisible();
+		expect(
+			await screen.findByRole("heading", { name: "November 2026" }),
+		).toBeVisible();
 		await waitFor(() => expect(calls).toHaveLength(1));
 		expect(window.localStorage.getItem(VIEW_KEY)).toBe("calendar");
 	});
@@ -1228,5 +1263,312 @@ describe("filtering by a category of the panel (BR-F05-50, D-622)", () => {
 		const { user } = renderPage({ seed: golden });
 		await user.click(summaryButton("Health"));
 		expect(window.localStorage.getItem(VIEW_KEY)).toBeNull();
+	});
+});
+
+describe("the calendar in the page (BR-F05-38, BR-F05-45, D-626)", () => {
+	const golden = subscriptionList();
+	const [netflix, cultGym, sunrise] = golden.items;
+	const chargeOf = (item: typeof netflix, date: string, amountMinor: number) =>
+		charge({
+			subscriptionId: item!.id,
+			subscription: { id: item!.id, name: item!.name },
+			payee: item!.name,
+			category: item!.category,
+			occurredOn: date,
+			dueOn: date,
+			amountMinor,
+		});
+	const SUNRISE_CHARGE = chargeOf(sunrise, "2026-11-01", 1800000);
+	const orphan = charge({
+		subscriptionId: null,
+		subscription: null,
+		payee: "Old gym",
+		occurredOn: "2026-11-03",
+		dueOn: null,
+		amountMinor: 50000,
+	});
+	const inCalendar = (charges = [SUNRISE_CHARGE]) => {
+		window.localStorage.setItem(VIEW_KEY, "calendar");
+		return renderPage({ seed: golden, charges });
+	};
+	const chip = (name: RegExp) => screen.findByRole("button", { name });
+	const panel = () =>
+		screen.queryByRole("complementary", { name: "Subscription" });
+	const rowNamed = (name: string) =>
+		screen.getByRole("row", { name: new RegExp(`^${name}`) });
+
+	test("the Calendar view shows the month and no list", async () => {
+		media({ wide: true, docked: true });
+		inCalendar();
+		expect(
+			await screen.findByRole("heading", { name: "November 2026" }),
+		).toBeVisible();
+		expect(screen.queryByRole("grid", { name: "Subscriptions" })).toBeNull();
+		expect(
+			screen.getByRole("radio", { name: "Calendar", checked: true }),
+		).toBeVisible();
+	});
+
+	test("the summary stays above it", async () => {
+		media({ wide: true, docked: true });
+		inCalendar();
+		await screen.findByRole("heading", { name: "November 2026" });
+		expect(screen.getByText("Monthly cost")).toBeVisible();
+	});
+
+	test("an item of the month is a button, and the panel stays beside it", async () => {
+		media({ wide: true, docked: true });
+		inCalendar();
+		expect(await chip(/^Netflix, ₹649.00, due/)).toBeVisible();
+		expect(panel()).toBeVisible();
+	});
+
+	// AC-F05-40
+	test("pressing an item selects its Subscription and marks that date in the timeline", async () => {
+		media({ wide: true, docked: true });
+		const { user } = inCalendar();
+		await user.click(await chip(/^Netflix/));
+		expect(
+			await screen.findByRole("heading", { name: "Netflix" }),
+		).toBeVisible();
+		const line = (await screen.findAllByText("5 Nov 2026"))[0]!.closest("li");
+		expect(line).toHaveClass("bg-accent-soft");
+	});
+
+	test("the pressed item is tinted in the grid", async () => {
+		media({ wide: true, docked: true });
+		const { user } = inCalendar();
+		await user.click(await chip(/^Netflix/));
+		expect(await chip(/^Netflix/)).toHaveClass("bg-accent-soft");
+		expect(await chip(/^Cult Gym/)).not.toHaveClass("bg-accent-soft");
+	});
+
+	test("the selection is there in the List view too", async () => {
+		media({ wide: true, docked: true });
+		const { user } = inCalendar();
+		await user.click(await chip(/^Netflix/));
+		await user.click(screen.getByRole("radio", { name: "List" }));
+		expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "true");
+	});
+
+	test("selecting the Subscription from the list afterwards marks no date", async () => {
+		media({ wide: true, docked: true });
+		const { user } = inCalendar();
+		await user.click(await chip(/^Netflix/));
+		await user.click(screen.getByRole("radio", { name: "List" }));
+		await user.click(rowNamed("Netflix"));
+		await user.click(rowNamed("Netflix"));
+		await screen.findByRole("heading", { name: "Netflix" });
+		for (const line of await screen.findAllByText("5 Nov 2026")) {
+			expect(line.closest("li")).not.toHaveClass("bg-accent-soft");
+		}
+	});
+
+	test("pressing an item of another Subscription moves the selection and the mark", async () => {
+		media({ wide: true, docked: true });
+		const { user } = inCalendar();
+		await user.click(await chip(/^Netflix/));
+		await user.click(await chip(/^Cult Gym/));
+		expect(
+			await screen.findByRole("heading", { name: "Cult Gym" }),
+		).toBeVisible();
+		expect(await chip(/^Cult Gym/)).toHaveClass("bg-accent-soft");
+		expect(await chip(/^Netflix/)).not.toHaveClass("bg-accent-soft");
+	});
+
+	test("Escape clears the selection and the tint", async () => {
+		media({ wide: true, docked: true });
+		const { user } = inCalendar();
+		await user.click(await chip(/^Netflix/));
+		await screen.findByRole("heading", { name: "Netflix" });
+		await user.keyboard("{Escape}");
+		expect(
+			screen.getByRole("heading", { name: "Your Subscriptions" }),
+		).toBeVisible();
+		expect(await chip(/^Netflix/)).not.toHaveClass("bg-accent-soft");
+	});
+
+	test("Close details clears them too", async () => {
+		media({ wide: true, docked: true });
+		const { user } = inCalendar();
+		await user.click(await chip(/^Netflix/));
+		await user.click(
+			await screen.findByRole("button", { name: "Close details" }),
+		);
+		expect(await chip(/^Netflix/)).not.toHaveClass("bg-accent-soft");
+	});
+
+	// AC-F05-40
+	test("a charge of a deleted Subscription shows the toast and selects nothing", async () => {
+		media({ wide: true, docked: true });
+		const { user } = inCalendar([SUNRISE_CHARGE, orphan]);
+		await user.click(await chip(/^Old gym/));
+		expect(
+			await screen.findByText(
+				"This charge belongs to a deleted Subscription. It stays in Transactions as an ordinary expense.",
+			),
+		).toBeVisible();
+		expect(
+			screen.getByRole("heading", { name: "Your Subscriptions" }),
+		).toBeVisible();
+	});
+
+	test("it leaves an earlier selection as it was", async () => {
+		media({ wide: true, docked: true });
+		const { user } = inCalendar([SUNRISE_CHARGE, orphan]);
+		await user.click(await chip(/^Netflix/));
+		await screen.findByRole("heading", { name: "Netflix" });
+		await user.click(await chip(/^Old gym/));
+		expect(screen.getByRole("heading", { name: "Netflix" })).toBeVisible();
+	});
+
+	test("a day's popover closes on Escape and leaves the selection alone", async () => {
+		media({ wide: true, docked: true });
+		const charges = [
+			SUNRISE_CHARGE,
+			chargeOf(netflix, "2026-11-01", 64900),
+			chargeOf(cultGym, "2026-11-01", 150000),
+		];
+		const { user } = inCalendar(charges);
+		await user.click(await chip(/^Netflix, ₹649.00, due/));
+		await screen.findByRole("heading", { name: "Netflix" });
+		await user.click(await screen.findByRole("button", { name: /more/ }));
+		await screen.findByRole("dialog", { name: "Sun, 1 Nov" });
+		await user.keyboard("{Escape}");
+		await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+		expect(screen.getByRole("heading", { name: "Netflix" })).toBeVisible();
+	});
+
+	test("an item chosen in a day's popover selects its Subscription", async () => {
+		media({ wide: true, docked: true });
+		const charges = [
+			SUNRISE_CHARGE,
+			chargeOf(netflix, "2026-11-01", 64900),
+			chargeOf(cultGym, "2026-11-01", 150000),
+		];
+		const { user } = inCalendar(charges);
+		await user.click(await screen.findByRole("button", { name: /more/ }));
+		const dialog = await screen.findByRole("dialog");
+		await user.click(within(dialog).getByRole("button", { name: /Cult Gym/ }));
+		expect(
+			await screen.findByRole("heading", { name: "Cult Gym" }),
+		).toBeVisible();
+	});
+
+	test("Up and Down do nothing in the calendar", async () => {
+		media({ wide: true, docked: true });
+		const { user } = inCalendar();
+		await screen.findByRole("heading", { name: "November 2026" });
+		await user.keyboard("{ArrowDown}");
+		expect(
+			screen.getByRole("heading", { name: "Your Subscriptions" }),
+		).toBeVisible();
+	});
+
+	test("the panel's categories do not narrow the calendar", async () => {
+		media({ wide: true, docked: true });
+		const { user } = renderPage({ seed: golden, charges: [SUNRISE_CHARGE] });
+		await user.click(screen.getByRole("button", { name: "Health" }));
+		await user.click(screen.getByRole("radio", { name: "Calendar" }));
+		expect(await chip(/^Netflix/)).toBeVisible();
+		expect(await chip(/^Cult Gym/)).toBeVisible();
+	});
+
+	test("an item of another category clears the category filter", async () => {
+		media({ wide: true, docked: true });
+		const { user } = renderPage({ seed: golden, charges: [SUNRISE_CHARGE] });
+		await user.click(screen.getByRole("button", { name: "Health" }));
+		await user.click(screen.getByRole("radio", { name: "Calendar" }));
+		await user.click(await chip(/^Netflix/));
+		await user.click(screen.getByRole("radio", { name: "List" }));
+		expect(screen.queryByRole("grid", { name: "Showing" })).toBeNull();
+		expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "true");
+	});
+
+	test("an item of the filtered category keeps the filter", async () => {
+		media({ wide: true, docked: true });
+		const { user } = renderPage({ seed: golden, charges: [SUNRISE_CHARGE] });
+		await user.click(screen.getByRole("button", { name: "Entertainment" }));
+		await user.click(screen.getByRole("radio", { name: "Calendar" }));
+		await user.click(await chip(/^Netflix/));
+		await user.click(screen.getByRole("radio", { name: "List" }));
+		expect(screen.getByRole("grid", { name: "Showing" })).toHaveTextContent(
+			"Entertainment",
+		);
+	});
+
+	test("below 1180 px a pressed item opens the drawer", async () => {
+		media({ wide: true, docked: false });
+		const { user } = inCalendar();
+		await user.click(await chip(/^Netflix/));
+		expect(
+			await screen.findByRole("dialog", { name: "Subscription" }),
+		).toBeVisible();
+	});
+
+	test("below 768 px it shows the days, and a pressed item selects", async () => {
+		media({ wide: false, docked: false });
+		const { user } = inCalendar();
+		expect(
+			await screen.findByRole("heading", { name: "2 to 8 Nov" }),
+		).toBeVisible();
+		expect(screen.queryByRole("table")).toBeNull();
+		await user.click(await chip(/Netflix/));
+		expect(
+			await screen.findByRole("dialog", { name: "Subscription" }),
+		).toBeVisible();
+	});
+
+	test("it reads the months and the month's charges, and no list again", async () => {
+		media({ wide: true, docked: true });
+		const { reads } = inCalendar();
+		await screen.findByRole("heading", { name: "November 2026" });
+		expect(reads).toHaveLength(0);
+	});
+
+	test("the server's own draw is the list, never the calendar", () => {
+		window.localStorage.setItem(VIEW_KEY, "calendar");
+		const queryClient = testClient();
+		queryClient.setQueryData(subscriptionKeys.list(), golden);
+		const { Url } = urlHarness("");
+		const html = renderToString(
+			<InRouter
+				pathname="/subscriptions"
+				router={routerFake()}
+			>
+				<Url>
+					<AppProviders
+						navigate={vi.fn()}
+						queryClient={queryClient}
+					>
+						<SubscriptionsPage locale={IN} />
+					</AppProviders>
+				</Url>
+			</InRouter>,
+		);
+		expect(html).not.toContain("November 2026");
+		expect(html).toContain("Within 7 days");
+	});
+
+	test("a Subscription gone from the list while it is marked leaves no mark, even when it returns", async () => {
+		media({ wide: true, docked: true });
+		const { user, queryClient } = inCalendar();
+		await user.click(await chip(/^Netflix/));
+		await screen.findByRole("heading", { name: "Netflix" });
+		queryClient.setQueryData(subscriptionKeys.list(), {
+			...golden,
+			items: golden.items.filter((each) => each.id !== netflix!.id),
+		});
+		expect(
+			await screen.findByRole("heading", { name: "Your Subscriptions" }),
+		).toBeVisible();
+		queryClient.setQueryData(subscriptionKeys.list(), golden);
+		expect(
+			await screen.findByRole("button", { name: /^Netflix/ }),
+		).not.toHaveClass("bg-accent-soft");
+		expect(
+			screen.getByRole("heading", { name: "Your Subscriptions" }),
+		).toBeVisible();
 	});
 });

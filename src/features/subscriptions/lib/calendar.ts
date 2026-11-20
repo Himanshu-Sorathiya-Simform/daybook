@@ -6,7 +6,7 @@ import {
 	monthsStarting,
 	shiftMonth,
 } from "@/lib/budgets/months";
-import { CATEGORY_LABELS, type CategoryKey } from "@/lib/categories";
+import { CATEGORY_LABELS, type CategoryKey, categoryColor } from "@/lib/categories";
 import {
 	formatDayHeader,
 	formatDayMonth,
@@ -36,6 +36,7 @@ export const CALENDAR_TEXT = {
 	weekColumn: "Week",
 	popoverHint: "Select one to open it in the panel.",
 	nothingDue: "Nothing due · Show days",
+	loading: "Loading the month",
 	deletedCharge:
 		"This charge belongs to a deleted Subscription. It stays in Transactions as an ordinary expense.",
 } as const;
@@ -51,24 +52,62 @@ export const LEGEND: readonly { text: string; fromM5?: true }[] = [
 
 // --- The month row (BR-F05-38) ---------------------------------------------------------------
 
-/** 13 months from 3 before the current one, 5 from 1 before below 768 px; Earlier months and
- * Later months move by 3 (BR-F05-38). */
-export const MONTHS_SHOWN = 13;
-export const MONTHS_SHOWN_COMPACT = 5;
-export const MONTHS_BEFORE = 3;
-export const MONTHS_BEFORE_COMPACT = 1;
+/** The row shows 4 to 8 months, as many as fit its width at `MONTH_CELL_WIDTH` each, so a figure
+ * is never cut; Earlier months and Later months move by 3 (BR-F05-38). */
+export const MONTHS_MIN = 4;
+export const MONTHS_MAX = 8;
+/** How many show before the row's width is known: the middle of the range. */
+export const MONTHS_DEFAULT = 5;
+export const MONTH_CELL_WIDTH = 88;
+/** What a row's width holds besides its months: the two arrows and the gaps. */
+export const MONTH_ROW_CHROME = 96;
 export const MONTH_STEP = 3;
+/** The months reads reach: within 120 months of the current one (BR-F05-36, D-596). */
+export const MONTH_REACH = 120;
 
-/** The months the row shows: `offset` months on from the first position (a multiple of
- * `MONTH_STEP` once Earlier months or Later months were pressed). */
-export function monthWindow(
+/** How many months a row `width` pixels wide shows (BR-F05-38): as many as fit, from 4 to 8;
+ * `null`, before the width is known, shows the default. */
+export function monthsFit(width: number | null): number {
+	if (width === null || width <= 0) return MONTHS_DEFAULT;
+	const fit = Math.floor((width - MONTH_ROW_CHROME) / MONTH_CELL_WIDTH);
+	return Math.min(MONTHS_MAX, Math.max(MONTHS_MIN, fit));
+}
+
+/** How many of the shown months come before the current one at offset 0 (BR-F05-38): 1 for 4
+ * or 5, 2 for 6 or 7 and 3 for 8, so the current month stays left of centre. */
+export function monthsBefore(count: number): number {
+	if (count <= 5) return 1;
+	return count <= 7 ? 2 : 3;
+}
+
+/** The months the row shows: `count` of them, `offset` months on from the first position (a
+ * multiple of `MONTH_STEP` once Earlier months or Later months were pressed). */
+export function monthWindow(current: Month, offset: number, count: number): Month[] {
+	return monthsStarting(shiftMonth(current, offset - monthsBefore(count)), count);
+}
+
+/** The months a read for the row covers at `offset`: the widest window, 8 months from 3 before,
+ * which holds every narrower one. */
+export function monthSpan(
 	current: Month,
 	offset: number,
-	compact: boolean,
-): Month[] {
-	const before = compact ? MONTHS_BEFORE_COMPACT : MONTHS_BEFORE;
-	const count = compact ? MONTHS_SHOWN_COMPACT : MONTHS_SHOWN;
-	return monthsStarting(shiftMonth(current, offset - before), count);
+): { from: Month; to: Month } {
+	const months = monthWindow(current, offset, MONTHS_MAX);
+	return { from: months[0]!, to: months.at(-1)! };
+}
+
+/** Whether Earlier months (`-1`) or Later months (`1`) can move the row by `MONTH_STEP`
+ * without a month past the reach of BR-F05-36. */
+export function canMoveMonths(
+	current: Month,
+	offset: number,
+	direction: -1 | 1,
+): boolean {
+	const { from, to } = monthSpan(current, offset + direction * MONTH_STEP);
+	return (
+		from >= shiftMonth(current, -MONTH_REACH)
+		&& to <= shiftMonth(current, MONTH_REACH)
+	);
 }
 
 /** One month of the row (BR-F05-38). */
@@ -82,11 +121,15 @@ export type MonthCell = {
 	figure: string;
 	/** "November 2026, charged ₹18,000.00 of ₹20,149.00". */
 	label: string;
+	/** Whether `figure` is known: the months read failed when it is not, and the cell shows "—"
+	 * and is named by its month alone. */
+	hasFigure: boolean;
 	/** A past month carries a check mark. */
 	past: boolean;
 	current: boolean;
 	selected: boolean;
-	/** The current month's bar: its charged share of the month, in tenths of a percent. */
+	/** The current month's bar: its charged share of the month, in tenths of a percent. The rest
+	 * of the track is what is still to come. */
 	chargedTenths: number | null;
 };
 
@@ -99,11 +142,11 @@ export type MonthCell = {
  */
 export function monthCells(
 	months: readonly Month[],
-	rows: readonly SubscriptionMonthRow[],
+	rows: readonly SubscriptionMonthRow[] | undefined,
 	{ current, selected }: { current: Month; selected: Month },
 	f: Formats,
 ): MonthCell[] {
-	const byMonth = new Map(rows.map((row) => [row.month, row]));
+	const byMonth = new Map((rows ?? []).map((row) => [row.month, row]));
 	return months.map((month) => {
 		const charged = byMonth.get(month)?.chargedMinor ?? 0;
 		const total = charged + (byMonth.get(month)?.expectedMinor ?? 0);
@@ -111,9 +154,16 @@ export function monthCells(
 		const now = month === current;
 		const long = formatMonth(month, f, "long");
 		let label = `${long}, expected ${money(total, f)}`;
-		if (past) label = `${long}, charged ${money(charged, f)}`;
+		if (rows === undefined) label = long;
+		else if (past) label = `${long}, charged ${money(charged, f)}`;
 		else if (now)
 			label = `${long}, charged ${money(charged, f)} of ${money(total, f)}`;
+		const barTenths =
+			now && rows !== undefined ?
+				total === 0 ?
+					0
+				:	percentTenths(charged, total)
+			:	null;
 		return {
 			month,
 			name: formatMonth(month, f, "shortName"),
@@ -121,17 +171,16 @@ export function monthCells(
 				month.slice(0, 4) === current.slice(0, 4) ?
 					null
 				:	formatYear(Number(month.slice(0, 4)), f),
-			figure: formatMoneyWhole(total, f.currency, f.numberLocale),
+			figure:
+				rows === undefined ? "—" : (
+					formatMoneyWhole(total, f.currency, f.numberLocale)
+				),
 			label,
+			hasFigure: rows !== undefined,
 			past,
 			current: now,
 			selected: month === selected,
-			chargedTenths:
-				now ?
-					total === 0 ?
-						0
-					:	percentTenths(charged, total)
-				:	null,
+			chargedTenths: barTenths,
 		};
 	});
 }
@@ -222,6 +271,10 @@ export function chipLabel(item: MonthItem, f: Formats): string {
 export function chipAmount(item: MonthItem, f: Formats): string {
 	return formatMoneyWhole(item.amountMinor, f.currency, f.numberLocale);
 }
+
+/** The colour of a chip's dot, its category's (BR-F05-38). */
+export const chipColor = (category: string): string =>
+	categoryColor(category as CategoryKey);
 
 const categoryLabel = (category: string): string =>
 	CATEGORY_LABELS[category as CategoryKey] ?? category;
