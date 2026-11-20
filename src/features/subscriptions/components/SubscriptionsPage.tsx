@@ -22,8 +22,13 @@ import { filterByCategory, isFilterable } from "../lib/category-filter";
 import { chargesHref, type OpenTarget } from "../lib/deep-link";
 import type { MenuAction } from "../lib/menu";
 import { asOfText, PAGE_TEXT } from "../lib/messages";
+import type { PanelActionKey } from "../lib/panel";
 import { DEFAULT_SORTING } from "../lib/table";
-import type { SubscriptionsLocale } from "../lib/types";
+import type {
+	SubscriptionAnswer,
+	SubscriptionItem,
+	SubscriptionsLocale,
+} from "../lib/types";
 import {
 	shownView,
 	SUBSCRIPTION_VIEWS,
@@ -31,6 +36,7 @@ import {
 	VIEW_KEY,
 } from "../lib/view";
 import { SubscriptionCalendar } from "./SubscriptionCalendar";
+import { SubscriptionDialog } from "./SubscriptionDialog";
 import { SubscriptionList } from "./SubscriptionList";
 import { SubscriptionPanel } from "./SubscriptionPanel";
 import { SubscriptionsHeader } from "./SubscriptionsHeader";
@@ -99,6 +105,10 @@ export function SubscriptionsPage({
 	// The table's sort lives here, so it outlives the table while the view changes (D-570).
 	const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
 	const [filtered, setFiltered] = useState<ExpenseCategory | null>(null);
+	// The Add or Edit dialog while it is open: the Subscription it edits, or `null` for Add.
+	const [dialog, setDialog] = useState<{ item: SubscriptionItem | null } | null>(
+		null,
+	);
 	// A Subscription that is gone from the list is no longer selected, and stays unselected if
 	// it comes back (BR-F05-21). Set while rendering, React's pattern for state that follows
 	// what was read.
@@ -163,8 +173,22 @@ export function SubscriptionsPage({
 		setPicked(item.subscriptionId);
 		setMarked({ id: item.subscriptionId, date: item.date });
 	};
-	const act = (action: MenuAction, id: string) => {
+	const edit = (id: string) => {
+		const item = list?.items.find((each) => each.id === id);
+		if (item) setDialog({ item });
+	};
+	const act = (action: MenuAction | PanelActionKey, id: string) => {
 		if (action === "viewCharges") router.push(chargesHref(id));
+		if (action === "edit") edit(id);
+	};
+	/** A confirmed Add or Edit: the Subscription becomes the selection when the panel is docked
+	 * or something is selected, and a filter that would hide it goes (BR-F05-33). */
+	const saved = (subscription: SubscriptionAnswer) => {
+		if (!docked && selected === null) return;
+		if (category !== null && subscription.category !== category) {
+			setFiltered(null);
+		}
+		choose(subscription.id);
 	};
 	const failed = !list && (query.isError || query.fetchStatus === "paused");
 	const isEmpty = list !== undefined && list.items.length === 0;
@@ -173,8 +197,11 @@ export function SubscriptionsPage({
 	const showPanel = list !== undefined && !isEmpty;
 	const drawerOpen = showPanel && !docked && selected !== null;
 
+	useShortcut("E", () => selected !== null && edit(selected), {
+		enabled: selected !== null && dialog === null,
+	});
 	useShortcut("Escape", () => choose(null), {
-		enabled: selected !== null,
+		enabled: selected !== null && dialog === null,
 		// Escape in a text field, a menu or a dialog belongs to them.
 		ignoreInputs: true,
 		ignoreDefaultPrevented: true,
@@ -233,6 +260,8 @@ export function SubscriptionsPage({
 					<EmptyState
 						title={PAGE_TEXT.emptyTitle}
 						body={PAGE_TEXT.emptyBody}
+						action={PAGE_TEXT.add}
+						onAction={() => setDialog({ item: null })}
 					/>
 				</Section>
 			);
@@ -267,6 +296,7 @@ export function SubscriptionsPage({
 					view={view}
 					onViewChange={setStored}
 					hasSwitch={!failed && !isEmpty}
+					onAdd={() => setDialog({ item: null })}
 				/>
 				{body()}
 			</div>
@@ -278,9 +308,20 @@ export function SubscriptionsPage({
 					formats={locale}
 					onClose={() => choose(null)}
 					onViewCharges={(id) => router.push(chargesHref(id))}
+					onAction={act}
 					selectedDue={markedDue}
 					activeCategory={category}
 					onCategory={filterTo}
+				/>
+			)}
+			{dialog !== null && (
+				<SubscriptionDialog
+					isOpen
+					item={dialog.item}
+					items={list?.items ?? []}
+					locale={locale}
+					onClose={() => setDialog(null)}
+					onSaved={saved}
 				/>
 			)}
 		</div>

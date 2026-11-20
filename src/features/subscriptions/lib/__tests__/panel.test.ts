@@ -1044,15 +1044,17 @@ describe("panelActions (BR-F05-40)", () => {
 });
 
 describe("what the panel offers so far (READY_PANEL)", () => {
-	test("nothing that needs a later chunk's dialog is on yet", () => {
-		expect(READY_PANEL.edit).toBe(false);
+	test("only Edit is on; what needs a later chunk's dialog is not", () => {
+		expect(READY_PANEL.edit).toBe(true);
 		expect(READY_PANEL.undoSkip).toBe(false);
 		expect(READY_PANEL.status.size).toBe(0);
-		expect(READY_PANEL.actions.size).toBe(0);
+		expect([...READY_PANEL.actions]).toEqual(["edit"]);
 	});
 
-	test("the hint leaves out the Edit key until Edit exists", () => {
-		expect(keysHint()).toBe("Up and down arrows move · Esc to close");
+	test("the hint names the Edit key once Edit exists", () => {
+		expect(keysHint()).toBe(
+			"E to edit · Up and down arrows move · Esc to close",
+		);
 		expect(keysHint(false)).toBe("Up and down arrows move · Esc to close");
 		expect(keysHint(true)).toBe(
 			"E to edit · Up and down arrows move · Esc to close",
@@ -1060,7 +1062,7 @@ describe("what the panel offers so far (READY_PANEL)", () => {
 		expect(keysHint(true)).toBe(PANEL_TEXT.keysHint);
 	});
 
-	test("the footer shows no button while none is ready, whatever the status", () => {
+	test("the footer is Edit alone, whatever the status", () => {
 		for (const status of [
 			"active",
 			"ending",
@@ -1069,7 +1071,9 @@ describe("what the panel offers so far (READY_PANEL)", () => {
 			"ended",
 		] as const) {
 			const item = subscriptionItem("netflix", { status });
-			expect(readyPanelActions(item, F)).toEqual([]);
+			expect(readyPanelActions(item, F).map((each) => each.action)).toEqual([
+				"edit",
+			]);
 		}
 	});
 

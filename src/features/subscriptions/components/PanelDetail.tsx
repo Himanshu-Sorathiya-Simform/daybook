@@ -18,6 +18,7 @@ import {
 	keysHint,
 	PANEL_TEXT,
 	paidSummary,
+	type PanelActionKey,
 	READY_PANEL,
 	readyPanelActions,
 	readyStatusActions,
@@ -36,6 +37,8 @@ export type PanelDetailProps = {
 	onClose: () => void;
 	/** View charges: Transactions filtered to this Subscription (BR-F05-23). */
 	onViewCharges: () => void;
+	/** A footer button, or "Add a note", which opens Edit (BR-F05-40). */
+	onAction: (action: PanelActionKey) => void;
 	/** The date the calendar's selection marks in the timeline (BR-F05-38). */
 	selectedDue?: string | null;
 	className?: string;
@@ -55,6 +58,7 @@ export function PanelDetail({
 	formats,
 	onClose,
 	onViewCharges,
+	onAction,
 	selectedDue = null,
 	className,
 }: Readonly<PanelDetailProps>) {
@@ -197,8 +201,18 @@ export function PanelDetail({
 					</div>
 				)}
 			</section>
-			{item.note !== null && (
-				<section
+			{item.note === null ?
+				READY_PANEL.edit && (
+					<Button
+						size="sm"
+						variant="row"
+						className="self-start"
+						onPress={() => onAction("edit")}
+					>
+						{PANEL_TEXT.addNote}
+					</Button>
+				)
+			:	<section
 					aria-label={PANEL_TEXT.note}
 					className="flex flex-col gap-1"
 				>
@@ -209,7 +223,7 @@ export function PanelDetail({
 						{item.note}
 					</p>
 				</section>
-			)}
+			}
 			<span className="flex-1" />
 			{footer.length > 0 && (
 				<div className="flex flex-wrap gap-2">
@@ -217,7 +231,7 @@ export function PanelDetail({
 						<Button
 							key={entry.action}
 							variant={entry.variant}
-							onPress={() => {}}
+							onPress={() => onAction(entry.action)}
 						>
 							{entry.label}
 						</Button>

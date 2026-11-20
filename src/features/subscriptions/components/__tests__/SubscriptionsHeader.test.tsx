@@ -10,16 +10,18 @@ import {
 
 function renderHeader(props: Partial<SubscriptionsHeaderProps> = {}) {
 	const onViewChange = vi.fn();
+	const onAdd = vi.fn();
 	const view = renderInApp(
 		<SubscriptionsHeader
 			asOf={null}
 			view="list"
 			hasSwitch
 			onViewChange={onViewChange}
+			onAdd={onAdd}
 			{...props}
 		/>,
 	);
-	return { ...view, onViewChange, user: userEvent.setup() };
+	return { ...view, onViewChange, onAdd, user: userEvent.setup() };
 }
 
 const choices = () =>
@@ -106,10 +108,30 @@ describe("SubscriptionsHeader (BR-F05-21)", () => {
 		expect(screen.queryByText(/^as of /)).toBeNull();
 	});
 
-	test("has no Add button yet, so no dead button ships", () => {
-		renderHeader();
+	// AC-F05-46
+	test("has Add a Subscription after the switch, and pressing it asks to add", async () => {
+		const { user, onAdd } = renderHeader();
+		const switchAt = screen.getByRole("radiogroup");
+		const add = screen.getByRole("button", { name: "Add a Subscription" });
 		expect(
-			screen.queryByRole("button", { name: /Add a Subscription/ }),
-		).toBeNull();
+			switchAt.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+		await user.click(add);
+		expect(onAdd).toHaveBeenCalledOnce();
+	});
+
+	test("Add keeps its name below 768 px, where only its icon shows", () => {
+		renderHeader();
+		const add = screen.getByRole("button", { name: "Add a Subscription" });
+		expect(add.querySelector(".max-md\\:sr-only")).not.toBeNull();
+		expect(add.querySelector("svg")).not.toBeNull();
+	});
+
+	test("shows Add with no switch, as an empty list does", () => {
+		renderHeader({ hasSwitch: false });
+		expect(screen.queryByRole("radiogroup")).toBeNull();
+		expect(
+			screen.getByRole("button", { name: "Add a Subscription" }),
+		).toBeVisible();
 	});
 });

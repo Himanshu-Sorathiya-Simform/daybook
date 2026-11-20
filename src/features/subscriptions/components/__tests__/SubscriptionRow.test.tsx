@@ -153,12 +153,13 @@ describe("the menu", () => {
 		expect(onAction).toHaveBeenCalledExactlyOnceWith("viewCharges", netflix.id);
 	});
 
-	test("offers only what is built so far", async () => {
+	test("offers only what is built so far: Edit and View charges", async () => {
 		const { user } = setup(rowOf(netflix));
 		await user.click(
 			screen.getByRole("button", { name: "Actions for Netflix" }),
 		);
 		expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual([
+			"Edit",
 			"View charges",
 		]);
 	});
@@ -239,13 +240,16 @@ describe("an ended row (BR-F05-22)", () => {
 		expect(screen.getByText("₹649.00")).toHaveClass("text-ink-2");
 	});
 
-	test("has no Resume button until its dialog exists, and the menu offers View charges", async () => {
+	test("has no Resume button until its dialog exists, and the menu offers Edit and View charges", async () => {
 		const { user } = setup(rowOf(ended));
 		expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
 		await user.click(
 			screen.getByRole("button", { name: "Actions for Old plan" }),
 		);
-		expect(screen.getAllByRole("menuitem")).toHaveLength(1);
+		expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual([
+			"Edit",
+			"View charges",
+		]);
 	});
 });
 

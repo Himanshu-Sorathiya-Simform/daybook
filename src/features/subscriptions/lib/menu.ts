@@ -18,7 +18,10 @@ export type MenuAction =
 
 /** The actions whose dialogs or writes exist so far. A later chunk adds its own as it builds
  * them, so the menu never offers a button that does nothing. */
-export const READY_ACTIONS: ReadonlySet<MenuAction> = new Set(["viewCharges"]);
+export const READY_ACTIONS: ReadonlySet<MenuAction> = new Set([
+	"edit",
+	"viewCharges",
+]);
 
 export type MenuItem = {
 	action: MenuAction;

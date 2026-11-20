@@ -244,18 +244,22 @@ describe("the Pause item and the 24-month limit (BR-F05-43)", () => {
 });
 
 describe("readyMenu (the actions built so far)", () => {
-	test("offers only View charges until the other dialogs exist", () => {
-		expect([...READY_ACTIONS]).toEqual(["viewCharges"]);
+	test("offers Edit and View charges until the other dialogs exist", () => {
+		expect([...READY_ACTIONS].sort()).toEqual(["edit", "viewCharges"]);
 	});
 
 	test.each(["active", "upcoming", "paused", "ending", "ended"] as const)(
-		"a %s Subscription's menu is View charges alone",
+		"a %s Subscription's menu is Edit, then View charges",
 		(status) => {
 			const item = subscriptionItem("netflix", { status });
 			expect(readyMenu(item, F).map((entry) => entry.action)).toEqual([
+				"edit",
 				"viewCharges",
 			]);
-			expect(readyMenu(item, F)[0]?.label).toBe("View charges");
+			expect(readyMenu(item, F).map((entry) => entry.label)).toEqual([
+				"Edit",
+				"View charges",
+			]);
 		},
 	);
 

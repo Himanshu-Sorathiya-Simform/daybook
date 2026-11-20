@@ -57,10 +57,10 @@ export const READY_PANEL: {
 	status: ReadonlySet<StatusAction>;
 	actions: ReadonlySet<PanelActionKey>;
 } = {
-	edit: false,
+	edit: true,
 	undoSkip: false,
 	status: new Set(),
-	actions: new Set(),
+	actions: new Set(["edit"]),
 };
 
 /** The hint at the foot of the panel: "E to edit · Up and down arrows move · Esc to close",

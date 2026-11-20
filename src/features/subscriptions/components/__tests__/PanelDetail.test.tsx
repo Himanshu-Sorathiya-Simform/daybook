@@ -56,6 +56,7 @@ function setup(
 	);
 	const onClose = vi.fn();
 	const onViewCharges = vi.fn();
+	const onAction = vi.fn();
 	const client = testClient();
 	const element = (due: string | null) => (
 		<AppProviders
@@ -67,6 +68,7 @@ function setup(
 				formats={IN}
 				onClose={onClose}
 				onViewCharges={onViewCharges}
+				onAction={onAction}
 				selectedDue={due}
 			/>
 		</AppProviders>
@@ -76,6 +78,7 @@ function setup(
 		reads,
 		onClose,
 		onViewCharges,
+		onAction,
 		again: (due: string | null) => view.rerender(element(due)),
 		user: userEvent.setup(),
 	};
@@ -181,25 +184,26 @@ describe("the status box and the buttons built so far", () => {
 		await screen.findByRole("list");
 	});
 
-	test("the footer has no Edit, Pause, Cancel or Delete until their dialogs exist", async () => {
+	test("the footer has Edit, and no Pause, Cancel or Delete until their dialogs exist", async () => {
 		setup();
 		await screen.findByRole("list");
-		for (const name of [
-			"Edit",
-			"Pause",
-			"Cancel Subscription",
-			"Delete",
-			"Resume",
-			"Add a note",
-		]) {
+		expect(screen.getByRole("button", { name: "Edit" })).toBeVisible();
+		for (const name of ["Pause", "Cancel Subscription", "Delete", "Resume"]) {
 			expect(screen.queryByRole("button", { name })).toBeNull();
 		}
 	});
 
-	test("the key hint leaves out the Edit key until Edit exists", async () => {
+	test("Edit asks to edit this Subscription", async () => {
+		const { user, onAction } = setup();
+		await screen.findByRole("list");
+		await user.click(screen.getByRole("button", { name: "Edit" }));
+		expect(onAction).toHaveBeenCalledExactlyOnceWith("edit");
+	});
+
+	test("the key hint names the Edit key", async () => {
 		setup();
 		expect(
-			screen.getByText("Up and down arrows move · Esc to close"),
+			screen.getByText("E to edit · Up and down arrows move · Esc to close"),
 		).toBeVisible();
 		await screen.findByRole("list");
 	});
@@ -541,10 +545,18 @@ describe("the note (BR-F05-40)", () => {
 		await screen.findByRole("list");
 	});
 
-	test("with no note there is no Note section and no Add a note yet", async () => {
-		setup();
+	test("with no note there is no Note section, but an Add a note that opens Edit", async () => {
+		const { user, onAction } = setup();
 		await screen.findByRole("list");
 		expect(screen.queryByRole("region", { name: "Note" })).toBeNull();
-		expect(screen.queryByText("Add a note")).toBeNull();
+		await user.click(screen.getByRole("button", { name: "Add a note" }));
+		expect(onAction).toHaveBeenCalledExactlyOnceWith("edit");
+	});
+
+	test("with a note there is no Add a note", async () => {
+		setup(subscriptionItem("netflix", { note: "Family plan" }));
+		await screen.findByRole("list");
+		expect(screen.getByRole("region", { name: "Note" })).toBeVisible();
+		expect(screen.queryByRole("button", { name: "Add a note" })).toBeNull();
 	});
 });

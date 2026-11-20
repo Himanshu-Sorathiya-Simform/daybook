@@ -17,6 +17,7 @@ import {
 } from "vitest";
 
 import { AppProviders } from "@/components/app/AppProviders";
+import { GOLDEN_BLOCK, meFor } from "@/components/app/__tests__/helpers";
 import { Toaster } from "@/components/feedback/Toaster";
 import { InRouter, routerFake } from "@/components/app/__tests__/router";
 import { resetUnsavedChoices } from "@/hooks/useStoredChoice";
@@ -204,12 +205,12 @@ describe("the list, golden at 2 November (BR-F05-21)", () => {
 		expect(reads).toHaveLength(0);
 	});
 
-	test("has no Add button, so no dead button ships", async () => {
+	test("has Add a Subscription in the header", async () => {
 		renderPage();
 		await screen.findByText("Monthly cost");
 		expect(
-			screen.queryByRole("button", { name: /Add a Subscription/ }),
-		).toBeNull();
+			screen.getByRole("button", { name: "Add a Subscription" }),
+		).toBeVisible();
 	});
 
 	test("has no panel yet", async () => {
@@ -241,10 +242,12 @@ describe("empty (section 6)", () => {
 		expect(loading()).toBeNull();
 	});
 
-	test("offers no Add button until its dialog exists", async () => {
+	test("offers Add a Subscription in the header and in the message", async () => {
 		renderPage({ answer: () => ok(emptyList()) });
 		await screen.findByText("No Subscriptions yet.");
-		expect(screen.queryByRole("button")).toBeNull();
+		expect(
+			screen.getAllByRole("button", { name: "Add a Subscription" }),
+		).toHaveLength(2);
 	});
 });
 
@@ -2038,5 +2041,345 @@ describe("what the server draws from the device's cookies (D-629)", () => {
 		).toBeNull();
 		expect(screen.getByRole("grid", { name: "Subscriptions" })).toBeVisible();
 		expect(document.cookie).toContain("daybook_wide=narrow");
+	});
+});
+
+describe("Add and Edit in the page (BR-F05-21, BR-F05-24, BR-F05-40, BR-F05-45)", () => {
+	const golden = subscriptionList();
+	const [netflix, , sunrise] = golden.items;
+	const rowNamed = (name: string) =>
+		screen.getByRole("row", { name: new RegExp(`^${name}`) });
+	const dialog = () => screen.queryByRole("dialog");
+	const panel = () =>
+		screen.queryByRole("complementary", { name: "Subscription" });
+
+	/** The reads the dialog adds to the page's: the profile, Add's payees and an Edit's write. */
+	function dialogReads() {
+		route(network, "get", "/api/me", () => ok(meFor("u1", GOLDEN_BLOCK)));
+		route(network, "get", "/api/payees", () =>
+			ok({ items: [], currency: "INR" }),
+		);
+	}
+	const changed = (item: typeof netflix, over: Record<string, unknown> = {}) => ({
+		...item,
+		currency: "INR",
+		changeDate: "2026-11-02",
+		chargesCreated: 0,
+		chargesUpdated: 0,
+		chargesDeleted: 0,
+		months: [],
+		...over,
+	});
+
+	describe("reaching the dialog", () => {
+		// AC-F05-46
+		test("Add a Subscription in the header opens Add", async () => {
+			media({ wide: true, docked: true });
+			dialogReads();
+			const { user } = renderPage({ seed: golden });
+			await user.click(
+				screen.getByRole("button", { name: "Add a Subscription" }),
+			);
+			expect(dialog()).toHaveAccessibleName("Add a Subscription");
+		});
+
+		// AC-F05-46
+		test("the empty page's Add opens Add too", async () => {
+			dialogReads();
+			const { user } = renderPage({ answer: () => ok(emptyList()) });
+			await screen.findByText("No Subscriptions yet.");
+			const adds = screen.getAllByRole("button", {
+				name: "Add a Subscription",
+			});
+			await user.click(adds.at(-1)!);
+			expect(dialog()).toHaveAccessibleName("Add a Subscription");
+		});
+
+		test("Add shows while the list loads and not when it failed", async () => {
+			renderPage({ answer: async () => (await delay("infinite"), ok({})) });
+			expect(
+				screen.getByRole("button", { name: "Add a Subscription" }),
+			).toBeVisible();
+		});
+
+		test("a failed load still has Add, as only the switch and the panel go", async () => {
+			dialogReads();
+			renderPage({ answer: () => refuse(500, "internal_error") });
+			await screen.findByText("Subscriptions could not be loaded.");
+			expect(
+				screen.getByRole("button", { name: "Add a Subscription" }),
+			).toBeVisible();
+		});
+
+		// AC-F05-46
+		test("Edit in a row's menu opens Edit for that Subscription", async () => {
+			media({ wide: true, docked: true });
+			dialogReads();
+			route(network, "get", "/api/transactions", () => ok(listPage([])));
+			const { user } = renderPage({ seed: golden });
+			await user.click(
+				screen.getByRole("button", { name: "Actions for Netflix" }),
+			);
+			await user.click(screen.getByRole("menuitem", { name: "Edit" }));
+			expect(dialog()).toHaveAccessibleName("Edit Netflix");
+		});
+
+		// AC-F05-46
+		test("Edit in the panel opens Edit for the selected Subscription", async () => {
+			media({ wide: true, docked: true });
+			dialogReads();
+			const { user } = renderPage({ seed: golden });
+			await user.click(rowNamed("Cult Gym"));
+			await screen.findByRole("heading", { name: "Cult Gym" });
+			await user.click(within(panel()!).getByRole("button", { name: "Edit" }));
+			expect(dialog()).toHaveAccessibleName("Edit Cult Gym");
+		});
+
+		// AC-F05-46
+		test("Add a note in the panel opens Edit", async () => {
+			media({ wide: true, docked: true });
+			dialogReads();
+			const { user } = renderPage({ seed: golden });
+			await user.click(rowNamed("Netflix"));
+			await user.click(
+				await screen.findByRole("button", { name: "Add a note" }),
+			);
+			expect(dialog()).toHaveAccessibleName("Edit Netflix");
+		});
+
+		test("Edit in the drawer below 1180 px opens Edit", async () => {
+			media({ wide: true, docked: false });
+			dialogReads();
+			const { user } = renderPage({ seed: golden });
+			await user.click(rowNamed("Netflix"));
+			const drawer = await screen.findByRole("dialog", {
+				name: "Subscription",
+			});
+			await user.click(within(drawer).getByRole("button", { name: "Edit" }));
+			expect(
+				screen.getByRole("dialog", { name: "Edit Netflix" }),
+			).toBeVisible();
+		});
+	});
+
+	describe("the E key (BR-F05-45)", () => {
+		// AC-F05-46
+		test("opens Edit for the selected Subscription", async () => {
+			media({ wide: true, docked: true });
+			dialogReads();
+			const { user } = renderPage({ seed: golden });
+			await user.click(rowNamed("Netflix"));
+			await screen.findByRole("heading", { name: "Netflix" });
+			await user.keyboard("e");
+			expect(dialog()).toHaveAccessibleName("Edit Netflix");
+		});
+
+		// AC-F05-46
+		test("with nothing selected it does nothing", async () => {
+			media({ wide: true, docked: true });
+			dialogReads();
+			const { user } = renderPage({ seed: golden });
+			await user.keyboard("e");
+			expect(dialog()).toBeNull();
+		});
+
+		test("in a text field it is typed, not a command", async () => {
+			media({ wide: true, docked: true });
+			dialogReads();
+			const { user } = renderPage({ seed: golden });
+			await user.click(rowNamed("Netflix"));
+			const field = document.createElement("input");
+			document.body.append(field);
+			field.focus();
+			await user.keyboard("e");
+			expect(dialog()).toBeNull();
+			field.remove();
+		});
+
+		test("works below 1180 px with the drawer open", async () => {
+			media({ wide: true, docked: false });
+			dialogReads();
+			const { user } = renderPage({ seed: golden });
+			await user.click(rowNamed("Netflix"));
+			await screen.findByRole("dialog", { name: "Subscription" });
+			await user.keyboard("e");
+			expect(
+				screen.getByRole("dialog", { name: "Edit Netflix" }),
+			).toBeVisible();
+		});
+
+		// AC-F05-46
+		test("Escape in the dialog closes it and keeps the selection", async () => {
+			media({ wide: true, docked: true });
+			dialogReads();
+			const { user } = renderPage({ seed: golden });
+			await user.click(rowNamed("Netflix"));
+			await screen.findByRole("heading", { name: "Netflix" });
+			await user.keyboard("e");
+			expect(dialog()).not.toBeNull();
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(dialog()).toBeNull());
+			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "true");
+		});
+
+		test("the panel's hint names it", async () => {
+			media({ wide: true, docked: true });
+			const { user } = renderPage({ seed: golden });
+			await user.click(rowNamed("Netflix"));
+			expect(
+				await screen.findByText(
+					"E to edit · Up and down arrows move · Esc to close",
+				),
+			).toBeVisible();
+		});
+	});
+
+	describe("after a confirmed save (BR-F05-33)", () => {
+		async function saveEdit(
+			user: ReturnType<typeof userEvent.setup>,
+			name: string,
+			amount: string,
+		) {
+			const box = await screen.findByRole("textbox", { name: "Amount" });
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "Save changes" }),
+				).not.toHaveAttribute("aria-disabled", "true"),
+			);
+			await user.clear(box);
+			await user.type(box, amount);
+			await user.click(screen.getByRole("button", { name: "Save changes" }));
+			await waitFor(() =>
+				expect(
+					screen.queryByRole("dialog", { name: `Edit ${name}` }),
+				).toBeNull(),
+			);
+		}
+
+		// AC-F05-46
+		test("docked, the saved Subscription is selected though nothing was", async () => {
+			media({ wide: true, docked: true });
+			dialogReads();
+			const patches = route(
+				network,
+				"patch",
+				`/api/subscriptions/${netflix!.id}`,
+				() =>
+					ok(
+						changed(netflix!, {
+							amountMinor: 79900,
+							version: netflix!.version + 1,
+						}),
+					),
+			);
+			const { user } = renderPage({ seed: golden });
+			await user.click(
+				screen.getByRole("button", { name: "Actions for Netflix" }),
+			);
+			await user.click(screen.getByRole("menuitem", { name: "Edit" }));
+			await saveEdit(user, "Netflix", "799");
+			expect(patches).toHaveLength(1);
+			expect(
+				await screen.findByRole("heading", { name: "Netflix" }),
+			).toBeVisible();
+			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "true");
+		});
+
+		// AC-F05-46
+		test("below 1180 px with nothing selected, nothing becomes selected", async () => {
+			media({ wide: true, docked: false });
+			dialogReads();
+			route(network, "patch", `/api/subscriptions/${netflix!.id}`, () =>
+				ok(changed(netflix!, { amountMinor: 79900 })),
+			);
+			const { user } = renderPage({ seed: golden });
+			await user.click(
+				screen.getByRole("button", { name: "Actions for Netflix" }),
+			);
+			await user.click(screen.getByRole("menuitem", { name: "Edit" }));
+			await saveEdit(user, "Netflix", "799");
+			expect(
+				screen.queryByRole("dialog", { name: "Subscription" }),
+			).toBeNull();
+			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
+		});
+
+		test("below 1180 px with one selected, the drawer stays on the saved one", async () => {
+			media({ wide: true, docked: false });
+			dialogReads();
+			route(network, "patch", `/api/subscriptions/${netflix!.id}`, () =>
+				ok(changed(netflix!, { amountMinor: 79900 })),
+			);
+			const { user } = renderPage({ seed: golden });
+			await user.click(rowNamed("Netflix"));
+			await screen.findByRole("dialog", { name: "Subscription" });
+			await user.keyboard("e");
+			await saveEdit(user, "Netflix", "799");
+			expect(
+				await screen.findByRole("dialog", { name: "Subscription" }),
+			).toHaveTextContent("Netflix");
+		});
+
+		// AC-F05-46
+		test("a category filter that would hide the saved Subscription goes", async () => {
+			media({ wide: true, docked: true });
+			dialogReads();
+			route(network, "patch", `/api/subscriptions/${sunrise!.id}`, () =>
+				ok(changed(sunrise!, { category: "food", amountMinor: 1950000 })),
+			);
+			const { user } = renderPage({ seed: golden });
+			await user.click(screen.getByRole("button", { name: "Housing" }));
+			expect(screen.getByRole("grid", { name: "Showing" })).toHaveTextContent(
+				"Housing",
+			);
+			await user.click(
+				screen.getByRole("button", {
+					name: "Actions for Sunrise Apartments",
+				}),
+			);
+			await user.click(screen.getByRole("menuitem", { name: "Edit" }));
+			await saveEdit(user, "Sunrise Apartments", "19500");
+			expect(screen.queryByRole("grid", { name: "Showing" })).toBeNull();
+		});
+
+		test("a refused save leaves the selection and the list as they were", async () => {
+			media({ wide: true, docked: true });
+			dialogReads();
+			route(network, "patch", `/api/subscriptions/${netflix!.id}`, () =>
+				refuse(500, "internal_error"),
+			);
+			const { user } = renderPage({ seed: golden });
+			await user.click(
+				screen.getByRole("button", { name: "Actions for Netflix" }),
+			);
+			await user.click(screen.getByRole("menuitem", { name: "Edit" }));
+			const box = await screen.findByRole("textbox", { name: "Amount" });
+			await waitFor(() =>
+				expect(
+					screen.getByRole("button", { name: "Save changes" }),
+				).not.toHaveAttribute("aria-disabled", "true"),
+			);
+			await user.clear(box);
+			await user.type(box, "799");
+			await user.click(screen.getByRole("button", { name: "Save changes" }));
+			await screen.findByText(/^The Subscription could not be saved\./);
+			expect(dialog()).toHaveAccessibleName("Edit Netflix");
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(dialog()).toBeNull());
+			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
+		});
+	});
+
+	test("the dialog opens on the Subscription as the page held it, not a later read", async () => {
+		media({ wide: true, docked: true });
+		dialogReads();
+		const { user } = renderPage({ seed: golden });
+		await user.click(
+			screen.getByRole("button", { name: "Actions for Netflix" }),
+		);
+		await user.click(screen.getByRole("menuitem", { name: "Edit" }));
+		expect(await screen.findByRole("textbox", { name: "Amount" })).toHaveValue(
+			"649.00",
+		);
 	});
 });

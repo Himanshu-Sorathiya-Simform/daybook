@@ -27,7 +27,11 @@ function setup(
 	],
 ) {
 	route(network, "get", "/api/transactions", () => ok(listPage(charges)));
-	const handlers = { onClose: vi.fn(), onViewCharges: vi.fn() };
+	const handlers = {
+		onClose: vi.fn(),
+		onViewCharges: vi.fn(),
+		onAction: vi.fn(),
+	};
 	const element = (extra: Partial<SubscriptionPanelProps> = {}) => (
 		<AppProviders
 			navigate={vi.fn()}

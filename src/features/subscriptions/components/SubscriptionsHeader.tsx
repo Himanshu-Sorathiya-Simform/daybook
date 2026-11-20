@@ -1,5 +1,8 @@
 "use client";
 
+import { Plus } from "lucide-react";
+
+import { Button } from "@/components/actions/Button";
 import { Segmented } from "@/components/forms/Segmented";
 import { choiceOf } from "@/lib/device-cookies";
 import { SUBSCRIPTION_VIEWS, type SubscriptionsView } from "../lib/view";
@@ -13,20 +16,23 @@ export type SubscriptionsHeaderProps = {
 	onViewChange: (view: SubscriptionsView) => void;
 	/** Whether "Show Subscriptions as" shows: not for an empty list or a failed load. */
 	hasSwitch: boolean;
+	/** Add a Subscription: an icon button below 768 px (BR-F05-21). */
+	onAdd: () => void;
 };
 
 /**
  * The page's header (BR-F05-21): the title, with "as of" while offline, and "Show
  * Subscriptions as" with List, Calendar and Table, Table only from 768 px (D-512): CSS hides
  * that option below it, so the server draws the final switch (D-629). The switch is left out
- * when there is nothing to show (section 6). Add a Subscription joins it with its
- * dialog.
+ * when there is nothing to show (section 6). Add a Subscription follows the switch, an
+ * icon button below 768 px.
  */
 export function SubscriptionsHeader({
 	asOf,
 	view,
 	onViewChange,
 	hasSwitch,
+	onAdd,
 }: Readonly<SubscriptionsHeaderProps>) {
 	return (
 		<div className="flex flex-wrap items-center gap-3">
@@ -48,6 +54,14 @@ export function SubscriptionsHeader({
 					}
 				/>
 			)}
+			<Button
+				icon={Plus}
+				onPress={onAdd}
+				className="max-md:w-11 max-md:justify-center max-md:px-0"
+			>
+				{/* An icon alone below 768 px; the name stays for screen readers. */}
+				<span className="max-md:sr-only">{PAGE_TEXT.add}</span>
+			</Button>
 		</div>
 	);
 }
