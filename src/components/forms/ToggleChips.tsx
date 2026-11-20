@@ -8,7 +8,12 @@ import {
 
 import { cn } from "@/lib/cn";
 
-export type ToggleChipOption = { value: string; label: string };
+export type ToggleChipOption = {
+	value: string;
+	label: string;
+	/** A chip that cannot be chosen now, such as a count with no date to end on. */
+	isDisabled?: boolean;
+};
 
 export type ToggleChipsProps = {
 	/** The group's accessible name, "Type". */
@@ -63,6 +68,7 @@ export function ToggleChips({
 				<AriaToggleButton
 					key={option.value}
 					id={option.value}
+					isDisabled={option.isDisabled ?? false}
 					className={cn(
 						"text-label text-ink bg-page border-line-strong inline-flex h-10 cursor-pointer items-center gap-1.5 rounded-full border px-3.5 font-medium whitespace-nowrap max-md:min-h-11",
 						"hover:bg-soft transition-colors duration-(--dur-fast) ease-out",

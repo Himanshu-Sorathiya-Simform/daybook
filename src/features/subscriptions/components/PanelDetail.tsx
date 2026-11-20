@@ -19,6 +19,7 @@ import {
 	PANEL_TEXT,
 	paidSummary,
 	type PanelActionKey,
+	type StatusAction,
 	READY_PANEL,
 	readyPanelActions,
 	readyStatusActions,
@@ -39,6 +40,10 @@ export type PanelDetailProps = {
 	onViewCharges: () => void;
 	/** A footer button, or "Add a note", which opens Edit (BR-F05-40). */
 	onAction: (action: PanelActionKey) => void;
+	/** A button of the status box: Skip this one, Resume now, Change or Resume. */
+	onStatusAction: (action: StatusAction) => void;
+	/** Undo skip, on the timeline line of a date that was skipped (BR-F05-27). */
+	onUndoSkip: (dueOn: string) => void;
 	/** The date the calendar's selection marks in the timeline (BR-F05-38). */
 	selectedDue?: string | null;
 	className?: string;
@@ -59,6 +64,8 @@ export function PanelDetail({
 	onClose,
 	onViewCharges,
 	onAction,
+	onStatusAction,
+	onUndoSkip,
 	selectedDue = null,
 	className,
 }: Readonly<PanelDetailProps>) {
@@ -121,7 +128,7 @@ export function PanelDetail({
 					setFoldedFor(all ? null : selectedDue);
 				}}
 				canUndoSkip={READY_PANEL.undoSkip}
-				onUndoSkip={() => {}}
+				onUndoSkip={onUndoSkip}
 			/>
 		);
 	};
@@ -176,7 +183,7 @@ export function PanelDetail({
 			<StatusBox
 				box={box}
 				actions={readyStatusActions(box.actions)}
-				onAction={() => {}}
+				onAction={onStatusAction}
 			/>
 			<section
 				aria-label={PANEL_TEXT.charges}
@@ -238,7 +245,7 @@ export function PanelDetail({
 					))}
 				</div>
 			)}
-			<p className="text-caption text-ink-3">{keysHint()}</p>
+			<p className="text-caption text-ink-3">{keysHint(item, formats)}</p>
 		</div>
 	);
 }

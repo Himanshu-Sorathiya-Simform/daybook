@@ -4,6 +4,7 @@ import { Pause } from "lucide-react";
 import { GridListItem as AriaGridListItem } from "react-aria-components";
 
 import { Badge } from "@/components/data/Badge";
+import { Button } from "@/components/actions/Button";
 import { CategoryTag } from "@/components/data/CategoryTag";
 import { categoryLabel } from "@/lib/categories";
 import { cn } from "@/lib/cn";
@@ -19,7 +20,8 @@ import {
 	rowDate,
 } from "../lib/labels";
 import type { ListRow } from "../lib/groups";
-import { type MenuAction, readyMenu } from "../lib/menu";
+import { LIST_TEXT } from "../lib/messages";
+import { type MenuAction, READY_ACTIONS, readyMenu } from "../lib/menu";
 import { RowMenu } from "./RowMenu";
 
 export type SubscriptionRowProps = {
@@ -100,6 +102,16 @@ export function SubscriptionRow({
 				</span>
 				{caption !== null && (
 					<span className="text-caption text-ink-3">{caption}</span>
+				)}
+				{ended && READY_ACTIONS.has("resume") && (
+					<Button
+						size="sm"
+						variant="row"
+						className="-ms-3 self-start"
+						onPress={() => onAction("resume", item.id)}
+					>
+						{LIST_TEXT.resume}
+					</Button>
 				)}
 			</span>
 			<span className="figures flex flex-col items-end text-right">

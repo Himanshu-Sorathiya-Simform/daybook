@@ -57,6 +57,8 @@ function setup(
 	const onClose = vi.fn();
 	const onViewCharges = vi.fn();
 	const onAction = vi.fn();
+	const onStatusAction = vi.fn();
+	const onUndoSkip = vi.fn();
 	const client = testClient();
 	const element = (due: string | null) => (
 		<AppProviders
@@ -69,6 +71,8 @@ function setup(
 				onClose={onClose}
 				onViewCharges={onViewCharges}
 				onAction={onAction}
+				onStatusAction={onStatusAction}
+				onUndoSkip={onUndoSkip}
 				selectedDue={due}
 			/>
 		</AppProviders>
@@ -79,6 +83,8 @@ function setup(
 		onClose,
 		onViewCharges,
 		onAction,
+		onStatusAction,
+		onUndoSkip,
 		again: (due: string | null) => view.rerender(element(due)),
 		user: userEvent.setup(),
 	};
@@ -175,21 +181,54 @@ describe("the pinned header (D-621)", () => {
 });
 
 describe("the status box and the buttons built so far", () => {
-	test("reads the next charge, with no button yet", async () => {
-		setup();
+	test("reads the next charge, with Skip this one, which asks to skip it", async () => {
+		const { user, onStatusAction } = setup();
 		expect(screen.getByText(/Next charge/).parentElement).toHaveTextContent(
 			"Next charge Thu, 5 Nov, in 3 days.",
 		);
-		expect(screen.queryByRole("button", { name: "Skip this one" })).toBeNull();
+		await user.click(screen.getByRole("button", { name: "Skip this one" }));
+		expect(onStatusAction).toHaveBeenCalledExactlyOnceWith("skip");
 		await screen.findByRole("list");
 	});
 
-	test("the footer has Edit, and no Pause, Cancel or Delete until their dialogs exist", async () => {
-		setup();
+	test.each([
+		["paused", ["Resume now", "Change"]],
+		// The box and the footer both offer Resume (BR-F05-40).
+		["ended", ["Resume", "Resume"]],
+	] as const)("a %s Subscription's panel has %j", async (status, names) => {
+		setup(
+			subscriptionItem("netflix", {
+				status,
+				endDate: status === "ended" ? "2026-09-30" : null,
+				pause:
+					status === "paused" ?
+						{ from: "2026-11-05", until: "2027-01-05" }
+					:	null,
+			}),
+		);
+		for (const name of new Set(names)) {
+			expect(screen.getAllByRole("button", { name }).length).toBe(
+				names.filter((each) => each === name).length,
+			);
+		}
 		await screen.findByRole("list");
-		expect(screen.getByRole("button", { name: "Edit" })).toBeVisible();
-		for (const name of ["Pause", "Cancel Subscription", "Delete", "Resume"]) {
-			expect(screen.queryByRole("button", { name })).toBeNull();
+	});
+
+	test("the footer has Edit, Pause, Cancel Subscription and Delete, each asking for its action", async () => {
+		const { user, onAction } = setup();
+		await screen.findByRole("list");
+		expect(
+			within(screen.getByRole("button", { name: "Edit" }).parentElement!)
+				.getAllByRole("button")
+				.map((button) => button.textContent),
+		).toEqual(["Edit", "Pause", "Cancel Subscription", "Delete"]);
+		for (const [name, action] of [
+			["Pause", "pause"],
+			["Cancel Subscription", "cancel"],
+			["Delete", "delete"],
+		] as const) {
+			await user.click(screen.getByRole("button", { name }));
+			expect(onAction).toHaveBeenLastCalledWith(action);
 		}
 	});
 
@@ -200,10 +239,28 @@ describe("the status box and the buttons built so far", () => {
 		expect(onAction).toHaveBeenCalledExactlyOnceWith("edit");
 	});
 
-	test("the key hint names the Edit key", async () => {
+	test("the key hint names only the keys that act on it", async () => {
 		setup();
 		expect(
-			screen.getByText("E to edit · Up and down arrows move · Esc to close"),
+			screen.getByText(
+				"E to edit · S to skip · P to pause · C to cancel · Delete to delete · Up and down arrows move · Esc to close",
+			),
+		).toBeVisible();
+		await screen.findByRole("list");
+	});
+
+	test("an ended one's hint offers resume and not skip", async () => {
+		setup(
+			subscriptionItem("netflix", {
+				status: "ended",
+				endDate: "2026-09-30",
+				nextDueOn: null,
+			}),
+		);
+		expect(
+			screen.getByText(
+				"E to edit · R to resume · Delete to delete · Up and down arrows move · Esc to close",
+			),
 		).toBeVisible();
 		await screen.findByRole("list");
 	});
@@ -412,10 +469,14 @@ describe("the charges (BR-F05-40, BR-F05-48, AC-F05-33)", () => {
 		expect(lines()).toHaveLength(7);
 	});
 
-	test("no Undo skip button, even for a skipped future date", async () => {
-		setup(subscriptionItem("netflix", { skips: ["2026-11-05"] }), []);
+	test("a skipped future date has Undo skip, which asks to bring that date back", async () => {
+		const { user, onUndoSkip } = setup(
+			subscriptionItem("netflix", { skips: ["2026-11-05"] }),
+			[],
+		);
 		await screen.findByText("You skipped it.");
-		expect(screen.queryByRole("button", { name: "Undo skip" })).toBeNull();
+		await user.click(screen.getByRole("button", { name: "Undo skip" }));
+		expect(onUndoSkip).toHaveBeenCalledExactlyOnceWith("2026-11-05");
 	});
 });
 

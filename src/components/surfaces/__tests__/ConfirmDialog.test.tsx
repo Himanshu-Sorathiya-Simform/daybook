@@ -450,3 +450,33 @@ describe("while the action runs", () => {
 		).not.toHaveAttribute("aria-disabled");
 	});
 });
+
+describe("a confirm button that rests", () => {
+	test("is disabled, takes no press, and Cancel still works", async () => {
+		const user = userEvent.setup();
+		const onConfirm = vi.fn();
+		const onOpenChange = vi.fn();
+		render(
+			<Host
+				startOpen
+				isConfirmDisabled
+				onConfirm={onConfirm}
+				onOpenChange={onOpenChange}
+			/>,
+		);
+		const confirm = screen.getByRole("button", { name: "Discard" });
+		expect(confirm).toHaveAttribute("aria-disabled", "true");
+		await user.click(confirm);
+		expect(onConfirm).not.toHaveBeenCalled();
+		await user.click(screen.getByRole("button", { name: "Keep editing" }));
+		expect(onOpenChange).toHaveBeenCalledWith(false);
+	});
+
+	test("is enabled by default", () => {
+		render(<Host startOpen />);
+		expect(screen.getByRole("button", { name: "Discard" })).not.toHaveAttribute(
+			"aria-disabled",
+			"true",
+		);
+	});
+});

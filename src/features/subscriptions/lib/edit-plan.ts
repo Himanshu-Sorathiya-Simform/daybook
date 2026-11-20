@@ -12,6 +12,7 @@ import {
 } from "@/lib/subscriptions/schemas";
 import { cadenceOf, type DialogMessages, type DialogValues } from "./dialog";
 import { formatDayHeader } from "@/lib/date-format";
+import { linkedCharges, type StripItem } from "./charges";
 import { money, shortDate } from "./labels";
 import type { SubscriptionItem, SubscriptionsLocale } from "./types";
 
@@ -19,17 +20,7 @@ import type { SubscriptionItem, SubscriptionsLocale } from "./types";
  * send, and the "What changes" section that shows it. The plan is the server's own
  * (`planChange`), so what the section shows is what the write does. */
 
-/** One cell of the strip of charges around today. */
-export type StripItemKind = "kept" | "today" | "off" | "new" | "more";
-
-export type StripItem = {
-	kind: StripItemKind;
-	label: string;
-	amount?: string;
-	note?: string;
-	/** A warning, as "second charge" is while its skip is not ticked. */
-	warn?: boolean;
-};
+export type { StripItem, StripItemKind } from "./charges";
 
 /** The double-charge choice (BR-F05-31), as the dialog writes it. */
 export type DoubleChargeChoice = {
@@ -112,13 +103,6 @@ function costLineOf(
 	]);
 	return `Monthly cost ${money(before.monthlyMinor, f)} → ${money(next.monthlyMinor, f)} · Yearly ${money(before.yearlyMinor, f)} → ${money(next.yearlyMinor, f)}`;
 }
-
-/** The charges that are linked and have a due date, which every read of a Subscription's
- * charges holds. */
-const linkedOf = (charges: readonly Transaction[]) =>
-	charges.filter(
-		(charge): charge is Transaction & { dueOn: string } => charge.dueOn !== null,
-	);
 
 /** The new Subscription's own words for what it would charge (the name and the figures the
  * body carries), used by the strip. */
@@ -219,7 +203,7 @@ export function editView({
 	});
 	if (!parsed.success) return null;
 	const data: SubscriptionEditBody = parsed.data;
-	const linked = linkedOf(charges);
+	const linked = linkedCharges(charges);
 	const stored: DatedSubscription = {
 		...item,
 		charged: linked.map((charge) => charge.dueOn),

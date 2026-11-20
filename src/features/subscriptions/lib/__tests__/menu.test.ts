@@ -1,7 +1,15 @@
 import { describe, expect, test } from "vitest";
 
 import type { Formats } from "../labels";
-import { type MenuAction, READY_ACTIONS, readyMenu, rowMenu } from "../menu";
+import {
+	type MenuAction,
+	READY_ACTIONS,
+	readyMenu,
+	rowMenu,
+	shortcutAction,
+	shortcutHints,
+	type ShortcutKey,
+} from "../menu";
 import { subscriptionItem } from "./fixtures";
 
 const F: Formats = {
@@ -244,22 +252,29 @@ describe("the Pause item and the 24-month limit (BR-F05-43)", () => {
 });
 
 describe("readyMenu (the actions built so far)", () => {
-	test("offers Edit and View charges until the other dialogs exist", () => {
-		expect([...READY_ACTIONS].sort()).toEqual(["edit", "viewCharges"]);
+	test("every action of the menu is built", () => {
+		expect([...READY_ACTIONS].sort()).toEqual(
+			[
+				"resume",
+				"edit",
+				"skip",
+				"pause",
+				"resumeNow",
+				"changePause",
+				"cancel",
+				"changeEnd",
+				"keepGoing",
+				"viewCharges",
+				"delete",
+			].sort(),
+		);
 	});
 
 	test.each(["active", "upcoming", "paused", "ending", "ended"] as const)(
-		"a %s Subscription's menu is Edit, then View charges",
+		"a %s Subscription's menu is the whole menu",
 		(status) => {
 			const item = subscriptionItem("netflix", { status });
-			expect(readyMenu(item, F).map((entry) => entry.action)).toEqual([
-				"edit",
-				"viewCharges",
-			]);
-			expect(readyMenu(item, F).map((entry) => entry.label)).toEqual([
-				"Edit",
-				"View charges",
-			]);
+			expect(readyMenu(item, F)).toEqual(rowMenu(item, F));
 		},
 	);
 
@@ -288,5 +303,86 @@ describe("readyMenu (the actions built so far)", () => {
 		expect(readyMenu(subscriptionItem("netflix"), F, all)).toEqual(
 			rowMenu(subscriptionItem("netflix"), F),
 		);
+	});
+});
+
+describe("the keys that act as the menu's items do (BR-F05-45, D-630)", () => {
+	const act = (key: ShortcutKey, status: Parameters<typeof subscriptionItem>[1]) =>
+		shortcutAction(key, subscriptionItem("netflix", status), F);
+
+	// AC-F05-52
+	test.each([
+		["S", { status: "active" }, "skip"],
+		["S", { status: "ending" }, "skip"],
+		["P", { status: "active" }, "pause"],
+		["P", { status: "ending" }, "pause"],
+		["P", { status: "paused" }, "changePause"],
+		["R", { status: "ended" }, "resume"],
+		["R", { status: "paused" }, "resumeNow"],
+		["R", { status: "ending" }, "keepGoing"],
+		["C", { status: "active" }, "cancel"],
+		["C", { status: "paused" }, "cancel"],
+		["C", { status: "ending" }, "changeEnd"],
+		["Delete", { status: "active" }, "delete"],
+		["Delete", { status: "upcoming" }, "delete"],
+		["Delete", { status: "ended" }, "delete"],
+	] as const)("%s on a %j Subscription acts as %s", (key, status, action) => {
+		expect(act(key, status)).toBe(action);
+	});
+
+	test.each([
+		["S", { status: "paused" }],
+		["S", { status: "ended" }],
+		["S", { status: "upcoming" }],
+		["S", { status: "active", nextDueOn: null }],
+		["P", { status: "ended" }],
+		["P", { status: "upcoming" }],
+		["P", { status: "active", nextDueOn: "2028-11-02" }],
+		["R", { status: "active" }],
+		["R", { status: "upcoming" }],
+		["C", { status: "ended" }],
+		["C", { status: "upcoming" }],
+	] as const)("%s on a %j Subscription acts as nothing", (key, status) => {
+		expect(act(key, status)).toBeNull();
+	});
+
+	test("a key only ever acts as an item the menu offers", () => {
+		for (const status of [
+			"active",
+			"ending",
+			"paused",
+			"upcoming",
+			"ended",
+		] as const) {
+			const item = subscriptionItem("netflix", { status });
+			const offered = rowMenu(item, F).map((entry) => entry.action);
+			for (const key of ["S", "P", "R", "C", "Delete"] as const) {
+				const action = shortcutAction(key, item, F);
+				if (action !== null) expect(offered).toContain(action);
+			}
+		}
+	});
+
+	test("the hints name each key with the words of its action", () => {
+		expect(shortcutHints(subscriptionItem("netflix"), F)).toEqual([
+			"S to skip",
+			"P to pause",
+			"C to cancel",
+			"Delete to delete",
+		]);
+		expect(
+			shortcutHints(subscriptionItem("netflix", { status: "paused" }), F),
+		).toEqual([
+			"P to change pause",
+			"R to resume now",
+			"C to cancel",
+			"Delete to delete",
+		]);
+	});
+
+	test("an upcoming Subscription has only Delete", () => {
+		expect(
+			shortcutHints(subscriptionItem("netflix", { status: "upcoming" }), F),
+		).toEqual(["Delete to delete"]);
 	});
 });

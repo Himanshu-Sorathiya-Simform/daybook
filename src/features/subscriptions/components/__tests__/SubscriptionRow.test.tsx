@@ -153,15 +153,33 @@ describe("the menu", () => {
 		expect(onAction).toHaveBeenCalledExactlyOnceWith("viewCharges", netflix.id);
 	});
 
-	test("offers only what is built so far: Edit and View charges", async () => {
+	test("offers an active Subscription's whole menu", async () => {
 		const { user } = setup(rowOf(netflix));
 		await user.click(
 			screen.getByRole("button", { name: "Actions for Netflix" }),
 		);
 		expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual([
 			"Edit",
+			"Skip the 5 Nov charge",
+			"Pause",
+			"Cancel Subscription",
 			"View charges",
+			"Delete",
 		]);
+	});
+
+	test.each([
+		["Skip the 5 Nov charge", "skip"],
+		["Pause", "pause"],
+		["Cancel Subscription", "cancel"],
+		["Delete", "delete"],
+	] as const)("%s runs its action", async (label, action) => {
+		const { user, onAction } = setup(rowOf(netflix));
+		await user.click(
+			screen.getByRole("button", { name: "Actions for Netflix" }),
+		);
+		await user.click(screen.getByRole("menuitem", { name: label }));
+		expect(onAction).toHaveBeenCalledExactlyOnceWith(action, netflix.id);
 	});
 });
 
@@ -240,16 +258,30 @@ describe("an ended row (BR-F05-22)", () => {
 		expect(screen.getByText("₹649.00")).toHaveClass("text-ink-2");
 	});
 
-	test("has no Resume button until its dialog exists, and the menu offers Edit and View charges", async () => {
-		const { user } = setup(rowOf(ended));
-		expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
+	test("has a Resume button that asks to resume it, and a menu that starts with Resume", async () => {
+		const { user, onAction } = setup(rowOf(ended));
+		await user.click(screen.getByRole("button", { name: "Resume" }));
+		expect(onAction).toHaveBeenCalledExactlyOnceWith("resume", ended.id);
 		await user.click(
 			screen.getByRole("button", { name: "Actions for Old plan" }),
 		);
 		expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual([
+			"Resume",
 			"Edit",
 			"View charges",
+			"Delete",
 		]);
+	});
+
+	test("pressing its Resume does not select the row", async () => {
+		const { user } = setup(rowOf(ended));
+		await user.click(screen.getByRole("button", { name: "Resume" }));
+		expect(screen.getByRole("row")).not.toHaveAttribute("aria-selected", "true");
+	});
+
+	test("only an ended row has a Resume button", () => {
+		setup(rowOf(netflix));
+		expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
 	});
 });
 

@@ -81,9 +81,6 @@ describe("PANEL_TEXT (BR-F05-40)", () => {
 		expect(PANEL_TEXT.noCharges).toBe("No charges yet.");
 		expect(PANEL_TEXT.note).toBe("Note");
 		expect(PANEL_TEXT.addNote).toBe("Add a note");
-		expect(PANEL_TEXT.keysHint).toBe(
-			"E to edit · Up and down arrows move · Esc to close",
-		);
 	});
 });
 
@@ -1044,25 +1041,53 @@ describe("panelActions (BR-F05-40)", () => {
 });
 
 describe("what the panel offers so far (READY_PANEL)", () => {
-	test("only Edit is on; what needs a later chunk's dialog is not", () => {
+	test("everything the panel can offer is built", () => {
 		expect(READY_PANEL.edit).toBe(true);
-		expect(READY_PANEL.undoSkip).toBe(false);
-		expect(READY_PANEL.status.size).toBe(0);
-		expect([...READY_PANEL.actions]).toEqual(["edit"]);
+		expect(READY_PANEL.undoSkip).toBe(true);
+		expect([...READY_PANEL.status].sort()).toEqual(
+			["change", "resume", "resumeNow", "skip"].sort(),
+		);
+		expect([...READY_PANEL.actions].sort()).toEqual(
+			["cancel", "delete", "edit", "pause", "resume"].sort(),
+		);
 	});
 
-	test("the hint names the Edit key once Edit exists", () => {
-		expect(keysHint()).toBe(
-			"E to edit · Up and down arrows move · Esc to close",
-		);
-		expect(keysHint(false)).toBe("Up and down arrows move · Esc to close");
-		expect(keysHint(true)).toBe(
-			"E to edit · Up and down arrows move · Esc to close",
-		);
-		expect(keysHint(true)).toBe(PANEL_TEXT.keysHint);
+	// AC-F05-52
+	test.each([
+		[
+			"active",
+			"E to edit · S to skip · P to pause · C to cancel · Delete to delete · Up and down arrows move · Esc to close",
+		],
+		[
+			"ending",
+			"E to edit · S to skip · P to pause · R to keep going · C to change end · Delete to delete · Up and down arrows move · Esc to close",
+		],
+		[
+			"paused",
+			"E to edit · P to change pause · R to resume now · C to cancel · Delete to delete · Up and down arrows move · Esc to close",
+		],
+		[
+			"upcoming",
+			"E to edit · Delete to delete · Up and down arrows move · Esc to close",
+		],
+		[
+			"ended",
+			"E to edit · R to resume · Delete to delete · Up and down arrows move · Esc to close",
+		],
+	] as const)(
+		"the hint of a %s Subscription names only the keys that act on it",
+		(status, hint) => {
+			expect(keysHint(subscriptionItem("netflix", { status }), F)).toBe(hint);
+		},
+	);
+
+	test("an active one with no next due date has no skip key in its hint", () => {
+		expect(
+			keysHint(subscriptionItem("netflix", { nextDueOn: null }), F),
+		).not.toContain("S to skip");
 	});
 
-	test("the footer is Edit alone, whatever the status", () => {
+	test("the footer is the whole footer, whatever the status", () => {
 		for (const status of [
 			"active",
 			"ending",
@@ -1071,9 +1096,7 @@ describe("what the panel offers so far (READY_PANEL)", () => {
 			"ended",
 		] as const) {
 			const item = subscriptionItem("netflix", { status });
-			expect(readyPanelActions(item, F).map((each) => each.action)).toEqual([
-				"edit",
-			]);
+			expect(readyPanelActions(item, F)).toEqual(panelActions(item, F));
 		}
 	});
 
@@ -1092,9 +1115,12 @@ describe("what the panel offers so far (READY_PANEL)", () => {
 		expect(readyPanelActions(item, F, all)).toEqual(panelActions(item, F));
 	});
 
-	test("the status box shows no button while none is ready", () => {
-		expect(readyStatusActions(["skip"])).toEqual([]);
-		expect(readyStatusActions(["resumeNow", "change"])).toEqual([]);
+	test("the status box shows every button its status offers", () => {
+		expect(readyStatusActions(["skip"])).toEqual(["skip"]);
+		expect(readyStatusActions(["resumeNow", "change"])).toEqual([
+			"resumeNow",
+			"change",
+		]);
 		expect(readyStatusActions([])).toEqual([]);
 	});
 

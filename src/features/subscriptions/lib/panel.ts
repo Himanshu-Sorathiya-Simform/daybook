@@ -17,7 +17,7 @@ import {
 	relativeDay,
 	scheduleText,
 } from "./labels";
-import { canPause } from "./menu";
+import { canPause, shortcutHints } from "./menu";
 import type { SubscriptionItem, SubscriptionList } from "./types";
 
 /** The words of the panel that no figure changes (BR-F05-40). */
@@ -37,8 +37,6 @@ export const PANEL_TEXT = {
 	noCharges: "No charges yet.",
 	note: "Note",
 	addNote: "Add a note",
-	keysHint: "E to edit · Up and down arrows move · Esc to close",
-	keysHintNoEdit: "Up and down arrows move · Esc to close",
 	chargesFailed: "Charges could not be loaded.",
 	retry: "Retry",
 	loadingCharges: "Loading charges",
@@ -58,18 +56,26 @@ export const READY_PANEL: {
 	actions: ReadonlySet<PanelActionKey>;
 } = {
 	edit: true,
-	undoSkip: false,
-	status: new Set(),
-	actions: new Set(["edit"]),
+	undoSkip: true,
+	status: new Set(["skip", "resumeNow", "change", "resume"]),
+	actions: new Set(["edit", "pause", "resume", "cancel", "delete"]),
 };
 
-/** The hint at the foot of the panel: "E to edit · Up and down arrows move · Esc to close",
- * without the Edit key until Edit exists. */
-export function keysHint(editReady: boolean = READY_PANEL.edit): string {
-	return editReady ? PANEL_TEXT.keysHint : PANEL_TEXT.keysHintNoEdit;
+/** The hint at the foot of the panel, naming only the keys that act on the selection:
+ * "E to edit · S to skip · P to pause · C to cancel · Delete to delete · Up and down arrows
+ * move · Esc to close" (BR-F05-40, D-630). */
+export function keysHint(
+	item: Pick<SubscriptionItem, "status" | "nextDueOn">,
+	f: Formats,
+): string {
+	return [
+		...(READY_PANEL.edit ? ["E to edit"] : []),
+		...shortcutHints(item, f),
+		"Up and down arrows move",
+		"Esc to close",
+	].join(" · ");
 }
 
-/** One category's share of the monthly cost (BR-F05-40). */
 export type CategoryCost = {
 	category: ExpenseCategory;
 	label: string;

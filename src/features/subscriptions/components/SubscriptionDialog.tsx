@@ -6,7 +6,6 @@ import {
 	useForm,
 	useSelector,
 } from "@tanstack/react-form";
-import { useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/actions/Button";
@@ -32,6 +31,7 @@ import { useChangeSubscription } from "../hooks/useChangeSubscription";
 import { useCreateSubscription } from "../hooks/useCreateSubscription";
 import { usePaidPayees } from "../hooks/usePaidPayees";
 import { useSubscriptionCharges } from "../hooks/useSubscriptionCharges";
+import { useWriteRefusal } from "../hooks/useWriteRefusal";
 import {
 	addView,
 	createBody,
@@ -49,16 +49,12 @@ import {
 } from "../lib/dialog";
 import { editView } from "../lib/edit-plan";
 import { payeeChoices } from "../lib/payees";
-import { refreshAfterSubscriptionWrite } from "../lib/refresh";
 import type {
 	SubscriptionAnswer,
 	SubscriptionItem,
 	SubscriptionsLocale,
 } from "../lib/types";
-import {
-	readSubscriptionWriteError,
-	type SubscriptionField,
-} from "../lib/write-errors";
+import type { SubscriptionField } from "../lib/write-errors";
 import { CadenceField } from "./CadenceField";
 import { PastCharges } from "./PastCharges";
 import { PayeeField } from "./PayeeField";
@@ -77,15 +73,17 @@ export type SubscriptionDialogProps = {
 	onSaved?: (saved: SubscriptionAnswer) => void;
 };
 
-/** The dialog field a server message belongs under; any other path is the dialog's own line. */
-const SERVER_FIELDS: Partial<Record<SubscriptionField, DialogField>> = {
+/** The server's field each dialog field answers to; a message for any other path is the
+ * dialog's own line. */
+const SERVER_OF: Record<DialogField, SubscriptionField> = {
 	name: "name",
-	amountMinor: "amount",
+	amount: "amountMinor",
 	cadence: "cadence",
 	category: "category",
 	startDate: "startDate",
 	note: "note",
 };
+const OWN_FIELDS = Object.values(SERVER_OF);
 
 /** A payee chosen from the list, and what it filled, so the hint goes once any of them
  * changes (BR-F05-24, D-594). */
@@ -120,13 +118,12 @@ export function SubscriptionDialog({
 	// then meets a 409, not a silent overwrite (BR-F05-34).
 	const [edited] = useState(item);
 	const online = useOnline();
-	const queryClient = useQueryClient();
 	const create = useCreateSubscription();
 	const change = useChangeSubscription();
 	const [id] = useState(() => uuidV7());
 	const [start] = useState(() => startValues(edited, locale));
-	const [server, setServer] = useState<Partial<Record<DialogField, string>>>({});
-	const [failure, setFailure] = useState<string | null>(null);
+	const refusal = useWriteRefusal(OWN_FIELDS);
+	const { failure } = refusal;
 	const [noteOpen, setNoteOpen] = useState(start.note !== "");
 	// "Add a note" takes its own button away, so the note it opens takes focus, not the Name.
 	const [noteFocused, setNoteFocused] = useState(false);
@@ -208,14 +205,7 @@ export function SubscriptionDialog({
 		:	null;
 
 	/** Clears what the server said about a field once it changes. */
-	const changed = (field: DialogField) => {
-		setServer((current) => {
-			const next = { ...current };
-			delete next[field];
-			return next;
-		});
-		setFailure(null);
-	};
+	const changed = (field: DialogField) => refusal.clearField(SERVER_OF[field]);
 
 	/** A payee was chosen: fill its category and the amount of its last expense (BR-F05-24). */
 	const choose = (payee: PayeeItem) => {
@@ -233,40 +223,6 @@ export function SubscriptionDialog({
 			amountMinor: lastExpense.amountMinor,
 		});
 		for (const field of ["name", "category", "amount"] as const) changed(field);
-	};
-
-	/** What a refused write shows: under the fields it names, or at the top. */
-	const refuse = async (error: unknown) => {
-		const outcome = readSubscriptionWriteError(error);
-		if (outcome.kind === "handled") return;
-		if (outcome.kind === "fields") {
-			const mapped: Partial<Record<DialogField, string>> = {};
-			let extra = outcome.message;
-			for (const [field, text] of Object.entries(outcome.fields)) {
-				const own = SERVER_FIELDS[field as SubscriptionField];
-				if (own) mapped[own] = text;
-				else extra ??= text;
-			}
-			setServer(mapped);
-			setFailure(extra);
-			focusInvalid();
-		} else if (outcome.kind === "conflict") {
-			// The conflict view comes with the notices; until then the dialog says so and the
-			// page reads the Subscription again.
-			setFailure(DIALOG_TEXT.conflict);
-			await refreshAfterSubscriptionWrite(queryClient, {
-				count: false,
-				charges: false,
-			});
-		} else if (outcome.kind === "gone") {
-			setFailure(outcome.message);
-			await refreshAfterSubscriptionWrite(queryClient, {
-				count: true,
-				charges: true,
-			});
-		} else {
-			setFailure(outcome.message);
-		}
 	};
 
 	/** Save, once the fields check out. */
@@ -310,20 +266,20 @@ export function SubscriptionDialog({
 			);
 		})();
 		if (request === null) return;
-		setFailure(null);
-		setServer({});
+		refusal.reset();
 		try {
 			const saved = await request;
 			onSaved?.(saved);
 			onClose();
 		} catch (error) {
-			await refuse(error);
+			if ((await refusal.refuse(error)) === "fields") focusInvalid();
 		}
 	};
 
 	/** A field's message: the server's refusal of it, else the first of its own checks. */
 	const messageOf = (field: AnyFieldApi, key: DialogField) =>
-		server[key] ?? (field.state.meta.errors as (string | undefined)[])[0];
+		refusal.fields[SERVER_OF[key]]
+		?? (field.state.meta.errors as (string | undefined)[])[0];
 	const canSave = online && chargesReady;
 	const title =
 		edited === null ? DIALOG_TEXT.addTitle : DIALOG_TEXT.editTitle(edited.name);

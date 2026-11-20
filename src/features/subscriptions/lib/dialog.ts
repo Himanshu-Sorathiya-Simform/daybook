@@ -31,6 +31,9 @@ import {
 } from "./labels";
 import type { SubscriptionItem, SubscriptionsLocale } from "./types";
 
+/** Which dialog the page has open (BR-F05-24, BR-F05-41 to BR-F05-44). */
+export type DialogKind = "add" | "edit" | "cancel" | "resume" | "pause" | "delete";
+
 /** The Add and Edit dialog's own words (BR-F05-24, section 8). */
 export const DIALOG_TEXT = {
 	addTitle: "Add a Subscription",

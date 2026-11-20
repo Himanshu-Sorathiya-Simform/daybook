@@ -19,8 +19,17 @@ export type MenuAction =
 /** The actions whose dialogs or writes exist so far. A later chunk adds its own as it builds
  * them, so the menu never offers a button that does nothing. */
 export const READY_ACTIONS: ReadonlySet<MenuAction> = new Set([
+	"resume",
 	"edit",
+	"skip",
+	"pause",
+	"resumeNow",
+	"changePause",
+	"cancel",
+	"changeEnd",
+	"keepGoing",
 	"viewCharges",
+	"delete",
 ]);
 
 export type MenuItem = {
@@ -101,4 +110,54 @@ export function readyMenu(
 	ready: ReadonlySet<MenuAction> = READY_ACTIONS,
 ): MenuItem[] {
 	return rowMenu(item, f).filter((entry) => ready.has(entry.action));
+}
+
+/** The keys that act on a selected Subscription as its menu's items do (BR-F05-45, D-630),
+ * besides E for Edit. */
+export type ShortcutKey = "S" | "P" | "R" | "C" | "Delete";
+
+/** Each key, the menu items it acts as, and the words its hint uses for each. */
+const KEYED: readonly {
+	key: ShortcutKey;
+	actions: Partial<Record<MenuAction, string>>;
+}[] = [
+	{ key: "S", actions: { skip: "skip" } },
+	{ key: "P", actions: { pause: "pause", changePause: "change pause" } },
+	{
+		key: "R",
+		actions: {
+			resume: "resume",
+			resumeNow: "resume now",
+			keepGoing: "keep going",
+		},
+	},
+	{ key: "C", actions: { cancel: "cancel", changeEnd: "change end" } },
+	{ key: "Delete", actions: { delete: "delete" } },
+];
+
+/** The menu item a key acts as for `item`, or `null` when its menu offers none: S skips the next
+ * charge, P pauses or changes the pause, R resumes (Resume now when paused, Keep it going when
+ * ending), C cancels (Change end date when ending) and Delete deletes. A key acts only where
+ * the menu offers the item, so it never does what the buttons would not (D-630). */
+export function shortcutAction(
+	key: ShortcutKey,
+	item: Pick<SubscriptionItem, "status" | "nextDueOn">,
+	f: Formats,
+): MenuAction | null {
+	const offered = readyMenu(item, f).map((entry) => entry.action);
+	const keyed = KEYED.find((each) => each.key === key);
+	return offered.find((action) => keyed && action in keyed.actions) ?? null;
+}
+
+/** The hints of the keys that act on `item`, in the order S, P, R, C, Delete: "S to skip",
+ * "P to pause", "Delete to delete" (BR-F05-40, D-630). */
+export function shortcutHints(
+	item: Pick<SubscriptionItem, "status" | "nextDueOn">,
+	f: Formats,
+): string[] {
+	return KEYED.flatMap(({ key, actions }) => {
+		const action = shortcutAction(key, item, f);
+		const words = action === null ? undefined : actions[action];
+		return words === undefined ? [] : [`${key} to ${words}`];
+	});
 }

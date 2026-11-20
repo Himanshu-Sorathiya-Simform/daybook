@@ -31,6 +31,8 @@ function setup(
 		onClose: vi.fn(),
 		onViewCharges: vi.fn(),
 		onAction: vi.fn(),
+		onStatusAction: vi.fn(),
+		onUndoSkip: vi.fn(),
 	};
 	const element = (extra: Partial<SubscriptionPanelProps> = {}) => (
 		<AppProviders

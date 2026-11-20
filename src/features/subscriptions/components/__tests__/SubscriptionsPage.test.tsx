@@ -2228,7 +2228,7 @@ describe("Add and Edit in the page (BR-F05-21, BR-F05-24, BR-F05-40, BR-F05-45)"
 			await user.click(rowNamed("Netflix"));
 			expect(
 				await screen.findByText(
-					"E to edit · Up and down arrows move · Esc to close",
+					"E to edit · S to skip · P to pause · C to cancel · Delete to delete · Up and down arrows move · Esc to close",
 				),
 			).toBeVisible();
 		});
@@ -2381,5 +2381,617 @@ describe("Add and Edit in the page (BR-F05-21, BR-F05-24, BR-F05-40, BR-F05-45)"
 		expect(await screen.findByRole("textbox", { name: "Amount" })).toHaveValue(
 			"649.00",
 		);
+	});
+});
+
+describe("Cancel, Resume, Pause, Delete and Skip in the page (BR-F05-22, BR-F05-26, BR-F05-40)", () => {
+	const golden = subscriptionList();
+	const [netflix] = golden.items;
+	const rowNamed = (name: string) =>
+		screen.getByRole("row", { name: new RegExp(`^${name}`) });
+	const menu = (name: string) =>
+		screen.getByRole("button", { name: `Actions for ${name}` });
+	const panel = () =>
+		screen.queryByRole("complementary", { name: "Subscription" });
+	const dialog = (name: string) => screen.queryByRole("dialog", { name });
+	const wide = () => media({ wide: true, docked: true });
+	/** The Ended group is closed until pressed (BR-F05-37). */
+	const openEnded = (user: ReturnType<typeof userEvent.setup>) =>
+		user.click(screen.getByRole("button", { name: "Ended · 1" }));
+
+	/** The golden list with Netflix changed. */
+	const withNetflix = (changes: Parameters<typeof subscriptionItem>[1]) => {
+		const list = subscriptionList();
+		return {
+			...list,
+			items: list.items.map((item) =>
+				item.id === netflix!.id ? { ...item, ...changes } : item,
+			),
+		};
+	};
+	const changed = (over: Record<string, unknown> = {}) => ({
+		...netflix,
+		currency: "INR",
+		changeDate: "2026-11-02",
+		chargesCreated: 0,
+		chargesUpdated: 0,
+		chargesDeleted: 0,
+		months: [],
+		...over,
+	});
+	const patchPath = `/api/subscriptions/${netflix!.id}`;
+	const pickMenuItem = async (
+		user: ReturnType<typeof userEvent.setup>,
+		of: string,
+		item: string,
+	) => {
+		await user.click(menu(of));
+		await user.click(screen.getByRole("menuitem", { name: item }));
+	};
+
+	describe("from a row's menu", () => {
+		// AC-F05-50
+		test.each([
+			["Pause", "Pause Netflix"],
+			["Cancel Subscription", "Cancel Netflix?"],
+		])("%s opens %s", async (item, title) => {
+			wide();
+			const { user } = renderPage({ seed: golden });
+			await pickMenuItem(user, "Netflix", item);
+			expect(await screen.findByRole("dialog", { name: title })).toBeVisible();
+		});
+
+		test("Delete opens its confirmation", async () => {
+			wide();
+			const { user } = renderPage({ seed: golden });
+			await pickMenuItem(user, "Netflix", "Delete");
+			expect(
+				await screen.findByRole("alertdialog", { name: "Delete Netflix?" }),
+			).toBeVisible();
+		});
+
+		// AC-F05-50
+		test("Change end date on an ending Subscription opens Cancel on a later date", async () => {
+			wide();
+			const ending = withNetflix({ status: "ending", endDate: "2026-12-31" });
+			const { user } = renderPage({ seed: ending });
+			await pickMenuItem(user, "Netflix", "Change end date");
+			await screen.findByRole("dialog", { name: "Cancel Netflix?" });
+			expect(
+				screen.getByRole("radio", { name: /^On a later date/ }),
+			).toBeChecked();
+		});
+
+		test("Keep it going on an ending Subscription opens Resume", async () => {
+			wide();
+			const ending = withNetflix({ status: "ending", endDate: "2026-12-31" });
+			const { user } = renderPage({ seed: ending });
+			await pickMenuItem(user, "Netflix", "Keep it going");
+			expect(
+				await screen.findByRole("dialog", { name: "Resume Netflix?" }),
+			).toBeVisible();
+		});
+
+		// AC-F05-50
+		test("Change pause on a paused Subscription opens Pause", async () => {
+			wide();
+			const paused = withNetflix({
+				status: "paused",
+				pause: { from: "2026-11-05", until: "2027-01-05" },
+				nextDueOn: "2027-01-05",
+			});
+			const { user } = renderPage({ seed: paused });
+			await pickMenuItem(user, "Netflix", "Change pause");
+			await screen.findByRole("dialog", { name: "Pause Netflix" });
+			expect(
+				screen.getByRole("radio", { name: "Until a date" }),
+			).toBeChecked();
+		});
+
+		test("Resume in an ended Subscription's menu opens Resume", async () => {
+			wide();
+			const ended = withNetflix({
+				status: "ended",
+				endDate: "2026-09-30",
+				nextDueOn: null,
+			});
+			const { user } = renderPage({ seed: ended });
+			await openEnded(user);
+			await pickMenuItem(user, "Netflix", "Resume");
+			expect(
+				await screen.findByRole("dialog", { name: "Resume Netflix?" }),
+			).toBeVisible();
+		});
+	});
+
+	describe("an ended row's Resume button", () => {
+		const ended = withNetflix({
+			status: "ended",
+			endDate: "2026-09-30",
+			nextDueOn: null,
+		});
+
+		// AC-F05-48
+		test("opens Resume without selecting the row", async () => {
+			wide();
+			const { user } = renderPage({ seed: ended });
+			await openEnded(user);
+			await user.click(
+				within(rowNamed("Netflix")).getByRole("button", { name: "Resume" }),
+			);
+			expect(
+				await screen.findByRole("dialog", { name: "Resume Netflix?" }),
+			).toBeVisible();
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(dialog("Resume Netflix?")).toBeNull());
+			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
+		});
+
+		test("is there on a phone, where the menu is not", async () => {
+			media({ wide: false, docked: false });
+			const { user } = renderPage({ seed: ended });
+			await openEnded(user);
+			await user.click(
+				within(rowNamed("Netflix")).getByRole("button", { name: "Resume" }),
+			);
+			expect(
+				await screen.findByRole("dialog", { name: "Resume Netflix?" }),
+			).toBeVisible();
+		});
+	});
+
+	describe("from the panel", () => {
+		test("the footer's Pause, Cancel Subscription and Delete open their dialogs", async () => {
+			wide();
+			const { user } = renderPage({ seed: golden });
+			await user.click(rowNamed("Netflix"));
+			await screen.findByRole("heading", { name: "Netflix" });
+			await user.click(
+				within(panel()!).getByRole("button", { name: "Pause" }),
+			);
+			expect(
+				await screen.findByRole("dialog", { name: "Pause Netflix" }),
+			).toBeVisible();
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(dialog("Pause Netflix")).toBeNull());
+			await user.click(
+				within(panel()!).getByRole("button", {
+					name: "Cancel Subscription",
+				}),
+			);
+			expect(
+				await screen.findByRole("dialog", { name: "Cancel Netflix?" }),
+			).toBeVisible();
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(dialog("Cancel Netflix?")).toBeNull());
+			await user.click(
+				within(panel()!).getByRole("button", { name: "Delete" }),
+			);
+			expect(
+				await screen.findByRole("alertdialog", { name: "Delete Netflix?" }),
+			).toBeVisible();
+		});
+
+		test("an ending Subscription's footer says Change end and opens Cancel", async () => {
+			wide();
+			const ending = withNetflix({ status: "ending", endDate: "2026-12-31" });
+			const { user } = renderPage({ seed: ending });
+			await user.click(rowNamed("Netflix"));
+			await user.click(
+				await screen.findByRole("button", { name: "Change end" }),
+			);
+			expect(
+				await screen.findByRole("dialog", { name: "Cancel Netflix?" }),
+			).toBeVisible();
+		});
+
+		test("the status box's Change opens Pause on a paused Subscription", async () => {
+			wide();
+			const paused = withNetflix({
+				status: "paused",
+				pause: { from: "2026-11-05", until: "2027-01-05" },
+				nextDueOn: "2027-01-05",
+			});
+			const { user } = renderPage({ seed: paused });
+			await user.click(rowNamed("Netflix"));
+			await user.click(
+				within(
+					await screen.findByRole("complementary", {
+						name: "Subscription",
+					}),
+				).getByRole("button", { name: "Change" }),
+			);
+			expect(
+				await screen.findByRole("dialog", { name: "Pause Netflix" }),
+			).toBeVisible();
+		});
+
+		test("the status box's Resume opens Resume on an ended Subscription", async () => {
+			wide();
+			const ended = withNetflix({
+				status: "ended",
+				endDate: "2026-09-30",
+				nextDueOn: null,
+			});
+			const { user } = renderPage({ seed: ended });
+			await openEnded(user);
+			await user.click(rowNamed("Netflix"));
+			await screen.findByRole("heading", { name: "Netflix" });
+			await user.click(
+				within(panel()!).getAllByRole("button", { name: "Resume" })[0]!,
+			);
+			expect(
+				await screen.findByRole("dialog", { name: "Resume Netflix?" }),
+			).toBeVisible();
+		});
+	});
+
+	describe("the writes with no dialog (BR-F05-26, BR-F05-27, BR-F05-29)", () => {
+		// AC-F05-51
+		test("Skip the 5 Nov charge in the menu posts the skip, and selects the Subscription", async () => {
+			wide();
+			const posts = route(
+				network,
+				"post",
+				`/api/subscriptions/${netflix!.id}/skips`,
+				() =>
+					ok(
+						changed({
+							skips: ["2026-11-05"],
+							version: netflix!.version + 1,
+						}),
+					),
+			);
+			const { user } = renderPage({ seed: golden });
+			await pickMenuItem(user, "Netflix", "Skip the 5 Nov charge");
+			await waitFor(() => expect(posts).toHaveLength(1));
+			expect(posts[0]?.body).toEqual({
+				dueOn: "2026-11-05",
+				changedAt: expect.any(String),
+			});
+			expect(
+				await screen.findByRole("heading", { name: "Netflix" }),
+			).toBeVisible();
+			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "true");
+		});
+
+		// AC-F05-51
+		test("Skip this one in the panel posts the same", async () => {
+			wide();
+			const posts = route(
+				network,
+				"post",
+				`/api/subscriptions/${netflix!.id}/skips`,
+				() => ok(changed({ version: netflix!.version + 1 })),
+			);
+			const { user } = renderPage({ seed: golden });
+			await user.click(rowNamed("Netflix"));
+			await user.click(
+				await screen.findByRole("button", { name: "Skip this one" }),
+			);
+			await waitFor(() => expect(posts).toHaveLength(1));
+			expect(posts[0]?.body).toMatchObject({ dueOn: "2026-11-05" });
+		});
+
+		// AC-F05-51
+		test("Undo skip on the timeline brings the date back", async () => {
+			wide();
+			const skipped = withNetflix({
+				skips: ["2026-11-05"],
+				nextDueOn: "2026-12-05",
+			});
+			const deletes = route(
+				network,
+				"delete",
+				`/api/subscriptions/${netflix!.id}/skips/2026-11-05`,
+				() => ok(changed({ version: netflix!.version + 1 })),
+			);
+			const { user } = renderPage({ seed: skipped });
+			await user.click(rowNamed("Netflix"));
+			await user.click(
+				await screen.findByRole("button", { name: "Undo skip" }),
+			);
+			await waitFor(() => expect(deletes).toHaveLength(1));
+			expect(deletes[0]?.body).toEqual({ changedAt: expect.any(String) });
+		});
+
+		// AC-F05-51
+		test("Resume now ends a pause in force today", async () => {
+			wide();
+			const paused = withNetflix({
+				status: "paused",
+				pause: { from: "2026-10-05", until: "2027-01-05" },
+				nextDueOn: "2027-01-05",
+			});
+			const patches = route(network, "patch", patchPath, () => ok(changed()));
+			const { user } = renderPage({ seed: paused });
+			await pickMenuItem(user, "Netflix", "Resume now");
+			await waitFor(() => expect(patches).toHaveLength(1));
+			expect(patches[0]?.body).toEqual({
+				changedAt: expect.any(String),
+				pause: { from: "2026-10-05", until: "2026-11-02" },
+			});
+		});
+
+		// AC-F05-51
+		test("a refusal says why in a toast and changes nothing", async () => {
+			wide();
+			route(network, "post", `/api/subscriptions/${netflix!.id}/skips`, () =>
+				refuse(422, "validation_failed", {
+					message: "m",
+					fields: { dueOn: "Only an upcoming charge can be skipped." },
+				}),
+			);
+			const { user } = renderPage({ seed: golden });
+			await pickMenuItem(user, "Netflix", "Skip the 5 Nov charge");
+			expect(
+				await screen.findByText("Only an upcoming charge can be skipped."),
+			).toBeVisible();
+			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
+		});
+	});
+
+	describe("after a confirmed write", () => {
+		// AC-F05-50
+		test("Cancel saved docked selects the Subscription", async () => {
+			wide();
+			const patches = route(network, "patch", patchPath, () =>
+				ok(changed({ version: netflix!.version + 1 })),
+			);
+			const { user } = renderPage({ seed: golden });
+			await pickMenuItem(user, "Netflix", "Cancel Subscription");
+			const save = await screen.findByRole("button", {
+				name: "Cancel Netflix",
+			});
+			await waitFor(() =>
+				expect(save).not.toHaveAttribute("aria-disabled", "true"),
+			);
+			await user.click(save);
+			await waitFor(() => expect(dialog("Cancel Netflix?")).toBeNull());
+			expect(patches).toHaveLength(1);
+			expect(patches[0]?.body).toEqual({
+				changedAt: expect.any(String),
+				endDate: "2026-11-02",
+			});
+			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "true");
+		});
+
+		// AC-F05-50
+		test("Delete removes the Subscription and clears the selection back to the summary", async () => {
+			wide();
+			let reads = 0;
+			const deletes = route(network, "delete", patchPath, () =>
+				ok({
+					changeDate: "2026-11-02",
+					chargesCreated: 0,
+					chargesKept: 2,
+					chargesDeleted: 0,
+					months: [],
+				}),
+			);
+			const { user } = renderPage({
+				seed: golden,
+				answer: () => {
+					reads += 1;
+					const rest = subscriptionList();
+					return ok({
+						...rest,
+						items: rest.items.filter((item) => item.id !== netflix!.id),
+					});
+				},
+			});
+			await user.click(rowNamed("Netflix"));
+			await screen.findByRole("heading", { name: "Netflix" });
+			await user.click(
+				within(panel()!).getByRole("button", { name: "Delete" }),
+			);
+			await user.click(
+				await screen.findByRole("button", { name: "Delete Netflix" }),
+			);
+			await waitFor(() => expect(deletes).toHaveLength(1));
+			await waitFor(() =>
+				expect(screen.queryByRole("row", { name: /^Netflix/ })).toBeNull(),
+			);
+			expect(reads).toBeGreaterThan(0);
+			expect(
+				await screen.findByRole("heading", { name: "Your Subscriptions" }),
+			).toBeVisible();
+		});
+
+		// AC-F05-50
+		test("cancel it instead swaps the confirmation for Cancel on the same Subscription", async () => {
+			wide();
+			const { user } = renderPage({ seed: golden });
+			await pickMenuItem(user, "Netflix", "Delete");
+			await user.click(
+				await screen.findByRole("button", { name: "cancel it instead" }),
+			);
+			expect(
+				await screen.findByRole("dialog", { name: "Cancel Netflix?" }),
+			).toBeVisible();
+			expect(screen.queryByRole("alertdialog")).toBeNull();
+		});
+
+		test("Escape closes a dialog and keeps the selection", async () => {
+			wide();
+			const { user } = renderPage({ seed: golden });
+			await user.click(rowNamed("Netflix"));
+			await screen.findByRole("heading", { name: "Netflix" });
+			await user.click(
+				within(panel()!).getByRole("button", { name: "Pause" }),
+			);
+			await screen.findByRole("dialog", { name: "Pause Netflix" });
+			await user.keyboard("{Escape}");
+			await waitFor(() => expect(dialog("Pause Netflix")).toBeNull());
+			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "true");
+		});
+	});
+});
+
+describe("the keys that act as the menu's items do (BR-F05-45, D-630)", () => {
+	const golden = subscriptionList();
+	const [netflix] = golden.items;
+	const rowNamed = (name: string) =>
+		screen.getByRole("row", { name: new RegExp(`^${name}`) });
+	const dialog = (name: string) => screen.queryByRole("dialog", { name });
+	const wide = () => media({ wide: true, docked: true });
+	const withNetflix = (changes: Parameters<typeof subscriptionItem>[1]) => {
+		const list = subscriptionList();
+		return {
+			...list,
+			items: list.items.map((item) =>
+				item.id === netflix!.id ? { ...item, ...changes } : item,
+			),
+		};
+	};
+	const select = async (seed: SubscriptionList, search = "") => {
+		wide();
+		const view = renderPage({ seed, search });
+		if (search === "") await view.user.click(rowNamed("Netflix"));
+		await screen.findByRole("heading", { name: "Netflix" });
+		return view;
+	};
+
+	// AC-F05-52
+	test("S skips the next charge", async () => {
+		const posts = route(
+			network,
+			"post",
+			`/api/subscriptions/${netflix!.id}/skips`,
+			() => ok({ ...netflix, currency: "INR", version: netflix!.version + 1 }),
+		);
+		const { user } = await select(golden);
+		await user.keyboard("s");
+		await waitFor(() => expect(posts).toHaveLength(1));
+		expect(posts[0]?.body).toMatchObject({ dueOn: "2026-11-05" });
+	});
+
+	test("P opens Pause, C opens Cancel", async () => {
+		const { user } = await select(golden);
+		await user.keyboard("p");
+		expect(
+			await screen.findByRole("dialog", { name: "Pause Netflix" }),
+		).toBeVisible();
+		await user.keyboard("{Escape}");
+		await waitFor(() => expect(dialog("Pause Netflix")).toBeNull());
+		await user.keyboard("c");
+		expect(
+			await screen.findByRole("dialog", { name: "Cancel Netflix?" }),
+		).toBeVisible();
+	});
+
+	test.each(["{Delete}", "{Backspace}"])(
+		"%s opens the Delete confirmation",
+		async (key) => {
+			const { user } = await select(golden);
+			await user.keyboard(key);
+			expect(
+				await screen.findByRole("alertdialog", { name: "Delete Netflix?" }),
+			).toBeVisible();
+		},
+	);
+
+	test("R does nothing for a Subscription that is running", async () => {
+		const { user } = await select(golden);
+		await user.keyboard("r");
+		expect(dialog("Resume Netflix?")).toBeNull();
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+	});
+
+	test("R opens Resume for an ended Subscription, and S and P do nothing", async () => {
+		const ended = withNetflix({
+			status: "ended",
+			endDate: "2026-09-30",
+			nextDueOn: null,
+		});
+		const { user } = await select(ended, `?open=${netflix!.id}`);
+		await user.keyboard("s");
+		await user.keyboard("p");
+		expect(dialog("Pause Netflix")).toBeNull();
+		await user.keyboard("r");
+		expect(
+			await screen.findByRole("dialog", { name: "Resume Netflix?" }),
+		).toBeVisible();
+	});
+
+	test("R is Resume now for a paused one, and P changes the pause", async () => {
+		const paused = withNetflix({
+			status: "paused",
+			pause: { from: "2026-10-05", until: "2027-01-05" },
+			nextDueOn: "2027-01-05",
+		});
+		const patches = route(
+			network,
+			"patch",
+			`/api/subscriptions/${netflix!.id}`,
+			() => ok({ ...netflix, currency: "INR", changeDate: "2026-11-02" }),
+		);
+		const { user } = await select(paused);
+		await user.keyboard("r");
+		await waitFor(() => expect(patches).toHaveLength(1));
+		expect(patches[0]?.body).toMatchObject({
+			pause: { from: "2026-10-05", until: "2026-11-02" },
+		});
+		await user.keyboard("p");
+		expect(
+			await screen.findByRole("dialog", { name: "Pause Netflix" }),
+		).toBeVisible();
+	});
+
+	test("on an ending one R keeps it going and C changes its end", async () => {
+		const ending = withNetflix({ status: "ending", endDate: "2026-12-31" });
+		const { user } = await select(ending);
+		await user.keyboard("r");
+		expect(
+			await screen.findByRole("dialog", { name: "Resume Netflix?" }),
+		).toBeVisible();
+		await user.keyboard("{Escape}");
+		await waitFor(() => expect(dialog("Resume Netflix?")).toBeNull());
+		await user.keyboard("c");
+		await screen.findByRole("dialog", { name: "Cancel Netflix?" });
+		expect(
+			screen.getByRole("radio", { name: /^On a later date/ }),
+		).toBeChecked();
+	});
+
+	test("with nothing selected no key does anything", async () => {
+		wide();
+		const { user } = renderPage({ seed: golden });
+		for (const key of ["s", "p", "r", "c", "{Delete}", "{Backspace}", "e"]) {
+			await user.keyboard(key);
+		}
+		expect(screen.queryByRole("dialog")).toBeNull();
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+	});
+
+	test("while a dialog is open the keys leave it alone", async () => {
+		const { user } = await select(golden);
+		await user.keyboard("p");
+		await screen.findByRole("dialog", { name: "Pause Netflix" });
+		await user.keyboard("c");
+		await user.keyboard("{Delete}");
+		expect(screen.getAllByRole("dialog")).toHaveLength(1);
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+	});
+
+	test("in a text field a letter is typed, not a command", async () => {
+		const { user } = await select(golden);
+		const field = document.createElement("input");
+		document.body.append(field);
+		field.focus();
+		await user.keyboard("pcs{Backspace}");
+		expect(screen.queryByRole("dialog")).toBeNull();
+		field.remove();
+	});
+
+	test("they work below 1180 px with the drawer open", async () => {
+		media({ wide: true, docked: false });
+		const { user } = renderPage({ seed: golden });
+		await user.click(rowNamed("Netflix"));
+		await screen.findByRole("dialog", { name: "Subscription" });
+		await user.keyboard("c");
+		expect(
+			await screen.findByRole("dialog", { name: "Cancel Netflix?" }),
+		).toBeVisible();
 	});
 });

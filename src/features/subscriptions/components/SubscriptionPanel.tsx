@@ -4,7 +4,7 @@ import { Drawer } from "@/components/surfaces/Drawer";
 import { DockedPanel } from "@/components/surfaces/DockedPanel";
 import type { ExpenseCategory } from "@/lib/subscriptions/model";
 import type { Formats } from "../lib/labels";
-import { PANEL_TEXT, type PanelActionKey } from "../lib/panel";
+import { PANEL_TEXT, type PanelActionKey, type StatusAction } from "../lib/panel";
 import type { SubscriptionList } from "../lib/types";
 import { PanelDetail } from "./PanelDetail";
 import { PanelSummary } from "./PanelSummary";
@@ -21,6 +21,10 @@ export type SubscriptionPanelProps = {
 	onViewCharges: (id: string) => void;
 	/** A button of the selected Subscription's footer, or "Add a note" (BR-F05-40). */
 	onAction: (action: PanelActionKey, id: string) => void;
+	/** A button of the selected Subscription's status box (BR-F05-40). */
+	onStatusAction: (action: StatusAction, id: string) => void;
+	/** Undo skip on the selected Subscription's timeline (BR-F05-27). */
+	onUndoSkip: (dueOn: string, id: string) => void;
 	/** The date the calendar's selection marks in the timeline, or `null` (BR-F05-38). */
 	selectedDue?: string | null;
 	/** The category the list is filtered to, and a press on a category of the summary (D-622). */
@@ -44,6 +48,8 @@ export function SubscriptionPanel({
 	onClose,
 	onViewCharges,
 	onAction,
+	onStatusAction,
+	onUndoSkip,
 	selectedDue = null,
 	activeCategory,
 	onCategory,
@@ -59,6 +65,8 @@ export function SubscriptionPanel({
 				onClose={onClose}
 				onViewCharges={() => onViewCharges(item.id)}
 				onAction={(action) => onAction(action, item.id)}
+				onStatusAction={(action) => onStatusAction(action, item.id)}
+				onUndoSkip={(dueOn) => onUndoSkip(dueOn, item.id)}
 				selectedDue={selectedDue}
 			/>
 		);

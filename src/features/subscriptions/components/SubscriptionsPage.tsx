@@ -16,19 +16,17 @@ import { useStoredChoice } from "@/hooks/useStoredChoice";
 import { cn } from "@/lib/cn";
 import type { ExpenseCategory, MonthItem } from "@/lib/subscriptions/model";
 import { useOpenParam } from "../hooks/useOpenParam";
+import { useQuickWrites } from "../hooks/useQuickWrites";
 import { useSubscriptions } from "../hooks/useSubscriptions";
 import { CALENDAR_TEXT } from "../lib/calendar";
 import { filterByCategory, isFilterable } from "../lib/category-filter";
 import { chargesHref, type OpenTarget } from "../lib/deep-link";
-import type { MenuAction } from "../lib/menu";
+import type { DialogKind } from "../lib/dialog";
+import { type MenuAction, shortcutAction, type ShortcutKey } from "../lib/menu";
 import { asOfText, PAGE_TEXT } from "../lib/messages";
-import type { PanelActionKey } from "../lib/panel";
+import type { PanelActionKey, StatusAction } from "../lib/panel";
 import { DEFAULT_SORTING } from "../lib/table";
-import type {
-	SubscriptionAnswer,
-	SubscriptionItem,
-	SubscriptionsLocale,
-} from "../lib/types";
+import type { SubscriptionItem, SubscriptionsLocale } from "../lib/types";
 import {
 	shownView,
 	SUBSCRIPTION_VIEWS,
@@ -36,6 +34,10 @@ import {
 	VIEW_KEY,
 } from "../lib/view";
 import { SubscriptionCalendar } from "./SubscriptionCalendar";
+import { CancelDialog } from "./CancelDialog";
+import { DeleteDialog } from "./DeleteDialog";
+import { PauseDialog } from "./PauseDialog";
+import { ResumeDialog } from "./ResumeDialog";
 import { SubscriptionDialog } from "./SubscriptionDialog";
 import { SubscriptionList } from "./SubscriptionList";
 import { SubscriptionPanel } from "./SubscriptionPanel";
@@ -105,10 +107,12 @@ export function SubscriptionsPage({
 	// The table's sort lives here, so it outlives the table while the view changes (D-570).
 	const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
 	const [filtered, setFiltered] = useState<ExpenseCategory | null>(null);
-	// The Add or Edit dialog while it is open: the Subscription it edits, or `null` for Add.
-	const [dialog, setDialog] = useState<{ item: SubscriptionItem | null } | null>(
-		null,
-	);
+	// The dialog while it is open, and the Subscription it is about: `null` for Add.
+	const [dialog, setDialog] = useState<{
+		kind: DialogKind;
+		item: SubscriptionItem | null;
+	} | null>(null);
+	const quick = useQuickWrites(locale);
 	// A Subscription that is gone from the list is no longer selected, and stays unselected if
 	// it comes back (BR-F05-21). Set while rendering, React's pattern for state that follows
 	// what was read.
@@ -173,22 +177,66 @@ export function SubscriptionsPage({
 		setPicked(item.subscriptionId);
 		setMarked({ id: item.subscriptionId, date: item.date });
 	};
-	const edit = (id: string) => {
+	/** Opens a dialog about a Subscription of the list. */
+	const open = (kind: Exclude<DialogKind, "add">, id: string) => {
 		const item = list?.items.find((each) => each.id === id);
-		if (item) setDialog({ item });
+		if (item) setDialog({ kind, item });
 	};
-	const act = (action: MenuAction | PanelActionKey, id: string) => {
-		if (action === "viewCharges") router.push(chargesHref(id));
-		if (action === "edit") edit(id);
-	};
-	/** A confirmed Add or Edit: the Subscription becomes the selection when the panel is docked
-	 * or something is selected, and a filter that would hide it goes (BR-F05-33). */
-	const saved = (subscription: SubscriptionAnswer) => {
+	/** A confirmed write that is not a delete: the Subscription becomes the selection when the
+	 * panel is docked or something is selected, and a filter that would hide it goes
+	 * (BR-F05-33). */
+	const saved = (subscription: { id: string; category: ExpenseCategory }) => {
 		if (!docked && selected === null) return;
 		if (category !== null && subscription.category !== category) {
 			setFiltered(null);
 		}
 		choose(subscription.id);
+	};
+	/** A write with no dialog: the Subscription is selected once it is confirmed. */
+	const quickly = async (
+		id: string,
+		write: (item: SubscriptionItem) => Promise<boolean>,
+	) => {
+		const item = list?.items.find((each) => each.id === id);
+		if (item && (await write(item))) saved(item);
+	};
+	const act = (action: MenuAction | PanelActionKey, id: string) => {
+		switch (action) {
+			case "viewCharges":
+				router.push(chargesHref(id));
+				return;
+			case "edit":
+				open("edit", id);
+				return;
+			case "skip":
+				void quickly(id, quick.skipNext);
+				return;
+			case "resumeNow":
+				void quickly(id, quick.resumeNow);
+				return;
+			case "pause":
+			case "changePause":
+				open("pause", id);
+				return;
+			case "cancel":
+			case "changeEnd":
+				open("cancel", id);
+				return;
+			case "resume":
+			case "keepGoing":
+				open("resume", id);
+				return;
+			case "delete":
+				open("delete", id);
+				return;
+		}
+	};
+	/** A button of the panel's status box (BR-F05-40). */
+	const actStatus = (action: StatusAction, id: string) => {
+		if (action === "skip") void quickly(id, quick.skipNext);
+		else if (action === "resumeNow") void quickly(id, quick.resumeNow);
+		else if (action === "change") open("pause", id);
+		else open("resume", id);
 	};
 	const failed = !list && (query.isError || query.fetchStatus === "paused");
 	const isEmpty = list !== undefined && list.items.length === 0;
@@ -197,9 +245,26 @@ export function SubscriptionsPage({
 	const showPanel = list !== undefined && !isEmpty;
 	const drawerOpen = showPanel && !docked && selected !== null;
 
-	useShortcut("E", () => selected !== null && edit(selected), {
+	useShortcut("E", () => selected !== null && open("edit", selected), {
 		enabled: selected !== null && dialog === null,
 	});
+	// The other keys act as the selection's menu items do, and only where it offers them, so a
+	// press that finds none does nothing (D-630).
+	const selectedItem = list?.items.find((each) => each.id === selected) ?? null;
+	const keyed = (key: ShortcutKey) =>
+		selectedItem !== null
+		&& dialog === null
+		&& shortcutAction(key, selectedItem, locale) !== null;
+	const press = (key: ShortcutKey) => () => {
+		const action = selectedItem && shortcutAction(key, selectedItem, locale);
+		if (selectedItem && action) act(action, selectedItem.id);
+	};
+	useShortcut("S", press("S"), { enabled: keyed("S") });
+	useShortcut("P", press("P"), { enabled: keyed("P") });
+	useShortcut("R", press("R"), { enabled: keyed("R") });
+	useShortcut("C", press("C"), { enabled: keyed("C") });
+	useShortcut("Delete", press("Delete"), { enabled: keyed("Delete") });
+	useShortcut("Backspace", press("Delete"), { enabled: keyed("Delete") });
 	useShortcut("Escape", () => choose(null), {
 		enabled: selected !== null && dialog === null,
 		// Escape in a text field, a menu or a dialog belongs to them.
@@ -261,7 +326,7 @@ export function SubscriptionsPage({
 						title={PAGE_TEXT.emptyTitle}
 						body={PAGE_TEXT.emptyBody}
 						action={PAGE_TEXT.add}
-						onAction={() => setDialog({ item: null })}
+						onAction={() => setDialog({ kind: "add", item: null })}
 					/>
 				</Section>
 			);
@@ -296,7 +361,7 @@ export function SubscriptionsPage({
 					view={view}
 					onViewChange={setStored}
 					hasSwitch={!failed && !isEmpty}
-					onAdd={() => setDialog({ item: null })}
+					onAdd={() => setDialog({ kind: "add", item: null })}
 				/>
 				{body()}
 			</div>
@@ -309,19 +374,61 @@ export function SubscriptionsPage({
 					onClose={() => choose(null)}
 					onViewCharges={(id) => router.push(chargesHref(id))}
 					onAction={act}
+					onStatusAction={actStatus}
+					onUndoSkip={(dueOn, id) =>
+						void quickly(id, (item) => quick.undoSkip(item, dueOn))
+					}
 					selectedDue={markedDue}
 					activeCategory={category}
 					onCategory={filterTo}
 				/>
 			)}
-			{dialog !== null && (
-				<SubscriptionDialog
+			{dialog !== null
+				&& (dialog.kind === "add" || dialog.kind === "edit") && (
+					<SubscriptionDialog
+						isOpen
+						item={dialog.item}
+						items={list?.items ?? []}
+						locale={locale}
+						onClose={() => setDialog(null)}
+						onSaved={saved}
+					/>
+				)}
+			{dialog?.item && dialog.kind === "cancel" && (
+				<CancelDialog
 					isOpen
 					item={dialog.item}
-					items={list?.items ?? []}
 					locale={locale}
 					onClose={() => setDialog(null)}
 					onSaved={saved}
+				/>
+			)}
+			{dialog?.item && dialog.kind === "resume" && (
+				<ResumeDialog
+					isOpen
+					item={dialog.item}
+					locale={locale}
+					onClose={() => setDialog(null)}
+					onSaved={saved}
+				/>
+			)}
+			{dialog?.item && dialog.kind === "pause" && (
+				<PauseDialog
+					isOpen
+					item={dialog.item}
+					locale={locale}
+					onClose={() => setDialog(null)}
+					onSaved={saved}
+				/>
+			)}
+			{dialog?.item && dialog.kind === "delete" && (
+				<DeleteDialog
+					isOpen
+					item={dialog.item}
+					onClose={() => setDialog(null)}
+					// "cancel it instead" swaps the confirmation for Cancel on the same Subscription.
+					onCancelInstead={(item) => setDialog({ kind: "cancel", item })}
+					onDeleted={() => choose(null)}
 				/>
 			)}
 		</div>

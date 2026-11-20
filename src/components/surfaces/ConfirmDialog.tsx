@@ -19,6 +19,8 @@ export type ConfirmDialogProps = {
 	cancelLabel?: string;
 	/** `danger` for an action that loses data; `primary` for any other. */
 	tone?: "danger" | "primary";
+	/** Whether the confirm button rests, such as offline before M5; Cancel still works. */
+	isConfirmDisabled?: boolean;
 	/** While the confirmed action runs: the confirm button shows a spinner and takes no second
 	 * press, and Escape, Cancel and Close wait. */
 	isPending?: boolean;
@@ -39,6 +41,7 @@ export function ConfirmDialog({
 	onConfirm,
 	cancelLabel = "Cancel",
 	tone = "danger",
+	isConfirmDisabled = false,
 	isPending = false,
 	className,
 }: Readonly<ConfirmDialogProps>) {
@@ -63,6 +66,7 @@ export function ConfirmDialog({
 					</Button>
 					<Button
 						variant={tone}
+						isDisabled={isConfirmDisabled}
 						isPending={isPending}
 						onPress={onConfirm}
 					>
