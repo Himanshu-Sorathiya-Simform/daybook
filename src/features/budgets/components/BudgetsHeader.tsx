@@ -8,7 +8,7 @@ import { Segmented } from "@/components/forms/Segmented";
 import { MonthPicker } from "@/components/navigation/MonthPicker";
 import { type Month, monthRange, shiftMonth } from "@/lib/budgets/months";
 import { formatMonth } from "@/lib/date-format";
-import type { BudgetsView } from "../hooks/useBudgetsView";
+import type { BudgetsView } from "../lib/view";
 import { monthLabel, PAGE_TEXT } from "../lib/messages";
 import { MonthMenu } from "./MonthMenu";
 

@@ -31,7 +31,7 @@ import {
 	SUBJECT_LABELS,
 } from "../lib/panel";
 import { LastSixMonths } from "./LastSixMonths";
-import { LineSkeleton } from "./LineSkeleton";
+import { LineSkeleton } from "@/components/feedback/LineSkeleton";
 import { LimitHistory } from "./LimitHistory";
 import { WhereItWent } from "./WhereItWent";
 

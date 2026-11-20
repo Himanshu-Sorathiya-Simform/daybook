@@ -17,7 +17,7 @@ import { formatMonth } from "@/lib/date-format";
 import { useBudgetMonth } from "../hooks/useBudgetMonth";
 import { useBudgetNotices } from "../hooks/useBudgetNotice";
 import { useBudgetsUrl } from "../hooks/useBudgetsUrl";
-import { useBudgetsView } from "../hooks/useBudgetsView";
+import { useStoredChoice } from "@/hooks/useStoredChoice";
 import { useMonthFilter } from "../hooks/useMonthFilter";
 import type { RowArrows } from "../hooks/useRowArrows";
 import { dayOfMonth } from "../lib/labels";
@@ -33,6 +33,7 @@ import { conflictRows } from "../lib/conflict";
 import { deletionNotice } from "../lib/notices";
 import { selectionKeys, subjectOf } from "../lib/panel";
 import type { BudgetMonthAnswer, BudgetsLocale } from "../lib/types";
+import { BUDGET_VIEWS, type BudgetsView, VIEW_KEY } from "../lib/view";
 import { BudgetDialog } from "./BudgetDialog";
 import { ConflictDialog } from "./ConflictDialog";
 import { BudgetList } from "./BudgetList";
@@ -113,7 +114,11 @@ export function BudgetsPage({ locale, className }: Readonly<BudgetsPageProps>) {
 	const current = monthOf(locale.today);
 	const url = useBudgetsUrl(current);
 	const online = useOnline();
-	const [view, setView] = useBudgetsView();
+	const [view, setView] = useStoredChoice<BudgetsView>(
+		VIEW_KEY,
+		BUDGET_VIEWS,
+		"list",
+	);
 	const wide = useMediaQuery(WIDE, false);
 	// The server can't know the width: it renders the docked panel, which CSS hides below 1180 px.
 	const docked = useMediaQuery(DOCKED, true);

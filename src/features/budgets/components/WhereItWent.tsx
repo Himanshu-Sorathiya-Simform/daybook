@@ -14,7 +14,7 @@ import type { Formats } from "../lib/labels";
 import { seeTransactions, whereItWent } from "../lib/panel";
 import { transactionsHref } from "../lib/paths";
 import { TOP_PAYEES } from "../lib/queries";
-import { LineSkeleton } from "./LineSkeleton";
+import { LineSkeleton } from "@/components/feedback/LineSkeleton";
 
 export type WhereItWentProps = {
 	category: ExpenseCategory;

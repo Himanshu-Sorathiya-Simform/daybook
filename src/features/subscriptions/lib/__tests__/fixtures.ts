@@ -1,7 +1,11 @@
 import { GOLDEN_SUBSCRIPTIONS } from "../../../../../seed/golden";
 import type { ListAnswer } from "@/lib/transactions/answers";
 import type { Transaction } from "@/lib/transactions/model";
-import type { SubscriptionAnswer, SubscriptionItem } from "../types";
+import type {
+	SubscriptionAnswer,
+	SubscriptionItem,
+	SubscriptionList,
+} from "../types";
 
 export type GoldenName = keyof typeof GOLDEN_SUBSCRIPTIONS;
 
@@ -122,6 +126,56 @@ export function listPage(
 		prevCursor: null,
 		groups: [],
 		order: null,
+		currency: "INR",
+	};
+}
+
+/** `GET /api/subscriptions` on golden at 2 November (section 5): four Subscriptions, 243,287.00
+ * a year and 20,273.92 a month, three charges in the next 30 days worth 20,149.00, and
+ * November's 18,000.00 charged with 2,149.00 still to come. */
+export function subscriptionList(
+	changes: Partial<SubscriptionList> = {},
+): SubscriptionList {
+	return {
+		items: [
+			subscriptionItem("netflix"),
+			subscriptionItem("cultGym"),
+			subscriptionItem("sunrise"),
+			subscriptionItem("amazonPrime"),
+		],
+		totals: { monthlyMinor: 2027392, yearlyMinor: 24328700, count: 4 },
+		upcoming: [
+			{
+				subscriptionId: GOLDEN_SUBSCRIPTIONS.netflix.id,
+				dueOn: "2026-11-05",
+				amountMinor: 64900,
+			},
+			{
+				subscriptionId: GOLDEN_SUBSCRIPTIONS.cultGym.id,
+				dueOn: "2026-11-10",
+				amountMinor: 150000,
+			},
+			{
+				subscriptionId: GOLDEN_SUBSCRIPTIONS.sunrise.id,
+				dueOn: "2026-12-01",
+				amountMinor: 1800000,
+			},
+		],
+		upcomingTotalMinor: 2014900,
+		thisMonth: { chargedMinor: 1800000, toComeMinor: 214900 },
+		currency: "INR",
+		...changes,
+	};
+}
+
+/** A new user's list: nothing yet. */
+export function emptyList(): SubscriptionList {
+	return {
+		items: [],
+		totals: { monthlyMinor: 0, yearlyMinor: 0, count: 0 },
+		upcoming: [],
+		upcomingTotalMinor: 0,
+		thisMonth: { chargedMinor: 0, toComeMinor: 0 },
 		currency: "INR",
 	};
 }

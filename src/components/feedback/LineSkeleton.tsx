@@ -1,4 +1,6 @@
-import { Skeleton } from "@/components/feedback/Skeleton";
+"use client";
+
+import { Skeleton } from "./Skeleton";
 import { cn } from "@/lib/cn";
 
 /** The text styles a line can stand for. */

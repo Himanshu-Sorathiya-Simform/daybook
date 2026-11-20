@@ -9,7 +9,7 @@ import { formatMonth } from "@/lib/date-format";
 import type { Formats } from "../lib/labels";
 import { chartLabel, type HistoryMonth, monthCells, PANEL_TEXT } from "../lib/panel";
 import { PANEL_MONTHS } from "../lib/queries";
-import { LineSkeleton } from "./LineSkeleton";
+import { LineSkeleton } from "@/components/feedback/LineSkeleton";
 
 export type LastSixMonthsProps = {
 	/** The months ending at the viewed one, oldest first (BR-F04-35), or undefined while they

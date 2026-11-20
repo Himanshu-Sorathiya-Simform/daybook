@@ -33,7 +33,8 @@ import {
 	testClient,
 	urlHarness,
 } from "../../hooks/__tests__/helpers";
-import { resetUnsavedView, VIEW_KEY } from "../../hooks/useBudgetsView";
+import { resetUnsavedChoices } from "@/hooks/useStoredChoice";
+import { VIEW_KEY } from "../../lib/view";
 import { budgetKeys } from "../../lib/keys";
 import {
 	budgetAnswer,
@@ -69,7 +70,7 @@ afterEach(() => {
 	onlineManager.setOnline(true);
 	vi.useRealTimers();
 	vi.restoreAllMocks();
-	resetUnsavedView();
+	resetUnsavedChoices();
 	window.localStorage.clear();
 	// @ts-expect-error jsdom has none; some tests set one.
 	delete window.matchMedia;
