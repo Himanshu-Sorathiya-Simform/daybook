@@ -344,6 +344,37 @@ describe("activeChips (BR-F03-39)", () => {
 		expect(amount!.label).toBe("₹800 to ₹2,499.99");
 	});
 
+	// AC-F03-77, D-541
+	test("a sub chip names its Subscription, and says Subscription charges without one", () => {
+		const sub = "0192e0c1-0000-7000-8000-000000000002";
+		expect(activeChips({ sub }, IN, "Netflix")[0]!.label).toBe(
+			"Netflix charges",
+		);
+		expect(activeChips({ sub }, IN, "Cult Gym")[0]!.label).toBe(
+			"Cult Gym charges",
+		);
+		for (const name of [undefined, null, ""]) {
+			expect(activeChips({ sub }, IN, name)[0]!.label).toBe(
+				"Subscription charges",
+			);
+		}
+	});
+
+	test("the name belongs to the sub chip alone, and removing it drops only sub", () => {
+		const sub = "0192e0c1-0000-7000-8000-000000000002";
+		const chips = activeChips(
+			{ src: "subscription", sub, q: "50%" },
+			IN,
+			"Netflix",
+		);
+		expect(chips.map((chip) => chip.label)).toEqual([
+			"Subscription charges",
+			"Netflix charges",
+			"“50%”",
+		]);
+		expect(chips[1]!.without).toEqual({ src: "subscription", q: "50%" });
+	});
+
 	test("each other chip removes only its own field", () => {
 		const filter: TransactionFilter = {
 			src: "subscription",

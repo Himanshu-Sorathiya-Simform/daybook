@@ -7,6 +7,7 @@ import { IconButton } from "@/components/actions/IconButton";
 import { Avatar } from "@/components/data/Avatar";
 import { Money } from "@/components/data/Money";
 import { Skeleton } from "@/components/feedback/Skeleton";
+import { TextLink } from "@/components/navigation/TextLink";
 import { cn } from "@/lib/cn";
 import { isGoalType } from "@/lib/transactions/model";
 import { usePayeeHistory } from "../hooks/usePayeeHistory";
@@ -103,7 +104,7 @@ export function PanelDetail({
 				sign="always"
 			/>
 			<dl className="border-line grid grid-cols-[6rem_minmax(0,1fr)] border-t">
-				{detailRows(row, locale).map(({ term, value }) => (
+				{detailRows(row, locale).map(({ term, value, href }) => (
 					<div
 						key={term}
 						className="contents"
@@ -112,7 +113,9 @@ export function PanelDetail({
 							{term}
 						</dt>
 						<dd className="border-line text-body text-ink border-b py-2.5 font-medium break-words whitespace-pre-line">
-							{value}
+							{href === undefined ?
+								value
+							:	<TextLink href={href}>{value}</TextLink>}
 						</dd>
 					</div>
 				))}

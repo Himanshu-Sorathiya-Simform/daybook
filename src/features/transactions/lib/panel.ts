@@ -4,6 +4,7 @@ import { formatMoney } from "@/lib/money";
 import { isGoalType, type Transaction } from "@/lib/transactions/model";
 import { type LabelLocale, transactionCount } from "./labels";
 import { TYPE_LABELS } from "./filter-labels";
+import { subscriptionHref } from "./subscriptions";
 import type {
 	BreakdownGroup,
 	PayeeHistoryAnswer,
@@ -130,28 +131,48 @@ export function detailDate(
 /** The Source row (BR-F03-72): "Demo data" for a demo row; "Added by you"; or for a charge,
  * "Auto from Netflix" while linked and "From a deleted Subscription" once not. */
 export function detailSource(
-	row: Pick<Transaction, "source" | "demo" | "subscriptionId" | "payee">,
+	row: Pick<
+		Transaction,
+		"source" | "demo" | "subscriptionId" | "subscription" | "payee"
+	>,
 ): string {
 	if (row.demo) return PANEL_TEXT.demo;
 	if (row.source === "manual") return "Added by you";
 	return row.subscriptionId === null ?
 			PANEL_TEXT.chargeDeleted
-		:	`Auto from ${row.payee ?? ""}`;
+		:	`Auto from ${row.subscription?.name ?? row.payee ?? ""}`;
 }
 
-export type DetailRow = { term: string; value: string };
+/** Where a linked charge's Source row leads: its Subscription on the Subscriptions page
+ * (BR-F03-16, D-586), and nowhere for a manual, demo or unlinked row. The name is the
+ * Subscription's, so an edited payee changes neither the words nor the link. */
+export function detailSourceHref(
+	row: Pick<Transaction, "source" | "demo" | "subscriptionId">,
+): string | null {
+	if (row.demo || row.source !== "subscription" || row.subscriptionId === null) {
+		return null;
+	}
+	return subscriptionHref(row.subscriptionId);
+}
+
+export type DetailRow = { term: string; value: string; href?: string };
 
 /** The selected row's details (BR-F03-72): Type; Category, or the Goal on a Goal row; Date;
  * Source; and Note, or "None". */
 export function detailRows(row: Transaction, locale: LabelLocale): DetailRow[] {
 	const goal = isGoalType(row.type);
+	const href = detailSourceHref(row);
 	return [
 		{ term: "Type", value: TYPE_LABELS[row.type] },
 		goal ?
 			{ term: "Goal", value: "Goal" }
 		:	{ term: "Category", value: categoryLabel(row.category ?? "other") },
 		{ term: "Date", value: detailDate(row, locale) },
-		{ term: "Source", value: detailSource(row) },
+		{
+			term: "Source",
+			value: detailSource(row),
+			...(href === null ? {} : { href }),
+		},
 		{ term: "Note", value: row.note ?? PANEL_TEXT.none },
 	];
 }

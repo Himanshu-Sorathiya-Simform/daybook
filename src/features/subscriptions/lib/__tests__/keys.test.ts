@@ -75,3 +75,11 @@ describe("subscriptionKeys (STATE-5)", () => {
 		);
 	});
 });
+
+// The Transactions page reads Subscription names under the same key, without importing this
+// one (STATE-5); its own test pins the same spelling, so both pages share one cache entry.
+describe("the list key is shared with the Transactions page (D-541)", () => {
+	test("is spelled subscriptions, list", () => {
+		expect([...subscriptionKeys.list()]).toEqual(["subscriptions", "list"]);
+	});
+});

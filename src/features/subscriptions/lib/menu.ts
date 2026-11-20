@@ -16,6 +16,10 @@ export type MenuAction =
 	| "viewCharges"
 	| "delete";
 
+/** The actions whose dialogs or writes exist so far. A later chunk adds its own as it builds
+ * them, so the menu never offers a button that does nothing. */
+export const READY_ACTIONS: ReadonlySet<MenuAction> = new Set(["viewCharges"]);
+
 export type MenuItem = {
 	action: MenuAction;
 	label: string;
@@ -85,4 +89,13 @@ export function rowMenu(
 		{ action: "delete", label: "Delete", danger: true, separatorBefore: true },
 	);
 	return items;
+}
+
+/** The row menu with only the actions that are ready: `rowMenu` less what `ready` lacks. */
+export function readyMenu(
+	item: Pick<SubscriptionItem, "status" | "nextDueOn">,
+	f: Formats,
+	ready: ReadonlySet<MenuAction> = READY_ACTIONS,
+): MenuItem[] {
+	return rowMenu(item, f).filter((entry) => ready.has(entry.action));
 }

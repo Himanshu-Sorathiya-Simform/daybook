@@ -2002,23 +2002,58 @@ describe("editing a charge or a demo row (BR-F03-11, BR-F03-16)", () => {
 		).toHaveTextContent("Mon, 2 Nov");
 	});
 
-	test("a linked charge says what editing it does", async () => {
+	// AC-F03-77
+	test("a linked charge says what editing it does, and links to its Subscription", async () => {
+		const id = "0192f0c4-7a1e-7c3b-9d2a-000000000001";
 		renderDialog({
 			mode: {
 				kind: "edit",
 				row: {
 					...ROW_16,
-					subscriptionId: "0192f0c4-7a1e-7c3b-9d2a-000000000001",
+					subscriptionId: id,
+					subscription: { id, name: "Netflix" },
 				},
 			},
 		});
 		await screen.findByRole("heading", { name: "Edit Transaction" });
 
+		const link = screen.getByRole("link", { name: "Auto from Netflix" });
+		expect(link).toHaveAttribute("href", `/subscriptions?open=${id}`);
+		expect(link.parentElement).toHaveTextContent(
+			"Auto from Netflix. Its type, date and time are fixed; editing it stops the Subscription from changing this charge.",
+		);
+	});
+
+	// AC-F03-77, D-586
+	test("the link names the Subscription, not a payee the user has edited", async () => {
+		const id = "0192f0c4-7a1e-7c3b-9d2a-000000000001";
+		renderDialog({
+			mode: {
+				kind: "edit",
+				row: {
+					...ROW_16,
+					payee: "Netflix India",
+					subscriptionId: id,
+					subscription: { id, name: "Netflix" },
+				},
+			},
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+		expect(
+			screen.getByRole("link", { name: "Auto from Netflix" }),
+		).toBeVisible();
+		expect(screen.queryByText(/Netflix India\./)).toBeNull();
+	});
+
+	test("an unlinked charge says it is from a deleted Subscription, with no link", async () => {
+		renderDialog({ mode: { kind: "edit", row: ROW_16 } });
+		await screen.findByRole("heading", { name: "Edit Transaction" });
 		expect(
 			screen.getByText(
-				"Auto from Netflix. Its type, date and time are fixed; editing it stops the Subscription from changing this charge.",
+				"From a deleted Subscription. Its type, date and time are fixed.",
 			),
-		).toBeInTheDocument();
+		).toBeVisible();
+		expect(screen.queryByRole("link", { name: /Auto from/ })).toBeNull();
 	});
 
 	test("a demo row keeps its Type and shows its date and time as text", async () => {

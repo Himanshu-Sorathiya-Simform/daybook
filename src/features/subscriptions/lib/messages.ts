@@ -30,6 +30,14 @@ export const PAGE_TEXT = {
 	add: "Add a Subscription",
 } as const;
 
+/** The list's own words (BR-F05-22, BR-F05-37). */
+export const LIST_TEXT = {
+	label: "Subscriptions",
+	newestFirst: "Newest first",
+	resume: "Resume",
+	actionsFor: (name: string) => `Actions for ${name}`,
+} as const;
+
 /** "as of 2:05 pm" beside the title while offline, once the list has loaded (section 10);
  * `null` online, or when nothing has loaded. `updatedAt` is the load's time in milliseconds. */
 export function asOfText(

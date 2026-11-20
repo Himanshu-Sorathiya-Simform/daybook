@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/actions/Button";
 import { FormAlert } from "@/components/feedback/FormAlert";
 import { OfflineNote } from "@/components/feedback/OfflineNote";
+import { TextLink } from "@/components/navigation/TextLink";
 import { AmountInput } from "@/components/forms/AmountInput";
 import { CategoryTiles } from "@/components/forms/CategoryTiles";
 import { DatePicker } from "@/components/forms/DatePicker";
@@ -37,6 +38,7 @@ import {
 	categoryTiles,
 	changedFields,
 	chargeNotice,
+	chargeNoticeLink,
 	checkEntry,
 	counterOf,
 	createBody,
@@ -152,6 +154,8 @@ export function EntryDialog({
 	const editing = mode.kind === "edit" ? mode.row : null;
 	const fixed = editing !== null && hasFixedDate(editing);
 	const charge = editing?.source === "subscription";
+	// A linked charge's notice leads to its Subscription (BR-F03-16, D-586).
+	const noticeLink = charge ? chargeNoticeLink(editing) : null;
 	const ownWindow = editing ? rowWindow(editing.createdAt, locale.timezone) : null;
 	const rules = ownWindow && { start, window: ownWindow };
 	const title = ENTRY_TITLES[mode.kind];
@@ -433,7 +437,15 @@ export function EntryDialog({
 					{failure && <FormAlert>{failure}</FormAlert>}
 					{charge ?
 						<p className="bg-soft rounded-control text-label text-ink-2 px-3 py-2.5">
-							{chargeNotice(editing)}
+							{noticeLink === null ?
+								chargeNotice(editing)
+							:	<>
+									<TextLink href={noticeLink.href}>
+										{noticeLink.text}
+									</TextLink>
+									{`. ${ENTRY_TEXT.chargeLinked}`}
+								</>
+							}
 						</p>
 					:	<form.Field name="type">
 							{(field) => (

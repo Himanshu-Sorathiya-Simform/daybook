@@ -1,12 +1,18 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
 import { EmptyState } from "@/components/feedback/EmptyState";
 import { Section } from "@/components/surfaces/Section";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useOnline } from "@/hooks/useOnline";
 import { useStoredChoice } from "@/hooks/useStoredChoice";
 import { cn } from "@/lib/cn";
+import { useOpenParam } from "../hooks/useOpenParam";
 import { useSubscriptions } from "../hooks/useSubscriptions";
+import { chargesHref, type OpenTarget } from "../lib/deep-link";
+import type { MenuAction } from "../lib/menu";
 import { asOfText, PAGE_TEXT } from "../lib/messages";
 import type { SubscriptionsLocale } from "../lib/types";
 import {
@@ -15,6 +21,7 @@ import {
 	type SubscriptionsView,
 	VIEW_KEY,
 } from "../lib/view";
+import { SubscriptionList } from "./SubscriptionList";
 import { SubscriptionsHeader } from "./SubscriptionsHeader";
 import { SubscriptionsSkeleton } from "./SubscriptionsSkeleton";
 import { SubscriptionsSummary } from "./SubscriptionsSummary";
@@ -51,6 +58,30 @@ export function SubscriptionsPage({
 	const isWide = useMediaQuery(WIDE, false);
 	const view = shownView(stored, isWide);
 	const list = query.data;
+	const router = useRouter();
+	const [picked, setPicked] = useState<string | null>(null);
+	const [endedOpen, setEndedOpen] = useState(false);
+	const [endedAll, setEndedAll] = useState(false);
+	// A Subscription that is gone from the list is no longer selected, and stays unselected if
+	// it comes back (BR-F05-21). Set while rendering, React's pattern for state that follows
+	// what was read.
+	const gone =
+		list !== undefined
+		&& picked !== null
+		&& !list.items.some((item) => item.id === picked);
+	if (gone) setPicked(null);
+	const selected = gone ? null : picked;
+	useOpenParam(list?.items, (target: OpenTarget | null) => {
+		setPicked(target?.id ?? null);
+		// An ended Subscription is selected with its group open and showing every row.
+		if (target?.ended) {
+			setEndedOpen(true);
+			setEndedAll(true);
+		}
+	});
+	const act = (action: MenuAction, id: string) => {
+		if (action === "viewCharges") router.push(chargesHref(id));
+	};
 	const failed = !list && (query.isError || query.fetchStatus === "paused");
 	const isEmpty = list !== undefined && list.items.length === 0;
 
@@ -62,12 +93,28 @@ export function SubscriptionsPage({
 						list={list}
 						formats={locale}
 					/>
-					{/* The list, calendar and table replace this as each arrives. */}
-					<Section>
-						<p className="text-body text-ink-2">
-							{`${PAGE_TEXT.viewNames[view]} is coming soon.`}
-						</p>
-					</Section>
+					{
+						view === "list" ?
+							<SubscriptionList
+								list={list}
+								formats={locale}
+								isWide={isWide}
+								selected={selected}
+								onSelect={setPicked}
+								endedOpen={endedOpen}
+								onEndedOpenChange={setEndedOpen}
+								endedAll={endedAll}
+								onEndedAllChange={setEndedAll}
+								onAction={act}
+							/>
+							// The calendar and table replace this as each arrives.
+						:	<Section>
+								<p className="text-body text-ink-2">
+									{`${PAGE_TEXT.viewNames[view]} is coming soon.`}
+								</p>
+							</Section>
+
+					}
 				</>
 			);
 		}

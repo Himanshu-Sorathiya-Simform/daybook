@@ -16,12 +16,23 @@ import {
 } from "vitest";
 
 import { AppProviders } from "@/components/app/AppProviders";
+import { InRouter, routerFake } from "@/components/app/__tests__/router";
 import { resetUnsavedChoices } from "@/hooks/useStoredChoice";
-import { ok, refuse, route, testClient } from "../../hooks/__tests__/helpers";
+import {
+	ok,
+	refuse,
+	route,
+	testClient,
+	urlHarness,
+} from "../../hooks/__tests__/helpers";
 import { subscriptionKeys } from "../../lib/keys";
 import type { SubscriptionList, SubscriptionsLocale } from "../../lib/types";
 import { VIEW_KEY } from "../../lib/view";
-import { emptyList, subscriptionList } from "../../lib/__tests__/fixtures";
+import {
+	emptyList,
+	subscriptionItem,
+	subscriptionList,
+} from "../../lib/__tests__/fixtures";
 import { SubscriptionsPage } from "../SubscriptionsPage";
 
 const network = setupServer();
@@ -64,22 +75,34 @@ const IN: SubscriptionsLocale = {
 function renderPage({
 	answer = () => ok(subscriptionList()),
 	seed,
+	search = "",
 }: {
 	answer?: () => Response | Promise<Response>;
 	seed?: SubscriptionList;
+	/** The URL's query, such as "?open=<id>". */
+	search?: string;
 } = {}) {
 	const reads = route(network, "get", "/api/subscriptions", answer);
 	const queryClient = testClient();
 	if (seed) queryClient.setQueryData(subscriptionKeys.list(), seed);
+	const router = routerFake();
+	const { calls, Url } = urlHarness(search);
 	const view = render(
-		<AppProviders
-			navigate={vi.fn()}
-			queryClient={queryClient}
+		<InRouter
+			pathname="/subscriptions"
+			router={router}
 		>
-			<SubscriptionsPage locale={IN} />
-		</AppProviders>,
+			<Url>
+				<AppProviders
+					navigate={vi.fn()}
+					queryClient={queryClient}
+				>
+					<SubscriptionsPage locale={IN} />
+				</AppProviders>
+			</Url>
+		</InRouter>,
 	);
-	return { ...view, queryClient, reads, user: userEvent.setup() };
+	return { ...view, queryClient, reads, router, calls, user: userEvent.setup() };
 }
 
 function goOffline() {
@@ -282,7 +305,7 @@ describe("the view (BR-F05-21)", () => {
 		expect(
 			screen.getByRole("radio", { name: "List", checked: true }),
 		).toBeVisible();
-		expect(screen.getByText("List is coming soon.")).toBeVisible();
+		expect(screen.getByRole("grid", { name: "Subscriptions" })).toBeVisible();
 	});
 
 	test("from 768 px offers List, Calendar and Table", () => {
@@ -337,7 +360,7 @@ describe("the view (BR-F05-21)", () => {
 		expect(
 			screen.getByRole("radio", { name: "List", checked: true }),
 		).toBeVisible();
-		expect(screen.getByText("List is coming soon.")).toBeVisible();
+		expect(screen.getByRole("grid", { name: "Subscriptions" })).toBeVisible();
 		expect(window.localStorage.getItem(VIEW_KEY)).toBe("table");
 	});
 
@@ -387,16 +410,258 @@ describe("the view (BR-F05-21)", () => {
 		window.localStorage.setItem(VIEW_KEY, "table");
 		const queryClient = testClient();
 		queryClient.setQueryData(subscriptionKeys.list(), subscriptionList());
+		const { Url } = urlHarness("");
 		const html = renderToString(
-			<AppProviders
-				navigate={vi.fn()}
-				queryClient={queryClient}
+			<InRouter
+				pathname="/subscriptions"
+				router={routerFake()}
 			>
-				<SubscriptionsPage locale={IN} />
-			</AppProviders>,
+				<Url>
+					<AppProviders
+						navigate={vi.fn()}
+						queryClient={queryClient}
+					>
+						<SubscriptionsPage locale={IN} />
+					</AppProviders>
+				</Url>
+			</InRouter>,
 		);
 		expect(html).toContain("Calendar");
 		expect(html).not.toContain(">Table<");
-		expect(html).toContain("List is coming soon.");
+		expect(html).toContain("Netflix");
+		expect(html).not.toContain("coming soon");
+	});
+});
+
+describe("the list view in the page (BR-F05-21, BR-F05-22, BR-F05-37)", () => {
+	const golden = subscriptionList();
+	const [, cultGym] = golden.items;
+	const rowNamed = (name: string | RegExp) =>
+		screen.getByRole("row", {
+			name: typeof name === "string" ? new RegExp(`^${name}`) : name,
+		});
+
+	test("shows the grouped list under the summary in the List view", () => {
+		media({ wide: true });
+		renderPage({ seed: golden });
+		expect(screen.getByText("Monthly cost")).toBeVisible();
+		expect(screen.getByText("Within 7 days · 1")).toBeVisible();
+		expect(rowNamed("Netflix")).toBeVisible();
+		expect(screen.queryByText(/coming soon/)).toBeNull();
+	});
+
+	test("shows no list in the Calendar and Table views, which arrive later", async () => {
+		media({ wide: true });
+		window.localStorage.setItem(VIEW_KEY, "calendar");
+		renderPage({ seed: golden });
+		expect(screen.queryByRole("grid", { name: "Subscriptions" })).toBeNull();
+		expect(screen.getByText("Calendar is coming soon.")).toBeVisible();
+	});
+
+	test("pressing a row selects it, and pressing it again clears it", async () => {
+		media({ wide: true });
+		const { user } = renderPage({ seed: golden });
+		await user.click(rowNamed("Netflix"));
+		expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "true");
+		await user.click(rowNamed("Netflix"));
+		expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
+	});
+
+	test("selecting another row moves the selection", async () => {
+		media({ wide: true });
+		const { user } = renderPage({ seed: golden });
+		await user.click(rowNamed("Netflix"));
+		await user.click(rowNamed("Cult Gym"));
+		expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
+		expect(rowNamed("Cult Gym")).toHaveAttribute("aria-selected", "true");
+	});
+
+	test("selecting does not change the remembered view", async () => {
+		media({ wide: true });
+		const { user } = renderPage({ seed: golden });
+		await user.click(rowNamed("Netflix"));
+		expect(window.localStorage.getItem(VIEW_KEY)).toBeNull();
+		expect(
+			screen.getByRole("radio", { name: "List", checked: true }),
+		).toBeVisible();
+	});
+
+	test("a Subscription that is deleted elsewhere is no longer selected after a refresh", async () => {
+		media({ wide: true });
+		const { user, queryClient } = renderPage({ seed: golden });
+		await user.click(rowNamed("Netflix"));
+		queryClient.setQueryData(subscriptionKeys.list(), {
+			...golden,
+			items: golden.items.slice(1),
+		});
+		await waitFor(() =>
+			expect(screen.queryByRole("row", { name: /^Netflix/ })).toBeNull(),
+		);
+		queryClient.setQueryData(subscriptionKeys.list(), golden);
+		await waitFor(() => expect(rowNamed("Netflix")).toBeVisible());
+		expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
+	});
+
+	// BR-F05-23
+	test("View charges opens Transactions filtered to the Subscription", async () => {
+		media({ wide: true });
+		const { user, router } = renderPage({ seed: golden });
+		await user.click(
+			screen.getByRole("button", { name: "Actions for Cult Gym" }),
+		);
+		await user.click(screen.getByRole("menuitem", { name: "View charges" }));
+		expect(router.push).toHaveBeenCalledExactlyOnceWith(
+			`/transactions?sub=${cultGym!.id}`,
+		);
+	});
+
+	test("the row menu does not change the selection", async () => {
+		media({ wide: true });
+		const { user } = renderPage({ seed: golden });
+		await user.click(
+			screen.getByRole("button", { name: "Actions for Netflix" }),
+		);
+		await user.keyboard("{Escape}");
+		expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
+	});
+
+	test("below 768 px the rows have no menu", () => {
+		media({ wide: false });
+		renderPage({ seed: golden });
+		expect(screen.queryByRole("button", { name: /Actions for/ })).toBeNull();
+		expect(rowNamed("Netflix")).toBeVisible();
+	});
+});
+
+describe("the deep link ?open=<id> (BR-F05-21, D-593)", () => {
+	const golden = subscriptionList();
+	const [netflix] = golden.items;
+	const rowNamed = (name: string) =>
+		screen.getByRole("row", { name: new RegExp(`^${name}`) });
+	const ended = subscriptionItem("cultGym", {
+		id: "0192f0c4-7a1e-7c3b-9d2a-00000000ed01",
+		name: "Old plan",
+		status: "ended",
+		endDate: "2026-09-30",
+		nextDueOn: null,
+	});
+	const eightEnded = Array.from({ length: 8 }, (_, i) => ({
+		...ended,
+		id: `0192f0c4-7a1e-7c3b-9d2a-00000000ed${String(10 + i)}`,
+		name: `Old plan ${i + 1}`,
+		endDate: `2026-0${i + 1}-15`,
+	}));
+	const withEnded = (items: typeof eightEnded): SubscriptionList => ({
+		...golden,
+		items: [...golden.items, ...items],
+	});
+
+	test("selects the Subscription and removes the parameter, keeping the view", async () => {
+		media({ wide: true });
+		window.localStorage.setItem(VIEW_KEY, "list");
+		const { calls } = renderPage({
+			seed: golden,
+			search: `?open=${netflix!.id}`,
+		});
+		expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "true");
+		await waitFor(() =>
+			expect(calls).toEqual([{ mode: "replace", href: "/subscriptions" }]),
+		);
+		expect(
+			screen.getByRole("radio", { name: "List", checked: true }),
+		).toBeVisible();
+		expect(window.localStorage.getItem(VIEW_KEY)).toBe("list");
+	});
+
+	test("an unknown id selects nothing, and the parameter is removed", async () => {
+		media({ wide: true });
+		const { calls } = renderPage({
+			seed: golden,
+			search: "?open=0192f0c4-0000-7000-8000-000000000000",
+		});
+		for (const row of screen
+			.getAllByRole("row")
+			.filter((r) => r.hasAttribute("data-key"))) {
+			expect(row).toHaveAttribute("aria-selected", "false");
+		}
+		await waitFor(() => expect(calls).toHaveLength(1));
+	});
+
+	test("an ended one is selected with the Ended group open and showing every row", async () => {
+		media({ wide: true });
+		const items = [...eightEnded];
+		renderPage({
+			seed: withEnded(items),
+			search: `?open=${items[0]!.id}`,
+		});
+		const trigger = screen.getByRole("button", { name: /^Ended · 8/ });
+		expect(trigger).toHaveAttribute("aria-expanded", "true");
+		expect(screen.getByRole("button", { name: "Show fewer" })).toBeVisible();
+		expect(rowNamed("Old plan 1")).toHaveAttribute("aria-selected", "true");
+		expect(rowNamed("Old plan 8")).toBeVisible();
+	});
+
+	test("a running one leaves the Ended group closed", () => {
+		media({ wide: true });
+		renderPage({
+			seed: withEnded(eightEnded),
+			search: `?open=${netflix!.id}`,
+		});
+		expect(screen.getByRole("button", { name: "Ended · 8" })).toHaveAttribute(
+			"aria-expanded",
+			"false",
+		);
+	});
+
+	test("waits for the list to load, then selects", async () => {
+		media({ wide: true });
+		const { calls } = renderPage({
+			search: `?open=${netflix!.id}`,
+			answer: async () => {
+				await delay(30);
+				return ok(golden);
+			},
+		});
+		expect(calls).toEqual([]);
+		await waitFor(() =>
+			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "true"),
+		);
+		await waitFor(() => expect(calls).toHaveLength(1));
+	});
+
+	test("in the calendar view it leaves the view as it is", async () => {
+		media({ wide: true });
+		window.localStorage.setItem(VIEW_KEY, "calendar");
+		const { calls } = renderPage({
+			seed: golden,
+			search: `?open=${netflix!.id}`,
+		});
+		expect(screen.getByText("Calendar is coming soon.")).toBeVisible();
+		await waitFor(() => expect(calls).toHaveLength(1));
+		expect(window.localStorage.getItem(VIEW_KEY)).toBe("calendar");
+	});
+
+	test("with no list it does nothing and keeps the parameter", async () => {
+		media({ wide: true });
+		const { calls } = renderPage({
+			search: `?open=${netflix!.id}`,
+			answer: () => refuse(500, "internal_error"),
+		});
+		await waitFor(() =>
+			expect(
+				screen.getByText("Subscriptions could not be loaded."),
+			).toBeVisible(),
+		);
+		expect(calls).toEqual([]);
+	});
+
+	test("a user can press the selected row to clear it afterwards", async () => {
+		media({ wide: true });
+		const { user } = renderPage({
+			seed: golden,
+			search: `?open=${netflix!.id}`,
+		});
+		await user.click(rowNamed("Netflix"));
+		expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
 	});
 });

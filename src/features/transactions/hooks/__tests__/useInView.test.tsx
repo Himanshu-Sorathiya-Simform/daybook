@@ -8,13 +8,17 @@ type Watched = {
 	callback: IntersectionObserverCallback;
 	targets: Element[];
 	live: boolean;
+	options: IntersectionObserverInit | undefined;
 };
 const observers: Watched[] = [];
 
 class FakeObserver {
 	private watched: Watched;
-	constructor(callback: IntersectionObserverCallback) {
-		this.watched = { callback, targets: [], live: true };
+	constructor(
+		callback: IntersectionObserverCallback,
+		options?: IntersectionObserverInit,
+	) {
+		this.watched = { callback, targets: [], live: true, options };
 		observers.push(this.watched);
 	}
 	observe(target: Element) {
@@ -42,14 +46,16 @@ function Probe({
 	onVisible,
 	attach = true,
 	resetKey,
+	margin,
 }: {
 	active: boolean;
 	onVisible: () => void;
 	attach?: boolean;
 	resetKey?: unknown;
+	margin?: string;
 }) {
 	const ref = useRef<HTMLDivElement>(null);
-	useInView(ref, active, onVisible, resetKey);
+	useInView(ref, active, onVisible, resetKey, margin);
 	return attach ? <div ref={ref}>Top</div> : null;
 }
 
@@ -202,5 +208,81 @@ describe("useInView (BR-F03-30)", () => {
 		expect(observers[1]!.live).toBe(true);
 		report(true);
 		expect(onVisible).toHaveBeenCalledOnce();
+	});
+
+	// D-620
+	describe("the margin", () => {
+		test("is none by default: the element is watched against the screen itself", () => {
+			render(
+				<Probe
+					active
+					onVisible={vi.fn()}
+				/>,
+			);
+			expect(observers).toHaveLength(1);
+			expect(observers[0]?.options).toEqual({ rootMargin: "0px" });
+		});
+
+		test("widens the screen as given, so the callback comes before the element is visible", () => {
+			render(
+				<Probe
+					active
+					onVisible={vi.fn()}
+					margin="0px 0px 1000px 0px"
+				/>,
+			);
+			expect(observers[0]?.options).toEqual({
+				rootMargin: "0px 0px 1000px 0px",
+			});
+		});
+
+		test("a new margin watches afresh with it, and drops the old observer", () => {
+			const { rerender } = render(
+				<Probe
+					active
+					onVisible={vi.fn()}
+					margin="0px"
+				/>,
+			);
+			rerender(
+				<Probe
+					active
+					onVisible={vi.fn()}
+					margin="0px 0px 400px 0px"
+				/>,
+			);
+			expect(observers).toHaveLength(2);
+			expect(observers[0]?.live).toBe(false);
+			expect(observers[1]?.live).toBe(true);
+			expect(observers[1]?.options).toEqual({
+				rootMargin: "0px 0px 400px 0px",
+			});
+		});
+
+		test("an inactive watcher makes no observer, whatever the margin", () => {
+			render(
+				<Probe
+					active={false}
+					onVisible={vi.fn()}
+					margin="0px 0px 1000px 0px"
+				/>,
+			);
+			expect(observers).toHaveLength(0);
+		});
+
+		test("still calls back when the element reports it is within the margin", () => {
+			const onVisible = vi.fn();
+			render(
+				<Probe
+					active
+					onVisible={onVisible}
+					margin="0px 0px 1000px 0px"
+				/>,
+			);
+			report(true);
+			expect(onVisible).toHaveBeenCalledTimes(1);
+			report(false);
+			expect(onVisible).toHaveBeenCalledTimes(1);
+		});
 	});
 });

@@ -8,7 +8,7 @@ import {
 	within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { HttpResponse } from "msw";
+import { delay, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { I18nProvider } from "react-aria-components";
 import { toast } from "sonner";
@@ -126,12 +126,20 @@ const CHECK_B = "?from=2026-10-01&to=2026-10-31&cat=food";
 const observers = new Set<{
 	callback: IntersectionObserverCallback;
 	targets: Element[];
+	options: IntersectionObserverInit | undefined;
 }>();
 let stays: ((target: Element) => boolean) | null = null;
 class FakeObserver {
-	private entry: { callback: IntersectionObserverCallback; targets: Element[] };
-	constructor(callback: IntersectionObserverCallback) {
-		this.entry = { callback, targets: [] };
+	private entry: {
+		callback: IntersectionObserverCallback;
+		targets: Element[];
+		options: IntersectionObserverInit | undefined;
+	};
+	constructor(
+		callback: IntersectionObserverCallback,
+		options?: IntersectionObserverInit,
+	) {
+		this.entry = { callback, targets: [], options };
 		observers.add(this.entry);
 	}
 	observe(target: Element) {
@@ -1006,6 +1014,63 @@ describe("loading more (BR-F03-30, D-530)", () => {
 		);
 		answer();
 		await waitFor(() => expect(rowNames()).toHaveLength(100));
+	});
+
+	// D-585: the Load more button holds the only spinner while a page loads.
+	test("shows one spinner while the next page loads, in the button", async () => {
+		let answer: () => void = () => {};
+		const waiting = new Promise<void>((resolve) => (answer = resolve));
+		const pages = threePages();
+		const { user } = renderPage("?sort=amount", {
+			list: async (request, index) => {
+				if (index === 1) await waiting;
+				return pages(request);
+			},
+		});
+		await grid();
+		expect(document.querySelectorAll(".animate-spin")).toHaveLength(0);
+
+		await user.click(screen.getByRole("button", { name: "Load more" }));
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "Load more" }),
+			).toHaveAttribute("aria-disabled", "true"),
+		);
+
+		const spinners = document.querySelectorAll(".animate-spin");
+		expect(spinners).toHaveLength(1);
+		expect(
+			screen.getByRole("button", { name: "Load more" }).contains(spinners[0]!),
+		).toBe(true);
+		expect(screen.queryByLabelText("Loading more Transactions")).toBeNull();
+		answer();
+		await waitFor(() => expect(rowNames()).toHaveLength(100));
+		expect(document.querySelectorAll(".animate-spin")).toHaveLength(0);
+	});
+
+	// D-620, AC-F03-64
+	test("the end of the list is watched 1,000 px before the screen, so the page loads before Load more is visible", async () => {
+		renderPage("?sort=amount", { list: threePages() });
+		await grid();
+
+		const endWatchers = [...observers].filter((each) =>
+			each.targets.some((target) => target.textContent === "Load more"),
+		);
+		expect(endWatchers).toHaveLength(1);
+		expect(endWatchers[0]?.options).toEqual({
+			rootMargin: "0px 0px 1000px 0px",
+		});
+	});
+
+	test("the top of the list keeps its own watcher with no margin", async () => {
+		renderPage("?sort=amount", { list: threePages() });
+		await grid();
+		const topWatchers = [...observers].filter((each) =>
+			each.targets.some((target) => target.textContent === "Load earlier"),
+		);
+		for (const watcher of topWatchers) {
+			expect(watcher.options).toEqual({ rootMargin: "0px" });
+		}
 	});
 
 	test("a page that fails to load announces nothing and Load more stays to try again", async () => {
@@ -2015,6 +2080,86 @@ describe("filters (BR-F03-39, D-523)", () => {
 
 		expect(calls).toEqual([{ mode: "push", href: "/transactions?sort=amount" }]);
 		expect(searchBox()).toHaveValue("");
+	});
+
+	describe("a Subscription chip (D-541, AC-F03-77)", () => {
+		const NETFLIX = "0192f0c4-7a1e-7c3b-9d2a-000000000001";
+		const names = {
+			items: [
+				{ id: NETFLIX, name: "Netflix" },
+				{ id: "0192f0c4-7a1e-7c3b-9d2a-000000000002", name: "Cult Gym" },
+			],
+		};
+		const chips = () =>
+			within(screen.getByRole("grid", { name: "Active filters" }))
+				.getAllByRole("row")
+				.map((row) => row.textContent);
+
+		test("reads Netflix charges once /api/subscriptions answers, whatever other filters show", async () => {
+			const reads = route(network, "get", "/api/subscriptions", () =>
+				ok(names),
+			);
+			renderFiltered(`?sub=${NETFLIX}&cat=food`);
+			await grid();
+			await waitFor(() =>
+				expect(chips()).toEqual(["Food", "Netflix charges"]),
+			);
+			expect(reads).toHaveLength(1);
+		});
+
+		test("reads Subscription charges while the names load", async () => {
+			route(network, "get", "/api/subscriptions", async () => {
+				await delay("infinite");
+				return ok(names);
+			});
+			renderFiltered(`?sub=${NETFLIX}`);
+			await grid();
+			expect(chips()).toEqual(["Subscription charges"]);
+		});
+
+		test("reads Subscription charges when the read fails", async () => {
+			const reads = route(network, "get", "/api/subscriptions", () =>
+				refuse(500, "internal"),
+			);
+			renderFiltered(`?sub=${NETFLIX}`);
+			await grid();
+			await waitFor(() => expect(reads.length).toBeGreaterThan(0));
+			expect(chips()).toEqual(["Subscription charges"]);
+		});
+
+		test("reads Subscription charges for an id the list does not hold", async () => {
+			const reads = route(network, "get", "/api/subscriptions", () =>
+				ok(names),
+			);
+			renderFiltered("?sub=0192f0c4-7a1e-7c3b-9d2a-0000000000ff");
+			await grid();
+			await waitFor(() => expect(reads).toHaveLength(1));
+			expect(chips()).toEqual(["Subscription charges"]);
+		});
+
+		test("removing the chip drops only the sub filter", async () => {
+			route(network, "get", "/api/subscriptions", () => ok(names));
+			const { user, calls } = renderFiltered(`?sub=${NETFLIX}&cat=food`);
+			await grid();
+			await user.click(
+				await screen.findByRole("button", {
+					name: "Remove Netflix charges",
+				}),
+			);
+			expect(calls).toEqual([
+				{ mode: "push", href: "/transactions?cat=food" },
+			]);
+		});
+
+		test("a page with no sub filter never asks for the Subscriptions", async () => {
+			const reads = route(network, "get", "/api/subscriptions", () =>
+				ok(names),
+			);
+			renderFiltered(CHECK_B);
+			await grid();
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			expect(reads).toHaveLength(0);
+		});
 	});
 
 	test("no filter shows no chips", async () => {

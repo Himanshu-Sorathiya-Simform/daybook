@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { asOfText, PAGE_TEXT } from "../messages";
+import { asOfText, LIST_TEXT, PAGE_TEXT } from "../messages";
 
 const F = { dateLocale: "en-IN", timezone: "Asia/Kolkata" };
 // 2026-11-02T08:35:00Z is 14:05 in Kolkata.
@@ -46,5 +46,18 @@ describe("the page's words (section 6)", () => {
 		);
 		expect(PAGE_TEXT.retry).toBe("Retry");
 		expect(PAGE_TEXT.add).toBe("Add a Subscription");
+	});
+});
+
+describe("LIST_TEXT (BR-F05-22, BR-F05-37)", () => {
+	test("holds the list's fixed words", () => {
+		expect(LIST_TEXT.label).toBe("Subscriptions");
+		expect(LIST_TEXT.newestFirst).toBe("Newest first");
+		expect(LIST_TEXT.resume).toBe("Resume");
+	});
+
+	test("names a row's menu from the Subscription", () => {
+		expect(LIST_TEXT.actionsFor("Netflix")).toBe("Actions for Netflix");
+		expect(LIST_TEXT.actionsFor("Cult Gym")).toBe("Actions for Cult Gym");
 	});
 });
