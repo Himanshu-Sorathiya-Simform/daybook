@@ -2791,6 +2791,74 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 			expect(screen.queryByRole("dialog")).toBeNull();
 		});
 
+		// D-623
+		describe("a category of Out by category toggles the Category filter", () => {
+			const categoryButton = (name: string, pressed?: boolean) =>
+				within(panel()).getByRole("button", {
+					name,
+					...(pressed === undefined ? {} : { pressed }),
+				});
+
+			test("pressing one pushes cat for it, with a history entry, and keeps the other filters", async () => {
+				docked();
+				const { calls, user } = renderPanel(
+					"?from=2026-10-01&to=2026-10-31",
+				);
+				await grid();
+				await user.click(categoryButton("Food"));
+				expect(calls).toEqual([
+					{
+						mode: "push",
+						href: "/transactions?from=2026-10-01&to=2026-10-31&cat=food",
+					},
+				]);
+			});
+
+			test("pressing a second adds it beside the first, sorted", async () => {
+				docked();
+				const { calls, user } = renderPanel("?cat=shopping");
+				await grid();
+				await user.click(categoryButton("Food"));
+				expect(calls.at(-1)).toEqual({
+					mode: "push",
+					href: "/transactions?cat=food,shopping",
+				});
+			});
+
+			test("a category the filter holds reads as pressed, and pressing it takes it out", async () => {
+				docked();
+				const { calls, user } = renderPanel("?cat=food");
+				await grid();
+				await user.click(categoryButton("Food", true));
+				expect(calls.at(-1)).toEqual({
+					mode: "push",
+					href: "/transactions",
+				});
+			});
+
+			test("the list and the chip follow: the chip reads the category and removing it clears", async () => {
+				docked();
+				const { user } = renderPanel("");
+				await grid();
+				await user.click(categoryButton("Food"));
+				expect(
+					within(screen.getByRole("grid", { name: "Active filters" }))
+						.getAllByRole("row")
+						.map((r) => r.textContent),
+				).toEqual(["Food"]);
+			});
+
+			test("the list's own sort and grouping stay", async () => {
+				docked();
+				const { calls, user } = renderPanel("?sort=amount");
+				await grid();
+				await user.click(categoryButton("Food"));
+				expect(calls.at(-1)?.href).toBe(
+					"/transactions?cat=food&sort=amount",
+				);
+			});
+		});
+
 		test("a click selects the row, writes txn by replacing, and the panel shows it", async () => {
 			docked();
 			const { calls, user } = renderPanel("");

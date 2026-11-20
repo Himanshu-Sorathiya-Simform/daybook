@@ -3,10 +3,9 @@
 import type { ReactNode } from "react";
 
 import { Drawer } from "@/components/surfaces/Drawer";
-import { Section } from "@/components/surfaces/Section";
+import { DockedPanel } from "@/components/surfaces/DockedPanel";
 import type { ExpenseCategory } from "@/lib/budgets/model";
 import type { Month } from "@/lib/budgets/months";
-import { cn } from "@/lib/cn";
 import type { Formats } from "../lib/labels";
 import { PANEL_TEXT, subjectOf } from "../lib/panel";
 import type { BudgetMonthAnswer } from "../lib/types";
@@ -98,23 +97,18 @@ export function BudgetPanel({
 		);
 	}
 	return (
-		<aside
-			aria-label={PANEL_TEXT.label}
-			className={cn("max-dock:hidden sticky top-7", className)}
+		<DockedPanel
+			label={PANEL_TEXT.label}
+			{...(className === undefined ? {} : { className })}
 		>
-			<Section
-				as="div"
-				className="flex min-h-140 flex-col px-5.5 py-5"
-			>
-				{shown ?
-					detail(selected, true)
-				:	<BudgetPanelSummary
-						month={month}
-						view={view}
-						formats={formats}
-					/>
-				}
-			</Section>
-		</aside>
+			{shown ?
+				detail(selected, true)
+			:	<BudgetPanelSummary
+					month={month}
+					view={view}
+					formats={formats}
+				/>
+			}
+		</DockedPanel>
 	);
 }

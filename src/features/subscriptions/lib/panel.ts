@@ -38,7 +38,36 @@ export const PANEL_TEXT = {
 	note: "Note",
 	addNote: "Add a note",
 	keysHint: "E to edit · Up and down arrows move · Esc to close",
+	keysHintNoEdit: "Up and down arrows move · Esc to close",
+	chargesFailed: "Charges could not be loaded.",
+	retry: "Retry",
+	loadingCharges: "Loading charges",
+	viewCharges: "View charges",
 } as const;
+
+/**
+ * What the panel offers so far. Each later chunk turns on what it builds, so the panel never
+ * shows a button, a link or a key that does nothing: the Edit key and "Add a note" with the
+ * Edit dialog, the status box's buttons and the footer's with theirs, and Undo skip with the
+ * Undo notices.
+ */
+export const READY_PANEL: {
+	edit: boolean;
+	undoSkip: boolean;
+	status: ReadonlySet<StatusAction>;
+	actions: ReadonlySet<PanelActionKey>;
+} = {
+	edit: false,
+	undoSkip: false,
+	status: new Set(),
+	actions: new Set(),
+};
+
+/** The hint at the foot of the panel: "E to edit · Up and down arrows move · Esc to close",
+ * without the Edit key until Edit exists. */
+export function keysHint(editReady: boolean = READY_PANEL.edit): string {
+	return editReady ? PANEL_TEXT.keysHint : PANEL_TEXT.keysHintNoEdit;
+}
 
 /** One category's share of the monthly cost (BR-F05-40). */
 export type CategoryCost = {
@@ -351,6 +380,23 @@ export function chargeTimeline(
 	return [...ahead.reverse(), ...past];
 }
 
+/**
+ * How many timeline lines the Subscription will have, known before its charges load, for the
+ * skeleton that holds their place (BR-F05-40): every charge the list counts, every skipped
+ * date, and the two due dates to come (none once ended). `count` is what shows at first, at most
+ * 7; `toggle` says a Show all button follows.
+ */
+export function expectedLines(
+	item: Pick<SubscriptionItem, "status" | "chargeCount" | "skips">,
+): { count: number; toggle: boolean } {
+	const coming = item.status === "ended" ? 0 : 2;
+	const all = item.chargeCount + item.skips.length + coming;
+	return {
+		count: Math.min(all, TIMELINE_PREVIEW),
+		toggle: all > TIMELINE_PREVIEW,
+	};
+}
+
 /** The lines the panel shows: the first 7, or all of them (BR-F05-40). */
 export function shownLines(
 	lines: readonly TimelineLine[],
@@ -415,4 +461,21 @@ export function panelActions(
 	}
 	actions.push({ action: "delete", label: "Delete", variant: "danger" });
 	return actions;
+}
+
+/** The footer's buttons that are ready: `panelActions` less what `ready` lacks. */
+export function readyPanelActions(
+	item: Pick<SubscriptionItem, "status" | "nextDueOn">,
+	f: Formats,
+	ready: ReadonlySet<PanelActionKey> = READY_PANEL.actions,
+): PanelAction[] {
+	return panelActions(item, f).filter((entry) => ready.has(entry.action));
+}
+
+/** The status box's buttons that are ready. */
+export function readyStatusActions(
+	actions: readonly StatusAction[],
+	ready: ReadonlySet<StatusAction> = READY_PANEL.status,
+): StatusAction[] {
+	return actions.filter((action) => ready.has(action));
 }

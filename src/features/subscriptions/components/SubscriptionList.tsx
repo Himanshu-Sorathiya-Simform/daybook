@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
+import { useState } from "react";
 import {
 	Button as AriaButton,
 	Disclosure as AriaDisclosure,
@@ -14,15 +15,20 @@ import {
 
 import { Button } from "@/components/actions/Button";
 import { GroupHeader } from "@/components/data/GroupHeader";
+import { FilterChips } from "@/components/forms/FilterChips";
 import { Section } from "@/components/surfaces/Section";
+import { type RowArrows, useRowArrows } from "@/hooks/useRowArrows";
 import { cn } from "@/lib/cn";
+import type { ExpenseCategory } from "@/lib/subscriptions/model";
 import {
 	endedToggle,
+	flatOrder,
 	groupHeader,
 	listGroups,
 	NO_RUNNING,
 	shownRows,
 } from "../lib/groups";
+import { categoryChip, FILTER_TEXT } from "../lib/category-filter";
 import type { Formats } from "../lib/labels";
 import type { MenuAction } from "../lib/menu";
 import { LIST_TEXT } from "../lib/messages";
@@ -32,7 +38,6 @@ import { SubscriptionRow } from "./SubscriptionRow";
 export type SubscriptionListProps = {
 	list: SubscriptionListData;
 	formats: Formats;
-	isWide: boolean;
 	/** The selected Subscription's id, or `null`. */
 	selected: string | null;
 	onSelect: (id: string | null) => void;
@@ -42,6 +47,12 @@ export type SubscriptionListProps = {
 	endedAll: boolean;
 	onEndedAllChange: (all: boolean) => void;
 	onAction: (action: MenuAction, id: string) => void;
+	/** What Up and Down do: select beside the docked panel, else only move focus, and nothing
+	 * while the drawer is open (BR-F05-45, D-571). */
+	arrows?: RowArrows;
+	/** The category the list is narrowed to, and how to clear it (BR-F05-50). */
+	category?: ExpenseCategory | null;
+	onClearCategory?: () => void;
 	className?: string;
 };
 
@@ -66,7 +77,6 @@ const selectedIn = (ids: readonly string[], selected: string | null) =>
 export function SubscriptionList({
 	list,
 	formats,
-	isWide,
 	selected,
 	onSelect,
 	endedOpen,
@@ -74,8 +84,13 @@ export function SubscriptionList({
 	endedAll,
 	onEndedAllChange,
 	onAction,
+	arrows = "select",
+	category = null,
+	onClearCategory,
 	className,
 }: Readonly<SubscriptionListProps>) {
+	// The rows' holder as state, so the shortcuts listen on it once it is on the page.
+	const [holder, setHolder] = useState<HTMLDivElement | null>(null);
 	const { groups, hasRunning } = listGroups(
 		list.items,
 		list.upcoming,
@@ -88,103 +103,126 @@ export function SubscriptionList({
 	const endedIds = endedRows.map((row) => row.item.id);
 	const toggle = ended ? endedToggle(ended.rows.length, endedAll) : null;
 
+	useRowArrows({
+		holder,
+		ids: flatOrder(groups, { endedOpen, endedAll }),
+		selected,
+		onSelect,
+		mode: arrows,
+	});
+
 	const rowOf = (row: (typeof endedRows)[number]) => (
 		<SubscriptionRow
 			key={row.item.id}
 			row={row}
 			formats={formats}
-			isWide={isWide}
 			onAction={onAction}
 		/>
 	);
 
 	return (
 		<Section className={cn("px-5 pt-1 pb-3 max-md:px-4", className)}>
-			{!hasRunning && (
-				<p className="text-body text-ink-2 pt-4 pb-1">{NO_RUNNING}</p>
+			{category !== null && (
+				<div className="flex flex-wrap items-center gap-2 pt-3">
+					<span className="text-label text-ink-2">
+						{FILTER_TEXT.showing}
+					</span>
+					<FilterChips
+						label={FILTER_TEXT.showing}
+						chips={[{ id: category, label: categoryChip(category) }]}
+						onRemove={() => onClearCategory?.()}
+						onClearAll={() => onClearCategory?.()}
+						clearAllLabel={FILTER_TEXT.showAll}
+					/>
+				</div>
 			)}
-			{running.length > 0 && (
-				<AriaGridList
-					aria-label={LIST_TEXT.label}
-					selectionMode="single"
-					selectedKeys={selectedIn(runningIds, selected)}
-					onSelectionChange={(picked) => onSelect(pickedId(picked))}
-					// Letters are the page's shortcuts (BR-F05-45).
-					disallowTypeAhead
-					className="flex flex-col outline-none"
-				>
-					{running.map((group) => {
-						const header = groupHeader(group, formats);
-						return (
-							<AriaGridListSection
-								key={group.key}
-								id={`group:${group.key}`}
-								className="flex flex-col"
-							>
-								<AriaGridListHeader>
-									<GroupHeader
-										label={header.label}
-										{...(header.figure === null ?
-											{}
-										:	{ figures: header.figure })}
-									/>
-								</AriaGridListHeader>
-								{group.rows.map(rowOf)}
-							</AriaGridListSection>
-						);
-					})}
-				</AriaGridList>
-			)}
-			{ended && (
-				<AriaDisclosure
-					isExpanded={endedOpen}
-					onExpandedChange={onEndedOpenChange}
-				>
-					<AriaButton
-						slot="trigger"
-						className="text-caption text-ink-2 focus-visible:focus-ring rounded-control flex w-full cursor-pointer items-center gap-1.5 pt-4 pb-1.5 text-left font-semibold outline-none max-md:min-h-11"
+			<div ref={setHolder}>
+				{!hasRunning && (
+					<p className="text-body text-ink-2 pt-4 pb-1">{NO_RUNNING}</p>
+				)}
+				{running.length > 0 && (
+					<AriaGridList
+						aria-label={LIST_TEXT.label}
+						selectionMode="single"
+						selectedKeys={selectedIn(runningIds, selected)}
+						onSelectionChange={(picked) => onSelect(pickedId(picked))}
+						// Letters are the page's shortcuts (BR-F05-45).
+						disallowTypeAhead
+						className="flex flex-col outline-none"
 					>
-						<ChevronRight
-							aria-hidden="true"
-							className={cn(
-								"size-3.5 shrink-0 transition-transform duration-(--dur-fast) ease-out",
-								endedOpen && "rotate-90",
-							)}
-						/>
-						<span className="flex-1">
-							{groupHeader(ended, formats).label}
-						</span>
-						{endedOpen && (
-							<span className="text-ink-3 font-normal">
-								{LIST_TEXT.newestFirst}
-							</span>
-						)}
-					</AriaButton>
-					<AriaDisclosurePanel>
-						<AriaGridList
-							aria-label={groupHeader(ended, formats).label}
-							selectionMode="single"
-							selectedKeys={selectedIn(endedIds, selected)}
-							onSelectionChange={(picked) =>
-								onSelect(pickedId(picked))
-							}
-							disallowTypeAhead
-							className="flex flex-col outline-none"
+						{running.map((group) => {
+							const header = groupHeader(group, formats);
+							return (
+								<AriaGridListSection
+									key={group.key}
+									id={`group:${group.key}`}
+									className="flex flex-col"
+								>
+									<AriaGridListHeader>
+										<GroupHeader
+											label={header.label}
+											{...(header.figure === null ?
+												{}
+											:	{ figures: header.figure })}
+										/>
+									</AriaGridListHeader>
+									{group.rows.map(rowOf)}
+								</AriaGridListSection>
+							);
+						})}
+					</AriaGridList>
+				)}
+				{ended && (
+					<AriaDisclosure
+						isExpanded={endedOpen}
+						onExpandedChange={onEndedOpenChange}
+					>
+						<AriaButton
+							slot="trigger"
+							className="text-caption text-ink-2 focus-visible:focus-ring rounded-control flex w-full cursor-pointer items-center gap-1.5 pt-4 pb-1.5 text-left font-semibold outline-none max-md:min-h-11"
 						>
-							{endedRows.map(rowOf)}
-						</AriaGridList>
-						{toggle !== null && (
-							<Button
-								size="sm"
-								variant="row"
-								onPress={() => onEndedAllChange(!endedAll)}
+							<ChevronRight
+								aria-hidden="true"
+								className={cn(
+									"size-3.5 shrink-0 transition-transform duration-(--dur-fast) ease-out",
+									endedOpen && "rotate-90",
+								)}
+							/>
+							<span className="flex-1">
+								{groupHeader(ended, formats).label}
+							</span>
+							{endedOpen && (
+								<span className="text-ink-3 font-normal">
+									{LIST_TEXT.newestFirst}
+								</span>
+							)}
+						</AriaButton>
+						<AriaDisclosurePanel>
+							<AriaGridList
+								aria-label={groupHeader(ended, formats).label}
+								selectionMode="single"
+								selectedKeys={selectedIn(endedIds, selected)}
+								onSelectionChange={(picked) =>
+									onSelect(pickedId(picked))
+								}
+								disallowTypeAhead
+								className="flex flex-col outline-none"
 							>
-								{toggle}
-							</Button>
-						)}
-					</AriaDisclosurePanel>
-				</AriaDisclosure>
-			)}
+								{endedRows.map(rowOf)}
+							</AriaGridList>
+							{toggle !== null && (
+								<Button
+									size="sm"
+									variant="row"
+									onPress={() => onEndedAllChange(!endedAll)}
+								>
+									{toggle}
+								</Button>
+							)}
+						</AriaDisclosurePanel>
+					</AriaDisclosure>
+				)}
+			</div>
 		</Section>
 	);
 }

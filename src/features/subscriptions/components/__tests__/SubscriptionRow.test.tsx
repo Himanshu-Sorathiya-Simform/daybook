@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { GridList as AriaGridList } from "react-aria-components";
 import { describe, expect, test, vi } from "vitest";
@@ -7,17 +7,13 @@ import { subscriptionItem } from "../../lib/__tests__/fixtures";
 import { SubscriptionRow } from "../SubscriptionRow";
 import { endedOn, FORMATS, made, rowOf } from "./rows";
 
-function setup(
-	row: ReturnType<typeof rowOf>,
-	{ isWide = true }: { isWide?: boolean } = {},
-) {
+function setup(row: ReturnType<typeof rowOf>) {
 	const onAction = vi.fn();
 	render(
 		<AriaGridList aria-label="Subscriptions">
 			<SubscriptionRow
 				row={row}
 				formats={FORMATS}
-				isWide={isWide}
 				onAction={onAction}
 			/>
 		</AriaGridList>,
@@ -28,32 +24,51 @@ function setup(
 const netflix = subscriptionItem("netflix");
 const prime = subscriptionItem("amazonPrime");
 
-describe("a row from 768 px (BR-F05-22, AC-F05-34)", () => {
-	test("reads the next due date over how far off it is, then the name and category", () => {
+/** The pieces that only one layout shows are hidden by a breakpoint class: jsdom has no
+ * stylesheet, so a test names the piece and checks its class. */
+const wideOnly = (el: HTMLElement) =>
+	expect(el.closest(".max-md\\:hidden")).not.toBeNull();
+const phoneOnly = (el: HTMLElement) =>
+	expect(el.closest(".md\\:hidden")).not.toBeNull();
+const always = (el: HTMLElement) => {
+	expect(el.closest(".max-md\\:hidden")).toBeNull();
+	expect(el.closest(".md\\:hidden")).toBeNull();
+};
+const row = () => screen.getByRole("row");
+
+describe("the row's content (BR-F05-22, AC-F05-34)", () => {
+	test("reads the next due date over how far off it is, in the date column", () => {
 		setup(rowOf(netflix));
-		const row = screen.getByRole("row");
-		expect(within(row).getByText("Thu, 5 Nov")).toBeVisible();
-		expect(within(row).getByText("in 3 days")).toBeVisible();
-		expect(within(row).getByText("Netflix")).toBeVisible();
-		expect(within(row).getByText("Entertainment")).toBeVisible();
+		const top = within(row()).getByText("Thu, 5 Nov", {
+			selector: ".font-semibold",
+		});
+		wideOnly(top);
+		const sub = within(row()).getByText("in 3 days");
+		wideOnly(sub);
 	});
 
-	test("shows the amount with its cadence and no monthly line for a monthly one", () => {
+	test("the name, the category and the amount show at every width", () => {
 		setup(rowOf(netflix));
-		const row = screen.getByRole("row");
-		expect(within(row).getByText("₹649.00")).toBeVisible();
-		expect(within(row).getByText("a month")).toBeVisible();
-		expect(within(row).queryByText(/≈/)).toBeNull();
+		always(within(row()).getByText("Netflix"));
+		always(within(row()).getByText("Entertainment"));
+		always(within(row()).getByText("₹649.00"));
+		always(within(row()).getByText("a month"));
 	});
 
-	test("a yearly one adds its monthly equivalent, and a date outside the year has no weekday", () => {
+	test("a monthly Subscription has no monthly line", () => {
+		setup(rowOf(netflix));
+		expect(within(row()).queryByText(/≈/)).toBeNull();
+	});
+
+	test("a yearly one adds its monthly equivalent, for wide rows, and a date outside the year has no weekday", () => {
 		setup(rowOf(prime));
-		const row = screen.getByRole("row");
-		expect(within(row).getByText("₹1,499.00")).toBeVisible();
-		expect(within(row).getByText("a year")).toBeVisible();
-		expect(within(row).getByText("≈ ₹124.92 a month")).toBeVisible();
-		expect(within(row).getByText("12 Oct 2027")).toBeVisible();
-		expect(within(row).getByText("in 11 months")).toBeVisible();
+		always(within(row()).getByText("₹1,499.00"));
+		always(within(row()).getByText("a year"));
+		wideOnly(within(row()).getByText("≈ ₹124.92 a month"));
+		wideOnly(
+			within(row()).getByText("12 Oct 2027", { selector: ".font-semibold" }),
+		);
+		wideOnly(within(row()).getByText("in 11 months"));
 	});
 
 	test("a due date of today reads today", () => {
@@ -61,14 +76,75 @@ describe("a row from 768 px (BR-F05-22, AC-F05-34)", () => {
 		expect(screen.getByText("today")).toBeVisible();
 	});
 
-	test("has its actions menu, named for the Subscription", () => {
+	test("the row is named by its whole reading, name first", () => {
+		setup(rowOf(netflix));
+		expect(row()).toHaveAccessibleName(
+			"Netflix, Entertainment, ₹649.00 a month, Thu, 5 Nov in 3 days",
+		);
+	});
+});
+
+describe("the two layouts are CSS, so the server's HTML is the final one (D-625)", () => {
+	test("the grid has two columns on a phone and four from 768 px", () => {
+		setup(rowOf(netflix));
+		expect(row()).toHaveClass("grid-cols-[minmax(0,1fr)_auto]");
+		expect(row().className).toContain(
+			"md:grid-cols-[8rem_minmax(0,1fr)_11.25rem_2.5rem]",
+		);
+	});
+
+	test("the date column and the menu are for wide rows only", () => {
+		setup(rowOf(netflix));
+		wideOnly(within(row()).getByText("in 3 days"));
+		wideOnly(screen.getByRole("button", { name: "Actions for Netflix" }));
+	});
+
+	test("the phone's date line sits under the amount, and wide rows have the monthly equivalent instead", () => {
+		setup(rowOf(prime));
+		const phone = within(row()).getByText("12 Oct 2027", {
+			selector: ".text-caption",
+		});
+		phoneOnly(phone);
+		wideOnly(within(row()).getByText("≈ ₹124.92 a month"));
+	});
+
+	test("the category sits beside the name on wide rows and under the badges on a phone", () => {
+		setup(
+			rowOf(made("Hotstar", { status: "upcoming", startDate: "2026-12-05" })),
+		);
+		const category = within(row())
+			.getByText("Entertainment")
+			.closest("span.inline-flex") as HTMLElement;
+		expect(category).toHaveClass("max-md:order-last", "max-md:basis-full");
+	});
+
+	test("an ended row's phone line reads Ended and its end date", () => {
+		setup(rowOf(endedOn("Old plan", "2026-09-30")));
+		phoneOnly(within(row()).getByText("Ended 30 Sept"));
+	});
+
+	test("a row with no next due has no phone line", () => {
+		setup(rowOf(made("Club", { nextDueOn: null })));
+		expect(within(row()).queryByText(/Nov|Dec/)).toBeNull();
+	});
+
+	test("there is one of each piece, so a reader gets no double", () => {
+		setup(rowOf(netflix));
+		expect(within(row()).getAllByText("Netflix")).toHaveLength(1);
+		expect(within(row()).getAllByText("Entertainment")).toHaveLength(1);
+		expect(within(row()).getAllByText("₹649.00")).toHaveLength(1);
+	});
+});
+
+describe("the menu", () => {
+	test("is named for the Subscription", () => {
 		setup(rowOf(netflix));
 		expect(
 			screen.getByRole("button", { name: "Actions for Netflix" }),
 		).toBeVisible();
 	});
 
-	test("the menu offers View charges and runs it with the row's id", async () => {
+	test("offers View charges and runs it with the row's id", async () => {
 		const { user, onAction } = setup(rowOf(netflix));
 		await user.click(
 			screen.getByRole("button", { name: "Actions for Netflix" }),
@@ -77,7 +153,7 @@ describe("a row from 768 px (BR-F05-22, AC-F05-34)", () => {
 		expect(onAction).toHaveBeenCalledExactlyOnceWith("viewCharges", netflix.id);
 	});
 
-	test("the menu offers only what is built so far", async () => {
+	test("offers only what is built so far", async () => {
 		const { user } = setup(rowOf(netflix));
 		await user.click(
 			screen.getByRole("button", { name: "Actions for Netflix" }),
@@ -85,13 +161,6 @@ describe("a row from 768 px (BR-F05-22, AC-F05-34)", () => {
 		expect(screen.getAllByRole("menuitem").map((m) => m.textContent)).toEqual([
 			"View charges",
 		]);
-	});
-
-	test("the row is named by its whole reading, name first", () => {
-		setup(rowOf(netflix));
-		expect(screen.getByRole("row")).toHaveAccessibleName(
-			"Netflix, Entertainment, ₹649.00 a month, Thu, 5 Nov in 3 days",
-		);
 	});
 });
 
@@ -119,7 +188,9 @@ describe("badges (BR-F05-22)", () => {
 		expect(
 			screen.getByText("Paused until 5 Jan 2027").querySelector("svg"),
 		).not.toBeNull();
-		cleanup();
+	});
+
+	test("an ending badge has no icon", () => {
 		setup(rowOf(made("Spotify", { status: "ending", endDate: "2026-12-31" })));
 		expect(screen.getByText("Ends 31 Dec 2026").querySelector("svg")).toBeNull();
 	});
@@ -154,13 +225,17 @@ describe("an ended row (BR-F05-22)", () => {
 
 	test("reads Ended over its end date and has no next due", () => {
 		setup(rowOf(ended));
-		expect(screen.getByText("Ended")).toBeVisible();
+		expect(
+			screen.getByText("Ended", { selector: ".font-semibold" }),
+		).toBeVisible();
 		expect(screen.getByText("30 Sept 2026")).toBeVisible();
 	});
 
 	test("is dimmed", () => {
 		setup(rowOf(ended));
-		expect(screen.getByText("Ended")).toHaveClass("text-ink-2");
+		expect(
+			screen.getByText("Ended", { selector: ".font-semibold" }),
+		).toHaveClass("text-ink-2");
 		expect(screen.getByText("₹649.00")).toHaveClass("text-ink-2");
 	});
 
@@ -187,43 +262,5 @@ describe("a Subscription with no next due date (BR-F05-22)", () => {
 		);
 		expect(screen.getByText("No more charges")).toBeVisible();
 		expect(screen.getByText("Ends 31 Dec")).toBeVisible();
-	});
-});
-
-describe("a row below 768 px (BR-F05-22)", () => {
-	test("has no date column and no menu", () => {
-		setup(rowOf(netflix), { isWide: false });
-		expect(screen.queryByText("in 3 days")).toBeNull();
-		expect(screen.queryByRole("button")).toBeNull();
-	});
-
-	test("puts the next due date under the amount, not the monthly equivalent", () => {
-		setup(rowOf(prime), { isWide: false });
-		expect(screen.getByText("12 Oct 2027")).toBeVisible();
-		expect(screen.queryByText(/≈/)).toBeNull();
-		expect(screen.getByText("₹1,499.00")).toBeVisible();
-	});
-
-	test("an ended one reads Ended and its end date under the amount", () => {
-		setup(rowOf(endedOn("Old plan", "2026-09-30")), { isWide: false });
-		expect(screen.getByText("Ended 30 Sept")).toBeVisible();
-	});
-
-	test("a row with no next due has nothing under the amount", () => {
-		setup(rowOf(made("Club", { nextDueOn: null })), { isWide: false });
-		expect(screen.getByText("₹649.00")).toBeVisible();
-		expect(screen.queryByText(/Nov|Dec/)).toBeNull();
-	});
-
-	test("the category sits under the name", () => {
-		setup(rowOf(netflix), { isWide: false });
-		expect(screen.getByText("Entertainment")).toBeVisible();
-	});
-
-	test("is named by its reading with the date under the amount", () => {
-		setup(rowOf(netflix), { isWide: false });
-		expect(screen.getByRole("row")).toHaveAccessibleName(
-			"Netflix, Entertainment, ₹649.00 a month, Thu, 5 Nov",
-		);
 	});
 });

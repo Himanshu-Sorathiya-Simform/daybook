@@ -106,6 +106,21 @@ const details = () =>
 
 describe("PanelDetail (BR-F03-72)", () => {
 	// AC-F03-57
+	test("the header row stays pinned at the panel's top edge while the rest scrolls (D-621)", () => {
+		renderDetail();
+		const header = screen.getByRole("heading", {
+			name: "Transaction",
+		}).parentElement;
+		expect(header).toHaveClass(
+			"sticky",
+			"-top-5",
+			"-mt-5",
+			"pt-5",
+			"z-10",
+			"bg-section",
+		);
+	});
+
 	test("#24: the top, the details and Swiggy's last 3 months", async () => {
 		const { asked } = renderDetail();
 

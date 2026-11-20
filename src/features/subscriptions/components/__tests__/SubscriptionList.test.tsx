@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
@@ -18,7 +18,6 @@ function setup(list: ListData, props: Partial<SubscriptionListProps> = {}) {
 		<SubscriptionList
 			list={list}
 			formats={FORMATS}
-			isWide
 			selected={null}
 			endedOpen={false}
 			endedAll={false}
@@ -147,7 +146,6 @@ describe("the Ended group (BR-F05-37)", () => {
 			<SubscriptionList
 				list={listOf(...eight)}
 				formats={FORMATS}
-				isWide
 				selected={null}
 				endedOpen
 				endedAll
@@ -294,11 +292,19 @@ describe("the row menu in the list (BR-F05-22, BR-F05-23)", () => {
 	});
 });
 
-describe("below 768 px", () => {
-	test("rows have no menu button and no date column", () => {
-		setup(subscriptionList(), { isWide: false });
-		expect(screen.queryByRole("button")).toBeNull();
-		expect(screen.queryByText("in 3 days")).toBeNull();
+describe("the layouts are CSS (D-625)", () => {
+	test("every row has one date column and one menu, each for wide rows only", () => {
+		setup(subscriptionList());
+		for (const row of itemRows()) {
+			expect(
+				within(row).getAllByRole("button", { name: /^Actions for/ }),
+			).toHaveLength(1);
+		}
+		for (const button of screen.getAllByRole("button", {
+			name: /^Actions for/,
+		})) {
+			expect(button.closest(".max-md\\:hidden")).not.toBeNull();
+		}
 		expect(itemRows()).toHaveLength(4);
 	});
 });
@@ -318,5 +324,62 @@ describe("the 30-day caption in the list (BR-F05-22)", () => {
 		expect(
 			screen.getByText("3 charges in the next 30 days, ₹360.00"),
 		).toBeVisible();
+	});
+});
+
+describe("the category chip (BR-F05-50, D-622)", () => {
+	test("shows nothing while the list is not filtered", () => {
+		setup(subscriptionList());
+		expect(screen.queryByText("Showing")).toBeNull();
+		expect(screen.queryByRole("button", { name: "Show all" })).toBeNull();
+	});
+
+	test("shows Showing, the category's name as a chip, and Show all", () => {
+		setup(subscriptionList(), { category: "entertainment" });
+		expect(screen.getByText("Showing")).toBeVisible();
+		expect(screen.getByRole("grid", { name: "Showing" })).toHaveTextContent(
+			"Entertainment",
+		);
+		expect(screen.getByRole("button", { name: "Show all" })).toBeVisible();
+	});
+
+	test("the chip's remove button is named for the category and clears the filter", async () => {
+		const onClearCategory = vi.fn();
+		const { user } = setup(subscriptionList(), {
+			category: "entertainment",
+			onClearCategory,
+		});
+		await user.click(
+			screen.getByRole("button", { name: "Remove Entertainment" }),
+		);
+		expect(onClearCategory).toHaveBeenCalledOnce();
+	});
+
+	test("Show all clears it too", async () => {
+		const onClearCategory = vi.fn();
+		const { user } = setup(subscriptionList(), {
+			category: "entertainment",
+			onClearCategory,
+		});
+		await user.click(screen.getByRole("button", { name: "Show all" }));
+		expect(onClearCategory).toHaveBeenCalledOnce();
+	});
+
+	test("a multi-word category reads as its label", () => {
+		setup(listOf(made("Soap", { category: "personal_care" })), {
+			category: "personal_care",
+		});
+		expect(screen.getByRole("grid", { name: "Showing" })).toHaveTextContent(
+			"Personal care",
+		);
+	});
+
+	test("sits above the groups", () => {
+		setup(subscriptionList(), { category: "entertainment" });
+		const chip = screen.getByText("Showing");
+		const grid = screen.getByRole("grid", { name: "Subscriptions" });
+		expect(chip.compareDocumentPosition(grid)).toBe(
+			Node.DOCUMENT_POSITION_FOLLOWING,
+		);
 	});
 });

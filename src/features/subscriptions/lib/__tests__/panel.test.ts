@@ -6,10 +6,17 @@ import {
 	categoryCosts,
 	chargeTimeline,
 	detailLine,
+	expectedLines,
+	keysHint,
 	PANEL_TEXT,
 	paidSummary,
+	type PanelActionKey,
 	panelActions,
+	READY_PANEL,
+	readyPanelActions,
+	readyStatusActions,
 	shownLines,
+	type StatusAction,
 	statusBox,
 	TIMELINE_PREVIEW,
 	timelineToggle,
@@ -1033,5 +1040,161 @@ describe("panelActions (BR-F05-40)", () => {
 			expect(all[0]!.action).toBe("edit");
 			expect(all.at(-1)!.action).toBe("delete");
 		}
+	});
+});
+
+describe("what the panel offers so far (READY_PANEL)", () => {
+	test("nothing that needs a later chunk's dialog is on yet", () => {
+		expect(READY_PANEL.edit).toBe(false);
+		expect(READY_PANEL.undoSkip).toBe(false);
+		expect(READY_PANEL.status.size).toBe(0);
+		expect(READY_PANEL.actions.size).toBe(0);
+	});
+
+	test("the hint leaves out the Edit key until Edit exists", () => {
+		expect(keysHint()).toBe("Up and down arrows move · Esc to close");
+		expect(keysHint(false)).toBe("Up and down arrows move · Esc to close");
+		expect(keysHint(true)).toBe(
+			"E to edit · Up and down arrows move · Esc to close",
+		);
+		expect(keysHint(true)).toBe(PANEL_TEXT.keysHint);
+	});
+
+	test("the footer shows no button while none is ready, whatever the status", () => {
+		for (const status of [
+			"active",
+			"ending",
+			"paused",
+			"upcoming",
+			"ended",
+		] as const) {
+			const item = subscriptionItem("netflix", { status });
+			expect(readyPanelActions(item, F)).toEqual([]);
+		}
+	});
+
+	test("the footer keeps the full order for the buttons that are ready", () => {
+		const ready = new Set<PanelActionKey>(["edit", "delete", "cancel"]);
+		expect(
+			readyPanelActions(subscriptionItem("netflix"), F, ready).map(
+				(each) => each.action,
+			),
+		).toEqual(["edit", "cancel", "delete"]);
+	});
+
+	test("the footer with all ready is the whole footer", () => {
+		const item = subscriptionItem("netflix");
+		const all = new Set(panelActions(item, F).map((each) => each.action));
+		expect(readyPanelActions(item, F, all)).toEqual(panelActions(item, F));
+	});
+
+	test("the status box shows no button while none is ready", () => {
+		expect(readyStatusActions(["skip"])).toEqual([]);
+		expect(readyStatusActions(["resumeNow", "change"])).toEqual([]);
+		expect(readyStatusActions([])).toEqual([]);
+	});
+
+	test("the status box keeps the order of the buttons that are ready", () => {
+		const ready = new Set<StatusAction>(["change", "resumeNow"]);
+		expect(readyStatusActions(["resumeNow", "change"], ready)).toEqual([
+			"resumeNow",
+			"change",
+		]);
+		expect(readyStatusActions(["skip", "resume"], ready)).toEqual([]);
+	});
+});
+
+describe("PANEL_TEXT: the charge load's words (AC-F05-33)", () => {
+	test("a failed read says so, with Retry", () => {
+		expect(PANEL_TEXT.chargesFailed).toBe("Charges could not be loaded.");
+		expect(PANEL_TEXT.retry).toBe("Retry");
+		expect(PANEL_TEXT.viewCharges).toBe("View charges");
+		expect(PANEL_TEXT.loadingCharges).toBe("Loading charges");
+	});
+});
+
+describe("expectedLines: how many lines the skeleton holds (BR-F05-40)", () => {
+	const item = (changes: Partial<Parameters<typeof expectedLines>[0]> = {}) => ({
+		status: "active" as const,
+		chargeCount: 2,
+		skips: [] as string[],
+		...changes,
+	});
+
+	test("every charge and the two dates to come: Netflix's 4 lines", () => {
+		expect(expectedLines(subscriptionItem("netflix"))).toEqual({
+			count: 4,
+			toggle: false,
+		});
+	});
+
+	test("a skipped date is a line too: Cult Gym's one charge, one skip and two to come", () => {
+		expect(expectedLines(subscriptionItem("cultGym"))).toEqual({
+			count: 4,
+			toggle: false,
+		});
+	});
+
+	test("an ended Subscription has none to come", () => {
+		expect(expectedLines(item({ status: "ended", chargeCount: 3 }))).toEqual({
+			count: 3,
+			toggle: false,
+		});
+	});
+
+	test("an ended one with no charge has no line at all", () => {
+		expect(expectedLines(item({ status: "ended", chargeCount: 0 }))).toEqual({
+			count: 0,
+			toggle: false,
+		});
+	});
+
+	test("one that has not started has only the two to come", () => {
+		expect(expectedLines(item({ status: "upcoming", chargeCount: 0 }))).toEqual({
+			count: 2,
+			toggle: false,
+		});
+	});
+
+	test("shows at most 7, and says a Show all follows", () => {
+		expect(expectedLines(item({ chargeCount: 5 }))).toEqual({
+			count: 7,
+			toggle: false,
+		});
+		expect(expectedLines(item({ chargeCount: 6 }))).toEqual({
+			count: 7,
+			toggle: true,
+		});
+		expect(expectedLines(item({ chargeCount: 520 }))).toEqual({
+			count: 7,
+			toggle: true,
+		});
+	});
+
+	test("skips count toward the total", () => {
+		expect(
+			expectedLines(
+				item({ chargeCount: 4, skips: ["2026-01-01", "2026-02-01"] }),
+			),
+		).toEqual({ count: 7, toggle: true });
+	});
+
+	test("agrees with the real timeline's line count once the charges are known", () => {
+		const netflix = subscriptionItem("netflix");
+		const charges = [
+			charge({
+				subscriptionId: netflix.id,
+				dueOn: "2026-09-05",
+				occurredOn: "2026-09-05",
+			}),
+			charge({
+				subscriptionId: netflix.id,
+				dueOn: "2026-10-05",
+				occurredOn: "2026-10-05",
+			}),
+		];
+		expect(chargeTimeline(netflix, charges, F)).toHaveLength(
+			expectedLines(netflix).count,
+		);
 	});
 });

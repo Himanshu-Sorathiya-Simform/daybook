@@ -8,6 +8,7 @@ import {
 	detailRows,
 	detailSource,
 	detailSourceHref,
+	withCategoryToggled,
 	detailTitle,
 	historyLine,
 	historyTitle,
@@ -489,5 +490,55 @@ describe("detailSourceHref (BR-F03-16, D-586)", () => {
 			term: "Source",
 			value: "From a deleted Subscription",
 		});
+	});
+});
+
+describe("withCategoryToggled (BR-F03-71, D-623)", () => {
+	test("adds the category to a filter that has none", () => {
+		expect(withCategoryToggled({}, "food")).toEqual({ cat: ["food"] });
+	});
+
+	test("adds it beside the categories already there, sorted and without repeats", () => {
+		expect(withCategoryToggled({ cat: ["shopping"] }, "food")).toEqual({
+			cat: ["food", "shopping"],
+		});
+		expect(withCategoryToggled({ cat: ["food", "travel"] }, "housing")).toEqual({
+			cat: ["food", "housing", "travel"],
+		});
+	});
+
+	test("takes it out when it is already there", () => {
+		expect(withCategoryToggled({ cat: ["food", "shopping"] }, "food")).toEqual({
+			cat: ["shopping"],
+		});
+	});
+
+	test("drops the list when the last category goes", () => {
+		const result = withCategoryToggled({ cat: ["food"] }, "food");
+		expect(result).toEqual({});
+		expect("cat" in result).toBe(false);
+	});
+
+	test("keeps every other field of the filter", () => {
+		const filter = {
+			from: "2026-10-01",
+			to: "2026-10-31",
+			type: ["expense" as const],
+			q: "swiggy",
+		};
+		expect(withCategoryToggled(filter, "food")).toEqual({
+			...filter,
+			cat: ["food"],
+		});
+		expect(withCategoryToggled({ ...filter, cat: ["food"] }, "food")).toEqual(
+			filter,
+		);
+	});
+
+	test("does not change what it is given", () => {
+		const filter = { cat: ["food" as const] };
+		withCategoryToggled(filter, "shopping");
+		withCategoryToggled(filter, "food");
+		expect(filter).toEqual({ cat: ["food"] });
 	});
 });

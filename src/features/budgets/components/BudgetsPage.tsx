@@ -19,7 +19,7 @@ import { useBudgetNotices } from "../hooks/useBudgetNotice";
 import { useBudgetsUrl } from "../hooks/useBudgetsUrl";
 import { useStoredChoice } from "@/hooks/useStoredChoice";
 import { useMonthFilter } from "../hooks/useMonthFilter";
-import type { RowArrows } from "../hooks/useRowArrows";
+import type { RowArrows } from "@/hooks/useRowArrows";
 import { dayOfMonth } from "../lib/labels";
 import {
 	asOfText,

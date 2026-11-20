@@ -25,8 +25,6 @@ import { RowMenu } from "./RowMenu";
 export type SubscriptionRowProps = {
 	row: ListRow;
 	formats: Formats;
-	/** From 768 px the row has its date column and menu; below, the date sits under the amount. */
-	isWide: boolean;
 	onAction: (action: MenuAction, id: string) => void;
 	className?: string;
 };
@@ -35,13 +33,16 @@ export type SubscriptionRowProps = {
  * One Subscription in the list (BR-F05-22): from 768 px its next due date over how far off it
  * is, then the name with the category, the badges and the 30-day caption, then the amount with
  * its cadence and the monthly equivalent, then the actions menu. Below 768 px the date sits
- * under the amount instead. An ended row is dimmed. React Aria names the row by its text value,
- * which holds the whole reading, the name first.
+ * under the amount instead and the category under the name. An ended row is dimmed.
+ *
+ * The two layouts are CSS, not a width read in script: the server cannot know the window, so a
+ * script-chosen layout would be drawn narrow and then redrawn wide once the page loads, moving
+ * everything (D-625). Both layouts' pieces are in the row and a breakpoint shows the right ones.
+ * React Aria names the row by its text value, which holds the whole reading, the name first.
  */
 export function SubscriptionRow({
 	row,
 	formats,
-	isWide,
 	onAction,
 	className,
 }: Readonly<SubscriptionRowProps>) {
@@ -60,7 +61,7 @@ export function SubscriptionRow({
 				item.name,
 				categoryLabel(item.category),
 				amountWithCadence(item, formats),
-				isWide ? `${date.top} ${date.sub}`.trim() : phoneLine,
+				`${date.top} ${date.sub}`.trim(),
 			]
 				.filter(Boolean)
 				.join(", ")}
@@ -71,28 +72,22 @@ export function SubscriptionRow({
 				className,
 			)}
 		>
-			{isWide && (
-				<span className="figures flex flex-col">
-					<span
-						className={cn(
-							"text-body font-semibold",
-							ended && "text-ink-2",
-						)}
-					>
-						{date.top}
-					</span>
-					<span className="text-caption text-ink-3">{date.sub}</span>
+			<span className="figures flex flex-col max-md:hidden">
+				<span
+					className={cn("text-body font-semibold", ended && "text-ink-2")}
+				>
+					{date.top}
 				</span>
-			)}
+				<span className="text-caption text-ink-3">{date.sub}</span>
+			</span>
 			<span className="flex min-w-0 flex-col gap-0.75">
 				<span className="flex flex-wrap items-center gap-2">
 					<span className="text-body font-semibold">{item.name}</span>
-					{isWide && (
-						<CategoryTag
-							category={item.category}
-							variant="dot"
-						/>
-					)}
+					<CategoryTag
+						category={item.category}
+						variant="dot"
+						className="max-md:order-last max-md:basis-full"
+					/>
 					{badges.map((badge) => (
 						<Badge
 							key={badge.kind}
@@ -103,12 +98,6 @@ export function SubscriptionRow({
 						</Badge>
 					))}
 				</span>
-				{!isWide && (
-					<CategoryTag
-						category={item.category}
-						variant="dot"
-					/>
-				)}
 				{caption !== null && (
 					<span className="text-caption text-ink-3">{caption}</span>
 				)}
@@ -127,26 +116,26 @@ export function SubscriptionRow({
 						{cadenceWords(item.cadence)}
 					</span>
 				</span>
-				{isWide ?
-					hint !== null && (
-						<span className="text-caption text-ink-3">{hint}</span>
-					)
-				:	phoneLine !== "" && (
-						<span className="text-caption text-ink-3">{phoneLine}</span>
-					)
-				}
+				{hint !== null && (
+					<span className="text-caption text-ink-3 max-md:hidden">
+						{hint}
+					</span>
+				)}
+				{phoneLine !== "" && (
+					<span className="text-caption text-ink-3 md:hidden">
+						{phoneLine}
+					</span>
+				)}
 			</span>
-			{isWide && (
-				<span className="flex justify-end">
-					{menu.length > 0 && (
-						<RowMenu
-							name={item.name}
-							items={menu}
-							onAction={(action) => onAction(action, item.id)}
-						/>
-					)}
-				</span>
-			)}
+			<span className="flex justify-end max-md:hidden">
+				{menu.length > 0 && (
+					<RowMenu
+						name={item.name}
+						items={menu}
+						onAction={(action) => onAction(action, item.id)}
+					/>
+				)}
+			</span>
 		</AriaGridListItem>
 	);
 }

@@ -89,4 +89,15 @@ describe("TransactionListItem (BR-F03-32)", () => {
 			"Swiggy, Food: Team lunch, 10:15 pm, −₹700.00",
 		);
 	});
+
+	test("shows it can be pressed: a pointer and a hover fill, and the selected fill wins", () => {
+		renderItems([row()]);
+		const item = screen.getByRole("row");
+		expect(item).toHaveClass(
+			"cursor-pointer",
+			"hover:bg-soft",
+			"selected:bg-accent-soft",
+		);
+		expect(item).not.toHaveClass("cursor-default");
+	});
 });

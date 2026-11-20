@@ -31,6 +31,7 @@ import { ENTRY_TEXT } from "../lib/entry";
 import type { LabelLocale } from "../lib/labels";
 import type { TransactionAnswer } from "../lib/types";
 import { TRANSACTIONS_TEXT } from "../lib/messages";
+import { withCategoryToggled } from "../lib/panel";
 import { FilterBar } from "./FilterBar";
 import { HeaderTotals } from "./HeaderTotals";
 import { TransactionList } from "./TransactionList";
@@ -277,6 +278,13 @@ export function TransactionsPage({
 				onEdit={(row) => entry.openEdit(row)}
 				onDuplicate={(row) => entry.openDuplicate(row)}
 				onDelete={removeRow}
+				activeCategories={url.filter.cat ?? []}
+				onCategory={(category) =>
+					url.setFilter(
+						withCategoryToggled(url.filter, category),
+						url.list,
+					)
+				}
 			/>
 		</div>
 	);

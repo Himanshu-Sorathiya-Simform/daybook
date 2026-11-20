@@ -90,6 +90,23 @@ const actionNames = () =>
 		.filter((name) => name !== "" && !/^View as|^Remove/.test(name ?? ""));
 
 describe("BudgetPanelDetail: a Budget (BR-F04-30)", () => {
+	test("the header row stays pinned at the panel's top edge while the rest scrolls (D-621)", async () => {
+		serve();
+		renderDetail("food", "2026-10");
+		const header = screen.getByRole("heading", {
+			level: 2,
+			name: "Budget",
+		}).parentElement;
+		expect(header).toHaveClass(
+			"sticky",
+			"-top-5",
+			"-mt-5",
+			"pt-5",
+			"z-10",
+			"bg-section",
+		);
+	});
+
 	test("the label Budget, Close details, and the category", async () => {
 		serve();
 		const { user, onClose } = renderDetail("food", "2026-10");

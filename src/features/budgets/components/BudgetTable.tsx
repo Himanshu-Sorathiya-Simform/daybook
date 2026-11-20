@@ -40,7 +40,7 @@ import { categoryLabel } from "@/lib/categories";
 import { cn } from "@/lib/cn";
 import { compareCodeUnits } from "@/lib/compare";
 import { formatMoney } from "@/lib/money";
-import { type RowArrows, useRowArrows } from "../hooks/useRowArrows";
+import { type RowArrows, useRowArrows } from "@/hooks/useRowArrows";
 import {
 	type Formats,
 	percentOf,
@@ -48,7 +48,7 @@ import {
 	TABLE_TEXT,
 	tableCaption,
 } from "../lib/labels";
-import { pickedIn, selectedIn } from "../lib/rows";
+import { categoryOf, pickedIn, selectedIn } from "../lib/rows";
 import type { BudgetMonthAnswer } from "../lib/types";
 import { BudgetsFilter } from "./BudgetsFilter";
 
@@ -230,7 +230,14 @@ export function BudgetTable({
 		...rows.map((row) => `budget:${row.id}`),
 		...unbudgeted.map((row) => `unbudgeted:${row.category}`),
 	];
-	useRowArrows({ holder, ids, selected, onSelect, mode: arrows });
+	useRowArrows({
+		holder,
+		ids,
+		selected,
+		onSelect,
+		mode: arrows,
+		selectionOf: categoryOf,
+	});
 
 	const overall = {
 		limitMinor: view.overall.limitMinor,

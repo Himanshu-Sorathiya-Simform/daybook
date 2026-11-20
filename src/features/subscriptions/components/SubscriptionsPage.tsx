@@ -7,10 +7,14 @@ import { EmptyState } from "@/components/feedback/EmptyState";
 import { Section } from "@/components/surfaces/Section";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useOnline } from "@/hooks/useOnline";
+import type { RowArrows } from "@/hooks/useRowArrows";
+import { useShortcut } from "@/hooks/useShortcut";
 import { useStoredChoice } from "@/hooks/useStoredChoice";
 import { cn } from "@/lib/cn";
+import type { ExpenseCategory } from "@/lib/subscriptions/model";
 import { useOpenParam } from "../hooks/useOpenParam";
 import { useSubscriptions } from "../hooks/useSubscriptions";
+import { filterByCategory, isFilterable } from "../lib/category-filter";
 import { chargesHref, type OpenTarget } from "../lib/deep-link";
 import type { MenuAction } from "../lib/menu";
 import { asOfText, PAGE_TEXT } from "../lib/messages";
@@ -22,6 +26,7 @@ import {
 	VIEW_KEY,
 } from "../lib/view";
 import { SubscriptionList } from "./SubscriptionList";
+import { SubscriptionPanel } from "./SubscriptionPanel";
 import { SubscriptionsHeader } from "./SubscriptionsHeader";
 import { SubscriptionsSkeleton } from "./SubscriptionsSkeleton";
 import { SubscriptionsSummary } from "./SubscriptionsSummary";
@@ -35,6 +40,16 @@ export type SubscriptionsPageProps = {
 /** From here up the Table shows in the switch (BR-F05-21, D-512). */
 const WIDE = "(min-width: 48rem)";
 
+/** From here up the panel docks beside the list (BR-F05-40); the `dock` breakpoint. */
+const DOCKED = "(min-width: 1180px)";
+
+/** What Up and Down do in the list: nothing while the drawer is open, select with the panel
+ * docked, else only move focus (BR-F05-45, D-571). */
+function arrowsFor(isCovered: boolean, isDocked: boolean): RowArrows {
+	if (isCovered) return "off";
+	return isDocked ? "select" : "focus";
+}
+
 /**
  * The Subscriptions page (F05 section 6), from top to bottom: the header (BR-F05-21), then
  * the summary and the view. Loading shows a skeleton summary and four rows. A list with no
@@ -42,6 +57,10 @@ const WIDE = "(min-width: 48rem)";
  * saved, only the error with Retry; both leave out the view switch. Offline, the saved list
  * shows with "as of" beside the title. The remembered view is List, Calendar or Table, and a
  * stored Table shows the list below 768 px (BR-F05-21).
+ * - **The panel** (BR-F05-40): beside the list from 1180 px, where Up and Down select; below,
+ *   a drawer while a Subscription is selected, where they only move focus, and nothing while
+ *   the drawer is open (BR-F05-45). It is left out while loading, on error and with no
+ *   Subscription. Escape clears the selection.
  */
 export function SubscriptionsPage({
 	locale,
@@ -62,6 +81,7 @@ export function SubscriptionsPage({
 	const [picked, setPicked] = useState<string | null>(null);
 	const [endedOpen, setEndedOpen] = useState(false);
 	const [endedAll, setEndedAll] = useState(false);
+	const [filtered, setFiltered] = useState<ExpenseCategory | null>(null);
 	// A Subscription that is gone from the list is no longer selected, and stays unselected if
 	// it comes back (BR-F05-21). Set while rendering, React's pattern for state that follows
 	// what was read.
@@ -71,19 +91,47 @@ export function SubscriptionsPage({
 		&& !list.items.some((item) => item.id === picked);
 	if (gone) setPicked(null);
 	const selected = gone ? null : picked;
+	// A category that has lost its last Subscription filters nothing any more and clears.
+	const stale =
+		filtered !== null && list !== undefined && !isFilterable(list, filtered);
+	if (stale) setFiltered(null);
+	const category = stale ? null : filtered;
+	const shown =
+		list && category !== null ? filterByCategory(list, category) : list;
 	useOpenParam(list?.items, (target: OpenTarget | null) => {
 		setPicked(target?.id ?? null);
+		// A deep link shows its row, so a filter that would hide it goes.
+		if (target) setFiltered(null);
 		// An ended Subscription is selected with its group open and showing every row.
 		if (target?.ended) {
 			setEndedOpen(true);
 			setEndedAll(true);
 		}
 	});
+	/** A press on a category of the panel's summary: filter to it, or clear it when it already
+	 * is the filter (BR-F05-50). A selection the filter would hide clears with it. */
+	const filterTo = (next: ExpenseCategory) => {
+		const target = next === category ? null : next;
+		setFiltered(target);
+		const item = list?.items.find((each) => each.id === selected);
+		if (target !== null && item && item.category !== target) setPicked(null);
+	};
 	const act = (action: MenuAction, id: string) => {
 		if (action === "viewCharges") router.push(chargesHref(id));
 	};
 	const failed = !list && (query.isError || query.fetchStatus === "paused");
 	const isEmpty = list !== undefined && list.items.length === 0;
+	// The server can't know the width: it renders the docked panel, which CSS hides below 1180 px.
+	const docked = useMediaQuery(DOCKED, true);
+	const showPanel = list !== undefined && !isEmpty;
+	const drawerOpen = showPanel && !docked && selected !== null;
+
+	useShortcut("Escape", () => setPicked(null), {
+		enabled: selected !== null,
+		// Escape in a text field, a menu or a dialog belongs to them.
+		ignoreInputs: true,
+		ignoreDefaultPrevented: true,
+	});
 
 	const body = () => {
 		if (list && !isEmpty) {
@@ -96,9 +144,8 @@ export function SubscriptionsPage({
 					{
 						view === "list" ?
 							<SubscriptionList
-								list={list}
+								list={shown ?? list}
 								formats={locale}
-								isWide={isWide}
 								selected={selected}
 								onSelect={setPicked}
 								endedOpen={endedOpen}
@@ -106,6 +153,9 @@ export function SubscriptionsPage({
 								endedAll={endedAll}
 								onEndedAllChange={setEndedAll}
 								onAction={act}
+								arrows={arrowsFor(drawerOpen, docked)}
+								category={category}
+								onClearCategory={() => setFiltered(null)}
 							/>
 							// The calendar and table replace this as each arrives.
 						:	<Section>
@@ -146,18 +196,34 @@ export function SubscriptionsPage({
 	return (
 		<div
 			className={cn(
-				"flex min-w-0 flex-col gap-4 px-8 py-7 max-md:px-4 max-md:py-5",
+				showPanel
+					&& "dock:grid dock:grid-cols-[minmax(0,1fr)_minmax(20rem,25rem)] dock:items-start gap-5",
+				"px-8 py-7 max-md:px-4 max-md:py-5",
 				className,
 			)}
 		>
-			<SubscriptionsHeader
-				asOf={asOfText(online, query.dataUpdatedAt, locale)}
-				view={view}
-				onViewChange={setStored}
-				isWide={isWide}
-				hasSwitch={!failed && !isEmpty}
-			/>
-			{body()}
+			<div className="flex min-w-0 flex-col gap-4">
+				<SubscriptionsHeader
+					asOf={asOfText(online, query.dataUpdatedAt, locale)}
+					view={view}
+					onViewChange={setStored}
+					isWide={isWide}
+					hasSwitch={!failed && !isEmpty}
+				/>
+				{body()}
+			</div>
+			{showPanel && (
+				<SubscriptionPanel
+					isDocked={docked}
+					list={list}
+					selected={selected}
+					formats={locale}
+					onClose={() => setPicked(null)}
+					onViewCharges={(id) => router.push(chargesHref(id))}
+					activeCategory={category}
+					onCategory={filterTo}
+				/>
+			)}
 		</div>
 	);
 }

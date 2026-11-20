@@ -67,7 +67,7 @@ export function PanelDetail({
 		isOnline && history.isPending && history.fetchStatus === "fetching";
 	return (
 		<div className={cn("flex min-h-full flex-col gap-4", className)}>
-			<div className="flex items-center">
+			<div className="bg-section sticky -top-5 z-10 -mt-5 flex items-center pt-5">
 				<h2 className="text-label text-ink-2 flex-1">
 					{PANEL_TEXT.heading}
 				</h2>

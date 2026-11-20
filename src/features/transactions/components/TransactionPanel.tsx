@@ -4,14 +4,14 @@ import { X } from "lucide-react";
 
 import { Button } from "@/components/actions/Button";
 import { IconButton } from "@/components/actions/IconButton";
-import { Skeleton } from "@/components/feedback/Skeleton";
 import { Drawer } from "@/components/surfaces/Drawer";
-import { Section } from "@/components/surfaces/Section";
-import { cn } from "@/lib/cn";
+import { DockedPanel } from "@/components/surfaces/DockedPanel";
+import type { CategoryKey } from "@/lib/categories";
 import type { LabelLocale } from "../lib/labels";
 import { PANEL_TEXT, type PanelSelection } from "../lib/panel";
 import type { SummaryAnswer, TransactionAnswer } from "../lib/types";
 import { PanelDetail } from "./PanelDetail";
+import { PanelDetailSkeleton } from "./PanelDetailSkeleton";
 import { PanelSummary } from "./PanelSummary";
 
 export type TransactionPanelProps = {
@@ -28,29 +28,12 @@ export type TransactionPanelProps = {
 	onEdit: (row: TransactionAnswer) => void;
 	onDuplicate: (row: TransactionAnswer) => void;
 	onDelete: (row: TransactionAnswer, byKeyboard: boolean) => void;
+	/** The categories the committed filter holds, and a press on one of the summary's bars:
+	 * it toggles that category in the filter (D-623). */
+	activeCategories?: readonly CategoryKey[];
+	onCategory?: (category: CategoryKey) => void;
 	className?: string;
 };
-
-/** The skeleton lines while a selected row loads alone (BR-F03-70). */
-function LoadingLines() {
-	return (
-		<div
-			role="status"
-			aria-busy="true"
-			aria-label="Loading the Transaction"
-			className="flex flex-col gap-3"
-		>
-			<Skeleton className="h-3.5 w-30" />
-			<Skeleton className="h-5.5 w-45" />
-			{[0, 1, 2, 3].map((each) => (
-				<Skeleton
-					key={each}
-					className="h-2.5 w-full"
-				/>
-			))}
-		</div>
-	);
-}
 
 /**
  * The Transactions panel (BR-F03-70 to BR-F03-72, D-520). Docked, it is a sticky column that
@@ -69,11 +52,13 @@ export function TransactionPanel({
 	onEdit,
 	onDuplicate,
 	onDelete,
+	activeCategories,
+	onCategory,
 	className,
 }: Readonly<TransactionPanelProps>) {
 	// The heading and Close of the selected row, kept while it loads or fails (BR-F03-72).
 	const header = (
-		<div className="flex items-center">
+		<div className="bg-section sticky -top-5 z-10 -mt-5 flex items-center pt-5">
 			<h2 className="text-label text-ink-2 flex-1">{PANEL_TEXT.heading}</h2>
 			<IconButton
 				icon={X}
@@ -88,9 +73,9 @@ export function TransactionPanel({
 		if (selection === null) return null;
 		if (selection.state === "loading") {
 			return (
-				<div className="flex flex-col gap-4">
+				<div className="flex min-h-full flex-col gap-4">
 					{header}
-					<LoadingLines />
+					<PanelDetailSkeleton />
 				</div>
 			);
 		}
@@ -139,22 +124,19 @@ export function TransactionPanel({
 		);
 	}
 	return (
-		<aside
-			aria-label={PANEL_TEXT.label}
-			className={cn("max-dock:hidden sticky top-7", className)}
+		<DockedPanel
+			label={PANEL_TEXT.label}
+			{...(className === undefined ? {} : { className })}
 		>
-			<Section
-				as="div"
-				className="flex min-h-140 flex-col px-5.5 py-5"
-			>
-				{detail ?? (
-					<PanelSummary
-						summary={summary}
-						isPending={isSummaryPending}
-						locale={locale}
-					/>
-				)}
-			</Section>
-		</aside>
+			{detail ?? (
+				<PanelSummary
+					summary={summary}
+					isPending={isSummaryPending}
+					locale={locale}
+					{...(activeCategories === undefined ? {} : { activeCategories })}
+					{...(onCategory === undefined ? {} : { onCategory })}
+				/>
+			)}
+		</DockedPanel>
 	);
 }

@@ -2,8 +2,9 @@ import { categoryLabel, type CategoryKey } from "@/lib/categories";
 import { formatFullDay, formatShortDate, formatTime } from "@/lib/date-format";
 import { formatMoney } from "@/lib/money";
 import { isGoalType, type Transaction } from "@/lib/transactions/model";
+import { sortedUnique, type TransactionFilter } from "@/lib/transactions/url";
 import { type LabelLocale, transactionCount } from "./labels";
-import { TYPE_LABELS } from "./filter-labels";
+import { omitFields, TYPE_LABELS } from "./filter-labels";
 import { subscriptionHref } from "./subscriptions";
 import type {
 	BreakdownGroup,
@@ -102,6 +103,24 @@ export function categoryBars(
 		outMinor: each.outMinor,
 		share: largest > 0 ? Math.max(0, each.outMinor) / largest : 0,
 	}));
+}
+
+/**
+ * A click on a category of "Out by category" (BR-F03-71, D-623): the filter with that category
+ * added to its categories, or taken out again when it is already there, so each bar is a toggle
+ * for the Category filter. The other fields stay, and the list of categories is kept sorted and
+ * without repeats, as the URL writes it.
+ */
+export function withCategoryToggled(
+	filter: TransactionFilter,
+	category: CategoryKey,
+): TransactionFilter {
+	const chosen = filter.cat ?? [];
+	if (!chosen.includes(category)) {
+		return { ...filter, cat: sortedUnique([...chosen, category]) };
+	}
+	const left = chosen.filter((other) => other !== category);
+	return left.length > 0 ? { ...filter, cat: left } : omitFields(filter, "cat");
 }
 
 /** "Top payees by Out" (BR-F03-71): the first 4 of the summary's payees. */

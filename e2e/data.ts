@@ -7,6 +7,7 @@ import {
 	loadGoldenBudgets,
 	type LoadedGolden,
 } from "../seed/load-golden";
+import { GOLDEN_TODAY } from "../seed/golden";
 import { type LoadedStress, loadStress } from "../seed/load-stress";
 import { todayIn } from "@/lib/time";
 import { type Account, newAccount } from "./accounts";
@@ -60,8 +61,10 @@ export async function signUpByApi(
  * A new user holding golden's profile, its 22 M1 Transactions (D-471) and its four Budgets, on
  * `/transactions` at `path`. The rows go straight into the database, since their September and
  * October dates lie outside the API's 10-day window. Golden's figures hold on any day for
- * filters with explicit dates (checks A to E, G and H) and for the Budgets of September to
- * November 2026; "Today" and presets follow the real clock.
+ * filters with explicit dates (checks A to E, G and H), for all-time counts and for the Budgets
+ * of September to November 2026; "Today" and presets follow the real clock. Golden's four
+ * Subscriptions end on golden's own day, 2 November, so the catch-up of a later real day adds no
+ * charge: without that, every count would grow by the charges due since.
  */
 export async function userWithGolden(
 	page: Page,
@@ -76,6 +79,10 @@ export async function userWithGolden(
 		"DATABASE_URL_SYSTEM",
 		async (client) => {
 			const loaded = await loadGolden(client, userId);
+			await client.query(
+				"UPDATE app.subscriptions SET end_date = $2 WHERE user_id = $1 AND end_date IS NULL",
+				[userId, GOLDEN_TODAY],
+			);
 			return {
 				golden: loaded,
 				budgets: await loadGoldenBudgets(client, userId),

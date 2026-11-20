@@ -24,6 +24,9 @@ const IN: LabelLocale = {
 	currency: "INR",
 };
 
+const onCategoryMock = vi.fn();
+afterEach(() => onCategoryMock.mockClear());
+
 const SHOWN: PanelSelection = { state: "shown", row: row() };
 
 function renderPanel(props: Partial<TransactionPanelProps> = {}) {
@@ -78,6 +81,32 @@ describe("TransactionPanel docked (BR-F03-70)", () => {
 			screen.getByRole("heading", { name: "Transaction" }),
 		).toBeInTheDocument();
 		expect(screen.queryByText("11 Transactions")).toBeNull();
+	});
+
+	test("a row loading alone keeps the pinned header over its skeleton", () => {
+		renderPanel({ selection: { state: "loading" } });
+		const header = screen.getByRole("heading", {
+			name: "Transaction",
+		}).parentElement;
+		expect(header).toHaveClass(
+			"sticky",
+			"-top-5",
+			"-mt-5",
+			"pt-5",
+			"z-10",
+			"bg-section",
+		);
+	});
+
+	// D-623
+	test("pressing a category of the summary asks to toggle it", async () => {
+		const { user } = renderPanel({
+			onCategory: onCategoryMock,
+			activeCategories: ["food"],
+		});
+		const food = screen.getByRole("button", { name: "Food", pressed: true });
+		await user.click(food);
+		expect(onCategoryMock).toHaveBeenCalledExactlyOnceWith("food");
 	});
 
 	test("a row loading alone shows skeleton lines in place of the summary", () => {

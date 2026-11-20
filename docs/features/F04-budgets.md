@@ -9,7 +9,7 @@ A Budget is a monthly spending limit for one expense category. Its limit applies
 | Milestone  | M2. Before M5, writes are online only, with F03's stand-ins: Save disabled offline, and a failed save keeps the dialog open (D-241)                                                                                                                 |
 | Plan       | Free and Premium, with no gating; one-month limits included (D-560)                                                                                                                                                                                 |
 | Depends on | [F03](F03-transactions.md) (category spending, summary, drill-down), [F02](F02-onboarding-profile-settings.md) (month, locale), [P2](../platform/P2-data-access-and-security.md); P1 (write queue, from M5); F08, F09, F10, F11 read Budget figures |
-| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-580, D-583, D-616                                                                                                  |
+| Decisions  | D-33, D-40, D-46, D-110, D-111, D-171, D-185, D-213, D-241, D-246 to D-249, D-265, D-269, D-281, D-400, D-512, D-553, D-560 to D-580, D-583, D-616, D-621                                                                                           |
 
 ## 1. User stories
 
@@ -244,7 +244,7 @@ Examples in this spec write amounts without the currency symbol and months as `e
 
 **The panel** (D-249)
 
-- **BR-F04-30** From 1180 px the panel is docked beside the list. Below that it is a drawer over a scrim, 420 px wide (the full width below 768 px), opened by a selection and closed by Close details, the scrim or Escape. It is hidden in the error, offline-other-month and new-user states (section 6).
+- **BR-F04-30** From 1180 px the panel is docked beside the list. Below that it is a drawer over a scrim, 420 px wide (the full width below 768 px), opened by a selection and closed by Close details, the scrim or Escape. It is hidden in the error, offline-other-month and new-user states (section 6). The docked panel is never taller than the screen: its frame stays put, its content scrolls inside it with the thin scrollbar, and its header stays pinned while it does (D-621).
     - **With no selection (docked only), a summary:** "This month" and the month; "Compared with September", three rows each with a note:
         - "Budgeted spending" 13,168.00, "5,069.00 more than September";
         - "Limits" 11,000.00, "1,000.00 more than September · 4 Budgets, 3 in September" (the Budget counts only when they differ);

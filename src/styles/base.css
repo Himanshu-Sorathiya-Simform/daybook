@@ -2,6 +2,11 @@
    The page font comes from --font-sans through Tailwind's reset. */
 
 @layer base {
+	/* Every scroller, the page included, inherits one scrollbar colour pair (D-621). */
+	:root {
+		scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+	}
+
 	html {
 		background: var(--page);
 		color: var(--ink);

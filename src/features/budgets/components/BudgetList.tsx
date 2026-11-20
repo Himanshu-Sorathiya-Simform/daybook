@@ -21,7 +21,7 @@ import {
 } from "@/lib/budgets/model";
 import { cn } from "@/lib/cn";
 import { formatMoney } from "@/lib/money";
-import { type RowArrows, useRowArrows } from "../hooks/useRowArrows";
+import { type RowArrows, useRowArrows } from "@/hooks/useRowArrows";
 import {
 	attentionFigure,
 	type Formats,
@@ -32,7 +32,7 @@ import {
 	noLimitCaption,
 } from "../lib/labels";
 import { PAGE_TEXT } from "../lib/messages";
-import { pickedIn, selectedIn } from "../lib/rows";
+import { categoryOf, pickedIn, selectedIn } from "../lib/rows";
 import type { BudgetMonthAnswer } from "../lib/types";
 import { BudgetListItem } from "./BudgetListItem";
 import { BudgetsFilter } from "./BudgetsFilter";
@@ -109,7 +109,14 @@ export function BudgetList({
 	const inactiveIds = inactive.map((row) => `inactive:${row.category}`);
 	const shown = [...mainIds, ...(expanded ? inactiveIds : [])];
 
-	useRowArrows({ holder, ids: shown, selected, onSelect, mode: arrows });
+	useRowArrows({
+		holder,
+		ids: shown,
+		selected,
+		onSelect,
+		mode: arrows,
+		selectionOf: categoryOf,
+	});
 
 	const sectionOf = (
 		key: string,

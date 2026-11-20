@@ -10,12 +10,12 @@ Transactions are the ledger every other number comes from: income, expenses, ref
 - **The panel:** beside the list, a summary of what the filter selects, or the selected Transaction with its payee's recent history and its actions.
 - **Pending changes:** changes not yet confirmed show as pending and never enter confirmed totals.
 
-| Item       | Value                                                                                                                                                                                                                                                                                     |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                                                   |
-| Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                                                      |
-| Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows)                                   |
-| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-559, D-580 to D-582, D-584 to D-588, D-606 to D-608, D-614 |
+| Item       | Value                                                                                                                                                                                                                                                                                                                 |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M1, with parts in M2 and M5 (section 2)                                                                                                                                                                                                                                                                               |
+| Plan       | Free and Premium. Bulk delete is Stretch (`transactions.bulkDelete`)                                                                                                                                                                                                                                                  |
+| Depends on | [F02](F02-onboarding-profile-settings.md) (profile, locale, today), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md); F05 (charges, tombstones), F06 (Goal states), P1 (write queue, sync panel), F15 (demo rows)                                                               |
+| Decisions  | D-20 to D-24, D-32, D-35 to D-40, D-77, D-78, D-80 to D-89, D-102, D-171, D-176, D-185, D-213, D-218 to D-231, D-236 to D-239, D-241, D-255, D-270, D-445 to D-460, D-462 to D-470, D-473 to D-490, D-493 to D-501, D-520 to D-559, D-580 to D-582, D-584 to D-588, D-606 to D-608, D-614, D-620, D-621, D-623, D-624 |
 
 ## 1. User stories
 
@@ -292,6 +292,7 @@ A view's `filter` holds the filter object's fields with these differences from t
     - **Subtitle:** a dot in the category's color (CAT-4), then the category label, then " · " and the description when there is one, then " · " and the time: "Food · Monthly groceries · 7:00 pm". Goal rows show the time alone.
     - **Time:** or "Auto" for charges; outside day grouping, the day and the time (BR-F03-31).
     - **Amount and badges:** the signed amount (D-231), then any badge: "Pending sync" or "Not saved".
+    - **A row can be pressed**, so it shows a pointer and a hover fill, and the selected fill wins over the hover (D-624).
 
 **Grouping**
 
@@ -506,14 +507,14 @@ A view's `filter` holds the filter object's fields with these differences from t
 **The panel**
 
 - **BR-F03-70** The panel sits beside the list (D-520).
-    - **From 1180 px wide:** the page has two columns, the list and a sticky panel 320 to 400 px wide, always shown.
+    - **From 1180 px wide:** the page has two columns, the list and a sticky panel 320 to 400 px wide, always shown. The panel is never taller than the screen: its frame stays put, its content scrolls inside it with the thin scrollbar, and its header, "Transaction" with Close details, stays pinned while it does (D-621).
     - **Below 1180 px, phones included:** the panel shows only while a row is selected, as a drawer from the right edge, at most 420 px wide and full width on phones, over a scrim. Close, Esc or a press on the scrim clears the selection.
     - **No row menu:** a row has no ⋯ menu. Edit, Duplicate and Delete live in the panel at every width.
     - **Loading:** skeleton lines until its data arrives.
-- **BR-F03-71** With no row selected, the panel shows the summary of the committed filter.
+- **BR-F03-71** With no row selected, the panel shows the summary of the committed filter. While it loads, the panel shows its fixed words, "This list", "Out by category", "Top payees by Out" and the hint, with bars where the figures go, in the same rows, so nothing moves when it arrives.
     - **The request:** the header totals (BR-F03-41) and the panel share one summary request, with `by=category,payee` (BR-F03-58).
     - **The heading:** "This list", then "14 Transactions" ("1 Transaction" for one), then the span from `firstOn` to `lastOn` in the F02 short date format, "1 Oct to 31 Oct" (a year shows outside the current year, as that format adds it), or the one date when they are equal, left out when there are no rows.
-    - **"Out by category":** each `byCategory` entry as its category tag, a bar in the category's color whose length is its Out against the largest, and its Out.
+    - **"Out by category":** each `byCategory` entry as its category tag, a bar in the category's color whose length is its Out against the largest, and its Out. Each category is a button that toggles it in the Category filter (D-623): the committed categories gain it, or lose it when they already hold it, with a history entry, and a category the filter holds reads as pressed. The whole row presses it.
     - **"Top payees by Out":** the first 4 `byPayee` entries, each with its avatar, label, count and Out.
     - **Empty parts** are left out. The panel ends with the hint "Select a Transaction to see it here. Up and down arrows move, Enter opens."
 - **BR-F03-72** With a row selected, the panel shows it.
@@ -1172,6 +1173,7 @@ Search (F13) reads the same rows live. Reports (F11) are never cached.
 - **AC-F03-75** (client integration) Pages from above and the panel (D-581, D-582, BR-F03-56, BR-F03-72): with 7 pages of 2 rows, Load earlier announces "Loaded 2 more Transactions"; a press on it that brings the first page moves focus to that page's first row, one with pages still above keeps focus on the button, and the top scrolling into view loads the page and leaves focus where it was. A group on two pages takes the totals of the page fetched last, the first page after Load earlier. A selected row that is loading, or failed, shows "Transaction" and Close details.
 - **AC-F03-76** (client integration) Small behaviours (D-587, D-588, section 8): choosing a date preset or All time closes the Date menu, while Custom range keeps it open. On the phone sheet, when the summary request fails while online, Show reads "Show Transactions" and applies at once. A search with a control character commits nothing and says "Remove unsupported characters.", and typing again clears the message.
 - **AC-F03-77** (client integration) Subscription names on golden: with `sub=<Netflix id>` the chip reads "Netflix charges" once `/api/subscriptions` answers, whatever other filters leave in the list, and "Subscription charges" while it loads, when it fails and for an id it does not hold. #16's panel and edit dialog read "Auto from Netflix", linking to `/subscriptions?open=<Netflix id>`, and still do after the charge's payee is edited to "Netflix India" (D-541, D-586).
+- **AC-F03-78** (client integration) The panel's summary and rows (BR-F03-71, BR-F03-70, BR-F03-32): with `from=2026-10-01&to=2026-10-31` and nothing selected, pressing Food under "Out by category" pushes `cat=food` beside the dates, with a history entry, and its chip appears; pressing Shopping then adds it (`cat=food,shopping`); pressing Food again takes it out; a category the filter holds reads as pressed. While the summary loads the panel shows its words with bars, and a row loading alone shows its terms with bars in the detail's layout. A list row shows a pointer and a hover fill.
 
 ## 15. Illustrations
 
