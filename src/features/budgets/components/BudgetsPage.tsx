@@ -44,7 +44,7 @@ import { BudgetsOverview } from "./BudgetsOverview";
 import { BudgetsSkeleton } from "./BudgetsSkeleton";
 import { BudgetTable } from "./BudgetTable";
 import { DeleteBudgetDialog } from "./DeleteBudgetDialog";
-import { UndoNotice } from "./UndoNotice";
+import { UndoNotice } from "@/components/feedback/UndoNotice";
 
 export type BudgetsPageProps = {
 	/** The profile's formats and its today, from the server render (TIME-5). */

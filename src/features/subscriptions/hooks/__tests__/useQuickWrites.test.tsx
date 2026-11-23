@@ -3,28 +3,34 @@ import userEvent from "@testing-library/user-event";
 import { delay } from "msw";
 import { setupServer } from "msw/node";
 import { useState } from "react";
-import { toast } from "sonner";
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { AppProviders } from "@/components/app/AppProviders";
-import { Toaster } from "@/components/feedback/Toaster";
 import { isUuidV7 } from "@/lib/ids";
 import { subscriptionAnswer, subscriptionItem } from "../../lib/__tests__/fixtures";
-import type { SubscriptionItem } from "../../lib/types";
+import type { SubscriptionItem, SubscriptionsLocale } from "../../lib/types";
 import { useQuickWrites } from "../useQuickWrites";
+import { useSubscriptionNotice } from "../useSubscriptionNotice";
 import { ok, refuse, route, testClient } from "./helpers";
 
 const network = setupServer();
 beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
 afterEach(() => {
-	toast.dismiss();
 	network.resetHandlers();
 	vi.restoreAllMocks();
 });
 afterAll(() => network.close());
 
-const NETFLIX = subscriptionItem("netflix");
 const TODAY = "2026-11-02";
+const IN: SubscriptionsLocale = {
+	currency: "INR",
+	numberLocale: "en-IN",
+	dateLocale: "en-IN",
+	today: TODAY,
+	timezone: "Asia/Kolkata",
+	weekStart: "monday",
+};
+const NETFLIX = subscriptionItem("netflix");
 const PAUSED_IN_FORCE = subscriptionItem("netflix", {
 	status: "paused",
 	pause: { from: "2026-10-05", until: "2027-01-05" },
@@ -42,8 +48,10 @@ function useResult() {
 
 /** Buttons that press each write on `item`, and say whether it was confirmed. */
 function Harness({ item }: { item: SubscriptionItem }) {
-	const quick = useQuickWrites({ today: TODAY });
+	const notices = useSubscriptionNotice(IN);
+	const quick = useQuickWrites({ today: TODAY }, notices);
 	const [last, setLast] = useResult();
+	const { notice, conflict } = notices;
 	return (
 		<>
 			<button onClick={() => void quick.skipNext(item).then(setLast)}>
@@ -58,7 +66,13 @@ function Harness({ item }: { item: SubscriptionItem }) {
 				resume now
 			</button>
 			<output>{last}</output>
-			<Toaster />
+			<p data-testid="notice">
+				{notice ? (notice.failure ?? notice.text) : ""}
+			</p>
+			<p data-testid="conflict">
+				{conflict ? `${conflict.current.version} ${conflict.line}` : ""}
+			</p>
+			<button onClick={notices.keepMine}>keep mine</button>
 		</>
 	);
 }
@@ -78,6 +92,7 @@ function setup(item: SubscriptionItem = NETFLIX) {
 const press = (user: ReturnType<typeof userEvent.setup>, name: string) =>
 	user.click(screen.getByRole("button", { name }));
 const result = () => screen.getByRole("status").textContent;
+const noticeText = () => screen.getByTestId("notice").textContent;
 
 describe("Skip this one (BR-F05-26)", () => {
 	// AC-F05-51
@@ -189,11 +204,79 @@ describe("Resume now (BR-F05-29)", () => {
 	});
 });
 
-describe("a refusal (section 8)", () => {
+describe("the notice of a confirmed write (BR-F05-33)", () => {
+	// AC-F05-51
+	test("a skip reads its date, with the Subscription's name", async () => {
+		route(network, "post", `/api/subscriptions/${NETFLIX.id}/skips`, () =>
+			ok(
+				subscriptionAnswer("netflix", {
+					version: 2,
+					nextDueOn: "2026-12-05",
+				}),
+			),
+		);
+		const user = setup();
+		await press(user, "skip");
+		await waitFor(() =>
+			expect(noticeText()).toBe("Skipped the 5 Nov Netflix charge."),
+		);
+	});
+
+	test("an Undo skip says the charge is back", async () => {
+		route(
+			network,
+			"delete",
+			`/api/subscriptions/${NETFLIX.id}/skips/2026-11-05`,
+			() => ok(subscriptionAnswer("netflix", { version: 2 })),
+		);
+		const user = setup();
+		await press(user, "unskip");
+		await waitFor(() =>
+			expect(noticeText()).toBe("The 5 Nov Netflix charge is back."),
+		);
+	});
+
+	test("Resume now says it resumed and when the next charge is", async () => {
+		route(network, "patch", `/api/subscriptions/${NETFLIX.id}`, () =>
+			ok({
+				...subscriptionAnswer("netflix", { nextDueOn: "2026-12-05" }),
+				changeDate: TODAY,
+				chargesCreated: 0,
+				chargesUpdated: 0,
+				chargesDeleted: 0,
+				months: [],
+			}),
+		);
+		const user = setup(PAUSED_IN_FORCE);
+		await press(user, "resume now");
+		await waitFor(() =>
+			expect(noticeText()).toBe("Netflix resumed. Next charge Sat, 5 Dec."),
+		);
+	});
+
+	test("nothing is said before the answer, and nothing when it is refused", async () => {
+		route(
+			network,
+			"post",
+			`/api/subscriptions/${NETFLIX.id}/skips`,
+			async () => {
+				await delay(80);
+				return refuse(500, "internal_error");
+			},
+		);
+		const user = setup();
+		await press(user, "skip");
+		expect(noticeText()).toBe("");
+		await waitFor(() => expect(noticeText()).toMatch(/could not be saved/));
+		expect(noticeText()).not.toMatch(/Skipped/);
+	});
+});
+
+describe("a refusal (section 8, BR-F05-33)", () => {
 	const skips = `/api/subscriptions/${NETFLIX.id}/skips`;
 
 	// AC-F05-51
-	test("a 422 says why in a toast, and is not confirmed", async () => {
+	test("a 422 says why in the notice, and is not confirmed", async () => {
 		route(network, "post", skips, () =>
 			refuse(422, "validation_failed", {
 				message: "m",
@@ -202,9 +285,9 @@ describe("a refusal (section 8)", () => {
 		);
 		const user = setup();
 		await press(user, "skip");
-		expect(
-			await screen.findByText("Only an upcoming charge can be skipped."),
-		).toBeVisible();
+		await waitFor(() =>
+			expect(noticeText()).toBe("Only an upcoming charge can be skipped."),
+		);
 		expect(result()).toBe("false");
 	});
 
@@ -212,11 +295,11 @@ describe("a refusal (section 8)", () => {
 		route(network, "post", skips, () => refuse(500, "internal_error"));
 		const user = setup();
 		await press(user, "skip");
-		expect(
-			await screen.findByText(
+		await waitFor(() =>
+			expect(noticeText()).toBe(
 				"The Subscription could not be saved. Check your connection and try again.",
 			),
-		).toBeVisible();
+		);
 	});
 
 	test("a 404 says it was deleted on another device", async () => {
@@ -225,14 +308,15 @@ describe("a refusal (section 8)", () => {
 		);
 		const user = setup();
 		await press(user, "skip");
-		expect(
-			await screen.findByText(
+		await waitFor(() =>
+			expect(noticeText()).toBe(
 				"This Subscription was deleted on another device.",
 			),
-		).toBeVisible();
+		);
 	});
 
-	test("a 409 says it changed on another device", async () => {
+	// AC-F05-54
+	test("a 409 opens the conflict view instead of a notice", async () => {
 		route(network, "post", skips, () =>
 			refuse(409, "version_conflict", {
 				message: "m",
@@ -241,11 +325,44 @@ describe("a refusal (section 8)", () => {
 		);
 		const user = setup();
 		await press(user, "skip");
-		expect(
-			await screen.findByText(
-				/^This Subscription changed on another device\./,
+		await waitFor(() =>
+			expect(screen.getByTestId("conflict")).toHaveTextContent(
+				"2 Keep mine saves your change to the Subscription as it is saved now.",
 			),
-		).toBeVisible();
+		);
+		expect(noticeText()).toBe("");
+		expect(result()).toBe("false");
+	});
+
+	// AC-F05-54
+	test("Keep mine sends the same skip against the saved version, and then the notice says so", async () => {
+		let at = 0;
+		const posts = route(network, "post", skips, () =>
+			++at === 1 ?
+				refuse(409, "version_conflict", {
+					message: "m",
+					details: {
+						current: subscriptionAnswer("netflix", { version: 5 }),
+					},
+				})
+			:	ok(subscriptionAnswer("netflix", { version: 6 })),
+		);
+		const user = setup();
+		await press(user, "skip");
+		await waitFor(() =>
+			expect(screen.getByTestId("conflict").textContent).not.toBe(""),
+		);
+		await press(user, "keep mine");
+		await waitFor(() =>
+			expect(noticeText()).toBe("Skipped the 5 Nov Netflix charge."),
+		);
+		expect(posts).toHaveLength(2);
+		expect(posts[1]?.headers.get("if-match")).toBe('"5"');
+		expect(posts[1]?.body).toEqual(posts[0]?.body);
+		expect(posts[1]?.headers.get("idempotency-key")).not.toBe(
+			posts[0]?.headers.get("idempotency-key"),
+		);
+		expect(screen.getByTestId("conflict").textContent).toBe("");
 	});
 
 	test("a 401 shows nothing", async () => {
@@ -253,7 +370,7 @@ describe("a refusal (section 8)", () => {
 		const user = setup();
 		await press(user, "skip");
 		await waitFor(() => expect(result()).toBe("false"));
-		expect(document.querySelector("[data-sonner-toast]")).toBeNull();
+		expect(noticeText()).toBe("");
 	});
 
 	test("a press can be made again after a refusal", async () => {
@@ -265,7 +382,7 @@ describe("a refusal (section 8)", () => {
 		);
 		const user = setup();
 		await press(user, "skip");
-		await screen.findByText(/could not be saved/);
+		await waitFor(() => expect(noticeText()).toMatch(/could not be saved/));
 		await press(user, "skip");
 		await waitFor(() => expect(result()).toBe("true"));
 		expect(posts).toHaveLength(2);
@@ -274,7 +391,7 @@ describe("a refusal (section 8)", () => {
 
 describe("offline, before M5", () => {
 	// AC-F05-51
-	test("says so in a toast and sends nothing", async () => {
+	test("says so in the notice and sends nothing", async () => {
 		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
 		const posts = route(
 			network,
@@ -287,9 +404,9 @@ describe("offline, before M5", () => {
 			window.dispatchEvent(new Event("offline"));
 		});
 		await press(user, "skip");
-		expect(
-			await screen.findByText("You are offline. Connect to save."),
-		).toBeVisible();
+		await waitFor(() =>
+			expect(noticeText()).toBe("You are offline. Connect to save."),
+		);
 		expect(result()).toBe("false");
 		expect(posts).toHaveLength(0);
 	});

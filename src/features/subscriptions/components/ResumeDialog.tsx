@@ -19,17 +19,17 @@ import { useOnce } from "@/hooks/useOnce";
 import { useOnline } from "@/hooks/useOnline";
 import { amountMessage, formatAmountInput, parseAmount } from "@/lib/amount";
 import { uuidV7 } from "@/lib/ids";
+import type { SubscriptionEditInput } from "@/lib/subscriptions/schemas";
 import { useChangeSubscription } from "../hooks/useChangeSubscription";
 import { useSubscriptionCharges } from "../hooks/useSubscriptionCharges";
 import { useWriteRefusal } from "../hooks/useWriteRefusal";
+import { fieldsOf } from "../lib/conflict";
 import { DIALOG_TEXT } from "../lib/dialog";
 import { amountWithCadence } from "../lib/labels";
 import { RESUME_TEXT, type ResumeChoice, resumeView } from "../lib/resume";
-import type {
-	SubscriptionAnswer,
-	SubscriptionItem,
-	SubscriptionsLocale,
-} from "../lib/types";
+import type { Confirmed } from "../lib/notices";
+import type { SubscriptionItem, SubscriptionsLocale } from "../lib/types";
+import { DialogConflict } from "./DialogConflict";
 import { ChargesStrip } from "./ChargesStrip";
 
 export type ResumeDialogProps = {
@@ -38,8 +38,8 @@ export type ResumeDialogProps = {
 	item: SubscriptionItem;
 	locale: SubscriptionsLocale;
 	onClose: () => void;
-	/** A confirmed write, with the Subscription as the server saved it. */
-	onSaved?: (saved: SubscriptionAnswer) => void;
+	/** A confirmed write: the Subscription before it, as the server saved it, and what was sent. */
+	onSaved?: (confirmed: Confirmed) => void;
 };
 
 /** The fields the user fills in: the choice, and the price when "Change the price too" is open. */
@@ -117,10 +117,18 @@ export function ResumeDialog({
 
 	const save = async (entered: ResumeValues) => {
 		const { body } = build(entered, new Date().toISOString());
+		await submit(body, opened);
+	};
+
+	/** Sends `body` against `against`: the Subscription as opened, or after a conflict as saved. */
+	const submit = async (
+		body: SubscriptionEditInput,
+		against: SubscriptionItem,
+	) => {
 		const request = sending.run(() =>
 			change.mutateAsync({
-				id: opened.id,
-				version: opened.version,
+				id: against.id,
+				version: against.version,
 				body,
 				idempotencyKey: uuidV7(),
 			}),
@@ -129,10 +137,15 @@ export function ResumeDialog({
 		refusal.reset();
 		try {
 			const saved = await request;
-			onSaved?.(saved);
+			onSaved?.({ kind: "resume", before: against, saved, sent: body });
 			onClose();
 		} catch (error) {
-			if ((await refusal.refuse(error)) === "fields") focusInvalid();
+			const outcome = await refusal.refuse(error, {
+				kind: "change",
+				id: against.id,
+				body,
+			});
+			if (outcome.kind === "fields") focusInvalid();
 		}
 	};
 
@@ -142,138 +155,163 @@ export function ResumeDialog({
 	const busy = change.isPending;
 	const canSave = online && ready;
 	return (
-		<Dialog
-			title={RESUME_TEXT.title(name)}
-			isOpen={isOpen}
-			// It only ever reports closing.
-			onOpenChange={onClose}
-			isPending={busy}
-			footer={
-				<>
-					<span className="flex-1" />
-					<Button
-						variant="secondary"
-						isDisabled={busy}
-						onPress={onClose}
-						className="max-md:hidden"
-					>
-						{RESUME_TEXT.notNow}
-					</Button>
-					<Button
-						isDisabled={!canSave}
-						isPending={busy}
-						onPress={() => void form.handleSubmit()}
-					>
-						{RESUME_TEXT.resume(name)}
-					</Button>
-				</>
-			}
-		>
-			<form
-				ref={formRef}
-				noValidate
-				aria-label={RESUME_TEXT.title(name)}
-				className="flex flex-col gap-4"
-				onSubmit={(event) => {
-					event.preventDefault();
-					event.stopPropagation();
-					if (canSave) void form.handleSubmit();
-				}}
-			>
-				{!online && <OfflineNote>{DIALOG_TEXT.offline}</OfflineNote>}
-				{refusal.failure && <FormAlert>{refusal.failure}</FormAlert>}
-				<p className="text-label text-ink-2">{view.opening}</p>
-				{/* Which dates were missed is only known once the charges are in. */}
-				{!ready ?
-					null
-				: view.choices !== null ?
-					<form.Field name="choice">
-						{(field) => (
-							<ChoiceGroup
-								label={RESUME_TEXT.how}
-								value={field.state.value}
-								onChange={(next) =>
-									field.handleChange(next as ResumeChoice)
-								}
-								options={[
-									{
-										value: "today",
-										label: RESUME_TEXT.today,
-										description: RESUME_TEXT.todayDetail,
-									},
-									{
-										value: "never",
-										label: view.choices?.never.title ?? "",
-										description:
-											view.choices?.never.description ?? "",
-									},
-								]}
-								isDisabled={busy}
-							/>
-						)}
-					</form.Field>
-				:	<p className="text-body text-ink">{view.plainLine}</p>}
-				{failed ?
-					<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-						<p
-							role="alert"
-							className="text-body text-ink-2"
-						>
-							{DIALOG_TEXT.chargesFailed}
-						</p>
+		<>
+			<Dialog
+				title={RESUME_TEXT.title(name)}
+				isOpen={isOpen}
+				// It only ever reports closing.
+				onOpenChange={onClose}
+				isPending={busy}
+				footer={
+					<>
+						<span className="flex-1" />
 						<Button
-							size="sm"
-							variant="row"
-							onPress={() => void charges.refetch()}
-						>
-							{DIALOG_TEXT.retry}
-						</Button>
-					</div>
-				: ready ?
-					<ChargesStrip items={view.strip} />
-				:	null}
-				{values.priceOpen ?
-					<form.Field name="amount">
-						{(field) => (
-							<AmountInput
-								label={RESUME_TEXT.newAmount}
-								name="amount"
-								autoFocus
-								currency={locale.currency}
-								numberLocale={locale.numberLocale}
-								value={field.state.value}
-								onChange={(text) => {
-									field.handleChange(text);
-									refusal.clearField("amountMinor");
-								}}
-								onBlur={() => {
-									if (typed.ok) {
-										field.handleChange(
-											formatAmountInput(typed.minor, locale),
-										);
-									}
-								}}
-								hint={view.priceHint}
-								error={messageOf(field)}
-								isDisabled={busy}
-							/>
-						)}
-					</form.Field>
-				:	<div className="flex flex-wrap items-center gap-x-2">
-						<span className="text-body figures flex-1">
-							{amountWithCadence(opened, locale)}
-						</span>
-						<Button
-							size="sm"
-							variant="row"
+							variant="secondary"
 							isDisabled={busy}
-							onPress={() => form.setFieldValue("priceOpen", true)}
+							onPress={onClose}
+							className="max-md:hidden"
 						>
-							{RESUME_TEXT.changePrice}
+							{RESUME_TEXT.notNow}
 						</Button>
-					</div>
+						<Button
+							isDisabled={!canSave}
+							isPending={busy}
+							onPress={() => void form.handleSubmit()}
+						>
+							{RESUME_TEXT.resume(name)}
+						</Button>
+					</>
 				}
-			</form>
-		</Dialog>
+			>
+				<form
+					ref={formRef}
+					noValidate
+					aria-label={RESUME_TEXT.title(name)}
+					className="flex flex-col gap-4"
+					onSubmit={(event) => {
+						event.preventDefault();
+						event.stopPropagation();
+						if (canSave) void form.handleSubmit();
+					}}
+				>
+					{!online && <OfflineNote>{DIALOG_TEXT.offline}</OfflineNote>}
+					{refusal.failure && <FormAlert>{refusal.failure}</FormAlert>}
+					<p className="text-label text-ink-2">{view.opening}</p>
+					{/* Which dates were missed is only known once the charges are in. */}
+					{!ready ?
+						null
+					: view.choices !== null ?
+						<form.Field name="choice">
+							{(field) => (
+								<ChoiceGroup
+									label={RESUME_TEXT.how}
+									value={field.state.value}
+									onChange={(next) =>
+										field.handleChange(next as ResumeChoice)
+									}
+									options={[
+										{
+											value: "today",
+											label: RESUME_TEXT.today,
+											description: RESUME_TEXT.todayDetail,
+										},
+										{
+											value: "never",
+											label: view.choices?.never.title ?? "",
+											description:
+												view.choices?.never.description
+												?? "",
+										},
+									]}
+									isDisabled={busy}
+								/>
+							)}
+						</form.Field>
+					:	<p className="text-body text-ink">{view.plainLine}</p>}
+					{failed ?
+						<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+							<p
+								role="alert"
+								className="text-body text-ink-2"
+							>
+								{DIALOG_TEXT.chargesFailed}
+							</p>
+							<Button
+								size="sm"
+								variant="row"
+								onPress={() => void charges.refetch()}
+							>
+								{DIALOG_TEXT.retry}
+							</Button>
+						</div>
+					: ready ?
+						<ChargesStrip items={view.strip} />
+					:	null}
+					{values.priceOpen ?
+						<form.Field name="amount">
+							{(field) => (
+								<AmountInput
+									label={RESUME_TEXT.newAmount}
+									name="amount"
+									autoFocus
+									currency={locale.currency}
+									numberLocale={locale.numberLocale}
+									value={field.state.value}
+									onChange={(text) => {
+										field.handleChange(text);
+										refusal.clearField("amountMinor");
+									}}
+									onBlur={() => {
+										if (typed.ok) {
+											field.handleChange(
+												formatAmountInput(
+													typed.minor,
+													locale,
+												),
+											);
+										}
+									}}
+									hint={view.priceHint}
+									error={messageOf(field)}
+									isDisabled={busy}
+								/>
+							)}
+						</form.Field>
+					:	<div className="flex flex-wrap items-center gap-x-2">
+							<span className="text-body figures flex-1">
+								{amountWithCadence(opened, locale)}
+							</span>
+							<Button
+								size="sm"
+								variant="row"
+								isDisabled={busy}
+								onPress={() => form.setFieldValue("priceOpen", true)}
+							>
+								{RESUME_TEXT.changePrice}
+							</Button>
+						</div>
+					}
+				</form>
+			</Dialog>
+			{refusal.conflict && (
+				<DialogConflict
+					conflict={refusal.conflict}
+					origin={fieldsOf(opened)}
+					formats={locale}
+					isPending={change.isPending}
+					onClose={refusal.closeConflict}
+					onKeepMine={() =>
+						void submit(
+							refusal.conflict!.request.body as SubscriptionEditInput,
+							refusal.conflict!.current,
+						)
+					}
+					onKeepTheirs={() => {
+						void refusal.dropConflict();
+						onClose();
+					}}
+				/>
+			)}
+		</>
 	);
 }

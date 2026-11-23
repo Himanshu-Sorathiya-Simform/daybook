@@ -555,9 +555,13 @@ describe("saving an Add (section 11)", () => {
 		expect(isUuidV7(body.id)).toBe(true);
 		expect(Number.isNaN(Date.parse(body.createdAt))).toBe(false);
 		expect(isUuidV7(post?.headers.get("idempotency-key") ?? "")).toBe(true);
-		expect(onSaved).toHaveBeenCalledWith(
-			expect.objectContaining({ id: "0192f1a0-0000-7000-8000-0000000000aa" }),
-		);
+		expect(onSaved).toHaveBeenCalledWith({
+			kind: "add",
+			saved: expect.objectContaining({
+				id: "0192f1a0-0000-7000-8000-0000000000aa",
+			}),
+			sent: expect.objectContaining({ backfill: false, name: "Hulu" }),
+		});
 	});
 
 	test("submitting the form saves it, as the Save button does", async () => {
@@ -1016,9 +1020,16 @@ describe("saving an Edit (BR-F05-46, section 11)", () => {
 			amountMinor: 79900,
 			currency: "INR",
 		});
-		expect(onSaved).toHaveBeenCalledWith(
-			expect.objectContaining({ version: NETFLIX.version + 1 }),
-		);
+		expect(onSaved).toHaveBeenCalledWith({
+			kind: "edit",
+			before: expect.objectContaining({ version: NETFLIX.version }),
+			saved: expect.objectContaining({ version: NETFLIX.version + 1 }),
+			sent: {
+				changedAt: expect.any(String),
+				amountMinor: 79900,
+				currency: "INR",
+			},
+		});
 	});
 
 	test("shows the cost line for a price change", async () => {
@@ -1254,25 +1265,127 @@ describe("a refused Edit keeps the dialog open (section 8)", () => {
 		expect(onClose).not.toHaveBeenCalled();
 	});
 
-	// AC-F05-45
-	test("a 409 says it changed on another device and keeps the dialog open", async () => {
+	// AC-F05-54
+	test("a 409 opens the conflict view over the dialog, which stays", async () => {
 		route(network, "patch", patchPath, () =>
 			refuse(409, "version_conflict", {
 				message: "m",
 				details: {
 					current: subscriptionAnswer("netflix", {
 						version: NETFLIX.version + 1,
+						name: "Netflix India",
 					}),
 				},
 			}),
 		);
-		route(network, "get", "/api/subscriptions", () => ok(subscriptionList()));
+		const { user, onClose, onSaved } = renderDialog(
+			NETFLIX,
+			{},
+			{ charges: CHARGES },
+		);
+		await edit(user);
+		const view = await screen.findByRole("dialog", {
+			name: "This Subscription changed on another device",
+		});
+		// The ₹799.00 put over the saved Subscription differs from its ₹649.00; the name left
+		// alone reads as saved on both sides.
+		expect(within(view).getByText("₹799.00")).toBeVisible();
+		expect(within(view).getByText("₹649.00")).toBeVisible();
+		expect(within(view).getAllByText("Netflix India")).toHaveLength(2);
+		expect(within(view).getAllByText("Differs")).toHaveLength(1);
+		expect(onClose).not.toHaveBeenCalled();
+		expect(onSaved).not.toHaveBeenCalled();
+	});
+
+	// AC-F05-54
+	test("Keep mine sends the same change again at the saved version, with its first change time", async () => {
+		let at = 0;
+		const patches = route(network, "patch", patchPath, () =>
+			++at === 1 ?
+				refuse(409, "version_conflict", {
+					message: "m",
+					details: {
+						current: subscriptionAnswer("netflix", { version: 9 }),
+					},
+				})
+			:	ok({
+					...subscriptionAnswer("netflix", { version: 10 }),
+					changeDate: "2026-11-02",
+					chargesCreated: 0,
+					chargesUpdated: 1,
+					chargesDeleted: 0,
+					months: [],
+				}),
+		);
+		const { user, onClose, onSaved } = renderDialog(
+			NETFLIX,
+			{},
+			{ charges: CHARGES },
+		);
+		await edit(user);
+		await user.click(await screen.findByRole("button", { name: "Keep mine" }));
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(patches).toHaveLength(2);
+		expect(patches[1]?.headers.get("if-match")).toBe('"9"');
+		expect(patches[1]?.body).toEqual(patches[0]?.body);
+		expect(onSaved).toHaveBeenCalledWith(
+			expect.objectContaining({
+				kind: "edit",
+				before: expect.objectContaining({ version: 9 }),
+			}),
+		);
+	});
+
+	// AC-F05-54
+	test("Keep theirs sends nothing and closes the dialog", async () => {
+		const patches = route(network, "patch", patchPath, () =>
+			refuse(409, "version_conflict", {
+				message: "m",
+				details: { current: subscriptionAnswer("netflix", { version: 9 }) },
+			}),
+		);
+		const { user, onClose, onSaved } = renderDialog(
+			NETFLIX,
+			{},
+			{ charges: CHARGES },
+		);
+		await edit(user);
+		await user.click(await screen.findByRole("button", { name: "Keep theirs" }));
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(patches).toHaveLength(1);
+		expect(onSaved).not.toHaveBeenCalled();
+	});
+
+	test("closing the view without a choice goes back to the dialog with its values", async () => {
+		route(network, "patch", patchPath, () =>
+			refuse(409, "version_conflict", {
+				message: "m",
+				details: { current: subscriptionAnswer("netflix", { version: 9 }) },
+			}),
+		);
 		const { user, onClose } = renderDialog(NETFLIX, {}, { charges: CHARGES });
 		await edit(user);
+		await screen.findByRole("button", { name: "Keep mine" });
+		await user.keyboard("{Escape}");
+		await waitFor(() =>
+			expect(screen.queryByRole("button", { name: "Keep mine" })).toBeNull(),
+		);
+		expect(onClose).not.toHaveBeenCalled();
+		expect(amountBox()).toHaveValue("799.00");
+	});
+
+	test("a 409 on an Add, which has no version, is a failed save", async () => {
+		route(network, "post", "/api/subscriptions", () =>
+			refuse(409, "version_conflict", {
+				message: "m",
+				details: { current: subscriptionAnswer("netflix", { version: 9 }) },
+			}),
+		);
+		const { user, onClose } = await openAdd(null);
+		await fillAdd(user);
+		await user.click(addButton());
 		expect(
-			await screen.findByText(
-				/^This Subscription changed on another device\./,
-			),
+			await screen.findByText(/^The Subscription could not be saved\./),
 		).toBeVisible();
 		expect(onClose).not.toHaveBeenCalled();
 	});

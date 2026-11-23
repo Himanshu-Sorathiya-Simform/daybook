@@ -193,3 +193,34 @@ describe("below 1180 px, a drawer (BR-F05-40)", () => {
 		expect(screen.queryByRole("dialog")).toBeNull();
 	});
 });
+
+describe("the notice slot (BR-F05-33)", () => {
+	const notice = <p role="status">Netflix saved.</p>;
+
+	// AC-F05-53
+	test("docked, a notice shows inside the selected Subscription's details, under the header", () => {
+		setup({ selected: NETFLIX!.id, notice });
+		const panel = screen.getByRole("complementary", { name: "Subscription" });
+		expect(panel).toContainElement(screen.getByText("Netflix saved."));
+		const heading = screen.getByRole("heading", { name: "Netflix", level: 3 });
+		expect(
+			screen.getByText("Netflix saved.").compareDocumentPosition(heading)
+				& Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+	});
+
+	test("docked with nothing selected the summary shows and the notice does not", () => {
+		setup({ selected: null, notice });
+		expect(screen.queryByText("Netflix saved.")).toBeNull();
+	});
+
+	test("in the drawer it shows with the selection", async () => {
+		setup({ isDocked: false, selected: NETFLIX!.id, notice });
+		expect(await screen.findByText("Netflix saved.")).toBeVisible();
+	});
+
+	test("with no notice nothing extra is drawn", () => {
+		setup({ selected: NETFLIX!.id });
+		expect(screen.queryByText("Netflix saved.")).toBeNull();
+	});
+});

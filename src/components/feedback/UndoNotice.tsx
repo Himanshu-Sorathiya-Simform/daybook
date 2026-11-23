@@ -5,7 +5,9 @@ import { Check, CircleAlert, X } from "lucide-react";
 import { Button } from "@/components/actions/Button";
 import { IconButton } from "@/components/actions/IconButton";
 import { cn } from "@/lib/cn";
-import { PAGE_TEXT } from "../lib/messages";
+
+/** The words of the two buttons, the same on every page that has a notice. */
+export const NOTICE_TEXT = { undo: "Undo", dismiss: "Dismiss" } as const;
 
 export type UndoNoticeProps = {
 	/** What was done, or what went wrong. */
@@ -21,7 +23,7 @@ export type UndoNoticeProps = {
 };
 
 /**
- * The inline notice after a Budget write (BR-F04-29), in the panel or above the list: what was
+ * The inline notice after a write (BR-F04-29, BR-F05-33), in the panel or above the list: what was
  * done, with Undo and Dismiss, never a toast. A failed Undo or Remove reads its failure with
  * Dismiss alone, and is announced at once; the rest politely. While Undo is on its way the
  * button waits and Dismiss rests, so the answer finds the notice where it was.
@@ -58,12 +60,12 @@ export function UndoNotice({
 					isPending={isPending}
 					onPress={onUndo}
 				>
-					{PAGE_TEXT.undo}
+					{NOTICE_TEXT.undo}
 				</Button>
 			)}
 			<IconButton
 				icon={X}
-				label={PAGE_TEXT.dismiss}
+				label={NOTICE_TEXT.dismiss}
 				variant="plain"
 				size="sm"
 				isDisabled={isPending}

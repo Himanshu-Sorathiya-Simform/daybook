@@ -2285,6 +2285,50 @@ describe("Add and Edit in the page (BR-F05-21, BR-F05-24, BR-F05-40, BR-F05-45)"
 			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "true");
 		});
 
+		// AC-F05-53
+		test("an Edit's notice shows in the panel and its Undo puts the old amount back", async () => {
+			media({ wide: true, docked: true });
+			dialogReads();
+			const patches = route(
+				network,
+				"patch",
+				`/api/subscriptions/${netflix!.id}`,
+				() =>
+					ok(
+						changed(netflix!, {
+							amountMinor: 79900,
+							version: netflix!.version + 1,
+						}),
+					),
+			);
+			const { user } = renderPage({ seed: golden });
+			await user.click(
+				screen.getByRole("button", { name: "Actions for Netflix" }),
+			);
+			await user.click(screen.getByRole("menuitem", { name: "Edit" }));
+			await saveEdit(user, "Netflix", "799");
+			const text = "Netflix saved. Next charge Thu, 5 Nov.";
+			const notice = (await screen.findByText(text)).closest("[role=status]")!;
+			expect(
+				screen
+					.getByRole("complementary", { name: "Subscription" })
+					.contains(notice),
+			).toBe(true);
+			await user.click(
+				within(notice as HTMLElement).getByRole("button", { name: "Undo" }),
+			);
+			await waitFor(() => expect(screen.queryByText(text)).toBeNull());
+			expect(patches).toHaveLength(2);
+			expect(patches[1]?.body).toEqual({
+				changedAt: expect.any(String),
+				amountMinor: netflix!.amountMinor,
+				currency: "INR",
+			});
+			expect(patches[1]?.headers.get("if-match")).toBe(
+				`"${netflix!.version + 1}"`,
+			);
+		});
+
 		// AC-F05-46
 		test("below 1180 px with nothing selected, nothing becomes selected", async () => {
 			media({ wide: true, docked: false });
@@ -2714,7 +2758,7 @@ describe("Cancel, Resume, Pause, Delete and Skip in the page (BR-F05-22, BR-F05-
 		});
 
 		// AC-F05-51
-		test("a refusal says why in a toast and changes nothing", async () => {
+		test("a refusal says why in a notice and changes nothing", async () => {
 			wide();
 			route(network, "post", `/api/subscriptions/${netflix!.id}/skips`, () =>
 				refuse(422, "validation_failed", {
@@ -2724,10 +2768,11 @@ describe("Cancel, Resume, Pause, Delete and Skip in the page (BR-F05-22, BR-F05-
 			);
 			const { user } = renderPage({ seed: golden });
 			await pickMenuItem(user, "Netflix", "Skip the 5 Nov charge");
-			expect(
-				await screen.findByText("Only an upcoming charge can be skipped."),
-			).toBeVisible();
+			expect(await screen.findByRole("alert")).toHaveTextContent(
+				"Only an upcoming charge can be skipped.",
+			);
 			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
+			expect(document.querySelector("[data-sonner-toast]")).toBeNull();
 		});
 	});
 
@@ -2810,6 +2855,369 @@ describe("Cancel, Resume, Pause, Delete and Skip in the page (BR-F05-22, BR-F05-
 				await screen.findByRole("dialog", { name: "Cancel Netflix?" }),
 			).toBeVisible();
 			expect(screen.queryByRole("alertdialog")).toBeNull();
+		});
+
+		const gym = golden.items.find((item) => item.name === "Cult Gym")!;
+		/** The notice that reads `text`: a status, in the panel or above the view. */
+		const noticeOf = (text: string) =>
+			screen.getByText(text).closest<HTMLElement>('[role="status"]')!;
+		/** Skips Netflix's next charge from its menu; the answer has version + 1. */
+		const skipNetflix = async (user: ReturnType<typeof userEvent.setup>) => {
+			await pickMenuItem(user, "Netflix", "Skip the 5 Nov charge");
+			await screen.findByText("Skipped the 5 Nov Netflix charge.");
+		};
+		const skipRoute = () =>
+			route(network, "post", `/api/subscriptions/${netflix!.id}/skips`, () =>
+				ok(
+					changed({
+						version: netflix!.version + 1,
+						skips: ["2026-11-05"],
+					}),
+				),
+			);
+
+		// AC-F05-53
+		test("a skip docked shows its notice in the panel, with Undo and Dismiss, and not above the list", async () => {
+			wide();
+			skipRoute();
+			const { user } = renderPage({ seed: golden });
+			await skipNetflix(user);
+			const notice = noticeOf("Skipped the 5 Nov Netflix charge.");
+			expect(panel()!.contains(notice)).toBe(true);
+			expect(
+				within(notice).getByRole("button", { name: "Undo" }),
+			).toBeVisible();
+			expect(
+				within(notice).getByRole("button", { name: "Dismiss" }),
+			).toBeVisible();
+			expect(
+				screen.getAllByText("Skipped the 5 Nov Netflix charge."),
+			).toHaveLength(1);
+		});
+
+		// AC-F05-53
+		test("below 1180 px with nothing selected the notice is above the view and nothing is selected", async () => {
+			media({ wide: true, docked: false });
+			skipRoute();
+			const { user } = renderPage({ seed: golden });
+			await skipNetflix(user);
+			expect(panel()).toBeNull();
+			expect(noticeOf("Skipped the 5 Nov Netflix charge.")).toBeVisible();
+			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
+			// It sits between the summary and the list.
+			const summary = screen.getByText("Monthly cost");
+			const list = screen.getByRole("grid", { name: "Subscriptions" });
+			expect(
+				summary.compareDocumentPosition(
+					noticeOf("Skipped the 5 Nov Netflix charge."),
+				) & Node.DOCUMENT_POSITION_FOLLOWING,
+			).toBeTruthy();
+			expect(
+				noticeOf(
+					"Skipped the 5 Nov Netflix charge.",
+				).compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING,
+			).toBeTruthy();
+		});
+
+		// AC-F05-53
+		test("selecting another Subscription moves the notice above the view", async () => {
+			wide();
+			skipRoute();
+			const { user } = renderPage({ seed: golden });
+			await skipNetflix(user);
+			await user.click(rowNamed("Cult Gym"));
+			expect(
+				await screen.findByRole("heading", { name: "Cult Gym" }),
+			).toBeVisible();
+			const moved = noticeOf("Skipped the 5 Nov Netflix charge.");
+			expect(panel()!.contains(moved)).toBe(false);
+			// Selecting Netflix again brings it back into the panel.
+			await user.click(rowNamed("Netflix"));
+			await waitFor(() =>
+				expect(
+					panel()!.contains(noticeOf("Skipped the 5 Nov Netflix charge.")),
+				).toBe(true),
+			);
+		});
+
+		// AC-F05-53
+		test("Dismiss ends the notice", async () => {
+			wide();
+			skipRoute();
+			const { user } = renderPage({ seed: golden });
+			await skipNetflix(user);
+			await user.click(screen.getByRole("button", { name: "Dismiss" }));
+			expect(
+				screen.queryByText("Skipped the 5 Nov Netflix charge."),
+			).toBeNull();
+		});
+
+		// AC-F05-53
+		test("the next write replaces the notice", async () => {
+			wide();
+			skipRoute();
+			const { user } = renderPage({ seed: golden });
+			await skipNetflix(user);
+			await pickMenuItem(user, "Cult Gym", "Cancel Subscription");
+			const save = await screen.findByRole("button", {
+				name: "Cancel Cult Gym",
+			});
+			await waitFor(() =>
+				expect(save).not.toHaveAttribute("aria-disabled", "true"),
+			);
+			route(network, "patch", `/api/subscriptions/${gym.id}`, () =>
+				ok({
+					...gym,
+					currency: "INR",
+					changeDate: "2026-11-02",
+					chargesCreated: 0,
+					chargesUpdated: 0,
+					chargesDeleted: 0,
+					months: [],
+					endDate: "2026-11-02",
+					version: gym.version + 1,
+				}),
+			);
+			await user.click(save);
+			await waitFor(() =>
+				expect(
+					screen.getByText("Cult Gym cancelled. Earlier charges stay."),
+				).toBeVisible(),
+			);
+			expect(screen.queryByText(/Skipped the 5 Nov/)).toBeNull();
+		});
+
+		// AC-F05-53
+		test("Undo sends the skip's delete at the version the write returned, and the notice ends", async () => {
+			wide();
+			skipRoute();
+			const deletes = route(
+				network,
+				"delete",
+				`/api/subscriptions/${netflix!.id}/skips/2026-11-05`,
+				() => ok(changed({ version: netflix!.version + 2 })),
+			);
+			const { user } = renderPage({ seed: golden });
+			await skipNetflix(user);
+			await user.click(screen.getByRole("button", { name: "Undo" }));
+			await waitFor(() =>
+				expect(
+					screen.queryByText("Skipped the 5 Nov Netflix charge."),
+				).toBeNull(),
+			);
+			expect(deletes).toHaveLength(1);
+			expect(deletes[0]?.headers.get("if-match")).toBe(
+				`"${netflix!.version + 1}"`,
+			);
+		});
+
+		// AC-F05-53
+		test("while Undo is on its way Dismiss rests, and a failed Undo reads why with Dismiss alone", async () => {
+			wide();
+			skipRoute();
+			route(
+				network,
+				"delete",
+				`/api/subscriptions/${netflix!.id}/skips/2026-11-05`,
+				async () => {
+					await delay(80);
+					return refuse(422, "validation_failed", {
+						message: "m",
+						fields: {
+							dueOn: "This charge date has passed, so it can't be brought back.",
+						},
+					});
+				},
+			);
+			const { user } = renderPage({ seed: golden });
+			await skipNetflix(user);
+			await user.click(screen.getByRole("button", { name: "Undo" }));
+			expect(screen.getByRole("button", { name: "Dismiss" })).toHaveAttribute(
+				"aria-disabled",
+				"true",
+			);
+			const alert = await screen.findByRole("alert");
+			expect(alert).toHaveTextContent("This change can't be undone any more.");
+			expect(within(alert).queryByRole("button", { name: "Undo" })).toBeNull();
+			await user.click(within(alert).getByRole("button", { name: "Dismiss" }));
+			expect(screen.queryByRole("alert")).toBeNull();
+		});
+
+		// AC-F05-54
+		test("a 409 on Undo opens the conflict view: Keep theirs ends the notice, Keep mine sends it again at the saved version", async () => {
+			wide();
+			skipRoute();
+			let at = 0;
+			const deletes = route(
+				network,
+				"delete",
+				`/api/subscriptions/${netflix!.id}/skips/2026-11-05`,
+				() =>
+					++at < 3 ?
+						refuse(409, "version_conflict", {
+							message: "m",
+							details: {
+								current: changed({
+									version: 12,
+									skips: ["2026-11-05"],
+									amountMinor: 79900,
+								}),
+							},
+						})
+					:	ok(changed({ version: 13 })),
+			);
+			const { user } = renderPage({ seed: golden });
+			await skipNetflix(user);
+			await user.click(screen.getByRole("button", { name: "Undo" }));
+			const view = await screen.findByRole("dialog", {
+				name: "This Subscription changed on another device",
+			});
+			expect(
+				within(view).getByText(
+					"Keep mine puts the Subscription back as it was before your change.",
+				),
+			).toBeVisible();
+			// Closing the view leaves the notice with its Undo.
+			await user.keyboard("{Escape}");
+			await waitFor(() =>
+				expect(
+					screen.queryByRole("dialog", {
+						name: /changed on another device/,
+					}),
+				).toBeNull(),
+			);
+			expect(screen.getByRole("button", { name: "Undo" })).toBeVisible();
+			await user.click(screen.getByRole("button", { name: "Undo" }));
+			await user.click(
+				await screen.findByRole("button", { name: "Keep mine" }),
+			);
+			await waitFor(() =>
+				expect(
+					screen.queryByText("Skipped the 5 Nov Netflix charge."),
+				).toBeNull(),
+			);
+			expect(deletes).toHaveLength(3);
+			expect(deletes[2]?.headers.get("if-match")).toBe('"12"');
+		});
+
+		// AC-F05-54
+		test("a 409 on Skip this one opens the conflict view, and Keep theirs sends nothing more", async () => {
+			wide();
+			const posts = route(
+				network,
+				"post",
+				`/api/subscriptions/${netflix!.id}/skips`,
+				() =>
+					refuse(409, "version_conflict", {
+						message: "m",
+						details: { current: changed({ version: 12 }) },
+					}),
+			);
+			const { user } = renderPage({ seed: golden });
+			await pickMenuItem(user, "Netflix", "Skip the 5 Nov charge");
+			await screen.findByRole("dialog", {
+				name: "This Subscription changed on another device",
+			});
+			await user.click(screen.getByRole("button", { name: "Keep theirs" }));
+			await waitFor(() =>
+				expect(
+					screen.queryByRole("dialog", {
+						name: /changed on another device/,
+					}),
+				).toBeNull(),
+			);
+			expect(posts).toHaveLength(1);
+			expect(screen.queryByText(/^Skipped the 5 Nov/)).toBeNull();
+		});
+
+		// AC-F05-53
+		test("a delete's notice is above the list with Dismiss alone, and the selection is cleared", async () => {
+			wide();
+			route(network, "delete", patchPath, () =>
+				ok({
+					changeDate: "2026-11-02",
+					chargesCreated: 0,
+					chargesKept: 2,
+					chargesDeleted: 0,
+					months: [],
+				}),
+			);
+			const { user } = renderPage({
+				seed: golden,
+				answer: () => {
+					const rest = subscriptionList();
+					return ok({
+						...rest,
+						items: rest.items.filter((item) => item.id !== netflix!.id),
+					});
+				},
+			});
+			await user.click(rowNamed("Netflix"));
+			await screen.findByRole("heading", { name: "Netflix" });
+			await user.click(
+				within(panel()!).getByRole("button", { name: "Delete" }),
+			);
+			await user.click(
+				await screen.findByRole("button", { name: "Delete Netflix" }),
+			);
+			await screen.findByText(
+				"Netflix deleted. Its charges stay in Transactions.",
+			);
+			const notice = noticeOf(
+				"Netflix deleted. Its charges stay in Transactions.",
+			);
+			expect(
+				within(notice).queryByRole("button", { name: "Undo" }),
+			).toBeNull();
+			expect(
+				within(notice).getByRole("button", { name: "Dismiss" }),
+			).toBeVisible();
+			expect(panel()!.contains(notice)).toBe(false);
+			expect(
+				await screen.findByRole("heading", { name: "Your Subscriptions" }),
+			).toBeVisible();
+			await user.click(
+				within(notice).getByRole("button", { name: "Dismiss" }),
+			);
+			expect(screen.queryByText(/^Netflix deleted\./)).toBeNull();
+		});
+
+		// AC-F05-53
+		test("deleting the last Subscription leaves the notice above the empty message", async () => {
+			wide();
+			const one = {
+				...subscriptionList(),
+				items: [subscriptionItem("netflix")],
+			};
+			route(network, "delete", patchPath, () =>
+				ok({
+					changeDate: "2026-11-02",
+					chargesCreated: 0,
+					chargesKept: 2,
+					chargesDeleted: 0,
+					months: [],
+				}),
+			);
+			const { user } = renderPage({
+				seed: one,
+				answer: () => ok(emptyList()),
+			});
+			await pickMenuItem(user, "Netflix", "Delete");
+			await user.click(
+				await screen.findByRole("button", { name: "Delete Netflix" }),
+			);
+			await screen.findByText(
+				"Netflix deleted. Its charges stay in Transactions.",
+			);
+			const notice = noticeOf(
+				"Netflix deleted. Its charges stay in Transactions.",
+			);
+			expect(await screen.findByText("No Subscriptions yet.")).toBeVisible();
+			expect(
+				notice.compareDocumentPosition(
+					screen.getByText("No Subscriptions yet."),
+				) & Node.DOCUMENT_POSITION_FOLLOWING,
+			).toBeTruthy();
 		});
 
 		test("Escape closes a dialog and keeps the selection", async () => {

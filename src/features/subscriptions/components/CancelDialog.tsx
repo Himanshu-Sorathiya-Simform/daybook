@@ -13,6 +13,7 @@ import { useOnce } from "@/hooks/useOnce";
 import { useOnline } from "@/hooks/useOnline";
 import { formatDayHeader } from "@/lib/date-format";
 import { uuidV7 } from "@/lib/ids";
+import type { SubscriptionEditInput } from "@/lib/subscriptions/schemas";
 import { useChangeSubscription } from "../hooks/useChangeSubscription";
 import { useSubscriptionCharges } from "../hooks/useSubscriptionCharges";
 import { useWriteRefusal } from "../hooks/useWriteRefusal";
@@ -25,12 +26,11 @@ import {
 	type CancelValues,
 	cancelView,
 } from "../lib/cancel";
+import { fieldsOf } from "../lib/conflict";
 import { DIALOG_TEXT } from "../lib/dialog";
-import type {
-	SubscriptionAnswer,
-	SubscriptionItem,
-	SubscriptionsLocale,
-} from "../lib/types";
+import type { Confirmed } from "../lib/notices";
+import type { SubscriptionItem, SubscriptionsLocale } from "../lib/types";
+import { DialogConflict } from "./DialogConflict";
 import { ChargesStrip } from "./ChargesStrip";
 
 export type CancelDialogProps = {
@@ -39,8 +39,8 @@ export type CancelDialogProps = {
 	item: SubscriptionItem;
 	locale: SubscriptionsLocale;
 	onClose: () => void;
-	/** A confirmed write, with the Subscription as the server saved it. */
-	onSaved?: (saved: SubscriptionAnswer) => void;
+	/** A confirmed write: the Subscription before it, as the server saved it, and what was sent. */
+	onSaved?: (confirmed: Confirmed) => void;
 };
 
 /**
@@ -103,10 +103,18 @@ export function CancelDialog({
 			return;
 		}
 		const { body } = next;
+		await submit(body, opened);
+	};
+
+	/** Sends `body` against `against`: the Subscription as opened, or after a conflict as saved. */
+	const submit = async (
+		body: SubscriptionEditInput,
+		against: SubscriptionItem,
+	) => {
 		const request = sending.run(() =>
 			change.mutateAsync({
-				id: opened.id,
-				version: opened.version,
+				id: against.id,
+				version: against.version,
 				body,
 				idempotencyKey: uuidV7(),
 			}),
@@ -115,10 +123,10 @@ export function CancelDialog({
 		refusal.reset();
 		try {
 			const saved = await request;
-			onSaved?.(saved);
+			onSaved?.({ kind: "cancel", before: against, saved, sent: body });
 			onClose();
 		} catch (error) {
-			await refusal.refuse(error);
+			await refusal.refuse(error, { kind: "change", id: against.id, body });
 		}
 	};
 
@@ -127,123 +135,147 @@ export function CancelDialog({
 	const dated = values.choice === "later" || values.choice === "earlier";
 	const bounds = values.choice === "later" ? range.later : range.earlier;
 	return (
-		<Dialog
-			title={CANCEL_TEXT.title(name)}
-			isOpen={isOpen}
-			// It only ever reports closing.
-			onOpenChange={onClose}
-			isPending={busy}
-			footer={
-				<>
-					<span className="flex-1" />
-					<Button
-						variant="secondary"
-						isDisabled={busy}
-						onPress={onClose}
-						className="max-md:hidden"
-					>
-						{CANCEL_TEXT.keep(name)}
-					</Button>
-					<Button
-						variant={view.deleted > 0 ? "danger" : "primary"}
-						isDisabled={!canSave}
-						isPending={busy}
-						onPress={() => void form.handleSubmit()}
-					>
-						{view.deleted > 0 ?
-							CANCEL_TEXT.cancelAndDelete(view.deleted)
-						:	CANCEL_TEXT.cancel(name)}
-					</Button>
-				</>
-			}
-		>
-			<form
-				noValidate
-				aria-label={CANCEL_TEXT.title(name)}
-				className="flex flex-col gap-4"
-				onSubmit={(event) => {
-					event.preventDefault();
-					event.stopPropagation();
-					if (canSave) void form.handleSubmit();
-				}}
-			>
-				{!online && <OfflineNote>{DIALOG_TEXT.offline}</OfflineNote>}
-				{refusal.failure && <FormAlert>{refusal.failure}</FormAlert>}
-				<form.Field name="choice">
-					{(field) => (
-						<ChoiceGroup
-							label={CANCEL_TEXT.question}
-							value={field.state.value}
-							onChange={(next) => {
-								field.handleChange(next as CancelChoice);
-								refusal.reset();
-							}}
-							options={options.map((option) => ({
-								value: option.value,
-								label: option.label,
-								...(option.description === undefined ?
-									{}
-								:	{ description: option.description }),
-							}))}
+		<>
+			<Dialog
+				title={CANCEL_TEXT.title(name)}
+				isOpen={isOpen}
+				// It only ever reports closing.
+				onOpenChange={onClose}
+				isPending={busy}
+				footer={
+					<>
+						<span className="flex-1" />
+						<Button
+							variant="secondary"
 							isDisabled={busy}
-						/>
-					)}
-				</form.Field>
-				{dated && (
-					<form.Field
-						name={values.choice === "later" ? "later" : "earlier"}
-					>
+							onPress={onClose}
+							className="max-md:hidden"
+						>
+							{CANCEL_TEXT.keep(name)}
+						</Button>
+						<Button
+							variant={view.deleted > 0 ? "danger" : "primary"}
+							isDisabled={!canSave}
+							isPending={busy}
+							onPress={() => void form.handleSubmit()}
+						>
+							{view.deleted > 0 ?
+								CANCEL_TEXT.cancelAndDelete(view.deleted)
+							:	CANCEL_TEXT.cancel(name)}
+						</Button>
+					</>
+				}
+			>
+				<form
+					noValidate
+					aria-label={CANCEL_TEXT.title(name)}
+					className="flex flex-col gap-4"
+					onSubmit={(event) => {
+						event.preventDefault();
+						event.stopPropagation();
+						if (canSave) void form.handleSubmit();
+					}}
+				>
+					{!online && <OfflineNote>{DIALOG_TEXT.offline}</OfflineNote>}
+					{refusal.failure && <FormAlert>{refusal.failure}</FormAlert>}
+					<form.Field name="choice">
 						{(field) => (
-							<DatePicker
-								label={CANCEL_TEXT.dateLabel}
+							<ChoiceGroup
+								label={CANCEL_TEXT.question}
 								value={field.state.value}
-								onChange={(date) => {
-									field.handleChange(date);
+								onChange={(next) => {
+									field.handleChange(next as CancelChoice);
 									refusal.reset();
 								}}
-								display={formatDayHeader(field.state.value, locale)}
-								today={locale.today}
-								minValue={bounds.min}
-								maxValue={bounds.max}
-								firstDayOfWeek={locale.weekStart}
-								error={refusal.fields.endDate}
+								options={options.map((option) => ({
+									value: option.value,
+									label: option.label,
+									...(option.description === undefined ?
+										{}
+									:	{ description: option.description }),
+								}))}
 								isDisabled={busy}
 							/>
 						)}
 					</form.Field>
-				)}
-				{view.deletionLine !== null && (
-					<p
-						role="status"
-						className="text-body text-ink font-semibold"
-					>
-						{view.deletionLine}
-					</p>
-				)}
-				{view.editedLine !== null && (
-					<p className="text-caption text-ink-2">{view.editedLine}</p>
-				)}
-				{failed ?
-					<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+					{dated && (
+						<form.Field
+							name={values.choice === "later" ? "later" : "earlier"}
+						>
+							{(field) => (
+								<DatePicker
+									label={CANCEL_TEXT.dateLabel}
+									value={field.state.value}
+									onChange={(date) => {
+										field.handleChange(date);
+										refusal.reset();
+									}}
+									display={formatDayHeader(
+										field.state.value,
+										locale,
+									)}
+									today={locale.today}
+									minValue={bounds.min}
+									maxValue={bounds.max}
+									firstDayOfWeek={locale.weekStart}
+									error={refusal.fields.endDate}
+									isDisabled={busy}
+								/>
+							)}
+						</form.Field>
+					)}
+					{view.deletionLine !== null && (
 						<p
-							role="alert"
-							className="text-body text-ink-2"
+							role="status"
+							className="text-body text-ink font-semibold"
 						>
-							{DIALOG_TEXT.chargesFailed}
+							{view.deletionLine}
 						</p>
-						<Button
-							size="sm"
-							variant="row"
-							onPress={() => void charges.refetch()}
-						>
-							{DIALOG_TEXT.retry}
-						</Button>
-					</div>
-				: ready ?
-					<ChargesStrip items={view.strip} />
-				:	null}
-				<p className="text-body text-ink-2">{view.endingLine}</p>
-			</form>
-		</Dialog>
+					)}
+					{view.editedLine !== null && (
+						<p className="text-caption text-ink-2">{view.editedLine}</p>
+					)}
+					{failed ?
+						<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+							<p
+								role="alert"
+								className="text-body text-ink-2"
+							>
+								{DIALOG_TEXT.chargesFailed}
+							</p>
+							<Button
+								size="sm"
+								variant="row"
+								onPress={() => void charges.refetch()}
+							>
+								{DIALOG_TEXT.retry}
+							</Button>
+						</div>
+					: ready ?
+						<ChargesStrip items={view.strip} />
+					:	null}
+					<p className="text-body text-ink-2">{view.endingLine}</p>
+				</form>
+			</Dialog>
+			{refusal.conflict && (
+				<DialogConflict
+					conflict={refusal.conflict}
+					origin={fieldsOf(opened)}
+					formats={locale}
+					isPending={change.isPending}
+					onClose={refusal.closeConflict}
+					onKeepMine={() =>
+						void submit(
+							refusal.conflict!.request.body as SubscriptionEditInput,
+							refusal.conflict!.current,
+						)
+					}
+					onKeepTheirs={() => {
+						void refusal.dropConflict();
+						onClose();
+					}}
+				/>
+			)}
+		</>
 	);
 }

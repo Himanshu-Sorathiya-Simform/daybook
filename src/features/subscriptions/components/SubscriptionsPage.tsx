@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/feedback/EmptyState";
+import { UndoNotice } from "@/components/feedback/UndoNotice";
 import { showToast } from "@/components/feedback/showToast";
 import { Section } from "@/components/surfaces/Section";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
@@ -17,13 +18,16 @@ import { cn } from "@/lib/cn";
 import type { ExpenseCategory, MonthItem } from "@/lib/subscriptions/model";
 import { useOpenParam } from "../hooks/useOpenParam";
 import { useQuickWrites } from "../hooks/useQuickWrites";
+import { useSubscriptionNotice } from "../hooks/useSubscriptionNotice";
 import { useSubscriptions } from "../hooks/useSubscriptions";
 import { CALENDAR_TEXT } from "../lib/calendar";
 import { filterByCategory, isFilterable } from "../lib/category-filter";
+import { conflictRows, fieldsOf } from "../lib/conflict";
 import { chargesHref, type OpenTarget } from "../lib/deep-link";
 import type { DialogKind } from "../lib/dialog";
 import { type MenuAction, shortcutAction, type ShortcutKey } from "../lib/menu";
 import { asOfText, PAGE_TEXT } from "../lib/messages";
+import type { Confirmed } from "../lib/notices";
 import type { PanelActionKey, StatusAction } from "../lib/panel";
 import { DEFAULT_SORTING } from "../lib/table";
 import type { SubscriptionItem, SubscriptionsLocale } from "../lib/types";
@@ -35,6 +39,7 @@ import {
 } from "../lib/view";
 import { SubscriptionCalendar } from "./SubscriptionCalendar";
 import { CancelDialog } from "./CancelDialog";
+import { ConflictDialog } from "./ConflictDialog";
 import { DeleteDialog } from "./DeleteDialog";
 import { PauseDialog } from "./PauseDialog";
 import { ResumeDialog } from "./ResumeDialog";
@@ -112,7 +117,8 @@ export function SubscriptionsPage({
 		kind: DialogKind;
 		item: SubscriptionItem | null;
 	} | null>(null);
-	const quick = useQuickWrites(locale);
+	const notices = useSubscriptionNotice(locale);
+	const quick = useQuickWrites(locale, notices);
 	// A Subscription that is gone from the list is no longer selected, and stays unselected if
 	// it comes back (BR-F05-21). Set while rendering, React's pattern for state that follows
 	// what was read.
@@ -192,6 +198,13 @@ export function SubscriptionsPage({
 		}
 		choose(subscription.id);
 	};
+	/** A write from a dialog is confirmed: its notice, and the selection (BR-F05-33). A delete
+	 * clears the selection. */
+	const confirmed = (write: Confirmed) => {
+		notices.confirm(write);
+		if (write.kind === "delete") choose(null);
+		else saved(write.saved);
+	};
 	/** A write with no dialog: the Subscription is selected once it is confirmed. */
 	const quickly = async (
 		id: string,
@@ -245,6 +258,26 @@ export function SubscriptionsPage({
 	const showPanel = list !== undefined && !isEmpty;
 	const drawerOpen = showPanel && !docked && selected !== null;
 
+	// The notice shows in the panel while the Subscription it is about is selected, else above the
+	// view (BR-F05-33); a delete's never shows in the panel.
+	const notice = notices.notice;
+	const noticeInPanel =
+		notice !== null
+		&& notice.inPanel
+		&& showPanel
+		&& selected === notice.subscriptionId;
+	const noticeNode =
+		notice === null ? null : (
+			<UndoNotice
+				text={notice.failure ?? notice.text}
+				isFailure={notice.failure !== null}
+				isPending={notices.isUndoing}
+				{...(notice.undo ? { onUndo: notices.undo } : {})}
+				onDismiss={notices.dismiss}
+			/>
+		);
+	const noticeAbove = noticeInPanel ? null : noticeNode;
+
 	useShortcut("E", () => selected !== null && open("edit", selected), {
 		enabled: selected !== null && dialog === null,
 	});
@@ -280,6 +313,7 @@ export function SubscriptionsPage({
 						list={list}
 						formats={locale}
 					/>
+					{noticeAbove}
 					{view === "list" ?
 						<SubscriptionList
 							list={shown ?? list}
@@ -321,14 +355,17 @@ export function SubscriptionsPage({
 		}
 		if (isEmpty) {
 			return (
-				<Section>
-					<EmptyState
-						title={PAGE_TEXT.emptyTitle}
-						body={PAGE_TEXT.emptyBody}
-						action={PAGE_TEXT.add}
-						onAction={() => setDialog({ kind: "add", item: null })}
-					/>
-				</Section>
+				<>
+					{noticeAbove}
+					<Section>
+						<EmptyState
+							title={PAGE_TEXT.emptyTitle}
+							body={PAGE_TEXT.emptyBody}
+							action={PAGE_TEXT.add}
+							onAction={() => setDialog({ kind: "add", item: null })}
+						/>
+					</Section>
+				</>
 			);
 		}
 		if (failed) {
@@ -379,6 +416,7 @@ export function SubscriptionsPage({
 						void quickly(id, (item) => quick.undoSkip(item, dueOn))
 					}
 					selectedDue={markedDue}
+					notice={noticeInPanel ? noticeNode : null}
 					activeCategory={category}
 					onCategory={filterTo}
 				/>
@@ -391,7 +429,7 @@ export function SubscriptionsPage({
 						items={list?.items ?? []}
 						locale={locale}
 						onClose={() => setDialog(null)}
-						onSaved={saved}
+						onSaved={confirmed}
 					/>
 				)}
 			{dialog?.item && dialog.kind === "cancel" && (
@@ -400,7 +438,7 @@ export function SubscriptionsPage({
 					item={dialog.item}
 					locale={locale}
 					onClose={() => setDialog(null)}
-					onSaved={saved}
+					onSaved={confirmed}
 				/>
 			)}
 			{dialog?.item && dialog.kind === "resume" && (
@@ -409,7 +447,7 @@ export function SubscriptionsPage({
 					item={dialog.item}
 					locale={locale}
 					onClose={() => setDialog(null)}
-					onSaved={saved}
+					onSaved={confirmed}
 				/>
 			)}
 			{dialog?.item && dialog.kind === "pause" && (
@@ -418,17 +456,35 @@ export function SubscriptionsPage({
 					item={dialog.item}
 					locale={locale}
 					onClose={() => setDialog(null)}
-					onSaved={saved}
+					onSaved={confirmed}
+				/>
+			)}
+			{notices.conflict && (
+				<ConflictDialog
+					isOpen
+					// It only ever reports closing.
+					onOpenChange={notices.closeConflict}
+					rows={conflictRows(
+						notices.conflict.yours,
+						fieldsOf(notices.conflict.current),
+						locale,
+					)}
+					keepMineLine={notices.conflict.line}
+					isDelete={notices.conflict.isDelete}
+					isPending={notices.isUndoing}
+					onKeepMine={notices.keepMine}
+					onKeepTheirs={notices.keepTheirs}
 				/>
 			)}
 			{dialog?.item && dialog.kind === "delete" && (
 				<DeleteDialog
 					isOpen
 					item={dialog.item}
+					locale={locale}
 					onClose={() => setDialog(null)}
 					// "cancel it instead" swaps the confirmation for Cancel on the same Subscription.
 					onCancelInstead={(item) => setDialog({ kind: "cancel", item })}
-					onDeleted={() => choose(null)}
+					onDeleted={confirmed}
 				/>
 			)}
 		</div>

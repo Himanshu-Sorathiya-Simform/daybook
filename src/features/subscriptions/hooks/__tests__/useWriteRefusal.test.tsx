@@ -4,6 +4,7 @@ import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
 import { apiFetch } from "@/lib/api/client";
+import type { ChangeRequest } from "../../lib/conflict";
 import { subscriptionAnswer } from "../../lib/__tests__/fixtures";
 import { refuse, renderHookInApp, route, testClient } from "./helpers";
 import { useWriteRefusal } from "../useWriteRefusal";
@@ -14,6 +15,13 @@ afterEach(() => network.resetHandlers());
 afterAll(() => network.close());
 
 const PATH = "/api/subscriptions/x";
+
+/** What the dialog sent, which a 409 would send again. */
+const SENT: ChangeRequest = {
+	kind: "change",
+	id: "x",
+	body: { name: "Netflix India", changedAt: "2026-11-02T08:00:00.000Z" },
+};
 
 /** The error a write to `PATH` fails with, as the client makes it from the answer. */
 async function failure(answer: () => Response): Promise<unknown> {
@@ -32,10 +40,14 @@ function setup(
 	const queryClient = testClient();
 	const invalidate = vi.spyOn(queryClient, "invalidateQueries");
 	const view = renderHookInApp(() => useWriteRefusal(own), { queryClient });
-	const refused = async (error: unknown) => {
+	const refused = async (error: unknown, request: ChangeRequest | null = SENT) => {
 		let kind: string | undefined;
 		await act(async () => {
-			kind = await view.result.current.refuse(error);
+			const outcome = await view.result.current.refuse(
+				error,
+				...(request === null ? [] : [request]),
+			);
+			kind = outcome.kind;
 		});
 		return kind;
 	};
@@ -133,7 +145,7 @@ describe("the other refusals", () => {
 		expect(invalidate).toHaveBeenCalled();
 	});
 
-	test("a 409 says it changed on another device and reads the page again", async () => {
+	test("a 409 is the conflict, with what to send again, and shows no line", async () => {
 		const { result, refused, invalidate } = setup();
 		const kind = await refused(
 			await failure(() =>
@@ -146,10 +158,30 @@ describe("the other refusals", () => {
 			),
 		);
 		expect(kind).toBe("conflict");
-		expect(result.current.failure).toMatch(
-			/^This Subscription changed on another device\./,
+		expect(result.current.failure).toBeNull();
+		expect(result.current.conflict?.current.version).toBe(2);
+		expect(result.current.conflict?.request).toEqual(SENT);
+		// The page is read again only when a choice is made.
+		expect(invalidate).not.toHaveBeenCalled();
+	});
+
+	test("a 409 for a write with nothing to send again, an Add, is a failed save", async () => {
+		const { result, refused } = setup();
+		await refused(
+			await failure(() =>
+				refuse(409, "version_conflict", {
+					message: "m",
+					details: {
+						current: subscriptionAnswer("netflix", { version: 2 }),
+					},
+				}),
+			),
+			null,
 		);
-		expect(invalidate).toHaveBeenCalled();
+		expect(result.current.conflict).toBeNull();
+		expect(result.current.failure).toMatch(
+			/^The Subscription could not be saved\./,
+		);
 	});
 
 	test("a 401 shows nothing, since the app answers it", async () => {
@@ -210,5 +242,64 @@ describe("clearing", () => {
 		const { result } = setup();
 		act(() => result.current.clearField("name"));
 		expect(result.current.fields).toEqual({});
+	});
+});
+
+describe("the conflict", () => {
+	async function inConflict() {
+		const view = setup();
+		await view.refused(
+			await failure(() =>
+				refuse(409, "version_conflict", {
+					message: "m",
+					details: {
+						current: subscriptionAnswer("netflix", { version: 2 }),
+					},
+				}),
+			),
+		);
+		return view;
+	}
+
+	test("a new press's reset leaves it up until a choice", async () => {
+		const { result } = await inConflict();
+		act(() => result.current.reset());
+		expect(result.current.conflict).not.toBeNull();
+	});
+
+	test("closing the view drops it and reads nothing", async () => {
+		const { result, invalidate } = await inConflict();
+		act(() => result.current.closeConflict());
+		expect(result.current.conflict).toBeNull();
+		expect(invalidate).not.toHaveBeenCalled();
+	});
+
+	test("Keep theirs drops it and reads the page again", async () => {
+		const { result, invalidate } = await inConflict();
+		await act(async () => result.current.dropConflict());
+		expect(result.current.conflict).toBeNull();
+		expect(invalidate).toHaveBeenCalled();
+	});
+
+	test("a refusal that follows drops it, as the Keep mine resend that fails again", async () => {
+		const view = await inConflict();
+		await view.refused(await failure(() => refuse(500, "internal_error")));
+		expect(view.result.current.conflict).toBeNull();
+		expect(view.result.current.failure).toMatch(/could not be saved/);
+	});
+
+	test("a second 409 replaces it with the newer saved Subscription", async () => {
+		const view = await inConflict();
+		await view.refused(
+			await failure(() =>
+				refuse(409, "version_conflict", {
+					message: "m",
+					details: {
+						current: subscriptionAnswer("netflix", { version: 3 }),
+					},
+				}),
+			),
+		);
+		expect(view.result.current.conflict?.current.version).toBe(3);
 	});
 });

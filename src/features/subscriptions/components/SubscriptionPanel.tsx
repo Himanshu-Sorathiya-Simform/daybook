@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { Drawer } from "@/components/surfaces/Drawer";
 import { DockedPanel } from "@/components/surfaces/DockedPanel";
 import type { ExpenseCategory } from "@/lib/subscriptions/model";
@@ -27,6 +29,9 @@ export type SubscriptionPanelProps = {
 	onUndoSkip: (dueOn: string, id: string) => void;
 	/** The date the calendar's selection marks in the timeline, or `null` (BR-F05-38). */
 	selectedDue?: string | null;
+	/** The notice of a write to the selected Subscription, shown inside its details
+	 * (BR-F05-33). */
+	notice?: ReactNode;
 	/** The category the list is filtered to, and a press on a category of the summary (D-622). */
 	activeCategory?: ExpenseCategory | null;
 	onCategory?: (category: ExpenseCategory) => void;
@@ -51,6 +56,7 @@ export function SubscriptionPanel({
 	onStatusAction,
 	onUndoSkip,
 	selectedDue = null,
+	notice = null,
 	activeCategory,
 	onCategory,
 	className,
@@ -68,6 +74,7 @@ export function SubscriptionPanel({
 				onStatusAction={(action) => onStatusAction(action, item.id)}
 				onUndoSkip={(dueOn) => onUndoSkip(dueOn, item.id)}
 				selectedDue={selectedDue}
+				notice={notice}
 			/>
 		);
 	if (!isDocked) {

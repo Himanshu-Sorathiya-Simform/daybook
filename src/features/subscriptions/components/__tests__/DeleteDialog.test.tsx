@@ -8,7 +8,7 @@ import { renderInApp } from "@/components/app/__tests__/helpers";
 import { isUuidV7 } from "@/lib/ids";
 import { ok, refuse, route } from "../../hooks/__tests__/helpers";
 import { subscriptionAnswer, subscriptionItem } from "../../lib/__tests__/fixtures";
-import type { SubscriptionItem } from "../../lib/types";
+import type { SubscriptionItem, SubscriptionsLocale } from "../../lib/types";
 import { DeleteDialog, type DeleteDialogProps } from "../DeleteDialog";
 
 const network = setupServer();
@@ -19,6 +19,14 @@ afterEach(() => {
 });
 afterAll(() => network.close());
 
+const IN: SubscriptionsLocale = {
+	currency: "INR",
+	numberLocale: "en-IN",
+	dateLocale: "en-IN",
+	today: "2026-11-02",
+	timezone: "Asia/Kolkata",
+	weekStart: "monday",
+};
 const NETFLIX = subscriptionItem("netflix");
 const PATH = `/api/subscriptions/${NETFLIX.id}`;
 const DELETED = {
@@ -42,6 +50,7 @@ function setup(
 		<DeleteDialog
 			isOpen
 			item={item}
+			locale={IN}
 			{...handlers}
 			{...props}
 		/>,
@@ -145,9 +154,11 @@ describe("deleting (BR-F05-14, section 11)", () => {
 		expect(isUuidV7(deletes[0]?.headers.get("idempotency-key") ?? "")).toBe(
 			true,
 		);
-		expect(onDeleted).toHaveBeenCalledWith(
-			expect.objectContaining({ id: NETFLIX.id }),
-		);
+		expect(onDeleted).toHaveBeenCalledWith({
+			kind: "delete",
+			before: expect.objectContaining({ id: NETFLIX.id }),
+			saved: DELETED,
+		});
 	});
 
 	// AC-F05-50
@@ -158,7 +169,9 @@ describe("deleting (BR-F05-14, section 11)", () => {
 		const { user, onClose, onDeleted } = setup();
 		await user.click(button("Delete Netflix"));
 		await waitFor(() => expect(onClose).toHaveBeenCalled());
-		expect(onDeleted).toHaveBeenCalled();
+		expect(onDeleted).toHaveBeenCalledWith(
+			expect.objectContaining({ kind: "delete", saved: null }),
+		);
 	});
 
 	test("two presses send one request", async () => {
@@ -209,22 +222,131 @@ describe("a refused Delete keeps the dialog open (section 8)", () => {
 		).toBeVisible();
 	});
 
-	test("a 409 says it changed on another device", async () => {
+	// AC-F05-54
+	test("a 409 opens the conflict view over the dialog, which stays", async () => {
 		route(network, "delete", PATH, () =>
+			refuse(409, "version_conflict", {
+				message: "m",
+				details: {
+					current: subscriptionAnswer("netflix", {
+						version: 9,
+						amountMinor: 79900,
+					}),
+				},
+			}),
+		);
+		const { user, onClose, onDeleted } = setup();
+		await user.click(button("Delete Netflix"));
+		expect(
+			await screen.findByRole("dialog", {
+				name: "This Subscription changed on another device",
+			}),
+		).toBeVisible();
+		expect(button("Delete anyway")).toBeVisible();
+		expect(button("Keep it")).toBeVisible();
+		expect(
+			screen.getByText(
+				"Its charges stay in Transactions as ordinary expenses.",
+			),
+		).toBeVisible();
+		// The row for the amount differs: ₹799.00 saved now against the ₹649.00 it was opened on.
+		expect(screen.getByText("₹799.00")).toBeVisible();
+		expect(screen.getByText("Differs")).toBeVisible();
+		expect(onClose).not.toHaveBeenCalled();
+		expect(onDeleted).not.toHaveBeenCalled();
+	});
+
+	// AC-F05-54
+	test("Delete anyway sends the delete again with the first press's change time, at the saved version", async () => {
+		let at = 0;
+		const deletes = route(network, "delete", PATH, () =>
+			++at === 1 ?
+				refuse(409, "version_conflict", {
+					message: "m",
+					details: {
+						current: subscriptionAnswer("netflix", { version: 9 }),
+					},
+				})
+			:	ok(DELETED),
+		);
+		const { user, onClose, onDeleted } = setup();
+		await user.click(button("Delete Netflix"));
+		await user.click(
+			await screen.findByRole("button", { name: "Delete anyway" }),
+		);
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(deletes).toHaveLength(2);
+		expect(deletes[1]?.headers.get("if-match")).toBe('"9"');
+		expect(deletes[1]?.body).toEqual(deletes[0]?.body);
+		expect(deletes[1]?.headers.get("idempotency-key")).not.toBe(
+			deletes[0]?.headers.get("idempotency-key"),
+		);
+		// The notice is made from what Delete anyway deleted, the Subscription as saved then.
+		expect(onDeleted).toHaveBeenCalledWith({
+			kind: "delete",
+			before: expect.objectContaining({ version: 9 }),
+			saved: DELETED,
+		});
+	});
+
+	// AC-F05-54
+	test("Keep it sends nothing, reads the page again and closes the dialog", async () => {
+		const deletes = route(network, "delete", PATH, () =>
 			refuse(409, "version_conflict", {
 				message: "m",
 				details: { current: subscriptionAnswer("netflix", { version: 9 }) },
 			}),
 		);
-		route(network, "get", "/api/subscriptions", () => ok({}));
+		const { user, onClose, onDeleted } = setup();
+		await user.click(button("Delete Netflix"));
+		await user.click(await screen.findByRole("button", { name: "Keep it" }));
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(deletes).toHaveLength(1);
+		expect(onDeleted).not.toHaveBeenCalled();
+	});
+
+	test("closing the view with Escape sends nothing and leaves the dialog", async () => {
+		const deletes = route(network, "delete", PATH, () =>
+			refuse(409, "version_conflict", {
+				message: "m",
+				details: { current: subscriptionAnswer("netflix", { version: 9 }) },
+			}),
+		);
 		const { user, onClose } = setup();
 		await user.click(button("Delete Netflix"));
-		expect(
-			await screen.findByText(
-				/^This Subscription changed on another device\./,
-			),
-		).toBeVisible();
+		await screen.findByRole("button", { name: "Delete anyway" });
+		await user.keyboard("{Escape}");
+		await waitFor(() =>
+			expect(
+				screen.queryByRole("button", { name: "Delete anyway" }),
+			).toBeNull(),
+		);
+		expect(deletes).toHaveLength(1);
 		expect(onClose).not.toHaveBeenCalled();
+		expect(button("Delete Netflix")).toBeVisible();
+	});
+
+	test("a Delete anyway that is refused another way closes the view and says so in the dialog", async () => {
+		let at = 0;
+		route(network, "delete", PATH, () =>
+			++at === 1 ?
+				refuse(409, "version_conflict", {
+					message: "m",
+					details: {
+						current: subscriptionAnswer("netflix", { version: 9 }),
+					},
+				})
+			:	refuse(500, "internal_error"),
+		);
+		const { user } = setup();
+		await user.click(button("Delete Netflix"));
+		await user.click(
+			await screen.findByRole("button", { name: "Delete anyway" }),
+		);
+		expect(
+			await screen.findByText(/^The Subscription could not be deleted\./),
+		).toBeVisible();
+		expect(screen.queryByRole("button", { name: "Delete anyway" })).toBeNull();
 	});
 
 	test("a 401 shows nothing", async () => {

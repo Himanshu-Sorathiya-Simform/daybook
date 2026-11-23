@@ -1,7 +1,7 @@
 "use client";
 
 import { Pause, X } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { Button } from "@/components/actions/Button";
 import { IconButton } from "@/components/actions/IconButton";
@@ -46,6 +46,8 @@ export type PanelDetailProps = {
 	onUndoSkip: (dueOn: string) => void;
 	/** The date the calendar's selection marks in the timeline (BR-F05-38). */
 	selectedDue?: string | null;
+	/** The notice of a write to this Subscription, under the header (BR-F05-33). */
+	notice?: ReactNode;
 	className?: string;
 };
 
@@ -67,6 +69,7 @@ export function PanelDetail({
 	onStatusAction,
 	onUndoSkip,
 	selectedDue = null,
+	notice = null,
 	className,
 }: Readonly<PanelDetailProps>) {
 	const charges = useSubscriptionCharges(item.id);
@@ -145,6 +148,7 @@ export function PanelDetail({
 					onPress={onClose}
 				/>
 			</div>
+			{notice}
 			<div className="flex flex-col gap-1.5">
 				<h3 className="text-heading text-ink break-words">{item.name}</h3>
 				<div className="flex flex-wrap items-center gap-2">

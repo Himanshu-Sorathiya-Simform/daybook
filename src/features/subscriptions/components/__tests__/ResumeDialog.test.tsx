@@ -293,7 +293,12 @@ describe("saving (BR-F05-13, BR-F05-32, section 11)", () => {
 			endDate: null,
 		});
 		expect(patches[0]?.headers.get("if-match")).toBe(`"${ENDED.version}"`);
-		expect(onSaved).toHaveBeenCalled();
+		expect(onSaved).toHaveBeenCalledWith({
+			kind: "resume",
+			before: expect.objectContaining({ version: ENDED.version }),
+			saved: expect.objectContaining({ version: ENDED.version + 1 }),
+			sent: { changedAt: expect.any(String), endDate: null },
+		});
 	});
 
 	// AC-F05-48
@@ -411,21 +416,102 @@ describe("a refused Resume keeps the dialog open (section 8)", () => {
 		).toBeVisible();
 	});
 
-	test("a 409 says it changed on another device", async () => {
+	// AC-F05-54
+	test("a 409 opens the conflict view over the dialog, which stays", async () => {
+		route(network, "patch", PATCH, () =>
+			refuse(409, "version_conflict", {
+				message: "m",
+				details: {
+					current: subscriptionAnswer("netflix", {
+						version: 9,
+						amountMinor: 79900,
+					}),
+				},
+			}),
+		);
+		const { user, onSaved, onClose } = setup();
+		await resume(user);
+		expect(
+			await screen.findByRole("dialog", {
+				name: "This Subscription changed on another device",
+			}),
+		).toBeVisible();
+		expect(screen.getByRole("button", { name: "Keep mine" })).toBeVisible();
+		expect(screen.getByRole("button", { name: "Keep theirs" })).toBeVisible();
+		// The saved amount shows on both sides: the change does not touch it, so it does not differ.
+		expect(screen.getAllByText("₹799.00")).toHaveLength(2);
+		expect(
+			screen.getByText(
+				"Keep mine saves your change to the Subscription as it is saved now.",
+			),
+		).toBeVisible();
+		expect(onClose).not.toHaveBeenCalled();
+		expect(onSaved).not.toHaveBeenCalled();
+	});
+
+	// AC-F05-54
+	test("Keep mine sends the same change again at the saved version, with its first change time", async () => {
+		let at = 0;
+		const patches = route(network, "patch", PATCH, () =>
+			++at === 1 ?
+				refuse(409, "version_conflict", {
+					message: "m",
+					details: {
+						current: subscriptionAnswer("netflix", { version: 9 }),
+					},
+				})
+			:	ok(SAVED()),
+		);
+		const { user, onSaved, onClose } = setup();
+		await resume(user);
+		await user.click(await screen.findByRole("button", { name: "Keep mine" }));
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(patches).toHaveLength(2);
+		expect(patches[1]?.headers.get("if-match")).toBe('"9"');
+		expect(patches[1]?.body).toEqual(patches[0]?.body);
+		expect(patches[1]?.headers.get("idempotency-key")).not.toBe(
+			patches[0]?.headers.get("idempotency-key"),
+		);
+		// What Undo puts back is the Subscription as it was saved when Keep mine sent the change.
+		expect(onSaved).toHaveBeenCalledWith(
+			expect.objectContaining({
+				kind: "resume",
+				before: expect.objectContaining({ version: 9 }),
+			}),
+		);
+	});
+
+	// AC-F05-54
+	test("Keep theirs sends nothing and closes the dialog", async () => {
+		const patches = route(network, "patch", PATCH, () =>
+			refuse(409, "version_conflict", {
+				message: "m",
+				details: { current: subscriptionAnswer("netflix", { version: 9 }) },
+			}),
+		);
+		const { user, onSaved, onClose } = setup();
+		await resume(user);
+		await user.click(await screen.findByRole("button", { name: "Keep theirs" }));
+		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+		expect(patches).toHaveLength(1);
+		expect(onSaved).not.toHaveBeenCalled();
+	});
+
+	test("closing the view without a choice goes back to the dialog", async () => {
 		route(network, "patch", PATCH, () =>
 			refuse(409, "version_conflict", {
 				message: "m",
 				details: { current: subscriptionAnswer("netflix", { version: 9 }) },
 			}),
 		);
-		route(network, "get", "/api/subscriptions", () => ok({}));
-		const { user } = setup();
+		const { user, onClose } = setup();
 		await resume(user);
-		expect(
-			await screen.findByText(
-				/^This Subscription changed on another device\./,
-			),
-		).toBeVisible();
+		await screen.findByRole("button", { name: "Keep mine" });
+		await user.keyboard("{Escape}");
+		await waitFor(() =>
+			expect(screen.queryByRole("button", { name: "Keep mine" })).toBeNull(),
+		);
+		expect(onClose).not.toHaveBeenCalled();
 	});
 });
 

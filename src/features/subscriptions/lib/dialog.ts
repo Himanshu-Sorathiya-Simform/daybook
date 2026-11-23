@@ -42,8 +42,6 @@ export const DIALOG_TEXT = {
 	save: "Save changes",
 	cancel: "Cancel",
 	offline: "You are offline. Connect to save.",
-	conflict:
-		"This Subscription changed on another device. Close this and open it again to see it as it is now.",
 	name: "Name",
 	namePlaceholder: "Netflix, rent, insurance…",
 	payeesHeading: "Payees you've paid",
