@@ -1,17 +1,13 @@
 import { waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import { subscriptionKeys } from "../../lib/keys";
 import { charge, listPage } from "../../lib/__tests__/fixtures";
 import { useMonthCharges } from "../useMonthCharges";
-import { ok, refuse, renderHookInApp, route, url } from "./helpers";
+import { ok, refuse, renderHookInApp, route, url, testNetwork } from "./helpers";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 describe("useMonthCharges (BR-F05-38, BR-F05-48)", () => {
 	test("reads the month's charges and caches them under it", async () => {

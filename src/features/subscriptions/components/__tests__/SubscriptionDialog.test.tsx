@@ -20,8 +20,10 @@ import {
 	subscriptionAnswer,
 	subscriptionItem,
 	subscriptionList,
+	IN_LOCALE as IN,
+	changedAnswer,
 } from "../../lib/__tests__/fixtures";
-import type { SubscriptionItem, SubscriptionsLocale } from "../../lib/types";
+import type { SubscriptionItem } from "../../lib/types";
 import {
 	SubscriptionDialog,
 	type SubscriptionDialogProps,
@@ -36,15 +38,6 @@ afterEach(() => {
 });
 afterAll(() => network.close());
 
-/** The golden profile at the golden clock: 2 November 2026 in `en-IN`. */
-const IN: SubscriptionsLocale = {
-	currency: "INR",
-	numberLocale: "en-IN",
-	dateLocale: "en-IN",
-	today: "2026-11-02",
-	timezone: "Asia/Kolkata",
-	weekStart: "monday",
-};
 const ITEMS = subscriptionList().items;
 const NETFLIX = subscriptionItem("netflix");
 const SUNRISE = subscriptionItem("sunrise");
@@ -959,15 +952,11 @@ describe("Edit (BR-F05-24)", () => {
 
 describe("saving an Edit (BR-F05-46, section 11)", () => {
 	const CHARGES = [paid(NETFLIX, "2026-09-05"), paid(NETFLIX, "2026-10-05")];
-	const CHANGED = (over: Record<string, unknown> = {}) => ({
-		...subscriptionAnswer("netflix", { version: NETFLIX.version + 1 }),
-		changeDate: "2026-11-02",
-		chargesCreated: 0,
-		chargesUpdated: 0,
-		chargesDeleted: 0,
-		months: [],
-		...over,
-	});
+	const CHANGED = (over: Record<string, unknown> = {}) =>
+		changedAnswer(
+			subscriptionAnswer("netflix", { version: NETFLIX.version + 1 }),
+			over,
+		);
 	const patchPath = `/api/subscriptions/${NETFLIX.id}`;
 
 	/** Waits for the charges, since Save rests until they have loaded. */

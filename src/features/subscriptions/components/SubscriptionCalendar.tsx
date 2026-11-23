@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 
-import { Button } from "@/components/actions/Button";
 import { Skeleton } from "@/components/feedback/Skeleton";
 import { Section } from "@/components/surfaces/Section";
 import { useElementWidth } from "@/hooks/useElementWidth";
@@ -30,6 +29,7 @@ import {
 import type { Formats } from "../lib/labels";
 import { PANEL_TEXT } from "../lib/panel";
 import type { SubscriptionItem } from "../lib/types";
+import { ChargesRetry } from "./ChargesRetry";
 import { CalendarDays } from "./CalendarDays";
 import { CalendarGrid } from "./CalendarGrid";
 import { MonthRow } from "./MonthRow";
@@ -89,21 +89,11 @@ export function SubscriptionCalendar({
 	const body = () => {
 		if (failed) {
 			return (
-				<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-					<p
-						role="alert"
-						className="text-body text-ink-2"
-					>
-						{PANEL_TEXT.chargesFailed}
-					</p>
-					<Button
-						size="sm"
-						variant="row"
-						onPress={() => void charges.refetch()}
-					>
-						{PANEL_TEXT.retry}
-					</Button>
-				</div>
+				<ChargesRetry
+					message={PANEL_TEXT.chargesFailed}
+					retryLabel={PANEL_TEXT.retry}
+					onRetry={() => void charges.refetch()}
+				/>
 			);
 		}
 		if (isWide) {

@@ -3,20 +3,10 @@
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useState } from "react";
 
-import { Button } from "@/components/actions/Button";
-import { FormAlert } from "@/components/feedback/FormAlert";
-import { OfflineNote } from "@/components/feedback/OfflineNote";
 import { ChoiceGroup } from "@/components/forms/ChoiceGroup";
 import { DatePicker } from "@/components/forms/DatePicker";
-import { Dialog } from "@/components/surfaces/Dialog";
-import { useOnce } from "@/hooks/useOnce";
-import { useOnline } from "@/hooks/useOnline";
 import { formatDayHeader } from "@/lib/date-format";
-import { uuidV7 } from "@/lib/ids";
-import type { SubscriptionEditInput } from "@/lib/subscriptions/schemas";
-import { useChangeSubscription } from "../hooks/useChangeSubscription";
 import { useSubscriptionCharges } from "../hooks/useSubscriptionCharges";
-import { useWriteRefusal } from "../hooks/useWriteRefusal";
 import {
 	CANCEL_TEXT,
 	type CancelChoice,
@@ -26,11 +16,14 @@ import {
 	type CancelValues,
 	cancelView,
 } from "../lib/cancel";
+import { useEditWrite } from "../hooks/useEditWrite";
 import { fieldsOf } from "../lib/conflict";
 import { DIALOG_TEXT } from "../lib/dialog";
 import type { Confirmed } from "../lib/notices";
 import type { SubscriptionItem, SubscriptionsLocale } from "../lib/types";
 import { DialogConflict } from "./DialogConflict";
+import { WriteDialog } from "./WriteDialog";
+import { ChargesRetry } from "./ChargesRetry";
 import { ChargesStrip } from "./ChargesStrip";
 
 export type CancelDialogProps = {
@@ -63,11 +56,13 @@ export function CancelDialog({
 	// The Subscription as it was when the dialog opened, so a refetch while it is open never
 	// moves the version the write is made against (BR-F05-34).
 	const [opened] = useState(item);
-	const online = useOnline();
-	const change = useChangeSubscription();
 	const charges = useSubscriptionCharges(opened.id);
-	const refusal = useWriteRefusal(["endDate"]);
-	const sending = useOnce();
+	const { change, refusal, submit, conflictView } = useEditWrite({
+		kind: "cancel",
+		own: ["endDate"],
+		onClose,
+		onSaved,
+	});
 	const [start] = useState(() => cancelStart(opened, locale.today));
 	const [openedAt] = useState(() => new Date().toISOString());
 	const range = cancelRange(opened, locale.today);
@@ -106,172 +101,95 @@ export function CancelDialog({
 		await submit(body, opened);
 	};
 
-	/** Sends `body` against `against`: the Subscription as opened, or after a conflict as saved. */
-	const submit = async (
-		body: SubscriptionEditInput,
-		against: SubscriptionItem,
-	) => {
-		const request = sending.run(() =>
-			change.mutateAsync({
-				id: against.id,
-				version: against.version,
-				body,
-				idempotencyKey: uuidV7(),
-			}),
-		);
-		if (request === null) return;
-		refusal.reset();
-		try {
-			const saved = await request;
-			onSaved?.({ kind: "cancel", before: against, saved, sent: body });
-			onClose();
-		} catch (error) {
-			await refusal.refuse(error, { kind: "change", id: against.id, body });
-		}
-	};
-
 	const busy = change.isPending;
-	const canSave = online && ready;
 	const dated = values.choice === "later" || values.choice === "earlier";
 	const bounds = values.choice === "later" ? range.later : range.earlier;
 	return (
 		<>
-			<Dialog
+			<WriteDialog
 				title={CANCEL_TEXT.title(name)}
 				isOpen={isOpen}
-				// It only ever reports closing.
-				onOpenChange={onClose}
+				onClose={onClose}
 				isPending={busy}
-				footer={
-					<>
-						<span className="flex-1" />
-						<Button
-							variant="secondary"
-							isDisabled={busy}
-							onPress={onClose}
-							className="max-md:hidden"
-						>
-							{CANCEL_TEXT.keep(name)}
-						</Button>
-						<Button
-							variant={view.deleted > 0 ? "danger" : "primary"}
-							isDisabled={!canSave}
-							isPending={busy}
-							onPress={() => void form.handleSubmit()}
-						>
-							{view.deleted > 0 ?
-								CANCEL_TEXT.cancelAndDelete(view.deleted)
-							:	CANCEL_TEXT.cancel(name)}
-						</Button>
-					</>
+				failure={refusal.failure}
+				dismissLabel={CANCEL_TEXT.keep(name)}
+				confirmLabel={
+					view.deleted > 0 ?
+						CANCEL_TEXT.cancelAndDelete(view.deleted)
+					:	CANCEL_TEXT.cancel(name)
 				}
+				confirmVariant={view.deleted > 0 ? "danger" : "primary"}
+				isReady={ready}
+				onConfirm={() => void form.handleSubmit()}
 			>
-				<form
-					noValidate
-					aria-label={CANCEL_TEXT.title(name)}
-					className="flex flex-col gap-4"
-					onSubmit={(event) => {
-						event.preventDefault();
-						event.stopPropagation();
-						if (canSave) void form.handleSubmit();
-					}}
-				>
-					{!online && <OfflineNote>{DIALOG_TEXT.offline}</OfflineNote>}
-					{refusal.failure && <FormAlert>{refusal.failure}</FormAlert>}
-					<form.Field name="choice">
+				<form.Field name="choice">
+					{(field) => (
+						<ChoiceGroup
+							label={CANCEL_TEXT.question}
+							value={field.state.value}
+							onChange={(next) => {
+								field.handleChange(next as CancelChoice);
+								refusal.reset();
+							}}
+							options={options.map((option) => ({
+								value: option.value,
+								label: option.label,
+								...(option.description === undefined ?
+									{}
+								:	{ description: option.description }),
+							}))}
+							isDisabled={busy}
+						/>
+					)}
+				</form.Field>
+				{dated && (
+					<form.Field
+						name={values.choice === "later" ? "later" : "earlier"}
+					>
 						{(field) => (
-							<ChoiceGroup
-								label={CANCEL_TEXT.question}
+							<DatePicker
+								label={CANCEL_TEXT.dateLabel}
 								value={field.state.value}
-								onChange={(next) => {
-									field.handleChange(next as CancelChoice);
+								onChange={(date) => {
+									field.handleChange(date);
 									refusal.reset();
 								}}
-								options={options.map((option) => ({
-									value: option.value,
-									label: option.label,
-									...(option.description === undefined ?
-										{}
-									:	{ description: option.description }),
-								}))}
+								display={formatDayHeader(field.state.value, locale)}
+								today={locale.today}
+								minValue={bounds.min}
+								maxValue={bounds.max}
+								firstDayOfWeek={locale.weekStart}
+								error={refusal.fields.endDate}
 								isDisabled={busy}
 							/>
 						)}
 					</form.Field>
-					{dated && (
-						<form.Field
-							name={values.choice === "later" ? "later" : "earlier"}
-						>
-							{(field) => (
-								<DatePicker
-									label={CANCEL_TEXT.dateLabel}
-									value={field.state.value}
-									onChange={(date) => {
-										field.handleChange(date);
-										refusal.reset();
-									}}
-									display={formatDayHeader(
-										field.state.value,
-										locale,
-									)}
-									today={locale.today}
-									minValue={bounds.min}
-									maxValue={bounds.max}
-									firstDayOfWeek={locale.weekStart}
-									error={refusal.fields.endDate}
-									isDisabled={busy}
-								/>
-							)}
-						</form.Field>
-					)}
-					{view.deletionLine !== null && (
-						<p
-							role="status"
-							className="text-body text-ink font-semibold"
-						>
-							{view.deletionLine}
-						</p>
-					)}
-					{view.editedLine !== null && (
-						<p className="text-caption text-ink-2">{view.editedLine}</p>
-					)}
-					{failed ?
-						<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-							<p
-								role="alert"
-								className="text-body text-ink-2"
-							>
-								{DIALOG_TEXT.chargesFailed}
-							</p>
-							<Button
-								size="sm"
-								variant="row"
-								onPress={() => void charges.refetch()}
-							>
-								{DIALOG_TEXT.retry}
-							</Button>
-						</div>
-					:	ready && <ChargesStrip items={view.strip} />}
-					<p className="text-body text-ink-2">{view.endingLine}</p>
-				</form>
-			</Dialog>
-			{refusal.conflict && (
+				)}
+				{view.deletionLine !== null && (
+					<p
+						role="status"
+						className="text-body text-ink font-semibold"
+					>
+						{view.deletionLine}
+					</p>
+				)}
+				{view.editedLine !== null && (
+					<p className="text-caption text-ink-2">{view.editedLine}</p>
+				)}
+				{failed ?
+					<ChargesRetry
+						message={DIALOG_TEXT.chargesFailed}
+						retryLabel={DIALOG_TEXT.retry}
+						onRetry={() => void charges.refetch()}
+					/>
+				:	ready && <ChargesStrip items={view.strip} />}
+				<p className="text-body text-ink-2">{view.endingLine}</p>
+			</WriteDialog>
+			{conflictView && (
 				<DialogConflict
-					conflict={refusal.conflict}
+					{...conflictView}
 					origin={fieldsOf(opened)}
 					formats={locale}
-					isPending={change.isPending}
-					onClose={refusal.closeConflict}
-					onKeepMine={() =>
-						void submit(
-							refusal.conflict!.request.body as SubscriptionEditInput,
-							refusal.conflict!.current,
-						)
-					}
-					onKeepTheirs={() => {
-						void refusal.dropConflict();
-						onClose();
-					}}
 				/>
 			)}
 		</>

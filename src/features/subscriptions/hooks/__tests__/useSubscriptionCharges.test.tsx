@@ -1,16 +1,12 @@
 import { waitFor } from "@testing-library/react";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import { subscriptionKeys } from "../../lib/keys";
 import { charge, listPage, subscriptionItem } from "../../lib/__tests__/fixtures";
 import { useSubscriptionCharges } from "../useSubscriptionCharges";
-import { ok, refuse, renderHookInApp, route } from "./helpers";
+import { ok, refuse, renderHookInApp, route, testNetwork } from "./helpers";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 const NETFLIX = subscriptionItem("netflix").id;
 

@@ -7,6 +7,7 @@ import {
 	chargeTimeline,
 	detailLine,
 	expectedLines,
+	firstLines,
 	keysHint,
 	PANEL_TEXT,
 	paidSummary,
@@ -15,7 +16,6 @@ import {
 	READY_PANEL,
 	readyPanelActions,
 	readyStatusActions,
-	shownLines,
 	type StatusAction,
 	statusBox,
 	TIMELINE_PREVIEW,
@@ -892,19 +892,27 @@ describe("the timeline's preview (BR-F05-40)", () => {
 
 	test("shows 7 lines", () => {
 		expect(TIMELINE_PREVIEW).toBe(7);
-		expect(shownLines(lines(9), false)).toHaveLength(7);
+		expect(firstLines(lines(9))).toHaveLength(7);
 	});
 
-	test("shows all of them once asked", () => {
-		expect(shownLines(lines(9), true)).toHaveLength(9);
+	test("keeps the first lines in order", () => {
+		expect(firstLines(lines(9)).map((line) => line.key)).toEqual([
+			"0",
+			"1",
+			"2",
+			"3",
+			"4",
+			"5",
+			"6",
+		]);
 	});
 
 	test.each([0, 3, 7])("%i lines show as they are", (count) => {
-		expect(shownLines(lines(count), false)).toHaveLength(count);
+		expect(firstLines(lines(count))).toHaveLength(count);
 	});
 
 	test("8 lines show 7", () => {
-		expect(shownLines(lines(8), false)).toHaveLength(7);
+		expect(firstLines(lines(8))).toHaveLength(7);
 	});
 
 	test("the button reads Show all 9, then Show fewer", () => {

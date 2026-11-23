@@ -21,18 +21,8 @@ import {
 	wasHints,
 	yesterday,
 } from "../dialog";
-import type { SubscriptionsLocale } from "../types";
-import { subscriptionItem } from "./fixtures";
+import { subscriptionItem, IN_LOCALE as IN } from "./fixtures";
 
-/** The golden profile at the golden clock: 2 November 2026 in `en-IN`. */
-const IN: SubscriptionsLocale = {
-	currency: "INR",
-	numberLocale: "en-IN",
-	dateLocale: "en-IN",
-	today: "2026-11-02",
-	timezone: "Asia/Kolkata",
-	weekStart: "monday",
-};
 const NETFLIX = subscriptionItem("netflix");
 const ID = "0192f0c4-7a1e-7c3b-9d2a-000000000001";
 

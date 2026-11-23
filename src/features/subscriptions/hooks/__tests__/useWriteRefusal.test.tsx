@@ -1,18 +1,14 @@
 import { act } from "@testing-library/react";
 import { HttpResponse } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { apiFetch } from "@/lib/api/client";
 import type { ChangeRequest } from "../../lib/conflict";
 import { subscriptionAnswer } from "../../lib/__tests__/fixtures";
-import { refuse, renderHookInApp, route, testClient } from "./helpers";
+import { refuse, renderHookInApp, route, testClient, testNetwork } from "./helpers";
 import { useWriteRefusal } from "../useWriteRefusal";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 const PATH = "/api/subscriptions/x";
 

@@ -9,32 +9,23 @@ import {
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/actions/Button";
-import { FormAlert } from "@/components/feedback/FormAlert";
-import { OfflineNote } from "@/components/feedback/OfflineNote";
 import { AmountInput } from "@/components/forms/AmountInput";
 import { CategoryTiles } from "@/components/forms/CategoryTiles";
 import { DatePicker } from "@/components/forms/DatePicker";
 import { TextInput } from "@/components/forms/TextInput";
-import { Dialog } from "@/components/surfaces/Dialog";
 import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
-import { useOnce } from "@/hooks/useOnce";
-import { useOnline } from "@/hooks/useOnline";
 import { formatAmountInput, parseAmount } from "@/lib/amount";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { formatDayHeader } from "@/lib/date-format";
 import { uuidV7 } from "@/lib/ids";
 import type { ExpenseCategory } from "@/lib/subscriptions/model";
-import {
-	startDateWindow,
-	type SubscriptionEditInput,
-} from "@/lib/subscriptions/schemas";
+import { startDateWindow } from "@/lib/subscriptions/schemas";
 import type { PayeeItem } from "@/lib/transactions/answers";
 import { useBackfillDuplicates } from "../hooks/useBackfillDuplicates";
-import { useChangeSubscription } from "../hooks/useChangeSubscription";
+import { useEditWrite } from "../hooks/useEditWrite";
 import { useCreateSubscription } from "../hooks/useCreateSubscription";
 import { usePaidPayees } from "../hooks/usePaidPayees";
 import { useSubscriptionCharges } from "../hooks/useSubscriptionCharges";
-import { useWriteRefusal } from "../hooks/useWriteRefusal";
 import {
 	addView,
 	createBody,
@@ -57,7 +48,9 @@ import { payeeChoices } from "../lib/payees";
 import type { SubscriptionItem, SubscriptionsLocale } from "../lib/types";
 import type { SubscriptionField } from "../lib/write-errors";
 import { CadenceField } from "./CadenceField";
+import { ChargesRetry } from "./ChargesRetry";
 import { DialogConflict } from "./DialogConflict";
+import { WriteDialog } from "./WriteDialog";
 import { PastCharges } from "./PastCharges";
 import { PayeeField } from "./PayeeField";
 import { ScheduleLine } from "./ScheduleLine";
@@ -124,13 +117,9 @@ export function SubscriptionDialog({
 	// while it is open never moves the version a save is made against: another device's change
 	// then meets a 409, not a silent overwrite (BR-F05-34).
 	const [edited] = useState(item);
-	const online = useOnline();
 	const create = useCreateSubscription();
-	const change = useChangeSubscription();
 	const [id] = useState(() => uuidV7());
 	const [start] = useState(() => startValues(edited, locale));
-	const refusal = useWriteRefusal(OWN_FIELDS);
-	const { failure } = refusal;
 	const [noteOpen, setNoteOpen] = useState(start.note !== "");
 	// "Add a note" takes its own button away, so the note it opens takes focus, not the Name.
 	const [noteFocused, setNoteFocused] = useState(false);
@@ -140,9 +129,23 @@ export function SubscriptionDialog({
 	const [openedAt] = useState(() => new Date().toISOString());
 	const formRef = useRef<HTMLFormElement>(null);
 	const focusInvalid = useFocusFirstInvalid(formRef);
+	// A second press, Enter included, sends nothing while a write is out (D-575, D-615); Add
+	// and Edit share the one guard.
+	const {
+		change,
+		refusal,
+		sending,
+		submit: submitEdit,
+		conflictView,
+	} = useEditWrite({
+		kind: "edit",
+		own: OWN_FIELDS,
+		onClose,
+		onSaved,
+		onFieldsRefused: focusInvalid,
+	});
+	const { failure } = refusal;
 	const busy = create.isPending || change.isPending;
-	// A second press, Enter included, sends nothing while a write is out (D-575, D-615).
-	const sending = useOnce();
 
 	const form = useForm({
 		defaultValues: start,
@@ -275,315 +278,224 @@ export function SubscriptionDialog({
 		await submitEdit(next.body, edited);
 	};
 
-	/** Sends an Edit's `body` against `against`: the Subscription as opened, or after a conflict
-	 * as saved. */
-	const submitEdit = async (
-		body: SubscriptionEditInput,
-		against: SubscriptionItem,
-	) => {
-		const request = sending.run(() =>
-			change.mutateAsync({
-				id: against.id,
-				version: against.version,
-				body,
-				idempotencyKey: uuidV7(),
-			}),
-		);
-		if (request === null) return;
-		refusal.reset();
-		try {
-			const saved = await request;
-			onSaved?.({ kind: "edit", before: against, saved, sent: body });
-			onClose();
-		} catch (error) {
-			const outcome = await refusal.refuse(error, {
-				kind: "change",
-				id: against.id,
-				body,
-			});
-			if (outcome.kind === "fields") focusInvalid();
-		}
-	};
-
 	/** A field's message: the server's refusal of it, else the first of its own checks. */
 	const messageOf = (field: AnyFieldApi, key: DialogField) =>
 		refusal.fields[SERVER_OF[key]]
 		?? (field.state.meta.errors as (string | undefined)[])[0];
-	const canSave = online && chargesReady;
 	const title =
 		edited === null ? DIALOG_TEXT.addTitle : DIALOG_TEXT.editTitle(edited.name);
 	return (
 		<>
-			<Dialog
+			<WriteDialog
 				title={title}
 				isOpen={isOpen}
-				// It only ever reports closing.
-				onOpenChange={onClose}
+				onClose={onClose}
 				size="lg"
 				isPending={busy}
-				footer={
-					<>
-						<span className="flex-1" />
-						<Button
-							variant="secondary"
-							isDisabled={busy}
-							onPress={onClose}
-							className="max-md:hidden"
-						>
-							{DIALOG_TEXT.cancel}
-						</Button>
-						<Button
-							isDisabled={!canSave}
-							isPending={busy}
-							onPress={() => void form.handleSubmit()}
-						>
-							{adding ? DIALOG_TEXT.add : DIALOG_TEXT.save}
-						</Button>
-					</>
-				}
+				failure={failure}
+				dismissLabel={DIALOG_TEXT.cancel}
+				confirmLabel={adding ? DIALOG_TEXT.add : DIALOG_TEXT.save}
+				isReady={chargesReady}
+				onConfirm={() => void form.handleSubmit()}
+				formRef={formRef}
 			>
-				<form
-					ref={formRef}
-					noValidate
-					aria-label={title}
-					className="flex flex-col gap-4"
-					onSubmit={(event) => {
-						event.preventDefault();
-						event.stopPropagation();
-						if (canSave) void form.handleSubmit();
-					}}
-				>
-					{!online && <OfflineNote>{DIALOG_TEXT.offline}</OfflineNote>}
-					{failure && <FormAlert>{failure}</FormAlert>}
-					<form.Field name="name">
-						{(field) =>
-							adding ?
-								<PayeeField
-									autoFocus
-									value={field.state.value}
-									onChange={(text) => {
-										field.handleChange(text);
-										changed("name");
-									}}
-									choices={choices}
-									onChoose={choose}
-									hint={
-										filledNow ?
-											filledHint(
-												filledNow.payee,
-												filledNow,
-												locale,
-											)
-										:	undefined
+				<form.Field name="name">
+					{(field) =>
+						adding ?
+							<PayeeField
+								autoFocus
+								value={field.state.value}
+								onChange={(text) => {
+									field.handleChange(text);
+									changed("name");
+								}}
+								choices={choices}
+								onChoose={choose}
+								hint={
+									filledNow ?
+										filledHint(
+											filledNow.payee,
+											filledNow,
+											locale,
+										)
+									:	undefined
+								}
+								error={messageOf(field, "name")}
+								isDisabled={busy}
+							/>
+						:	<TextInput
+								label={DIALOG_TEXT.name}
+								placeholder={DIALOG_TEXT.namePlaceholder}
+								value={field.state.value}
+								onChange={(text) => {
+									field.handleChange(text);
+									changed("name");
+								}}
+								{...nameHint}
+								error={messageOf(field, "name")}
+								isDisabled={busy}
+							/>
+					}
+				</form.Field>
+				<div className="grid gap-3.5 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)]">
+					<form.Field name="amount">
+						{(field) => (
+							<AmountInput
+								label={DIALOG_TEXT.amount}
+								name="amount"
+								currency={locale.currency}
+								numberLocale={locale.numberLocale}
+								value={field.state.value}
+								onChange={(text) => {
+									field.handleChange(text);
+									changed("amount");
+								}}
+								onBlur={() => {
+									if (typed.ok) {
+										field.handleChange(
+											formatAmountInput(typed.minor, locale),
+										);
 									}
-									error={messageOf(field, "name")}
-									isDisabled={busy}
-								/>
-							:	<TextInput
-									label={DIALOG_TEXT.name}
-									placeholder={DIALOG_TEXT.namePlaceholder}
-									value={field.state.value}
-									onChange={(text) => {
-										field.handleChange(text);
-										changed("name");
-									}}
-									{...nameHint}
-									error={messageOf(field, "name")}
-									isDisabled={busy}
-								/>
-						}
-					</form.Field>
-					<div className="grid gap-3.5 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)]">
-						<form.Field name="amount">
-							{(field) => (
-								<AmountInput
-									label={DIALOG_TEXT.amount}
-									name="amount"
-									currency={locale.currency}
-									numberLocale={locale.numberLocale}
-									value={field.state.value}
-									onChange={(text) => {
-										field.handleChange(text);
-										changed("amount");
-									}}
-									onBlur={() => {
-										if (typed.ok) {
-											field.handleChange(
-												formatAmountInput(
-													typed.minor,
-													locale,
-												),
-											);
-										}
-									}}
-									{...(was.amount === undefined ?
-										{}
-									:	{ hint: was.amount })}
-									error={messageOf(field, "amount")}
-									isDisabled={busy}
-								/>
-							)}
-						</form.Field>
-						<form.Field name="every">
-							{(field) => (
-								<CadenceField
-									preset={values.preset}
-									onPresetChange={(preset) => {
-										form.setFieldValue("preset", preset);
-										changed("cadence");
-									}}
-									every={field.state.value}
-									onEveryChange={(every) => {
-										field.handleChange(every);
-										changed("cadence");
-									}}
-									unit={values.unit}
-									onUnitChange={(unit) => {
-										form.setFieldValue("unit", unit);
-										changed("cadence");
-									}}
-									error={messageOf(field, "cadence")}
-									was={was.cadence}
-									isDisabled={busy}
-								/>
-							)}
-						</form.Field>
-					</div>
-					<form.Field name="category">
-						{(field) => (
-							<CategoryTiles
-								tiles={EXPENSE_CATEGORIES}
-								value={field.state.value}
-								onChange={(next) => {
-									field.handleChange(next as ExpenseCategory);
-									changed("category");
 								}}
-								hint={was.category}
-								error={messageOf(field, "category")}
+								{...(was.amount === undefined ?
+									{}
+								:	{ hint: was.amount })}
+								error={messageOf(field, "amount")}
 								isDisabled={busy}
 							/>
 						)}
 					</form.Field>
-					<form.Field name="startDate">
+					<form.Field name="every">
 						{(field) => (
-							<DatePicker
-								label={DIALOG_TEXT.startedOn}
-								value={field.state.value}
-								onChange={(date) => {
-									field.handleChange(date);
-									changed("startDate");
+							<CadenceField
+								preset={values.preset}
+								onPresetChange={(preset) => {
+									form.setFieldValue("preset", preset);
+									changed("cadence");
 								}}
-								display={formatDayHeader(field.state.value, locale)}
-								today={locale.today}
-								minValue={min}
-								maxValue={max}
-								firstDayOfWeek={locale.weekStart}
-								hint={was.startDate ?? DIALOG_TEXT.startedHint}
-								error={messageOf(field, "startDate")}
+								every={field.state.value}
+								onEveryChange={(every) => {
+									field.handleChange(every);
+									changed("cadence");
+								}}
+								unit={values.unit}
+								onUnitChange={(unit) => {
+									form.setFieldValue("unit", unit);
+									changed("cadence");
+								}}
+								error={messageOf(field, "cadence")}
+								was={was.cadence}
 								isDisabled={busy}
 							/>
 						)}
 					</form.Field>
-					{schedule && <ScheduleLine summary={schedule} />}
-					{adding && add.past !== null && (
-						<PastCharges
-							choices={add.past}
-							value={values.past}
-							onChange={(past) => form.setFieldValue("past", past)}
-							duplicates={duplicateNote(
-								nameText,
-								duplicateDates,
-								locale,
-							)}
+				</div>
+				<form.Field name="category">
+					{(field) => (
+						<CategoryTiles
+							tiles={EXPENSE_CATEGORIES}
+							value={field.state.value}
+							onChange={(next) => {
+								field.handleChange(next as ExpenseCategory);
+								changed("category");
+							}}
+							hint={was.category}
+							error={messageOf(field, "category")}
 							isDisabled={busy}
 						/>
 					)}
-					<form.Field name="note">
-						{(field) =>
-							noteOpen ?
-								<TextInput
-									label={DIALOG_TEXT.note}
-									multiline
-									rows={2}
-									optional
-									autoFocus={noteFocused}
-									value={field.state.value}
-									onChange={(text) => {
-										field.handleChange(text.slice(0, NOTE_MAX));
-										changed("note");
-									}}
-									{...counterOf(field.state.value)}
-									error={messageOf(field, "note")}
-									isDisabled={busy}
-								/>
-							:	<Button
-									variant="row"
-									size="sm"
-									className="self-start"
-									onPress={() => {
-										setNoteOpen(true);
-										setNoteFocused(true);
-									}}
-								>
-									{DIALOG_TEXT.addNote}
-								</Button>
-						}
-					</form.Field>
-					{chargesFailed && (
-						<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-							<p
-								role="alert"
-								className="text-body text-ink-2"
-							>
-								{DIALOG_TEXT.chargesFailed}
-							</p>
-							<Button
-								size="sm"
+				</form.Field>
+				<form.Field name="startDate">
+					{(field) => (
+						<DatePicker
+							label={DIALOG_TEXT.startedOn}
+							value={field.state.value}
+							onChange={(date) => {
+								field.handleChange(date);
+								changed("startDate");
+							}}
+							display={formatDayHeader(field.state.value, locale)}
+							today={locale.today}
+							minValue={min}
+							maxValue={max}
+							firstDayOfWeek={locale.weekStart}
+							hint={was.startDate ?? DIALOG_TEXT.startedHint}
+							error={messageOf(field, "startDate")}
+							isDisabled={busy}
+						/>
+					)}
+				</form.Field>
+				{schedule && <ScheduleLine summary={schedule} />}
+				{adding && add.past !== null && (
+					<PastCharges
+						choices={add.past}
+						value={values.past}
+						onChange={(past) => form.setFieldValue("past", past)}
+						duplicates={duplicateNote(nameText, duplicateDates, locale)}
+						isDisabled={busy}
+					/>
+				)}
+				<form.Field name="note">
+					{(field) =>
+						noteOpen ?
+							<TextInput
+								label={DIALOG_TEXT.note}
+								multiline
+								rows={2}
+								optional
+								autoFocus={noteFocused}
+								value={field.state.value}
+								onChange={(text) => {
+									field.handleChange(text.slice(0, NOTE_MAX));
+									changed("note");
+								}}
+								{...counterOf(field.state.value)}
+								error={messageOf(field, "note")}
+								isDisabled={busy}
+							/>
+						:	<Button
 								variant="row"
-								onPress={() => void charges.refetch()}
+								size="sm"
+								className="self-start"
+								onPress={() => {
+									setNoteOpen(true);
+									setNoteFocused(true);
+								}}
 							>
-								{DIALOG_TEXT.retry}
+								{DIALOG_TEXT.addNote}
 							</Button>
-						</div>
-					)}
-					{view?.preview && (
-						<WhatChanges
-							view={view}
-							skipDouble={values.skipDouble}
-							onSkipDoubleChange={(ticked) =>
-								form.setFieldValue("skipDouble", ticked)
-							}
-							alsoPast={values.alsoPast}
-							onAlsoPastChange={(ticked) =>
-								form.setFieldValue("alsoPast", ticked)
-							}
-							isDisabled={busy}
-						/>
-					)}
-					{view?.noteOnly && (
-						<p className="text-caption text-ink-2">
-							{DIALOG_TEXT.noteOnly}
-						</p>
-					)}
-				</form>
-			</Dialog>
-			{edited !== null && refusal.conflict && (
+					}
+				</form.Field>
+				{chargesFailed && (
+					<ChargesRetry
+						message={DIALOG_TEXT.chargesFailed}
+						retryLabel={DIALOG_TEXT.retry}
+						onRetry={() => void charges.refetch()}
+					/>
+				)}
+				{view?.preview && (
+					<WhatChanges
+						view={view}
+						skipDouble={values.skipDouble}
+						onSkipDoubleChange={(ticked) =>
+							form.setFieldValue("skipDouble", ticked)
+						}
+						alsoPast={values.alsoPast}
+						onAlsoPastChange={(ticked) =>
+							form.setFieldValue("alsoPast", ticked)
+						}
+						isDisabled={busy}
+					/>
+				)}
+				{view?.noteOnly && (
+					<p className="text-caption text-ink-2">{DIALOG_TEXT.noteOnly}</p>
+				)}
+			</WriteDialog>
+			{edited !== null && conflictView && (
 				<DialogConflict
-					conflict={refusal.conflict}
+					{...conflictView}
 					origin={fieldsOf(edited)}
 					formats={locale}
-					isPending={change.isPending}
-					onClose={refusal.closeConflict}
-					onKeepMine={() =>
-						void submitEdit(
-							refusal.conflict!.request.body as SubscriptionEditInput,
-							refusal.conflict!.current,
-						)
-					}
-					onKeepTheirs={() => {
-						void refusal.dropConflict();
-						onClose();
-					}}
 				/>
 			)}
 		</>

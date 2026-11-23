@@ -1,10 +1,9 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { AppProviders } from "@/components/app/AppProviders";
-import { ok, route, testClient } from "../../hooks/__tests__/helpers";
+import { ok, route, testClient, testNetwork } from "../../hooks/__tests__/helpers";
 import { charge, listPage, subscriptionList } from "../../lib/__tests__/fixtures";
 import {
 	SubscriptionPanel,
@@ -12,10 +11,7 @@ import {
 } from "../SubscriptionPanel";
 import { FORMATS } from "./rows";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 const LIST = subscriptionList();
 const [NETFLIX, CULT] = LIST.items;

@@ -1,16 +1,19 @@
 import { waitFor } from "@testing-library/react";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import type { PayeeItem, PayeesAnswer } from "@/lib/transactions/answers";
 import { PAYEES_KEY } from "../../lib/payees";
 import { usePaidPayees } from "../usePaidPayees";
-import { ok, refuse, renderHookInApp, route, testClient } from "./helpers";
+import {
+	ok,
+	refuse,
+	renderHookInApp,
+	route,
+	testClient,
+	testNetwork,
+} from "./helpers";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 const payee = (name: string, over: Partial<PayeeItem> = {}): PayeeItem => ({
 	payee: name,

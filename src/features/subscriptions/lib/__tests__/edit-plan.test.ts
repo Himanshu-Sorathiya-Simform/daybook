@@ -3,18 +3,14 @@ import { describe, expect, test } from "vitest";
 import { GOLDEN_SUBSCRIPTIONS } from "../../../../../seed/golden";
 import { type DialogValues, fieldMessages, startValues } from "../dialog";
 import { alsoPastTitle, editView, periodWords, valueSentence } from "../edit-plan";
-import type { SubscriptionItem, SubscriptionsLocale } from "../types";
-import { charge, subscriptionItem, subscriptionList } from "./fixtures";
+import type { SubscriptionItem } from "../types";
+import {
+	charge,
+	subscriptionItem,
+	subscriptionList,
+	IN_LOCALE as IN,
+} from "./fixtures";
 
-/** The golden profile at the golden clock: 2 November 2026 in `en-IN`. */
-const IN: SubscriptionsLocale = {
-	currency: "INR",
-	numberLocale: "en-IN",
-	dateLocale: "en-IN",
-	today: "2026-11-02",
-	timezone: "Asia/Kolkata",
-	weekStart: "monday",
-};
 const ITEMS = subscriptionList().items;
 const NETFLIX = subscriptionItem("netflix");
 const SUNRISE = subscriptionItem("sunrise");

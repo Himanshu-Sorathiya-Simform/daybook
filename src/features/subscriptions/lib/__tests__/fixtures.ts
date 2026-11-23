@@ -4,10 +4,12 @@ import type { Transaction } from "@/lib/transactions/model";
 import { type Month, shiftMonth } from "@/lib/budgets/months";
 import type {
 	SubscriptionAnswer,
+	SubscriptionChanged,
 	SubscriptionItem,
 	SubscriptionList,
 	SubscriptionMonthRow,
 	SubscriptionMonthsAnswer,
+	SubscriptionsLocale,
 } from "../types";
 
 export type GoldenName = keyof typeof GOLDEN_SUBSCRIPTIONS;
@@ -87,6 +89,33 @@ export function subscriptionAnswer(
 ): SubscriptionAnswer {
 	return { ...subscriptionItem(name), currency: "INR", ...changes };
 }
+
+/** A change's answer (BR-F05-08) on 2 November: `answer` with no charges created, repriced
+ * or deleted, and no month changed, unless `changes` say otherwise. */
+export function changedAnswer(
+	answer: SubscriptionAnswer,
+	changes: Partial<SubscriptionChanged> = {},
+): SubscriptionChanged {
+	return {
+		...answer,
+		changeDate: "2026-11-02",
+		chargesCreated: 0,
+		chargesUpdated: 0,
+		chargesDeleted: 0,
+		months: [],
+		...changes,
+	};
+}
+
+/** The golden profile at the golden clock: 2 November 2026 in `en-IN`. */
+export const IN_LOCALE: SubscriptionsLocale = {
+	currency: "INR",
+	numberLocale: "en-IN",
+	dateLocale: "en-IN",
+	today: "2026-11-02",
+	timezone: "Asia/Kolkata",
+	weekStart: "monday",
+};
 
 let next = 1;
 

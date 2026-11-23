@@ -1,32 +1,21 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { renderInApp } from "@/components/app/__tests__/helpers";
 import { isUuidV7 } from "@/lib/ids";
-import { ok, refuse, route } from "../../hooks/__tests__/helpers";
-import { subscriptionAnswer, subscriptionItem } from "../../lib/__tests__/fixtures";
-import type { SubscriptionItem, SubscriptionsLocale } from "../../lib/types";
+import { ok, refuse, route, testNetwork } from "../../hooks/__tests__/helpers";
+import {
+	subscriptionAnswer,
+	subscriptionItem,
+	IN_LOCALE as IN,
+} from "../../lib/__tests__/fixtures";
+import type { SubscriptionItem } from "../../lib/types";
 import { DeleteDialog, type DeleteDialogProps } from "../DeleteDialog";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => {
-	network.resetHandlers();
-	vi.restoreAllMocks();
-});
-afterAll(() => network.close());
+const network = testNetwork({ restoreMocks: true });
 
-const IN: SubscriptionsLocale = {
-	currency: "INR",
-	numberLocale: "en-IN",
-	dateLocale: "en-IN",
-	today: "2026-11-02",
-	timezone: "Asia/Kolkata",
-	weekStart: "monday",
-};
 const NETFLIX = subscriptionItem("netflix");
 const PATH = `/api/subscriptions/${NETFLIX.id}`;
 const DELETED = {

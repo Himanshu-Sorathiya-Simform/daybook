@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/actions/Button";
 import { cn } from "@/lib/cn";
-import { shownLines, type TimelineLine, timelineToggle } from "../lib/panel";
+import { firstLines, type TimelineLine, timelineToggle } from "../lib/panel";
 
 export type ChargeTimelineProps = {
 	lines: readonly TimelineLine[];
@@ -33,7 +33,7 @@ export function ChargeTimeline({
 	return (
 		<div className={cn("flex flex-col", className)}>
 			<ol className="border-line border-t">
-				{shownLines(lines, showAll).map((line) => (
+				{(showAll ? lines : firstLines(lines)).map((line) => (
 					<li
 						key={line.key}
 						className={cn(

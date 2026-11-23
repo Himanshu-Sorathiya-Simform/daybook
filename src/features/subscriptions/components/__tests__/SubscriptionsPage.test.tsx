@@ -20,16 +20,22 @@ import { AppProviders } from "@/components/app/AppProviders";
 import { GOLDEN_BLOCK, meFor } from "@/components/app/__tests__/helpers";
 import { Toaster } from "@/components/feedback/Toaster";
 import { InRouter, routerFake } from "@/components/app/__tests__/router";
-import { resetUnsavedChoices } from "@/hooks/useStoredChoice";
 import {
 	ok,
 	refuse,
 	route,
 	testClient,
 	urlHarness,
+	media,
+	resetPageTest,
 } from "../../hooks/__tests__/helpers";
 import { subscriptionKeys } from "../../lib/keys";
-import type { SubscriptionList, SubscriptionsLocale } from "../../lib/types";
+import type {
+	SubscriptionChanged,
+	SubscriptionItem,
+	SubscriptionList,
+	SubscriptionsLocale,
+} from "../../lib/types";
 import { VIEW_KEY } from "../../lib/view";
 import type { Transaction } from "@/lib/transactions/model";
 import {
@@ -39,52 +45,55 @@ import {
 	monthsAnswer,
 	subscriptionItem,
 	subscriptionList,
+	changedAnswer,
+	IN_LOCALE,
 } from "../../lib/__tests__/fixtures";
-import { SubscriptionsPage } from "../SubscriptionsPage";
+import {
+	SubscriptionsPage,
+	type SubscriptionsPageProps,
+} from "../SubscriptionsPage";
 
 const network = setupServer();
 beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
 beforeEach(() => window.localStorage.clear());
 afterEach(() => {
-	for (const name of [VIEW_KEY, "daybook_wide"]) {
-		document.cookie = `${name}=; Max-Age=0; Path=/`;
-	}
 	// Sonner keeps its toasts in a module, so one test's toast would reach the next.
 	toast.dismiss();
-	network.resetHandlers();
-	onlineManager.setOnline(true);
-	vi.useRealTimers();
-	vi.restoreAllMocks();
-	resetUnsavedChoices();
-	window.localStorage.clear();
-	// @ts-expect-error jsdom has none; some tests set one.
-	delete window.matchMedia;
+	resetPageTest(network, VIEW_KEY);
 });
 afterAll(() => network.close());
 
-/** A window's width: jsdom has no `matchMedia`, which the page reads as a narrow window.
- * `wide` is 768 px up, where Table is offered; `docked` is 1180 px up, where the panel sits
- * beside the list and Up and Down select. */
-function media({ wide = false, docked = false }) {
-	window.matchMedia = vi.fn((query: string) => ({
-		matches:
-			(wide && query === "(min-width: 48rem)")
-			|| (docked && query === "(min-width: 1180px)"),
-		media: query,
-		addEventListener: () => {},
-		removeEventListener: () => {},
-	})) as unknown as typeof window.matchMedia;
-}
-
-// The golden profile on the golden clock's day (TST-3).
+// The golden profile on the golden clock's day (TST-3), with Hindi's Latin digits.
 const IN: SubscriptionsLocale = {
-	today: "2026-11-02",
-	currency: "INR",
+	...IN_LOCALE,
 	numberLocale: "hi-IN-u-nu-latn",
-	dateLocale: "en-IN",
-	timezone: "Asia/Kolkata",
-	weekStart: "monday",
 };
+
+/** The page as the server render leaves it: in its router and providers, the golden list
+ * already in the cache. */
+function seededPage(props: Partial<SubscriptionsPageProps> = {}) {
+	const queryClient = testClient();
+	queryClient.setQueryData(subscriptionKeys.list(), subscriptionList());
+	const { Url } = urlHarness("");
+	return (
+		<InRouter
+			pathname="/subscriptions"
+			router={routerFake()}
+		>
+			<Url>
+				<AppProviders
+					navigate={vi.fn()}
+					queryClient={queryClient}
+				>
+					<SubscriptionsPage
+						locale={IN}
+						{...props}
+					/>
+				</AppProviders>
+			</Url>
+		</InRouter>
+	);
+}
 
 /** Serves `/api/subscriptions` with `answer` and renders the page. With `seed`, the list is in
  * the cache as the server render leaves it. */
@@ -1549,24 +1558,7 @@ describe("the calendar in the page (BR-F05-38, BR-F05-45, D-626)", () => {
 
 	test("the server's own draw is the list, never the calendar", () => {
 		window.localStorage.setItem(VIEW_KEY, "calendar");
-		const queryClient = testClient();
-		queryClient.setQueryData(subscriptionKeys.list(), golden);
-		const { Url } = urlHarness("");
-		const html = renderToString(
-			<InRouter
-				pathname="/subscriptions"
-				router={routerFake()}
-			>
-				<Url>
-					<AppProviders
-						navigate={vi.fn()}
-						queryClient={queryClient}
-					>
-						<SubscriptionsPage locale={IN} />
-					</AppProviders>
-				</Url>
-			</InRouter>,
-		);
+		const html = renderToString(seededPage());
 		expect(html).not.toContain("November 2026");
 		expect(html).toContain("Within 7 days");
 	});
@@ -1815,24 +1807,7 @@ describe("the table in the page (BR-F05-39, BR-F05-45, BR-F05-50, D-570, D-627)"
 
 	test("the server's own draw of a remembered Table is the list", () => {
 		window.localStorage.setItem(VIEW_KEY, "table");
-		const queryClient = testClient();
-		queryClient.setQueryData(subscriptionKeys.list(), golden);
-		const { Url } = urlHarness("");
-		const html = renderToString(
-			<InRouter
-				pathname="/subscriptions"
-				router={routerFake()}
-			>
-				<Url>
-					<AppProviders
-						navigate={vi.fn()}
-						queryClient={queryClient}
-					>
-						<SubscriptionsPage locale={IN} />
-					</AppProviders>
-				</Url>
-			</InRouter>,
-		);
+		const html = renderToString(seededPage());
 		expect(html).toContain("Within 7 days");
 		expect(html).not.toContain("Ended Subscriptions aren");
 	});
@@ -1845,27 +1820,7 @@ describe("what the server draws from the device's cookies (D-629)", () => {
 		initialView?: "list" | "calendar" | "table";
 		initialWide?: boolean;
 	}) {
-		const queryClient = testClient();
-		queryClient.setQueryData(subscriptionKeys.list(), golden);
-		const { Url } = urlHarness("");
-		return renderToString(
-			<InRouter
-				pathname="/subscriptions"
-				router={routerFake()}
-			>
-				<Url>
-					<AppProviders
-						navigate={vi.fn()}
-						queryClient={queryClient}
-					>
-						<SubscriptionsPage
-							locale={IN}
-							{...props}
-						/>
-					</AppProviders>
-				</Url>
-			</InRouter>,
-		);
+		return renderToString(seededPage(props));
 	}
 	const TABLE = "Select a column heading to sort";
 	const LIST = "Within 7 days";
@@ -1953,28 +1908,7 @@ describe("what the server draws from the device's cookies (D-629)", () => {
 	// AC-F05-42
 	test("the browser keeps the server's view where storage holds none", () => {
 		media({ wide: true, docked: true });
-		const queryClient = testClient();
-		queryClient.setQueryData(subscriptionKeys.list(), golden);
-		const { Url } = urlHarness("");
-		render(
-			<InRouter
-				pathname="/subscriptions"
-				router={routerFake()}
-			>
-				<Url>
-					<AppProviders
-						navigate={vi.fn()}
-						queryClient={queryClient}
-					>
-						<SubscriptionsPage
-							locale={IN}
-							initialView="table"
-							initialWide
-						/>
-					</AppProviders>
-				</Url>
-			</InRouter>,
-		);
+		render(seededPage({ initialView: "table", initialWide: true }));
 		expect(screen.getByRole("radio", { name: "Table" })).toBeChecked();
 		expect(
 			screen.getByRole("grid", { name: /^Ended Subscriptions/ }),
@@ -1984,28 +1918,7 @@ describe("what the server draws from the device's cookies (D-629)", () => {
 	test("storage outranks the cookie where it holds a choice", () => {
 		media({ wide: true, docked: true });
 		window.localStorage.setItem(VIEW_KEY, "list");
-		const queryClient = testClient();
-		queryClient.setQueryData(subscriptionKeys.list(), golden);
-		const { Url } = urlHarness("");
-		render(
-			<InRouter
-				pathname="/subscriptions"
-				router={routerFake()}
-			>
-				<Url>
-					<AppProviders
-						navigate={vi.fn()}
-						queryClient={queryClient}
-					>
-						<SubscriptionsPage
-							locale={IN}
-							initialView="table"
-							initialWide
-						/>
-					</AppProviders>
-				</Url>
-			</InRouter>,
-		);
+		render(seededPage({ initialView: "table", initialWide: true }));
 		expect(screen.getByRole("radio", { name: "List" })).toBeChecked();
 	});
 
@@ -2073,16 +1986,10 @@ describe("Add and Edit in the page (BR-F05-21, BR-F05-24, BR-F05-40, BR-F05-45)"
 			ok({ items: [], currency: "INR" }),
 		);
 	}
-	const changed = (item: typeof netflix, over: Record<string, unknown> = {}) => ({
-		...item,
-		currency: "INR",
-		changeDate: "2026-11-02",
-		chargesCreated: 0,
-		chargesUpdated: 0,
-		chargesDeleted: 0,
-		months: [],
-		...over,
-	});
+	const changed = (
+		item: SubscriptionItem,
+		over: Partial<SubscriptionChanged> = {},
+	) => changedAnswer({ ...item, currency: "INR" }, over);
 
 	describe("reaching the dialog", () => {
 		// AC-F05-46
@@ -2269,8 +2176,8 @@ describe("Add and Edit in the page (BR-F05-21, BR-F05-24, BR-F05-40, BR-F05-45)"
 			);
 		}
 
-		// AC-F05-46
-		test("docked, the saved Subscription is selected though nothing was", async () => {
+		/** Docked, edits Netflix to ₹799.00 from its row's menu, the server saving it. */
+		async function editNetflixTo799() {
 			media({ wide: true, docked: true });
 			dialogReads();
 			const patches = route(
@@ -2291,6 +2198,12 @@ describe("Add and Edit in the page (BR-F05-21, BR-F05-24, BR-F05-40, BR-F05-45)"
 			);
 			await user.click(screen.getByRole("menuitem", { name: "Edit" }));
 			await saveEdit(user, "Netflix", "799");
+			return { user, patches };
+		}
+
+		// AC-F05-46
+		test("docked, the saved Subscription is selected though nothing was", async () => {
+			const { patches } = await editNetflixTo799();
 			expect(patches).toHaveLength(1);
 			expect(
 				await screen.findByRole("heading", { name: "Netflix" }),
@@ -2300,26 +2213,7 @@ describe("Add and Edit in the page (BR-F05-21, BR-F05-24, BR-F05-40, BR-F05-45)"
 
 		// AC-F05-53
 		test("an Edit's notice shows in the panel and its Undo puts the old amount back", async () => {
-			media({ wide: true, docked: true });
-			dialogReads();
-			const patches = route(
-				network,
-				"patch",
-				`/api/subscriptions/${netflix!.id}`,
-				() =>
-					ok(
-						changed(netflix!, {
-							amountMinor: 79900,
-							version: netflix!.version + 1,
-						}),
-					),
-			);
-			const { user } = renderPage({ seed: golden });
-			await user.click(
-				screen.getByRole("button", { name: "Actions for Netflix" }),
-			);
-			await user.click(screen.getByRole("menuitem", { name: "Edit" }));
-			await saveEdit(user, "Netflix", "799");
+			const { user, patches } = await editNetflixTo799();
 			const text = "Netflix saved. Next charge Thu, 5 Nov.";
 			const notice = (await screen.findByText(text)).closest("[role=status]")!;
 			expect(
@@ -2466,17 +2360,40 @@ describe("Cancel, Resume, Pause, Delete and Skip in the page (BR-F05-22, BR-F05-
 			),
 		};
 	};
-	const changed = (over: Record<string, unknown> = {}) => ({
-		...netflix,
-		currency: "INR",
-		changeDate: "2026-11-02",
-		chargesCreated: 0,
-		chargesUpdated: 0,
-		chargesDeleted: 0,
-		months: [],
-		...over,
-	});
+	const changed = (over: Partial<SubscriptionChanged> = {}) =>
+		changedAnswer({ ...netflix!, currency: "INR" }, over);
 	const patchPath = `/api/subscriptions/${netflix!.id}`;
+	/** Deletes Netflix from its panel; the server confirms, and its list reads without Netflix
+	 * from then on, calling `onRead` on each read. */
+	async function deleteNetflixFromPanel(onRead: () => void = () => {}) {
+		const deletes = route(network, "delete", patchPath, () =>
+			ok({
+				changeDate: "2026-11-02",
+				chargesCreated: 0,
+				chargesKept: 2,
+				chargesDeleted: 0,
+				months: [],
+			}),
+		);
+		const { user } = renderPage({
+			seed: golden,
+			answer: () => {
+				onRead();
+				const rest = subscriptionList();
+				return ok({
+					...rest,
+					items: rest.items.filter((item) => item.id !== netflix!.id),
+				});
+			},
+		});
+		await user.click(rowNamed("Netflix"));
+		await screen.findByRole("heading", { name: "Netflix" });
+		await user.click(within(panel()!).getByRole("button", { name: "Delete" }));
+		await user.click(
+			await screen.findByRole("button", { name: "Delete Netflix" }),
+		);
+		return { user, deletes };
+	}
 	const pickMenuItem = async (
 		user: ReturnType<typeof userEvent.setup>,
 		of: string,
@@ -2818,34 +2735,9 @@ describe("Cancel, Resume, Pause, Delete and Skip in the page (BR-F05-22, BR-F05-
 		test("Delete removes the Subscription and clears the selection back to the summary", async () => {
 			wide();
 			let reads = 0;
-			const deletes = route(network, "delete", patchPath, () =>
-				ok({
-					changeDate: "2026-11-02",
-					chargesCreated: 0,
-					chargesKept: 2,
-					chargesDeleted: 0,
-					months: [],
-				}),
-			);
-			const { user } = renderPage({
-				seed: golden,
-				answer: () => {
-					reads += 1;
-					const rest = subscriptionList();
-					return ok({
-						...rest,
-						items: rest.items.filter((item) => item.id !== netflix!.id),
-					});
-				},
+			const { deletes } = await deleteNetflixFromPanel(() => {
+				reads += 1;
 			});
-			await user.click(rowNamed("Netflix"));
-			await screen.findByRole("heading", { name: "Netflix" });
-			await user.click(
-				within(panel()!).getByRole("button", { name: "Delete" }),
-			);
-			await user.click(
-				await screen.findByRole("button", { name: "Delete Netflix" }),
-			);
 			await waitFor(() => expect(deletes).toHaveLength(1));
 			await waitFor(() =>
 				expect(screen.queryByRole("row", { name: /^Netflix/ })).toBeNull(),
@@ -3146,33 +3038,7 @@ describe("Cancel, Resume, Pause, Delete and Skip in the page (BR-F05-22, BR-F05-
 		// AC-F05-53
 		test("a delete's notice is above the list with Dismiss alone, and the selection is cleared", async () => {
 			wide();
-			route(network, "delete", patchPath, () =>
-				ok({
-					changeDate: "2026-11-02",
-					chargesCreated: 0,
-					chargesKept: 2,
-					chargesDeleted: 0,
-					months: [],
-				}),
-			);
-			const { user } = renderPage({
-				seed: golden,
-				answer: () => {
-					const rest = subscriptionList();
-					return ok({
-						...rest,
-						items: rest.items.filter((item) => item.id !== netflix!.id),
-					});
-				},
-			});
-			await user.click(rowNamed("Netflix"));
-			await screen.findByRole("heading", { name: "Netflix" });
-			await user.click(
-				within(panel()!).getByRole("button", { name: "Delete" }),
-			);
-			await user.click(
-				await screen.findByRole("button", { name: "Delete Netflix" }),
-			);
+			const { user } = await deleteNetflixFromPanel();
 			await screen.findByText(
 				"Netflix deleted. Its charges stay in Transactions.",
 			);

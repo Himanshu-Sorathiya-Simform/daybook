@@ -21,7 +21,7 @@ export function pageShape(
 	list: { items: readonly unknown[] } | undefined,
 	loadFailed: boolean,
 ): { failed: boolean; isEmpty: boolean; showPanel: boolean } {
-	const isEmpty = list !== undefined && list.items.length === 0;
+	const isEmpty = list?.items.length === 0;
 	return {
 		failed: list === undefined && loadFailed,
 		isEmpty,

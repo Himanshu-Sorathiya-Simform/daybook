@@ -1,15 +1,11 @@
 import { waitFor } from "@testing-library/react";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import { subscriptionKeys } from "../../lib/keys";
 import { useSubscriptionMonths } from "../useSubscriptionMonths";
-import { ok, refuse, renderHookInApp, route } from "./helpers";
+import { ok, refuse, renderHookInApp, route, testNetwork } from "./helpers";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 // AC-F05-24: section 5's figures for October to December.
 const MONTHS = {

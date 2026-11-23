@@ -1,8 +1,7 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { AppProviders } from "@/components/app/AppProviders";
 import {
@@ -11,16 +10,14 @@ import {
 	route,
 	type Seen,
 	testClient,
+	testNetwork,
 } from "../../hooks/__tests__/helpers";
 import type { SubscriptionItem } from "../../lib/types";
 import { charge, listPage, subscriptionItem } from "../../lib/__tests__/fixtures";
 import { PanelDetail } from "../PanelDetail";
 import { FORMATS } from "./rows";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 const IN = { ...FORMATS };
 const NETFLIX = subscriptionItem("netflix");

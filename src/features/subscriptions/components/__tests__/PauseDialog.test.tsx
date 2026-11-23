@@ -1,43 +1,31 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { renderInApp } from "@/components/app/__tests__/helpers";
 import { isUuidV7 } from "@/lib/ids";
-import { ok, refuse, route } from "../../hooks/__tests__/helpers";
-import { subscriptionAnswer, subscriptionItem } from "../../lib/__tests__/fixtures";
-import type { SubscriptionItem, SubscriptionsLocale } from "../../lib/types";
+import { ok, refuse, route, testNetwork } from "../../hooks/__tests__/helpers";
+import {
+	subscriptionAnswer,
+	subscriptionItem,
+	IN_LOCALE as IN,
+	changedAnswer,
+} from "../../lib/__tests__/fixtures";
+import type { SubscriptionItem } from "../../lib/types";
 import { PauseDialog, type PauseDialogProps } from "../PauseDialog";
+import {
+	conflictTests,
+	offlineAndClosingTests,
+	type WriteDialogHarness,
+} from "./writeDialogSuites";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => {
-	network.resetHandlers();
-	vi.restoreAllMocks();
-});
-afterAll(() => network.close());
+const network = testNetwork({ restoreMocks: true });
 
-/** The golden profile at the golden clock: 2 November 2026 in `en-IN`. */
-const IN: SubscriptionsLocale = {
-	currency: "INR",
-	numberLocale: "en-IN",
-	dateLocale: "en-IN",
-	today: "2026-11-02",
-	timezone: "Asia/Kolkata",
-	weekStart: "monday",
-};
 const NETFLIX = subscriptionItem("netflix");
 const PATCH = `/api/subscriptions/${NETFLIX.id}`;
-const SAVED = () => ({
-	...subscriptionAnswer("netflix", { version: NETFLIX.version + 1 }),
-	changeDate: "2026-11-02",
-	chargesCreated: 0,
-	chargesUpdated: 0,
-	chargesDeleted: 0,
-	months: [],
-});
+const SAVED = () =>
+	changedAnswer(subscriptionAnswer("netflix", { version: NETFLIX.version + 1 }));
 const FUTURE = subscriptionItem("netflix", {
 	status: "paused",
 	pause: { from: "2026-11-05", until: "2027-01-05" },
@@ -71,8 +59,16 @@ function setup(
 
 const button = (name: string | RegExp) => screen.getByRole("button", { name });
 const choice = (name: string | RegExp) => screen.getByRole("radio", { name });
-const resting = (name: string | RegExp) =>
-	expect(button(name)).toHaveAttribute("aria-disabled", "true");
+
+const HARNESS: WriteDialogHarness = {
+	network,
+	patch: PATCH,
+	kind: "pause",
+	confirm: "Pause until 5 Jan 2027",
+	dismiss: "Not now",
+	setup: () => setup(),
+	press: (user) => user.click(button("Pause until 5 Jan 2027")),
+};
 
 describe("Pause Netflix (BR-F05-43)", () => {
 	// AC-F05-49
@@ -308,103 +304,7 @@ describe("a refused Pause keeps the dialog open (section 8)", () => {
 		).toBeVisible();
 	});
 
-	// AC-F05-54
-	test("a 409 opens the conflict view over the dialog, which stays", async () => {
-		route(network, "patch", PATCH, () =>
-			refuse(409, "version_conflict", {
-				message: "m",
-				details: {
-					current: subscriptionAnswer("netflix", {
-						version: 9,
-						amountMinor: 79900,
-					}),
-				},
-			}),
-		);
-		const { user, onSaved, onClose } = setup();
-		await user.click(button("Pause until 5 Jan 2027"));
-		expect(
-			await screen.findByRole("dialog", {
-				name: "This Subscription changed on another device",
-			}),
-		).toBeVisible();
-		expect(screen.getByRole("button", { name: "Keep mine" })).toBeVisible();
-		expect(screen.getByRole("button", { name: "Keep theirs" })).toBeVisible();
-		// The saved amount shows on both sides: the change does not touch it, so it does not differ.
-		expect(screen.getAllByText("₹799.00")).toHaveLength(2);
-		expect(
-			screen.getByText(
-				"Keep mine saves your change to the Subscription as it is saved now.",
-			),
-		).toBeVisible();
-		expect(onClose).not.toHaveBeenCalled();
-		expect(onSaved).not.toHaveBeenCalled();
-	});
-
-	// AC-F05-54
-	test("Keep mine sends the same change again at the saved version, with its first change time", async () => {
-		let at = 0;
-		const patches = route(network, "patch", PATCH, () =>
-			++at === 1 ?
-				refuse(409, "version_conflict", {
-					message: "m",
-					details: {
-						current: subscriptionAnswer("netflix", { version: 9 }),
-					},
-				})
-			:	ok(SAVED()),
-		);
-		const { user, onSaved, onClose } = setup();
-		await user.click(button("Pause until 5 Jan 2027"));
-		await user.click(await screen.findByRole("button", { name: "Keep mine" }));
-		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
-		expect(patches).toHaveLength(2);
-		expect(patches[1]?.headers.get("if-match")).toBe('"9"');
-		expect(patches[1]?.body).toEqual(patches[0]?.body);
-		expect(patches[1]?.headers.get("idempotency-key")).not.toBe(
-			patches[0]?.headers.get("idempotency-key"),
-		);
-		// What Undo puts back is the Subscription as it was saved when Keep mine sent the change.
-		expect(onSaved).toHaveBeenCalledWith(
-			expect.objectContaining({
-				kind: "pause",
-				before: expect.objectContaining({ version: 9 }),
-			}),
-		);
-	});
-
-	// AC-F05-54
-	test("Keep theirs sends nothing and closes the dialog", async () => {
-		const patches = route(network, "patch", PATCH, () =>
-			refuse(409, "version_conflict", {
-				message: "m",
-				details: { current: subscriptionAnswer("netflix", { version: 9 }) },
-			}),
-		);
-		const { user, onSaved, onClose } = setup();
-		await user.click(button("Pause until 5 Jan 2027"));
-		await user.click(await screen.findByRole("button", { name: "Keep theirs" }));
-		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
-		expect(patches).toHaveLength(1);
-		expect(onSaved).not.toHaveBeenCalled();
-	});
-
-	test("closing the view without a choice goes back to the dialog", async () => {
-		route(network, "patch", PATCH, () =>
-			refuse(409, "version_conflict", {
-				message: "m",
-				details: { current: subscriptionAnswer("netflix", { version: 9 }) },
-			}),
-		);
-		const { user, onClose } = setup();
-		await user.click(button("Pause until 5 Jan 2027"));
-		await screen.findByRole("button", { name: "Keep mine" });
-		await user.keyboard("{Escape}");
-		await waitFor(() =>
-			expect(screen.queryByRole("button", { name: "Keep mine" })).toBeNull(),
-		);
-		expect(onClose).not.toHaveBeenCalled();
-	});
+	conflictTests(HARNESS);
 	test("choosing another count clears the message", async () => {
 		route(network, "patch", PATCH, () => refuse(500, "internal_error"));
 		const { user } = setup();
@@ -415,33 +315,4 @@ describe("a refused Pause keeps the dialog open (section 8)", () => {
 	});
 });
 
-describe("offline, before M5", () => {
-	test("says so, disables the button and sends nothing", async () => {
-		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
-		const patches = route(network, "patch", PATCH, () => ok({}));
-		const { user } = setup();
-		act(() => {
-			window.dispatchEvent(new Event("offline"));
-		});
-		expect(screen.getByText("You are offline. Connect to save.")).toBeVisible();
-		await user.click(button("Pause until 5 Jan 2027"));
-		resting("Pause until 5 Jan 2027");
-		expect(patches).toHaveLength(0);
-	});
-});
-
-describe("closing", () => {
-	test("Not now closes without a write", async () => {
-		const patches = route(network, "patch", PATCH, () => ok({}));
-		const { user, onClose } = setup();
-		await user.click(button("Not now"));
-		expect(onClose).toHaveBeenCalledOnce();
-		expect(patches).toHaveLength(0);
-	});
-
-	test("Escape closes it", async () => {
-		const { user, onClose } = setup();
-		await user.keyboard("{Escape}");
-		expect(onClose).toHaveBeenCalledOnce();
-	});
-});
+offlineAndClosingTests(HARNESS);

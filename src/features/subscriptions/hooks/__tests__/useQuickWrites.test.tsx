@@ -1,35 +1,24 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { delay } from "msw";
-import { setupServer } from "msw/node";
 import { useState } from "react";
-import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { AppProviders } from "@/components/app/AppProviders";
 import { isUuidV7 } from "@/lib/ids";
-import { subscriptionAnswer, subscriptionItem } from "../../lib/__tests__/fixtures";
-import type { SubscriptionItem, SubscriptionsLocale } from "../../lib/types";
+import {
+	subscriptionAnswer,
+	subscriptionItem,
+	IN_LOCALE as IN,
+} from "../../lib/__tests__/fixtures";
+import type { SubscriptionItem } from "../../lib/types";
 import { useQuickWrites } from "../useQuickWrites";
 import { useSubscriptionNotice } from "../useSubscriptionNotice";
-import { ok, refuse, route, testClient } from "./helpers";
+import { ok, refuse, route, testClient, testNetwork } from "./helpers";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => {
-	network.resetHandlers();
-	vi.restoreAllMocks();
-});
-afterAll(() => network.close());
+const network = testNetwork({ restoreMocks: true });
 
 const TODAY = "2026-11-02";
-const IN: SubscriptionsLocale = {
-	currency: "INR",
-	numberLocale: "en-IN",
-	dateLocale: "en-IN",
-	today: TODAY,
-	timezone: "Asia/Kolkata",
-	weekStart: "monday",
-};
 const NETFLIX = subscriptionItem("netflix");
 const PAUSED_IN_FORCE = subscriptionItem("netflix", {
 	status: "paused",

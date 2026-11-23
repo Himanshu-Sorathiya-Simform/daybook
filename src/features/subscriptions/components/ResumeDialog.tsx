@@ -9,20 +9,12 @@ import {
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/actions/Button";
-import { FormAlert } from "@/components/feedback/FormAlert";
-import { OfflineNote } from "@/components/feedback/OfflineNote";
 import { AmountInput } from "@/components/forms/AmountInput";
 import { ChoiceGroup } from "@/components/forms/ChoiceGroup";
-import { Dialog } from "@/components/surfaces/Dialog";
 import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
-import { useOnce } from "@/hooks/useOnce";
-import { useOnline } from "@/hooks/useOnline";
 import { amountMessage, formatAmountInput, parseAmount } from "@/lib/amount";
-import { uuidV7 } from "@/lib/ids";
-import type { SubscriptionEditInput } from "@/lib/subscriptions/schemas";
-import { useChangeSubscription } from "../hooks/useChangeSubscription";
 import { useSubscriptionCharges } from "../hooks/useSubscriptionCharges";
-import { useWriteRefusal } from "../hooks/useWriteRefusal";
+import { useEditWrite } from "../hooks/useEditWrite";
 import { fieldsOf } from "../lib/conflict";
 import { DIALOG_TEXT } from "../lib/dialog";
 import { amountWithCadence } from "../lib/labels";
@@ -30,6 +22,8 @@ import { RESUME_TEXT, type ResumeChoice, resumeView } from "../lib/resume";
 import type { Confirmed } from "../lib/notices";
 import type { SubscriptionItem, SubscriptionsLocale } from "../lib/types";
 import { DialogConflict } from "./DialogConflict";
+import { WriteDialog } from "./WriteDialog";
+import { ChargesRetry } from "./ChargesRetry";
 import { ChargesStrip } from "./ChargesStrip";
 
 export type ResumeDialogProps = {
@@ -65,13 +59,16 @@ export function ResumeDialog({
 	onSaved,
 }: Readonly<ResumeDialogProps>) {
 	const [opened] = useState(item);
-	const online = useOnline();
-	const change = useChangeSubscription();
 	const charges = useSubscriptionCharges(opened.id);
-	const refusal = useWriteRefusal(["amountMinor"]);
-	const sending = useOnce();
 	const formRef = useRef<HTMLFormElement>(null);
 	const focusInvalid = useFocusFirstInvalid(formRef);
+	const { change, refusal, submit, conflictView } = useEditWrite({
+		kind: "resume",
+		own: ["amountMinor"],
+		onClose,
+		onSaved,
+		onFieldsRefused: focusInvalid,
+	});
 	const [openedAt] = useState(() => new Date().toISOString());
 	const [start] = useState<ResumeValues>(() => ({
 		choice: "today",
@@ -120,194 +117,109 @@ export function ResumeDialog({
 		await submit(body, opened);
 	};
 
-	/** Sends `body` against `against`: the Subscription as opened, or after a conflict as saved. */
-	const submit = async (
-		body: SubscriptionEditInput,
-		against: SubscriptionItem,
-	) => {
-		const request = sending.run(() =>
-			change.mutateAsync({
-				id: against.id,
-				version: against.version,
-				body,
-				idempotencyKey: uuidV7(),
-			}),
-		);
-		if (request === null) return;
-		refusal.reset();
-		try {
-			const saved = await request;
-			onSaved?.({ kind: "resume", before: against, saved, sent: body });
-			onClose();
-		} catch (error) {
-			const outcome = await refusal.refuse(error, {
-				kind: "change",
-				id: against.id,
-				body,
-			});
-			if (outcome.kind === "fields") focusInvalid();
-		}
-	};
-
 	const messageOf = (field: AnyFieldApi) =>
 		refusal.fields.amountMinor
 		?? (field.state.meta.errors as (string | undefined)[])[0];
 	const busy = change.isPending;
-	const canSave = online && ready;
 	return (
 		<>
-			<Dialog
+			<WriteDialog
 				title={RESUME_TEXT.title(name)}
 				isOpen={isOpen}
-				// It only ever reports closing.
-				onOpenChange={onClose}
+				onClose={onClose}
 				isPending={busy}
-				footer={
-					<>
-						<span className="flex-1" />
-						<Button
-							variant="secondary"
-							isDisabled={busy}
-							onPress={onClose}
-							className="max-md:hidden"
-						>
-							{RESUME_TEXT.notNow}
-						</Button>
-						<Button
-							isDisabled={!canSave}
-							isPending={busy}
-							onPress={() => void form.handleSubmit()}
-						>
-							{RESUME_TEXT.resume(name)}
-						</Button>
-					</>
-				}
+				failure={refusal.failure}
+				dismissLabel={RESUME_TEXT.notNow}
+				confirmLabel={RESUME_TEXT.resume(name)}
+				isReady={ready}
+				onConfirm={() => void form.handleSubmit()}
+				formRef={formRef}
 			>
-				<form
-					ref={formRef}
-					noValidate
-					aria-label={RESUME_TEXT.title(name)}
-					className="flex flex-col gap-4"
-					onSubmit={(event) => {
-						event.preventDefault();
-						event.stopPropagation();
-						if (canSave) void form.handleSubmit();
-					}}
-				>
-					{!online && <OfflineNote>{DIALOG_TEXT.offline}</OfflineNote>}
-					{refusal.failure && <FormAlert>{refusal.failure}</FormAlert>}
-					<p className="text-label text-ink-2">{view.opening}</p>
-					{/* Which dates were missed is only known once the charges are in. */}
-					{ready
-						&& (view.choices !== null ?
-							<form.Field name="choice">
-								{(field) => (
-									<ChoiceGroup
-										label={RESUME_TEXT.how}
-										value={field.state.value}
-										onChange={(next) =>
-											field.handleChange(next as ResumeChoice)
-										}
-										options={[
-											{
-												value: "today",
-												label: RESUME_TEXT.today,
-												description: RESUME_TEXT.todayDetail,
-											},
-											{
-												value: "never",
-												label:
-													view.choices?.never.title ?? "",
-												description:
-													view.choices?.never.description
-													?? "",
-											},
-										]}
-										isDisabled={busy}
-									/>
-								)}
-							</form.Field>
-						:	<p className="text-body text-ink">{view.plainLine}</p>)}
-					{failed ?
-						<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-							<p
-								role="alert"
-								className="text-body text-ink-2"
-							>
-								{DIALOG_TEXT.chargesFailed}
-							</p>
-							<Button
-								size="sm"
-								variant="row"
-								onPress={() => void charges.refetch()}
-							>
-								{DIALOG_TEXT.retry}
-							</Button>
-						</div>
-					:	ready && <ChargesStrip items={view.strip} />}
-					{values.priceOpen ?
-						<form.Field name="amount">
+				<p className="text-label text-ink-2">{view.opening}</p>
+				{/* Which dates were missed is only known once the charges are in. */}
+				{ready
+					&& (view.choices !== null ?
+						<form.Field name="choice">
 							{(field) => (
-								<AmountInput
-									label={RESUME_TEXT.newAmount}
-									name="amount"
-									autoFocus
-									currency={locale.currency}
-									numberLocale={locale.numberLocale}
+								<ChoiceGroup
+									label={RESUME_TEXT.how}
 									value={field.state.value}
-									onChange={(text) => {
-										field.handleChange(text);
-										refusal.clearField("amountMinor");
-									}}
-									onBlur={() => {
-										if (typed.ok) {
-											field.handleChange(
-												formatAmountInput(
-													typed.minor,
-													locale,
-												),
-											);
-										}
-									}}
-									hint={view.priceHint}
-									error={messageOf(field)}
+									onChange={(next) =>
+										field.handleChange(next as ResumeChoice)
+									}
+									options={[
+										{
+											value: "today",
+											label: RESUME_TEXT.today,
+											description: RESUME_TEXT.todayDetail,
+										},
+										{
+											value: "never",
+											label: view.choices?.never.title ?? "",
+											description:
+												view.choices?.never.description
+												?? "",
+										},
+									]}
 									isDisabled={busy}
 								/>
 							)}
 						</form.Field>
-					:	<div className="flex flex-wrap items-center gap-x-2">
-							<span className="text-body figures flex-1">
-								{amountWithCadence(opened, locale)}
-							</span>
-							<Button
-								size="sm"
-								variant="row"
+					:	<p className="text-body text-ink">{view.plainLine}</p>)}
+				{failed ?
+					<ChargesRetry
+						message={DIALOG_TEXT.chargesFailed}
+						retryLabel={DIALOG_TEXT.retry}
+						onRetry={() => void charges.refetch()}
+					/>
+				:	ready && <ChargesStrip items={view.strip} />}
+				{values.priceOpen ?
+					<form.Field name="amount">
+						{(field) => (
+							<AmountInput
+								label={RESUME_TEXT.newAmount}
+								name="amount"
+								autoFocus
+								currency={locale.currency}
+								numberLocale={locale.numberLocale}
+								value={field.state.value}
+								onChange={(text) => {
+									field.handleChange(text);
+									refusal.clearField("amountMinor");
+								}}
+								onBlur={() => {
+									if (typed.ok) {
+										field.handleChange(
+											formatAmountInput(typed.minor, locale),
+										);
+									}
+								}}
+								hint={view.priceHint}
+								error={messageOf(field)}
 								isDisabled={busy}
-								onPress={() => form.setFieldValue("priceOpen", true)}
-							>
-								{RESUME_TEXT.changePrice}
-							</Button>
-						</div>
-					}
-				</form>
-			</Dialog>
-			{refusal.conflict && (
+							/>
+						)}
+					</form.Field>
+				:	<div className="flex flex-wrap items-center gap-x-2">
+						<span className="text-body figures flex-1">
+							{amountWithCadence(opened, locale)}
+						</span>
+						<Button
+							size="sm"
+							variant="row"
+							isDisabled={busy}
+							onPress={() => form.setFieldValue("priceOpen", true)}
+						>
+							{RESUME_TEXT.changePrice}
+						</Button>
+					</div>
+				}
+			</WriteDialog>
+			{conflictView && (
 				<DialogConflict
-					conflict={refusal.conflict}
+					{...conflictView}
 					origin={fieldsOf(opened)}
 					formats={locale}
-					isPending={change.isPending}
-					onClose={refusal.closeConflict}
-					onKeepMine={() =>
-						void submit(
-							refusal.conflict!.request.body as SubscriptionEditInput,
-							refusal.conflict!.current,
-						)
-					}
-					onKeepTheirs={() => {
-						void refusal.dropConflict();
-						onClose();
-					}}
 				/>
 			)}
 		</>

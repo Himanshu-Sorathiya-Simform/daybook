@@ -33,8 +33,9 @@ import {
 	route,
 	testClient,
 	urlHarness,
+	media,
+	resetPageTest,
 } from "../../hooks/__tests__/helpers";
-import { resetUnsavedChoices } from "@/hooks/useStoredChoice";
 import { VIEW_KEY } from "../../lib/view";
 import { budgetKeys } from "../../lib/keys";
 import {
@@ -66,34 +67,8 @@ beforeEach(() => {
 	});
 	route(network, "get", "/api/transactions/summary", () => ok(payeeSummary()));
 });
-afterEach(() => {
-	for (const name of [VIEW_KEY, "daybook_wide"]) {
-		document.cookie = `${name}=; Max-Age=0; Path=/`;
-	}
-	network.resetHandlers();
-	onlineManager.setOnline(true);
-	vi.useRealTimers();
-	vi.restoreAllMocks();
-	resetUnsavedChoices();
-	window.localStorage.clear();
-	// @ts-expect-error jsdom has none; some tests set one.
-	delete window.matchMedia;
-});
+afterEach(() => resetPageTest(network, VIEW_KEY));
 afterAll(() => network.close());
-
-/** A window's width: jsdom has no `matchMedia`, which the page reads as a narrow window, with
- * the panel as a drawer. `wide` is 768 px up, where List or Table shows; `docked` is 1180 px
- * up, where the panel docks. */
-function media({ wide = false, docked = false }) {
-	window.matchMedia = vi.fn((query: string) => ({
-		matches:
-			(wide && query === "(min-width: 48rem)")
-			|| (docked && query === "(min-width: 1180px)"),
-		media: query,
-		addEventListener: () => {},
-		removeEventListener: () => {},
-	})) as unknown as typeof window.matchMedia;
-}
 
 // The golden profile on the golden clock's day (TST-3).
 const IN: BudgetsLocale = {
@@ -1845,6 +1820,7 @@ describe("the Undo notice (BR-F04-29, D-562, AC-F04-25, AC-F04-29)", () => {
 					name: "Add Budget from November",
 				}),
 			);
+			await waitFor(() => expect(dialog).not.toBeInTheDocument());
 			await within(panel()).findByText(ADDED);
 			expect(screen.queryByText(CHANGED)).not.toBeInTheDocument();
 			expect(screen.getAllByRole("button", { name: "Undo" })).toHaveLength(1);

@@ -1,7 +1,6 @@
 import { QueryClient, skipToken } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import { subscriptionKeys } from "../keys";
 import {
@@ -13,11 +12,9 @@ import {
 } from "../queries";
 import { charge, listPage, subscriptionItem } from "./fixtures";
 import { GOLDEN_SUBSCRIPTIONS } from "../../../../../seed/golden";
+import { testNetwork } from "../../hooks/__tests__/helpers";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 const url = (path: string) => new URL(path, window.location.origin).toString();
 const ok = (data: unknown) => HttpResponse.json({ data });

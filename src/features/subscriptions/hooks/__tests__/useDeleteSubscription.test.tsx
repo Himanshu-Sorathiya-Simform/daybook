@@ -1,7 +1,6 @@
 import { act } from "@testing-library/react";
 import { HttpResponse } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import type { SubscriptionDeleteInput } from "@/lib/subscriptions/schemas";
 import { subscriptionAnswer } from "../../lib/__tests__/fixtures";
@@ -19,13 +18,11 @@ import {
 	route,
 	settled,
 	testClient,
+	testNetwork,
 } from "./helpers";
 import { watchAreas } from "./watching";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 const NETFLIX = subscriptionAnswer("netflix");
 const PATH = `/api/subscriptions/${NETFLIX.id}`;
@@ -56,6 +53,20 @@ async function remove(
 			.catch(() => undefined);
 	});
 	await settled(result);
+}
+
+/** Deletes Netflix through a fresh client that watches each area, and lists the areas that
+ * read again after it. */
+async function refreshedBy(options: Parameters<typeof remove>[1] = {}) {
+	const queryClient = testClient();
+	const areas = watchAreas(queryClient);
+	const { result } = renderHookInApp(() => useDeleteSubscription(), {
+		queryClient,
+	});
+	await remove(result, options);
+	const fetched = areas.fetched();
+	areas.stop();
+	return fetched;
 }
 
 describe("useDeleteSubscription (F05 section 11)", () => {
@@ -103,33 +114,19 @@ describe("useDeleteSubscription (F05 section 11)", () => {
 	describe("a confirmed delete refreshes what section 12 lists", () => {
 		test("with no charge to keep or delete: the Subscriptions and the profile", async () => {
 			route(network, "delete", PATH, () => ok(DELETED()));
-			const queryClient = testClient();
-			const areas = watchAreas(queryClient);
-			const { result } = renderHookInApp(() => useDeleteSubscription(), {
-				queryClient,
-			});
-			await remove(result);
-			expect(areas.fetched()).toEqual(["subscriptions", "profile"]);
-			areas.stop();
+			expect(await refreshedBy()).toEqual(["subscriptions", "profile"]);
 		});
 
 		// AC-F05-08: its charges stay as unlinked expenses, which Transactions lists differently.
 		test("charges kept as unlinked expenses refresh Transactions, payees and Budgets too", async () => {
 			route(network, "delete", PATH, () => ok(DELETED({ chargesKept: 2 })));
-			const queryClient = testClient();
-			const areas = watchAreas(queryClient);
-			const { result } = renderHookInApp(() => useDeleteSubscription(), {
-				queryClient,
-			});
-			await remove(result);
-			expect(areas.fetched()).toEqual([
+			expect(await refreshedBy()).toEqual([
 				"subscriptions",
 				"transactions",
 				"payees",
 				"budgets",
 				"profile",
 			]);
-			areas.stop();
 		});
 
 		test.each<[string, Partial<SubscriptionDeleted>]>([
@@ -138,14 +135,7 @@ describe("useDeleteSubscription (F05 section 11)", () => {
 			["a month listed", { months: ["2026-10"] }],
 		])("charges %s do as well", async (_what, counts) => {
 			route(network, "delete", PATH, () => ok(DELETED(counts)));
-			const queryClient = testClient();
-			const areas = watchAreas(queryClient);
-			const { result } = renderHookInApp(() => useDeleteSubscription(), {
-				queryClient,
-			});
-			await remove(result);
-			expect(areas.fetched()).toContain("transactions");
-			areas.stop();
+			expect(await refreshedBy()).toContain("transactions");
 		});
 	});
 
@@ -161,20 +151,13 @@ describe("useDeleteSubscription (F05 section 11)", () => {
 
 		test("on a plain delete still refreshes everything, since its charges are unknown", async () => {
 			route(network, "delete", PATH, () => refuse(404, "not_found"));
-			const queryClient = testClient();
-			const areas = watchAreas(queryClient);
-			const { result } = renderHookInApp(() => useDeleteSubscription(), {
-				queryClient,
-			});
-			await remove(result);
-			expect(areas.fetched()).toEqual([
+			expect(await refreshedBy()).toEqual([
 				"subscriptions",
 				"transactions",
 				"payees",
 				"budgets",
 				"profile",
 			]);
-			areas.stop();
 		});
 
 		// BR-F05-33
@@ -193,14 +176,7 @@ describe("useDeleteSubscription (F05 section 11)", () => {
 
 		test("on the Undo of an Add refreshes nothing", async () => {
 			route(network, "delete", PATH, () => refuse(404, "not_found"));
-			const queryClient = testClient();
-			const areas = watchAreas(queryClient);
-			const { result } = renderHookInApp(() => useDeleteSubscription(), {
-				queryClient,
-			});
-			await remove(result, { body: UNDO });
-			expect(areas.fetched()).toEqual([]);
-			areas.stop();
+			expect(await refreshedBy({ body: UNDO })).toEqual([]);
 		});
 	});
 
@@ -260,14 +236,7 @@ describe("useDeleteSubscription (F05 section 11)", () => {
 
 	test("a refused delete refreshes nothing", async () => {
 		route(network, "delete", PATH, () => refuse(500, "internal"));
-		const queryClient = testClient();
-		const areas = watchAreas(queryClient);
-		const { result } = renderHookInApp(() => useDeleteSubscription(), {
-			queryClient,
-		});
-		await remove(result);
-		expect(areas.fetched()).toEqual([]);
-		areas.stop();
+		expect(await refreshedBy()).toEqual([]);
 	});
 
 	test("a failure is never retried by itself", async () => {

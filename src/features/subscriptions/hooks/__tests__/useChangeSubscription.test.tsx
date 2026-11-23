@@ -1,7 +1,6 @@
 import { act } from "@testing-library/react";
 import { HttpResponse } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import type { SubscriptionEditInput } from "@/lib/subscriptions/schemas";
 import { subscriptionAnswer } from "../../lib/__tests__/fixtures";
@@ -19,13 +18,11 @@ import {
 	route,
 	settled,
 	testClient,
+	testNetwork,
 } from "./helpers";
 import { watchAreas } from "./watching";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 const NETFLIX = subscriptionAnswer("netflix");
 const PATH = `/api/subscriptions/${NETFLIX.id}`;

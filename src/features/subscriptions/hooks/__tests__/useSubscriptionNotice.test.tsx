@@ -5,8 +5,12 @@ import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vite
 
 import { isUuidV7 } from "@/lib/ids";
 import type { Confirmed } from "../../lib/notices";
-import type { SubscriptionsLocale } from "../../lib/types";
-import { subscriptionAnswer, subscriptionItem } from "../../lib/__tests__/fixtures";
+import {
+	subscriptionAnswer,
+	subscriptionItem,
+	IN_LOCALE as IN,
+	changedAnswer,
+} from "../../lib/__tests__/fixtures";
 import { ok, refuse, renderHookInApp, route, testClient } from "./helpers";
 import { useSubscriptionNotice } from "../useSubscriptionNotice";
 
@@ -18,27 +22,13 @@ afterEach(() => {
 });
 afterAll(() => network.close());
 
-const IN: SubscriptionsLocale = {
-	currency: "INR",
-	numberLocale: "en-IN",
-	dateLocale: "en-IN",
-	today: "2026-11-02",
-	timezone: "Asia/Kolkata",
-	weekStart: "monday",
-};
 const AT = "2026-11-02T08:00:00.000Z";
 const NETFLIX = subscriptionItem("netflix");
 const ID = NETFLIX.id;
 const PATH = `/api/subscriptions/${ID}`;
 
-const changed = (version: number, over = {}) => ({
-	...subscriptionAnswer("netflix", { version, ...over }),
-	changeDate: "2026-11-02",
-	chargesCreated: 0,
-	chargesUpdated: 0,
-	chargesDeleted: 0,
-	months: [],
-});
+const changed = (version: number, over = {}) =>
+	changedAnswer(subscriptionAnswer("netflix", { version, ...over }));
 
 /** An Edit that renamed Netflix, confirmed at version 4. */
 const EDITED: Confirmed = {

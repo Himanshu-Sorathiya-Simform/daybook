@@ -411,12 +411,9 @@ export function expectedLines(
 	};
 }
 
-/** The lines the panel shows: the first 7, or all of them (BR-F05-40). */
-export function shownLines(
-	lines: readonly TimelineLine[],
-	all: boolean,
-): TimelineLine[] {
-	return all ? [...lines] : lines.slice(0, TIMELINE_PREVIEW);
+/** The lines the panel shows before "Show all": the first 7 (BR-F05-40). */
+export function firstLines(lines: readonly TimelineLine[]): TimelineLine[] {
+	return lines.slice(0, TIMELINE_PREVIEW);
 }
 
 /** The button under the timeline: "Show all 9" or "Show fewer", and none with 7 lines or fewer

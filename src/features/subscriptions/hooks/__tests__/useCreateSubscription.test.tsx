@@ -1,7 +1,6 @@
 import { act } from "@testing-library/react";
 import { HttpResponse } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import { QUERY_ROOTS } from "@/lib/api/query-keys";
 import type { SubscriptionCreateInput } from "@/lib/subscriptions/schemas";
@@ -17,13 +16,11 @@ import {
 	settled,
 	testClient,
 	watched,
+	testNetwork,
 } from "./helpers";
 import { watchAreas } from "./watching";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 const ID = "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a8010";
 const KEY = "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1cfe";

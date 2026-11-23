@@ -1,19 +1,23 @@
 import { waitFor } from "@testing-library/react";
 import { http } from "msw";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import { GOLDEN_BLOCK, meFor } from "@/components/app/__tests__/helpers";
 import { ME_KEY } from "@/lib/api/me";
 import { subscriptionKeys } from "../../lib/keys";
 import { charge, listPage } from "../../lib/__tests__/fixtures";
 import { useBackfillDuplicates } from "../useBackfillDuplicates";
-import { ok, refuse, renderHookInApp, route, testClient, url } from "./helpers";
+import {
+	ok,
+	refuse,
+	renderHookInApp,
+	route,
+	testClient,
+	url,
+	testNetwork,
+} from "./helpers";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 type Args = { name: string; from: string; to: string };
 

@@ -27,6 +27,7 @@ import {
 	TIMELINE_PREVIEW,
 } from "../lib/panel";
 import type { SubscriptionItem } from "../lib/types";
+import { ChargesRetry } from "./ChargesRetry";
 import { ChargeTimeline } from "./ChargeTimeline";
 import { ChargeTimelineSkeleton } from "./ChargeTimelineSkeleton";
 import { StatusBox } from "./StatusBox";
@@ -93,21 +94,11 @@ export function PanelDetail({
 	const chargesBody = () => {
 		if (failed) {
 			return (
-				<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-					<p
-						role="alert"
-						className="text-body text-ink-2"
-					>
-						{PANEL_TEXT.chargesFailed}
-					</p>
-					<Button
-						size="sm"
-						variant="row"
-						onPress={() => void charges.refetch()}
-					>
-						{PANEL_TEXT.retry}
-					</Button>
-				</div>
+				<ChargesRetry
+					message={PANEL_TEXT.chargesFailed}
+					retryLabel={PANEL_TEXT.retry}
+					onRetry={() => void charges.refetch()}
+				/>
 			);
 		}
 		if (lines === null) {

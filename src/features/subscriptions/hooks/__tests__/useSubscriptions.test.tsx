@@ -1,16 +1,19 @@
 import { waitFor } from "@testing-library/react";
-import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 
 import { subscriptionKeys } from "../../lib/keys";
 import { subscriptionItem } from "../../lib/__tests__/fixtures";
 import { useSubscriptions } from "../useSubscriptions";
-import { ok, refuse, renderHookInApp, route, testClient } from "./helpers";
+import {
+	ok,
+	refuse,
+	renderHookInApp,
+	route,
+	testClient,
+	testNetwork,
+} from "./helpers";
 
-const network = setupServer();
-beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
-afterEach(() => network.resetHandlers());
-afterAll(() => network.close());
+const network = testNetwork();
 
 // AC-F05-02: golden at 2 November.
 const LIST = {

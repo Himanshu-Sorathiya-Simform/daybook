@@ -2,17 +2,8 @@ import { describe, expect, test } from "vitest";
 
 import { RESUME_TEXT, resumeView } from "../resume";
 import type { SubscriptionItem, SubscriptionsLocale } from "../types";
-import { charge, subscriptionItem } from "./fixtures";
+import { charge, subscriptionItem, IN_LOCALE as IN } from "./fixtures";
 
-/** The golden profile at the golden clock: 2 November 2026 in `en-IN`. */
-const IN: SubscriptionsLocale = {
-	currency: "INR",
-	numberLocale: "en-IN",
-	dateLocale: "en-IN",
-	today: "2026-11-02",
-	timezone: "Asia/Kolkata",
-	weekStart: "monday",
-};
 const NOW = "2026-11-02T06:30:00.000Z";
 
 /** Netflix cancelled on 30 September, after its 5 September charge. */

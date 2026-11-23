@@ -3,21 +3,11 @@
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useState } from "react";
 
-import { Button } from "@/components/actions/Button";
-import { FormAlert } from "@/components/feedback/FormAlert";
-import { OfflineNote } from "@/components/feedback/OfflineNote";
 import { DatePicker } from "@/components/forms/DatePicker";
 import { ToggleChips } from "@/components/forms/ToggleChips";
-import { Dialog } from "@/components/surfaces/Dialog";
-import { useOnce } from "@/hooks/useOnce";
-import { useOnline } from "@/hooks/useOnline";
 import { formatDayHeader } from "@/lib/date-format";
-import { uuidV7 } from "@/lib/ids";
-import type { SubscriptionEditInput } from "@/lib/subscriptions/schemas";
-import { useChangeSubscription } from "../hooks/useChangeSubscription";
-import { useWriteRefusal } from "../hooks/useWriteRefusal";
+import { useEditWrite } from "../hooks/useEditWrite";
 import { fieldsOf } from "../lib/conflict";
-import { DIALOG_TEXT } from "../lib/dialog";
 import {
 	PAUSE_TEXT,
 	type PauseChoice,
@@ -30,6 +20,7 @@ import {
 import type { Confirmed } from "../lib/notices";
 import type { SubscriptionItem, SubscriptionsLocale } from "../lib/types";
 import { DialogConflict } from "./DialogConflict";
+import { WriteDialog } from "./WriteDialog";
 import { ChargesStrip } from "./ChargesStrip";
 
 export type PauseDialogProps = {
@@ -59,10 +50,12 @@ export function PauseDialog({
 	onSaved,
 }: Readonly<PauseDialogProps>) {
 	const [opened] = useState(item);
-	const online = useOnline();
-	const change = useChangeSubscription();
-	const refusal = useWriteRefusal(["pause"]);
-	const sending = useOnce();
+	const { change, refusal, submit, conflictView } = useEditWrite({
+		kind: "pause",
+		own: ["pause"],
+		onClose,
+		onSaved,
+	});
 	const [start] = useState(() => pauseStart(opened, locale.today));
 	const [openedAt] = useState(() => new Date().toISOString());
 	const options = pauseOptions(opened, locale.today);
@@ -84,142 +77,71 @@ export function PauseDialog({
 		await submit(body, opened);
 	};
 
-	/** Sends `body` against `against`: the Subscription as opened, or after a conflict as saved. */
-	const submit = async (
-		body: SubscriptionEditInput,
-		against: SubscriptionItem,
-	) => {
-		const request = sending.run(() =>
-			change.mutateAsync({
-				id: against.id,
-				version: against.version,
-				body,
-				idempotencyKey: uuidV7(),
-			}),
-		);
-		if (request === null) return;
-		refusal.reset();
-		try {
-			const saved = await request;
-			onSaved?.({ kind: "pause", before: against, saved, sent: body });
-			onClose();
-		} catch (error) {
-			await refusal.refuse(error, { kind: "change", id: against.id, body });
-		}
-	};
-
 	const busy = change.isPending;
-	const canSave = online && view.body !== null;
 	return (
 		<>
-			<Dialog
+			<WriteDialog
 				title={PAUSE_TEXT.title(name)}
 				isOpen={isOpen}
-				// It only ever reports closing.
-				onOpenChange={onClose}
+				onClose={onClose}
 				isPending={busy}
-				footer={
-					<>
-						<span className="flex-1" />
-						<Button
-							variant="secondary"
-							isDisabled={busy}
-							onPress={onClose}
-							className="max-md:hidden"
-						>
-							{PAUSE_TEXT.notNow}
-						</Button>
-						<Button
-							isDisabled={!canSave}
-							isPending={busy}
-							onPress={() => void form.handleSubmit()}
-						>
-							{view.buttonLabel}
-						</Button>
-					</>
-				}
+				failure={refusal.failure}
+				dismissLabel={PAUSE_TEXT.notNow}
+				confirmLabel={view.buttonLabel}
+				isReady={view.body !== null}
+				onConfirm={() => void form.handleSubmit()}
 			>
-				<form
-					noValidate
-					aria-label={PAUSE_TEXT.title(name)}
-					className="flex flex-col gap-4"
-					onSubmit={(event) => {
-						event.preventDefault();
-						event.stopPropagation();
-						if (canSave) void form.handleSubmit();
-					}}
-				>
-					{!online && <OfflineNote>{DIALOG_TEXT.offline}</OfflineNote>}
-					{refusal.failure && <FormAlert>{refusal.failure}</FormAlert>}
-					<div className="flex flex-col gap-1.25">
-						<span className="text-caption text-ink font-semibold">
-							{PAUSE_TEXT.skip}
-						</span>
-						<form.Field name="choice">
-							{(field) => (
-								<ToggleChips
-									label={PAUSE_TEXT.skip}
-									selectionMode="single"
-									options={options}
-									value={[field.state.value]}
-									onChange={([next]) => {
-										if (next === undefined) return;
-										field.handleChange(next as PauseChoice);
-										refusal.reset();
-									}}
-									isDisabled={busy}
-								/>
-							)}
-						</form.Field>
-					</div>
-					{values.choice === "date" && (
-						<form.Field name="until">
-							{(field) => (
-								<DatePicker
-									label={PAUSE_TEXT.dateLabel}
-									value={field.state.value}
-									onChange={(date) => {
-										field.handleChange(date);
-										refusal.reset();
-									}}
-									display={formatDayHeader(
-										field.state.value,
-										locale,
-									)}
-									today={locale.today}
-									minValue={range.min}
-									maxValue={range.max}
-									firstDayOfWeek={locale.weekStart}
-									error={refusal.fields.pause}
-									isDisabled={busy}
-								/>
-							)}
-						</form.Field>
-					)}
-					<ChargesStrip items={view.strip} />
-					<p className="text-body text-ink">{view.sentence}</p>
-					<p className="text-caption text-ink-2">
-						{PAUSE_TEXT.still(name)}
-					</p>
-				</form>
-			</Dialog>
-			{refusal.conflict && (
+				<div className="flex flex-col gap-1.25">
+					<span className="text-caption text-ink font-semibold">
+						{PAUSE_TEXT.skip}
+					</span>
+					<form.Field name="choice">
+						{(field) => (
+							<ToggleChips
+								label={PAUSE_TEXT.skip}
+								selectionMode="single"
+								options={options}
+								value={[field.state.value]}
+								onChange={([next]) => {
+									if (next === undefined) return;
+									field.handleChange(next as PauseChoice);
+									refusal.reset();
+								}}
+								isDisabled={busy}
+							/>
+						)}
+					</form.Field>
+				</div>
+				{values.choice === "date" && (
+					<form.Field name="until">
+						{(field) => (
+							<DatePicker
+								label={PAUSE_TEXT.dateLabel}
+								value={field.state.value}
+								onChange={(date) => {
+									field.handleChange(date);
+									refusal.reset();
+								}}
+								display={formatDayHeader(field.state.value, locale)}
+								today={locale.today}
+								minValue={range.min}
+								maxValue={range.max}
+								firstDayOfWeek={locale.weekStart}
+								error={refusal.fields.pause}
+								isDisabled={busy}
+							/>
+						)}
+					</form.Field>
+				)}
+				<ChargesStrip items={view.strip} />
+				<p className="text-body text-ink">{view.sentence}</p>
+				<p className="text-caption text-ink-2">{PAUSE_TEXT.still(name)}</p>
+			</WriteDialog>
+			{conflictView && (
 				<DialogConflict
-					conflict={refusal.conflict}
+					{...conflictView}
 					origin={fieldsOf(opened)}
 					formats={locale}
-					isPending={change.isPending}
-					onClose={refusal.closeConflict}
-					onKeepMine={() =>
-						void submit(
-							refusal.conflict!.request.body as SubscriptionEditInput,
-							refusal.conflict!.current,
-						)
-					}
-					onKeepTheirs={() => {
-						void refusal.dropConflict();
-						onClose();
-					}}
 				/>
 			)}
 		</>
