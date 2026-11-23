@@ -139,9 +139,10 @@ export function detailLine(
 	f: Formats,
 ): string {
 	const hint = monthlyHint(item, f);
+	const monthly = hint === null ? "" : ` · ${hint}`;
 	return (
 		`${scheduleText(item, f)}, since ${formatDateYear(item.startDate, f)}`
-		+ ` · ${money(item.yearlyMinor, f)} a year${hint === null ? "" : ` · ${hint}`}`
+		+ ` · ${money(item.yearlyMinor, f)} a year${monthly}`
 	);
 }
 
@@ -259,6 +260,18 @@ export const TIMELINE_PREVIEW = 7;
 
 type Coming = { date: string; kind: "due" | "paused" | "skipped" };
 
+/** How a chargeable date with no charge reads: skipped (`null` for a skipped date on or before
+ * today, which was deleted as a charge and belongs to the past), paused or due. */
+function comingKind(
+	item: SubscriptionItem,
+	skipped: ReadonlySet<string>,
+	date: string,
+	today: string,
+): Coming["kind"] | null {
+	if (skipped.has(date)) return date > today ? "skipped" : null;
+	return inPause(item.pause, date) ? "paused" : "due";
+}
+
 /**
  * The dates still to come, up to the second due one: chargeable dates from today with no charge,
  * each skipped (a tombstone after today), paused or due. A date on or before today with a
@@ -278,19 +291,14 @@ function comingDates(
 	let dues = 0;
 	for (let from = today; from <= horizon && dues < 2;) {
 		const to = shiftDays(shiftMonths(from, 12), -1);
-		for (const date of chargeableDates(item, from, to, { ignorePause: true })) {
-			if (charged.has(date)) continue;
-			if (skipped.has(date)) {
-				if (date > today) found.push({ date, kind: "skipped" });
-				continue;
-			}
-			if (inPause(item.pause, date)) {
-				found.push({ date, kind: "paused" });
-				continue;
-			}
-			found.push({ date, kind: "due" });
-			dues += 1;
+		const year = chargeableDates(item, from, to, { ignorePause: true })
+			.filter((date) => !charged.has(date))
+			.map((date) => ({ date, kind: comingKind(item, skipped, date, today) }));
+		for (const { date, kind } of year) {
 			if (dues === 2) break;
+			if (kind === null) continue;
+			found.push({ date, kind });
+			if (kind === "due") dues += 1;
 		}
 		from = shiftDays(to, 1);
 	}

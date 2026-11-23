@@ -103,6 +103,24 @@ export function CalendarDays({
 			{weeks.map((week) => {
 				const expanded = opened.has(week.key);
 				const hint = phoneWeekHint(week, expanded);
+				/** The week's total, or the button that opens it, or a bar while loading. */
+				const weekEnd = () => {
+					if (isLoading) return <Skeleton className="h-3.5 w-16" />;
+					if (week.total !== null) {
+						return <span className="figures">{week.total}</span>;
+					}
+					if (hint === null) return null;
+					return (
+						<Button
+							size="sm"
+							variant="ghost"
+							className="text-ink-3 font-medium"
+							onPress={() => setOpened(new Set([...opened, week.key]))}
+						>
+							{hint}
+						</Button>
+					);
+				};
 				return (
 					<section
 						key={week.key}
@@ -111,22 +129,7 @@ export function CalendarDays({
 						<div className="text-label text-ink-2 flex items-baseline pt-3.5 pb-1 font-semibold">
 							<h3>{week.label}</h3>
 							<span className="flex-1" />
-							{isLoading ?
-								<Skeleton className="h-3.5 w-16" />
-							: week.total !== null ?
-								<span className="figures">{week.total}</span>
-							: hint !== null ?
-								<Button
-									size="sm"
-									variant="ghost"
-									className="text-ink-3 font-medium"
-									onPress={() =>
-										setOpened(new Set([...opened, week.key]))
-									}
-								>
-									{hint}
-								</Button>
-							:	null}
+							{weekEnd()}
 						</div>
 						{isLoading ?
 							<div className="flex flex-col gap-2 py-1">

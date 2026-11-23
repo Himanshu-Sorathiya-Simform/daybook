@@ -158,6 +158,136 @@ function strip({
 	return items;
 }
 
+type Note = NonNullable<ReturnType<typeof scheduleChangeNote>>;
+
+/** The fields as F05's edit schema reads them, so what is compared with the Subscription is the
+ * normalized text (BR-F05-46); a field with a message stands in as the Subscription's own value.
+ * `null` when the schema refuses them. */
+function parsedEdit({
+	item,
+	values,
+	messages,
+	cadence,
+	locale,
+	changedAt,
+}: {
+	item: SubscriptionItem;
+	values: DialogValues;
+	messages: DialogMessages;
+	cadence: NonNullable<ReturnType<typeof cadenceOf>>;
+	locale: SubscriptionsLocale;
+	changedAt: string;
+}): SubscriptionEditBody | null {
+	const typed = parseAmount(values.amount, locale);
+	const parsed = subscriptionEditSchema.safeParse({
+		changedAt,
+		name: messages.name === undefined ? values.name : item.name,
+		amountMinor: typed.ok && !messages.amount ? typed.minor : item.amountMinor,
+		currency: locale.currency,
+		cadence,
+		startDate:
+			messages.startDate === undefined ? values.startDate : item.startDate,
+		category: messages.category === undefined ? values.category : item.category,
+		note: messages.note === undefined ? values.note : (item.note ?? ""),
+	});
+	return parsed.success ? parsed.data : null;
+}
+
+/** The view of an Edit that changes nothing: no write, no preview. */
+function unchangedView(plan: ChangePlan, changeDate: string): EditView {
+	return {
+		body: null,
+		preview: false,
+		noteOnly: false,
+		nextDates: nextChargeDates(plan.next, {
+			from: shiftDays(changeDate, 1),
+			skipped: plan.skippedAfter,
+			count: 3,
+		}),
+		strip: [],
+		scheduleChanged: false,
+		values: null,
+		doubleCharge: null,
+		passed: null,
+		alsoPast: 0,
+		costLine: null,
+	};
+}
+
+/** Only the fields that differ from the Subscription are sent, an amount with its currency
+ * (BR-F05-25, BR-F05-46). */
+function editBody({
+	changedAt,
+	data,
+	changed,
+	currency,
+	skipOn,
+	alsoPast,
+}: {
+	changedAt: string;
+	data: SubscriptionEditBody;
+	changed: ChangePlan["changed"];
+	currency: SubscriptionsLocale["currency"];
+	/** The double-charge skip when it is ticked. */
+	skipOn: string | null;
+	alsoPast: boolean;
+}): SubscriptionEditInput {
+	const body: SubscriptionEditInput = { changedAt };
+	if (changed.name) body.name = data.name;
+	if (changed.amount) {
+		body.amountMinor = data.amountMinor;
+		body.currency = currency;
+	}
+	if (changed.cadence) body.cadence = data.cadence;
+	if (changed.start) body.startDate = data.startDate;
+	if (changed.category) body.category = data.category;
+	if (changed.note) body.note = data.note;
+	if (skipOn !== null) body.skipDueOn = skipOn;
+	if (alsoPast) body.alsoPastCharges = true;
+	return body;
+}
+
+/** The "Skip the date, so it isn't charged twice" choice (BR-F05-31). */
+function doubleChargeOf(
+	note: Extract<Note, { kind: "doubleCharge" }>,
+	cadence: ChangePlan["next"]["cadence"],
+	locale: SubscriptionsLocale,
+) {
+	const first =
+		note.nextAfterSkip === null ?
+			""
+		:	` The first charge on the new date is ${shortDate(note.nextAfterSkip, locale)}.`;
+	return {
+		skipOn: note.skipOn,
+		title: `Skip ${shortDate(note.skipOn, locale)}, so it isn't charged twice`,
+		description: `${shortDate(note.lastChargeOn, locale)} was already charged, less than ${periodWords(cadence)} before it.${first}`,
+	};
+}
+
+/** The line for a date that has passed, or `null` when the schedule change has none. */
+function passedLine(note: Note | null, locale: SubscriptionsLocale): string | null {
+	if (note?.kind !== "passed") return null;
+	return `${shortDate(note.passedOn, locale)} has passed, so nothing is charged until ${formatDayHeader(note.nextOn, locale)}.`;
+}
+
+/** The cost line, when the amount or the cadence changes for a Subscription that is running. */
+function costLineFor(
+	item: SubscriptionItem,
+	items: readonly SubscriptionItem[],
+	plan: ChangePlan,
+	newAmount: number,
+	locale: SubscriptionsLocale,
+): string | null {
+	const { changed } = plan;
+	if (!(changed.amount || changed.cadence) || item.nextDueOn === null) return null;
+	return costLineOf(
+		item,
+		items,
+		{ amountMinor: newAmount, cadence: plan.next.cadence },
+		locale,
+	);
+}
+
 /**
  * The Edit as it stands (BR-F05-24, BR-F05-46): the fields judged as the server judges them,
  * the change they make over the Subscription at change date C, which is today online, and from
@@ -187,22 +317,8 @@ export function editView({
 	const cadence = cadenceOf(values);
 	if (cadence === null) return null;
 	const complete = Object.keys(messages).length === 0;
-	const typed = parseAmount(values.amount, locale);
-	// Every field goes through F05's own edit schema, as the server reads it, so what is
-	// compared with the Subscription is the normalized text (BR-F05-46).
-	const parsed = subscriptionEditSchema.safeParse({
-		changedAt,
-		name: messages.name === undefined ? values.name : item.name,
-		amountMinor: typed.ok && !messages.amount ? typed.minor : item.amountMinor,
-		currency: locale.currency,
-		cadence,
-		startDate:
-			messages.startDate === undefined ? values.startDate : item.startDate,
-		category: messages.category === undefined ? values.category : item.category,
-		note: messages.note === undefined ? values.note : (item.note ?? ""),
-	});
-	if (!parsed.success) return null;
-	const data: SubscriptionEditBody = parsed.data;
+	const data = parsedEdit({ item, values, messages, cadence, locale, changedAt });
+	if (data === null) return null;
 	const linked = linkedCharges(charges);
 	const stored: DatedSubscription = {
 		...item,
@@ -211,25 +327,7 @@ export function editView({
 	};
 	const changeDate = locale.today;
 	const plan = planChange(data, stored, changeDate);
-	if (!plan.isChange) {
-		return {
-			body: null,
-			preview: false,
-			noteOnly: false,
-			nextDates: nextChargeDates(plan.next, {
-				from: shiftDays(changeDate, 1),
-				skipped: plan.skippedAfter,
-				count: 3,
-			}),
-			strip: [],
-			scheduleChanged: false,
-			values: null,
-			doubleCharge: null,
-			passed: null,
-			alsoPast: 0,
-			costLine: null,
-		};
-	}
+	if (!plan.isChange) return unchangedView(plan, changeDate);
 
 	const through = linked
 		.filter((charge) => charge.dueOn <= changeDate)
@@ -261,34 +359,14 @@ export function editView({
 	const { changed } = plan;
 	const pastUnedited = through.filter((charge) => !charge.edited).length;
 	const alsoPast = changed.name || changed.category ? pastUnedited : 0;
-
-	// Only the fields that differ from the Subscription are sent, an amount with its currency
-	// (BR-F05-25, BR-F05-46).
-	const body: SubscriptionEditInput = { changedAt };
-	if (changed.name) body.name = data.name;
-	if (changed.amount) {
-		body.amountMinor = data.amountMinor;
-		body.currency = locale.currency;
-	}
-	if (changed.cadence) body.cadence = data.cadence;
-	if (changed.start) body.startDate = data.startDate;
-	if (changed.category) body.category = data.category;
-	if (changed.note) body.note = data.note;
-	if (ticked) body.skipDueOn = skipOn;
-	if (alsoPast > 0 && values.alsoPast) body.alsoPastCharges = true;
-
-	const doubleCharge =
-		note?.kind === "doubleCharge" ?
-			{
-				skipOn: note.skipOn,
-				title: `Skip ${shortDate(note.skipOn, locale)}, so it isn't charged twice`,
-				description: `${shortDate(note.lastChargeOn, locale)} was already charged, less than ${periodWords(plan.next.cadence)} before it.${
-					note.nextAfterSkip === null ?
-						""
-					:	` The first charge on the new date is ${shortDate(note.nextAfterSkip, locale)}.`
-				}`,
-			}
-		:	null;
+	const body = editBody({
+		changedAt,
+		data,
+		changed,
+		currency: locale.currency,
+		skipOn: ticked ? skipOn : null,
+		alsoPast: alsoPast > 0 && values.alsoPast,
+	});
 	return {
 		body: complete ? body : null,
 		preview: complete && (plan.scheduleChanged || plan.valuesChanged),
@@ -305,21 +383,13 @@ export function editView({
 		}),
 		scheduleChanged: plan.scheduleChanged,
 		values: valueSentence(changed),
-		doubleCharge,
-		passed:
-			note?.kind === "passed" ?
-				`${shortDate(note.passedOn, locale)} has passed, so nothing is charged until ${formatDayHeader(note.nextOn, locale)}.`
+		doubleCharge:
+			note?.kind === "doubleCharge" ?
+				doubleChargeOf(note, plan.next.cadence, locale)
 			:	null,
+		passed: passedLine(note, locale),
 		alsoPast,
-		costLine:
-			(changed.amount || changed.cadence) && item.nextDueOn !== null ?
-				costLineOf(
-					item,
-					items,
-					{ amountMinor: newAmount, cadence: plan.next.cadence },
-					locale,
-				)
-			:	null,
+		costLine: costLineFor(item, items, plan, newAmount, locale),
 	};
 }
 

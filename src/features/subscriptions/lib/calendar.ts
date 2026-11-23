@@ -158,12 +158,10 @@ export function monthCells(
 		else if (past) label = `${long}, charged ${money(charged, f)}`;
 		else if (now)
 			label = `${long}, charged ${money(charged, f)} of ${money(total, f)}`;
-		const barTenths =
-			now && rows !== undefined ?
-				total === 0 ?
-					0
-				:	percentTenths(charged, total)
-			:	null;
+		let barTenths: number | null = null;
+		if (now && rows !== undefined) {
+			barTenths = total === 0 ? 0 : percentTenths(charged, total);
+		}
 		return {
 			month,
 			name: formatMonth(month, f, "shortName"),

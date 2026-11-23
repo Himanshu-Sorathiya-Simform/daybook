@@ -1,5 +1,6 @@
 import { amountMessage, formatAmountInput, parseAmount } from "@/lib/amount";
 import { categoryLabel } from "@/lib/categories";
+import { compareCodeUnits } from "@/lib/compare";
 import { formatDateYear, formatDayHeader } from "@/lib/date-format";
 import { normalizeText } from "@/lib/text";
 import { daysInRange, shiftDays } from "@/lib/time";
@@ -449,7 +450,7 @@ export function duplicateNote(
 	f: Formats,
 ): string | null {
 	if (dates.length === 0 || name === "") return null;
-	const oldest = [...dates].sort().slice(0, 3);
+	const oldest = [...dates].sort(compareCodeUnits).slice(0, 3);
 	const shown = oldest.map((date) => shortDate(date, f)).join(", ");
 	const more = dates.length > 3 ? " and more" : "";
 	const many = dates.length > 1;

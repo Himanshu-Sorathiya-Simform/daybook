@@ -104,6 +104,24 @@ const columns = helper.columns([
 	helper.accessor((row) => row.status, { id: "status", ...header("status") }),
 ]);
 
+/** The sort direction of the table's sorted column, or the default's when none is sorted. */
+function directionOf(sorted: SortingState[number] | undefined) {
+	if (sorted === undefined) return DEFAULT_SORT.direction;
+	return sorted.desc ? "desc" : "asc";
+}
+
+/** The sorted column as React Aria's table takes it, or nothing when none is sorted. */
+function descriptorOf(sorted: SortingState[number] | undefined) {
+	if (sorted === undefined) return {};
+	return {
+		sortDescriptor: {
+			column: sorted.id,
+			direction:
+				sorted.desc ? ("descending" as const) : ("ascending" as const),
+		},
+	};
+}
+
 /** The figures' columns, aligned right. */
 const FIGURES = new Set<string>(
 	TABLE_COLUMNS.filter((each) => each.numeric).map((each) => each.id),
@@ -171,10 +189,7 @@ export function SubscriptionTable({
 	const [sorted] = sorting;
 	const data = sortTableRows(tableRows(list, formats), {
 		column: (sorted?.id ?? DEFAULT_SORT.column) as TableColumn,
-		direction:
-			sorted === undefined ? DEFAULT_SORT.direction
-			: sorted.desc ? "desc"
-			: "asc",
+		direction: directionOf(sorted),
 	});
 	const table = useTable({
 		features,
@@ -268,15 +283,7 @@ export function SubscriptionTable({
 						onSelectionChange={(picked) => onSelect(pickedId(picked))}
 						disabledKeys={[TOTAL]}
 						disabledBehavior="selection"
-						{...(sorted === undefined ?
-							{}
-						:	{
-								sortDescriptor: {
-									column: sorted.id,
-									direction:
-										sorted.desc ? "descending" : "ascending",
-								},
-							})}
+						{...descriptorOf(sorted)}
 						onSortChange={({ column: pressed }) =>
 							// Every heading is one of the table's own columns.
 							(

@@ -97,6 +97,31 @@ export type SubscriptionNotices = {
 	closeConflict: () => void;
 };
 
+/** What the conflict view shows for a refused `pending` write, against the Subscription saved
+ * now (BR-F05-34): the user's version, and what Keep mine does. */
+function conflictFor(
+	current: SubscriptionAnswer,
+	pending: Pending,
+): NoticeConflict & { pending: Pending } {
+	const undoing = pending.source === "undo";
+	const request = undoing ? pending.plan.request : pending.request;
+	const isDelete = request.kind === "delete";
+	const origin = undoing ? pending.plan.origin : fieldsOf(pending.before);
+	let line: string = CONFLICT_TEXT.writeLine;
+	if (isDelete) line = CONFLICT_TEXT.deleteLine;
+	else if (undoing) line = CONFLICT_TEXT.undoLine;
+	return {
+		current,
+		yours:
+			isDelete ?
+				(origin ?? fieldsOf(current))
+			:	applyRequest(fieldsOf(current), request),
+		line,
+		isDelete,
+		pending,
+	};
+}
+
 /** The same delete without `undo: "create"`: a plain delete, whose charges stay (BR-F05-34). */
 function plainDelete(request: ChangeRequest): ChangeRequest {
 	if (request.kind !== "delete") return request;
@@ -261,26 +286,7 @@ export function useSubscriptionNotice(
 		const id =
 			pending.source === "undo" ? pending.plan.request.id : pending.request.id;
 		if (outcome.kind === "conflict") {
-			const request =
-				pending.source === "undo" ? pending.plan.request : pending.request;
-			const isDelete = request.kind === "delete";
-			const origin =
-				pending.source === "undo" ?
-					pending.plan.origin
-				:	fieldsOf(pending.before);
-			setConflictOf({
-				current: outcome.current,
-				yours:
-					isDelete ?
-						(origin ?? fieldsOf(outcome.current))
-					:	applyRequest(fieldsOf(outcome.current), request),
-				line:
-					isDelete ? CONFLICT_TEXT.deleteLine
-					: pending.source === "undo" ? CONFLICT_TEXT.undoLine
-					: CONFLICT_TEXT.writeLine,
-				isDelete,
-				pending,
-			});
+			setConflictOf(conflictFor(outcome.current, pending));
 			return;
 		}
 		setConflictOf(null);

@@ -251,9 +251,7 @@ export function CancelDialog({
 								{DIALOG_TEXT.retry}
 							</Button>
 						</div>
-					: ready ?
-						<ChargesStrip items={view.strip} />
-					:	null}
+					:	ready && <ChargesStrip items={view.strip} />}
 					<p className="text-body text-ink-2">{view.endingLine}</p>
 				</form>
 			</Dialog>

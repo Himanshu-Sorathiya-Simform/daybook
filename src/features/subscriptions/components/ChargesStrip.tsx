@@ -17,6 +17,13 @@ const CELLS: Record<Exclude<StripItemKind, "today" | "more">, string> = {
 	new: "border-line-strong text-ink",
 };
 
+/** An amount: struck through when the charge goes, bold at the new value. */
+function amountOf(kind: StripItemKind, amount: string) {
+	if (kind === "off") return <s>{amount}</s>;
+	if (kind === "new") return <b className="font-semibold">{amount}</b>;
+	return <span>{amount}</span>;
+}
+
 /**
  * The strip of charges around today (BR-F05-24), named "Charges around today": the last two
  * charges as they stay, "Today", the old next charge struck as "moves", the date offered as a
@@ -28,11 +35,13 @@ export function ChargesStrip({ items, className }: Readonly<ChargesStripProps>) 
 			aria-label={DIALOG_TEXT.stripLabel}
 			className={cn("flex items-stretch gap-1.5 pt-4.5", className)}
 		>
-			{items.map((item, at) => {
+			{items.map((item) => {
+				// A cell is told apart by its kind and its date or word.
+				const key = `${item.kind}:${item.label}`;
 				if (item.kind === "today") {
 					return (
 						<li
-							key={at}
+							key={key}
 							aria-hidden="true"
 							className="bg-ink relative w-0.5 flex-none rounded-xs"
 						>
@@ -45,7 +54,7 @@ export function ChargesStrip({ items, className }: Readonly<ChargesStripProps>) 
 				if (item.kind === "more") {
 					return (
 						<li
-							key={at}
+							key={key}
 							aria-hidden="true"
 							className="text-ink-3 grid flex-[0.5] place-items-center"
 						>
@@ -55,7 +64,7 @@ export function ChargesStrip({ items, className }: Readonly<ChargesStripProps>) 
 				}
 				return (
 					<li
-						key={at}
+						key={key}
 						className={cn(
 							"rounded-control text-caption figures flex min-w-0 flex-1 flex-col gap-px border px-1 py-1.5 text-center",
 							CELLS[item.kind],
@@ -65,10 +74,7 @@ export function ChargesStrip({ items, className }: Readonly<ChargesStripProps>) 
 							{item.label}
 						</span>
 						{item.amount !== undefined
-							&& (item.kind === "off" ? <s>{item.amount}</s>
-							: item.kind === "new" ?
-								<b className="font-semibold">{item.amount}</b>
-							:	<span>{item.amount}</span>)}
+							&& amountOf(item.kind, item.amount)}
 						{item.note !== undefined && (
 							<span
 								className={cn(

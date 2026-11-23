@@ -3,7 +3,7 @@
 import { Skeleton } from "@/components/feedback/Skeleton";
 import { cn } from "@/lib/cn";
 import type { MonthItem } from "@/lib/subscriptions/model";
-import { CALENDAR_TEXT, type GridWeek } from "../lib/calendar";
+import { CALENDAR_TEXT, type GridDay, type GridWeek } from "../lib/calendar";
 import type { Formats } from "../lib/labels";
 import { ChargeChip } from "./ChargeChip";
 import { DayPopover } from "./DayPopover";
@@ -24,6 +24,14 @@ export type CalendarGridProps = {
 	isLoading?: boolean;
 	className?: string;
 };
+
+/** A day of another month is dimmed with a lighter ink and weight, not with opacity, which
+ * would take its text below the contrast it needs. */
+function dayInk(day: Pick<GridDay, "today" | "inMonth" | "past">): string {
+	if (day.today) return "font-bold";
+	if (!day.inMonth) return "text-ink-3 font-normal";
+	return day.past ? "text-ink-3 font-medium" : "text-ink-2 font-medium";
+}
 
 /**
  * A month as a grid, from 768 px (BR-F05-38): a table of weeks from the profile's week start with
@@ -93,12 +101,7 @@ export function CalendarGrid({
 									<span
 										className={cn(
 											"text-small flex h-5.5 items-center",
-											// A day of another month is dimmed with a lighter ink and weight, not
-											// with opacity, which would take its text below the contrast it needs.
-											day.today ? "font-bold"
-											: !day.inMonth ? "text-ink-3 font-normal"
-											: day.past ? "text-ink-3 font-medium"
-											: "text-ink-2 font-medium",
+											dayInk(day),
 										)}
 									>
 										{day.today ?

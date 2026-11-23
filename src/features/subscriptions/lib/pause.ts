@@ -97,18 +97,13 @@ export function pauseStart(item: SubscriptionItem, today: string): PauseValues {
 	const limit = pauseLimit(today);
 	const first = dates[0] ?? today;
 	const twoMonths = shiftMonths(first, 2);
-	const until =
-		kind !== "new" && item.pause !== null ? item.pause.until
-		: twoMonths < limit ? twoMonths
-		: limit;
+	let until = twoMonths < limit ? twoMonths : limit;
+	if (kind !== "new" && item.pause !== null) until = item.pause.until;
 	if (kind !== "new") return { choice: "date", until };
 	const options = pauseOptions(item, today);
 	const free = (value: PauseChoice) =>
 		options.some((option) => option.value === value && !option.isDisabled);
-	const choice: PauseChoice =
-		free("n2") ? "n2"
-		: free("n1") ? "n1"
-		: "date";
+	const choice: PauseChoice = (["n2", "n1"] as const).find(free) ?? "date";
 	return { choice, until };
 }
 

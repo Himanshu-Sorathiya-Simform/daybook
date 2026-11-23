@@ -18,11 +18,13 @@ import { cn } from "@/lib/cn";
 import type { ExpenseCategory, MonthItem } from "@/lib/subscriptions/model";
 import { useOpenParam } from "../hooks/useOpenParam";
 import { useQuickWrites } from "../hooks/useQuickWrites";
-import { useSubscriptionNotice } from "../hooks/useSubscriptionNotice";
+import {
+	type SubscriptionNotices,
+	useSubscriptionNotice,
+} from "../hooks/useSubscriptionNotice";
 import { useSubscriptions } from "../hooks/useSubscriptions";
 import { CALENDAR_TEXT } from "../lib/calendar";
 import { filterByCategory, isFilterable } from "../lib/category-filter";
-import { conflictRows, fieldsOf } from "../lib/conflict";
 import { chargesHref, type OpenTarget } from "../lib/deep-link";
 import type { DialogKind } from "../lib/dialog";
 import { type MenuAction, shortcutAction, type ShortcutKey } from "../lib/menu";
@@ -32,24 +34,18 @@ import type { PanelActionKey, StatusAction } from "../lib/panel";
 import { DEFAULT_SORTING } from "../lib/table";
 import type { SubscriptionItem, SubscriptionsLocale } from "../lib/types";
 import {
+	pageShape,
 	shownView,
 	SUBSCRIPTION_VIEWS,
 	type SubscriptionsView,
 	VIEW_KEY,
 } from "../lib/view";
-import { SubscriptionCalendar } from "./SubscriptionCalendar";
-import { CancelDialog } from "./CancelDialog";
-import { ConflictDialog } from "./ConflictDialog";
-import { DeleteDialog } from "./DeleteDialog";
-import { PauseDialog } from "./PauseDialog";
-import { ResumeDialog } from "./ResumeDialog";
-import { SubscriptionDialog } from "./SubscriptionDialog";
-import { SubscriptionList } from "./SubscriptionList";
+import { type OpenDialog, SubscriptionDialogs } from "./SubscriptionDialogs";
 import { SubscriptionPanel } from "./SubscriptionPanel";
 import { SubscriptionsHeader } from "./SubscriptionsHeader";
 import { SubscriptionsSkeleton } from "./SubscriptionsSkeleton";
 import { SubscriptionsSummary } from "./SubscriptionsSummary";
-import { SubscriptionTable } from "./SubscriptionTable";
+import { SubscriptionsViews } from "./SubscriptionsViews";
 
 export type SubscriptionsPageProps = {
 	/** The profile's formats and its today, from the server render (TIME-5). */
@@ -69,6 +65,23 @@ const DOCKED = "(min-width: 1180px)";
 function arrowsFor(isCovered: boolean, isDocked: boolean): RowArrows {
 	if (isCovered) return "off";
 	return isDocked ? "select" : "focus";
+}
+
+/** The notice as the page shows it, with Undo when the write has one, or `null` for none. */
+function noticeOf(
+	notice: SubscriptionNotices["notice"],
+	notices: SubscriptionNotices,
+) {
+	if (notice === null) return null;
+	return (
+		<UndoNotice
+			text={notice.failure ?? notice.text}
+			isFailure={notice.failure !== null}
+			isPending={notices.isUndoing}
+			{...(notice.undo ? { onUndo: notices.undo } : {})}
+			onDismiss={notices.dismiss}
+		/>
+	);
 }
 
 /**
@@ -113,10 +126,7 @@ export function SubscriptionsPage({
 	const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
 	const [filtered, setFiltered] = useState<ExpenseCategory | null>(null);
 	// The dialog while it is open, and the Subscription it is about: `null` for Add.
-	const [dialog, setDialog] = useState<{
-		kind: DialogKind;
-		item: SubscriptionItem | null;
-	} | null>(null);
+	const [dialog, setDialog] = useState<OpenDialog | null>(null);
 	const notices = useSubscriptionNotice(locale);
 	const quick = useQuickWrites(locale, notices);
 	// A Subscription that is gone from the list is no longer selected, and stays unselected if
@@ -251,11 +261,12 @@ export function SubscriptionsPage({
 		else if (action === "change") open("pause", id);
 		else open("resume", id);
 	};
-	const failed = !list && (query.isError || query.fetchStatus === "paused");
-	const isEmpty = list !== undefined && list.items.length === 0;
+	const { failed, isEmpty, showPanel } = pageShape(
+		list,
+		query.isError || query.fetchStatus === "paused",
+	);
 	// The server can't know the width: it renders the docked panel, which CSS hides below 1180 px.
 	const docked = useMediaQuery(DOCKED, true);
-	const showPanel = list !== undefined && !isEmpty;
 	const drawerOpen = showPanel && !docked && selected !== null;
 
 	// The notice shows in the panel while the Subscription it is about is selected, else above the
@@ -266,16 +277,7 @@ export function SubscriptionsPage({
 		&& notice.inPanel
 		&& showPanel
 		&& selected === notice.subscriptionId;
-	const noticeNode =
-		notice === null ? null : (
-			<UndoNotice
-				text={notice.failure ?? notice.text}
-				isFailure={notice.failure !== null}
-				isPending={notices.isUndoing}
-				{...(notice.undo ? { onUndo: notices.undo } : {})}
-				onDismiss={notices.dismiss}
-			/>
-		);
+	const noticeNode = noticeOf(notice, notices);
 	const noticeAbove = noticeInPanel ? null : noticeNode;
 
 	// A dialog, or the conflict view of a refused write, takes the keys: the page behind rests.
@@ -316,42 +318,27 @@ export function SubscriptionsPage({
 						formats={locale}
 					/>
 					{noticeAbove}
-					{view === "list" ?
-						<SubscriptionList
-							list={shown ?? list}
-							formats={locale}
-							selected={selected}
-							onSelect={choose}
-							endedOpen={endedOpen}
-							onEndedOpenChange={setEndedOpen}
-							endedAll={endedAll}
-							onEndedAllChange={setEndedAll}
-							onAction={act}
-							arrows={arrowsFor(drawerOpen, docked)}
-							category={category}
-							onClearCategory={() => setFiltered(null)}
-						/>
-					: view === "calendar" ?
-						<SubscriptionCalendar
-							items={list.items}
-							formats={locale}
-							isWide={isWide}
-							selected={selected}
-							markedDue={markedDue}
-							onSelectItem={openItem}
-						/>
-					:	<SubscriptionTable
-							list={shown ?? list}
-							formats={locale}
-							sorting={sorting}
-							onSortingChange={setSorting}
-							selected={selected}
-							onSelect={choose}
-							arrows={arrowsFor(drawerOpen, docked)}
-							category={category}
-							onClearCategory={() => setFiltered(null)}
-						/>
-					}
+					<SubscriptionsViews
+						view={view}
+						shown={shown ?? list}
+						items={list.items}
+						formats={locale}
+						selected={selected}
+						onSelect={choose}
+						arrows={arrowsFor(drawerOpen, docked)}
+						category={category}
+						onClearCategory={() => setFiltered(null)}
+						endedOpen={endedOpen}
+						onEndedOpenChange={setEndedOpen}
+						endedAll={endedAll}
+						onEndedAllChange={setEndedAll}
+						onAction={act}
+						sorting={sorting}
+						onSortingChange={setSorting}
+						isWide={isWide}
+						markedDue={markedDue}
+						onSelectItem={openItem}
+					/>
 				</>
 			);
 		}
@@ -404,7 +391,7 @@ export function SubscriptionsPage({
 				/>
 				{body()}
 			</div>
-			{showPanel && (
+			{list && showPanel && (
 				<SubscriptionPanel
 					isDocked={docked}
 					list={list}
@@ -423,72 +410,15 @@ export function SubscriptionsPage({
 					onCategory={filterTo}
 				/>
 			)}
-			{dialog !== null
-				&& (dialog.kind === "add" || dialog.kind === "edit") && (
-					<SubscriptionDialog
-						isOpen
-						item={dialog.item}
-						items={list?.items ?? []}
-						locale={locale}
-						onClose={() => setDialog(null)}
-						onSaved={confirmed}
-					/>
-				)}
-			{dialog?.item && dialog.kind === "cancel" && (
-				<CancelDialog
-					isOpen
-					item={dialog.item}
-					locale={locale}
-					onClose={() => setDialog(null)}
-					onSaved={confirmed}
-				/>
-			)}
-			{dialog?.item && dialog.kind === "resume" && (
-				<ResumeDialog
-					isOpen
-					item={dialog.item}
-					locale={locale}
-					onClose={() => setDialog(null)}
-					onSaved={confirmed}
-				/>
-			)}
-			{dialog?.item && dialog.kind === "pause" && (
-				<PauseDialog
-					isOpen
-					item={dialog.item}
-					locale={locale}
-					onClose={() => setDialog(null)}
-					onSaved={confirmed}
-				/>
-			)}
-			{notices.conflict && (
-				<ConflictDialog
-					isOpen
-					// It only ever reports closing.
-					onOpenChange={notices.closeConflict}
-					rows={conflictRows(
-						notices.conflict.yours,
-						fieldsOf(notices.conflict.current),
-						locale,
-					)}
-					keepMineLine={notices.conflict.line}
-					isDelete={notices.conflict.isDelete}
-					isPending={notices.isUndoing}
-					onKeepMine={notices.keepMine}
-					onKeepTheirs={notices.keepTheirs}
-				/>
-			)}
-			{dialog?.item && dialog.kind === "delete" && (
-				<DeleteDialog
-					isOpen
-					item={dialog.item}
-					locale={locale}
-					onClose={() => setDialog(null)}
-					// "cancel it instead" swaps the confirmation for Cancel on the same Subscription.
-					onCancelInstead={(item) => setDialog({ kind: "cancel", item })}
-					onDeleted={confirmed}
-				/>
-			)}
+			<SubscriptionDialogs
+				dialog={dialog}
+				items={list?.items ?? []}
+				locale={locale}
+				onClose={() => setDialog(null)}
+				onSaved={confirmed}
+				onCancelInstead={(item) => setDialog({ kind: "cancel", item })}
+				notices={notices}
+			/>
 		</div>
 	);
 }

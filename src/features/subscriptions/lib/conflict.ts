@@ -1,4 +1,5 @@
 import { categoryLabel } from "@/lib/categories";
+import { compareCodeUnits } from "@/lib/compare";
 import type { Cadence, Pause } from "@/lib/subscriptions/schedule";
 import type { ExpenseCategory } from "@/lib/subscriptions/model";
 import type {
@@ -102,7 +103,28 @@ export type ChangeRequest =
 			body: Unstamped<SubscriptionUnskipInput>;
 	  };
 
-const sorted = (dates: string[]) => [...dates].sort();
+const sorted = (dates: string[]) => [...dates].sort(compareCodeUnits);
+
+/** `skips` with `date` among them, in order; the same list when it already is. */
+const withSkip = (skips: string[], date: string) =>
+	skips.includes(date) ? skips : sorted([...skips, date]);
+
+/** What a `change` request sets, put over `next`: a field the request does not carry is left. */
+function putFields(
+	next: ConflictFields,
+	body: Extract<ChangeRequest, { kind: "change" }>["body"],
+) {
+	if (body.name !== undefined) next.name = body.name;
+	if (body.amountMinor !== undefined) next.amountMinor = body.amountMinor;
+	if (body.cadence !== undefined) next.cadence = body.cadence as Cadence;
+	if (body.category !== undefined) {
+		next.category = body.category as ExpenseCategory;
+	}
+	if (body.startDate !== undefined) next.startDate = body.startDate;
+	if (body.endDate !== undefined) next.endDate = body.endDate;
+	if (body.pause !== undefined) next.pause = body.pause;
+	if (body.note !== undefined) next.note = body.note;
+}
 
 /**
  * The Subscription as `request` would leave `base`, for the "Yours" column: a change puts its
@@ -116,9 +138,7 @@ export function applyRequest(
 ): ConflictFields {
 	const next = { ...base, skips: [...base.skips] };
 	if (request.kind === "skip") {
-		if (!next.skips.includes(request.body.dueOn)) {
-			next.skips = sorted([...next.skips, request.body.dueOn]);
-		}
+		next.skips = withSkip(next.skips, request.body.dueOn);
 		return next;
 	}
 	if (request.kind === "unskip") {
@@ -127,18 +147,9 @@ export function applyRequest(
 	}
 	if (request.kind === "delete") return next;
 	const { body } = request;
-	if (body.name !== undefined) next.name = body.name;
-	if (body.amountMinor !== undefined) next.amountMinor = body.amountMinor;
-	if (body.cadence !== undefined) next.cadence = body.cadence as Cadence;
-	if (body.category !== undefined) {
-		next.category = body.category as ExpenseCategory;
-	}
-	if (body.startDate !== undefined) next.startDate = body.startDate;
-	if (body.endDate !== undefined) next.endDate = body.endDate;
-	if (body.pause !== undefined) next.pause = body.pause;
-	if (body.note !== undefined) next.note = body.note;
-	if (body.skipDueOn !== undefined && !next.skips.includes(body.skipDueOn)) {
-		next.skips = sorted([...next.skips, body.skipDueOn]);
+	putFields(next, body);
+	if (body.skipDueOn !== undefined) {
+		next.skips = withSkip(next.skips, body.skipDueOn);
 	}
 	if (body.unskipDueOn !== undefined) {
 		next.skips = next.skips.filter((date) => date !== body.unskipDueOn);

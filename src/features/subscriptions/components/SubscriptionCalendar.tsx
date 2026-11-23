@@ -167,11 +167,11 @@ export function SubscriptionCalendar({
 				<span className="flex-1" />
 				{isLoading ?
 					<Skeleton className="h-3.5 w-48" />
-				: failed ?
-					null
-				:	<span className="text-label text-ink-2 figures">
-						{heading.figures}
-					</span>
+				:	!failed && (
+						<span className="text-label text-ink-2 figures">
+							{heading.figures}
+						</span>
+					)
 				}
 			</div>
 			<div

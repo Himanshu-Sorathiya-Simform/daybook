@@ -4,7 +4,12 @@ import { chargesFromAfterEnd, resumeGapDates } from "@/lib/subscriptions/rules";
 import { chargeableDates } from "@/lib/subscriptions/schedule";
 import { shiftMonths } from "@/lib/time";
 import type { Transaction } from "@/lib/transactions/model";
-import { chargeCell, linkedCharges, type StripItem } from "./charges";
+import {
+	chargeCell,
+	type LinkedCharge,
+	linkedCharges,
+	type StripItem,
+} from "./charges";
 import { money, shortDate } from "./labels";
 import type { SubscriptionItem, SubscriptionsLocale } from "./types";
 
@@ -69,6 +74,69 @@ function neverDetail(
 	return `Also adds the ${gap.length} missed ${noun}: ${named}${more}, ${money(amountMinor * gap.length, f)}.`;
 }
 
+/** "Ended 5 Mar 2026, after the 5 Feb charge" for an ended Subscription, "Ends 5 Mar 2026"
+ * for one that is ending. */
+function openingLine(
+	ended: boolean,
+	endText: string,
+	latest: LinkedCharge | null,
+	f: SubscriptionsLocale,
+): string {
+	if (!ended) return `Ends ${endText}`;
+	const after = latest ? `, after the ${shortDate(latest.dueOn, f)} charge` : "";
+	return `Ended ${endText}${after}`;
+}
+
+/** The line under the heading when there is no missed charge to choose about. */
+function plainLineOf(ended: boolean, endText: string): string {
+	if (ended) return RESUME_TEXT.restartLine;
+	return `The end date is cleared. Charges carry on after ${endText}.`;
+}
+
+/** The strip of the charge before the gap, the first two missed charges (added or not), today,
+ * the next two charges, and "more". */
+function resumeStrip({
+	latest,
+	gap,
+	adding,
+	next,
+	amountMinor,
+	locale,
+}: {
+	latest: LinkedCharge | null;
+	gap: readonly string[];
+	adding: boolean;
+	next: readonly string[];
+	amountMinor: number;
+	locale: SubscriptionsLocale;
+}): StripItem[] {
+	const strip: StripItem[] = [];
+	if (latest) strip.push(chargeCell(latest, "kept", locale));
+	for (const date of gap.slice(0, 2)) {
+		strip.push(
+			adding ?
+				{
+					kind: "new",
+					label: shortDate(date, locale),
+					amount: money(amountMinor, locale),
+					note: "added",
+				}
+			:	{ kind: "kept", label: shortDate(date, locale), note: "not added" },
+		);
+	}
+	strip.push({ kind: "today", label: "Today" });
+	next.forEach((date, at) => {
+		strip.push({
+			kind: "new",
+			label: shortDate(date, locale),
+			amount: money(amountMinor, locale),
+			...(at === 0 ? { note: "next" } : {}),
+		});
+	});
+	strip.push({ kind: "more", label: "" });
+	return strip;
+}
+
 /**
  * Resume as it stands (BR-F05-42). `newAmountMinor` is the price typed under "Change the price
  * too", or `null` while it is closed or not an amount; `never` is whether "It never actually
@@ -129,30 +197,7 @@ export function resumeView({
 		.filter((date) => !charged.has(date) && !item.skips.includes(date))
 		.slice(0, 2);
 
-	const strip: StripItem[] = [];
-	if (latest) strip.push(chargeCell(latest, "kept", locale));
-	for (const date of gap.slice(0, 2)) {
-		strip.push(
-			adding ?
-				{
-					kind: "new",
-					label: shortDate(date, locale),
-					amount: money(amountMinor, locale),
-					note: "added",
-				}
-			:	{ kind: "kept", label: shortDate(date, locale), note: "not added" },
-		);
-	}
-	strip.push({ kind: "today", label: "Today" });
-	next.forEach((date, at) => {
-		strip.push({
-			kind: "new",
-			label: shortDate(date, locale),
-			amount: money(amountMinor, locale),
-			...(at === 0 ? { note: "next" } : {}),
-		});
-	});
-	strip.push({ kind: "more", label: "" });
+	const strip = resumeStrip({ latest, gap, adding, next, amountMinor, locale });
 
 	const body: SubscriptionResumeBody = { changedAt, endDate: null };
 	if (adding) body.backfillGap = true;
@@ -162,10 +207,7 @@ export function resumeView({
 	}
 
 	return {
-		opening:
-			ended ?
-				`Ended ${endText}${latest ? `, after the ${shortDate(latest.dueOn, locale)} charge` : ""}`
-			:	`Ends ${endText}`,
+		opening: openingLine(ended, endText, latest, locale),
 		gap,
 		choices:
 			choosing ?
@@ -176,12 +218,9 @@ export function resumeView({
 					},
 				}
 			:	null,
-		plainLine:
-			choosing ? null
-			: ended ? RESUME_TEXT.restartLine
-			: `The end date is cleared. Charges carry on after ${endText}.`,
+		plainLine: choosing ? null : plainLineOf(ended, endText),
 		strip,
-		priceHint: `Was ${money(item.amountMinor, locale)}. ${ended ? "Charges from today use it." : "Charges after today use it."}`,
+		priceHint: `Was ${money(item.amountMinor, locale)}. Charges ${ended ? "from" : "after"} today use it.`,
 		body,
 	};
 }

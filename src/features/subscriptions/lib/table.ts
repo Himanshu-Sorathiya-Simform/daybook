@@ -179,10 +179,8 @@ export function sortTableRows(
 		}
 		let order = 0;
 		if (typeof x === "number" && typeof y === "number") {
-			order =
-				x === y ? 0
-				: x < y ? -1
-				: 1;
+			if (x < y) order = -1;
+			else if (x > y) order = 1;
 		} else {
 			order = compareCodeUnits(lowercase(String(x)), lowercase(String(y)));
 		}

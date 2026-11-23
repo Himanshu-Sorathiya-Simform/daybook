@@ -97,6 +97,10 @@ type Filled = {
 	amountMinor: number;
 };
 
+/** The note's character counter, shown from 400 characters. */
+const counterOf = (text: string) =>
+	text.length > 400 ? { counter: `${text.length} / ${NOTE_MAX}` } : {};
+
 /**
  * "Add a Subscription" and "Edit Netflix" (BR-F05-24): a bottom sheet on phones. Name, Amount,
  * How often, Category, Started on, the schedule line, on Add the past-charges choice, a note
@@ -184,6 +188,7 @@ export function SubscriptionDialog({
 			add.schedule
 		:	view && editSchedule(values, view.nextDates, locale);
 	const was = edited === null ? {} : wasHints(edited, values, locale);
+	const nameHint = was.name === undefined ? {} : { hint: was.name };
 	const typed = parseAmount(values.amount, locale);
 	const nameText = values.name.trim();
 	const { min, max } = startDateWindow(locale.today);
@@ -382,9 +387,7 @@ export function SubscriptionDialog({
 										field.handleChange(text);
 										changed("name");
 									}}
-									{...(was.name === undefined ?
-										{}
-									:	{ hint: was.name })}
+									{...nameHint}
 									error={messageOf(field, "name")}
 									isDisabled={busy}
 								/>
@@ -509,11 +512,7 @@ export function SubscriptionDialog({
 										field.handleChange(text.slice(0, NOTE_MAX));
 										changed("note");
 									}}
-									{...(field.state.value.length > 400 ?
-										{
-											counter: `${field.state.value.length} / ${NOTE_MAX}`,
-										}
-									:	{})}
+									{...counterOf(field.state.value)}
 									error={messageOf(field, "note")}
 									isDisabled={busy}
 								/>

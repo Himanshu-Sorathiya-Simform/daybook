@@ -175,9 +175,9 @@ describe("the messages under the fields (BR-F05-24, section 8)", () => {
 		expect(fieldMessages(filled({ name: "n".repeat(61) }), IN, null).name).toBe(
 			"Use 60 characters or fewer.",
 		);
-		expect(fieldMessages(filled({ name: "n".repeat(60) }), IN, null).name).toBe(
-			undefined,
-		);
+		expect(
+			fieldMessages(filled({ name: "n".repeat(60) }), IN, null).name,
+		).toBeUndefined();
 	});
 
 	test("a name of spaces is a missing name", () => {

@@ -14,3 +14,17 @@ export function shownView(
 ): SubscriptionsView {
 	return view === "table" && !isWide ? "list" : view;
 }
+
+/** What the page has to show (F05 section 6): `failed` is a failed load, or no connection with
+ * nothing saved; `isEmpty` a list with no Subscription; `showPanel` a list with some. */
+export function pageShape(
+	list: { items: readonly unknown[] } | undefined,
+	loadFailed: boolean,
+): { failed: boolean; isEmpty: boolean; showPanel: boolean } {
+	const isEmpty = list !== undefined && list.items.length === 0;
+	return {
+		failed: list === undefined && loadFailed,
+		isEmpty,
+		showPanel: list !== undefined && !isEmpty,
+	};
+}

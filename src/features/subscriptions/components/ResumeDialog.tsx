@@ -198,36 +198,36 @@ export function ResumeDialog({
 					{refusal.failure && <FormAlert>{refusal.failure}</FormAlert>}
 					<p className="text-label text-ink-2">{view.opening}</p>
 					{/* Which dates were missed is only known once the charges are in. */}
-					{!ready ?
-						null
-					: view.choices !== null ?
-						<form.Field name="choice">
-							{(field) => (
-								<ChoiceGroup
-									label={RESUME_TEXT.how}
-									value={field.state.value}
-									onChange={(next) =>
-										field.handleChange(next as ResumeChoice)
-									}
-									options={[
-										{
-											value: "today",
-											label: RESUME_TEXT.today,
-											description: RESUME_TEXT.todayDetail,
-										},
-										{
-											value: "never",
-											label: view.choices?.never.title ?? "",
-											description:
-												view.choices?.never.description
-												?? "",
-										},
-									]}
-									isDisabled={busy}
-								/>
-							)}
-						</form.Field>
-					:	<p className="text-body text-ink">{view.plainLine}</p>}
+					{ready
+						&& (view.choices !== null ?
+							<form.Field name="choice">
+								{(field) => (
+									<ChoiceGroup
+										label={RESUME_TEXT.how}
+										value={field.state.value}
+										onChange={(next) =>
+											field.handleChange(next as ResumeChoice)
+										}
+										options={[
+											{
+												value: "today",
+												label: RESUME_TEXT.today,
+												description: RESUME_TEXT.todayDetail,
+											},
+											{
+												value: "never",
+												label:
+													view.choices?.never.title ?? "",
+												description:
+													view.choices?.never.description
+													?? "",
+											},
+										]}
+										isDisabled={busy}
+									/>
+								)}
+							</form.Field>
+						:	<p className="text-body text-ink">{view.plainLine}</p>)}
 					{failed ?
 						<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
 							<p
@@ -244,9 +244,7 @@ export function ResumeDialog({
 								{DIALOG_TEXT.retry}
 							</Button>
 						</div>
-					: ready ?
-						<ChargesStrip items={view.strip} />
-					:	null}
+					:	ready && <ChargesStrip items={view.strip} />}
 					{values.priceOpen ?
 						<form.Field name="amount">
 							{(field) => (

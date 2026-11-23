@@ -100,6 +100,8 @@ function restoredPause(before: Pause | null, today: string): Pause | null {
 	return before !== null && before.until > today ? before : null;
 }
 
+type UndoChange = Extract<ChangeRequest, { kind: "change" }>["body"];
+
 /**
  * What Undo sends after a change (BR-F05-34): the previous value of each field the write
  * changed, `unskipDueOn` when it skipped a date that was not skipped before, `alsoPastCharges`
@@ -119,8 +121,31 @@ export function undoBody(
 		kind: WriteKind;
 	},
 	today: string,
-): Extract<ChangeRequest, { kind: "change" }>["body"] | null {
-	const body: Extract<ChangeRequest, { kind: "change" }>["body"] = {};
+): UndoChange | null {
+	const body: UndoChange = {};
+	revertValues(body, sent, before, saved);
+	revertSchedule(body, sent, before, kind, today);
+	if (Object.keys(body).length === 0) return null;
+	if (sent.skipDueOn !== undefined && !before.skips.includes(sent.skipDueOn)) {
+		body.unskipDueOn = sent.skipDueOn;
+	}
+	if (
+		sent.alsoPastCharges === true
+		&& (body.name !== undefined || body.category !== undefined)
+	) {
+		body.alsoPastCharges = true;
+	}
+	return body;
+}
+
+/** What Undo sends back for the text, amount, cadence, start date, category and note fields
+ * a write changed. */
+function revertValues(
+	body: UndoChange,
+	sent: SubscriptionEditInput,
+	before: SubscriptionItem,
+	saved: Pick<SubscriptionAnswer, "currency">,
+) {
 	if (sent.name !== undefined && sent.name !== before.name) {
 		body.name = before.name;
 	}
@@ -143,6 +168,16 @@ export function undoBody(
 	if (sent.note !== undefined && sent.note !== before.note) {
 		body.note = before.note;
 	}
+}
+
+/** What Undo sends back for the end date and the pause a write changed. */
+function revertSchedule(
+	body: UndoChange,
+	sent: SubscriptionEditInput,
+	before: SubscriptionItem,
+	kind: WriteKind,
+	today: string,
+) {
 	if (sent.endDate !== undefined && sent.endDate !== before.endDate) {
 		body.endDate = before.endDate;
 		if (kind === "cancel") body.backfillGap = true;
@@ -150,17 +185,6 @@ export function undoBody(
 	if (sent.pause !== undefined && !samePause(sent.pause, before.pause)) {
 		body.pause = restoredPause(before.pause, today);
 	}
-	if (Object.keys(body).length === 0) return null;
-	if (sent.skipDueOn !== undefined && !before.skips.includes(sent.skipDueOn)) {
-		body.unskipDueOn = sent.skipDueOn;
-	}
-	if (
-		sent.alsoPastCharges === true
-		&& (body.name !== undefined || body.category !== undefined)
-	) {
-		body.alsoPastCharges = true;
-	}
-	return body;
 }
 
 /** "Netflix cancelled. 1 charge deleted.", "Netflix cancelled. Earlier charges stay." or, for

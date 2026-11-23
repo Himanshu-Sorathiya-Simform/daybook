@@ -387,20 +387,18 @@ describe("a conflict on Undo (BR-F05-34)", () => {
 	) {
 		const view = setup();
 		let at = 0;
+		const answer =
+			method === "patch" ?
+				changed(10)
+			:	{
+					changeDate: "2026-11-02",
+					chargesCreated: 0,
+					chargesKept: 0,
+					chargesDeleted: 0,
+					months: [],
+				};
 		const sent = route(network, method, PATH, () =>
-			++at === 1 ?
-				conflict409(9, { name: "Netflix Premium" })
-			:	ok(
-					method === "patch" ?
-						changed(10)
-					:	{
-							changeDate: "2026-11-02",
-							chargesCreated: 0,
-							chargesKept: 0,
-							chargesDeleted: 0,
-							months: [],
-						},
-				),
+			++at === 1 ? conflict409(9, { name: "Netflix Premium" }) : ok(answer),
 		);
 		confirm(view, confirmed);
 		undo(view);

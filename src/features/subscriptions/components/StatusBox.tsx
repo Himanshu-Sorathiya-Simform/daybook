@@ -35,10 +35,10 @@ export function StatusBox({
 			)}
 		>
 			<p className="min-w-40 flex-1">
-				{box.segments.map((part, index) =>
+				{box.segments.map((part) =>
 					part.strong ?
-						<strong key={index}>{part.text}</strong>
-					:	<span key={index}>{part.text}</span>,
+						<strong key={part.text}>{part.text}</strong>
+					:	<span key={part.text}>{part.text}</span>,
 				)}
 			</p>
 			{actions.map((action) => (

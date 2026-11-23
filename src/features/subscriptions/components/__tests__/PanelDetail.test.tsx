@@ -207,7 +207,7 @@ describe("the status box and the buttons built so far", () => {
 			}),
 		);
 		for (const name of new Set(names)) {
-			expect(screen.getAllByRole("button", { name }).length).toBe(
+			expect(screen.getAllByRole("button", { name })).toHaveLength(
 				names.filter((each) => each === name).length,
 			);
 		}
@@ -416,7 +416,7 @@ describe("the charges (BR-F05-40, BR-F05-48, AC-F05-33)", () => {
 		await user.click(screen.getByRole("button", { name: "Retry" }));
 		await screen.findByRole("list");
 		expect(screen.queryByRole("alert")).toBeNull();
-		expect(reads.length).toBe(2);
+		expect(reads).toHaveLength(2);
 	});
 
 	test("a failing second page shows the failure, not the first page's rows", async () => {
