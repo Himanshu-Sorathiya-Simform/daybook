@@ -380,6 +380,35 @@ describe("the keys that act as the menu's items do (BR-F05-45, D-630)", () => {
 		]);
 	});
 
+	// AC-F05-52
+	test("an ending Subscription's hints add keep going and change end", () => {
+		expect(
+			shortcutHints(
+				subscriptionItem("netflix", {
+					status: "ending",
+					endDate: "2026-12-31",
+				}),
+				F,
+			),
+		).toEqual([
+			"S to skip",
+			"P to pause",
+			"R to keep going",
+			"C to change end",
+			"Delete to delete",
+		]);
+	});
+
+	// AC-F05-52
+	test("an ended Subscription's hints are resume and delete only", () => {
+		expect(
+			shortcutHints(
+				subscriptionItem("netflix", { status: "ended", nextDueOn: null }),
+				F,
+			),
+		).toEqual(["R to resume", "Delete to delete"]);
+	});
+
 	test("an upcoming Subscription has only Delete", () => {
 		expect(
 			shortcutHints(subscriptionItem("netflix", { status: "upcoming" }), F),

@@ -290,6 +290,11 @@ describe("statusBox (BR-F05-40)", () => {
 		]);
 	});
 
+	test("an active Subscription says nothing of an end date it is given", () => {
+		const box = statusBox(item({ endDate: "2026-12-31" }), F);
+		expect(box.text).toBe("Next charge Thu, 5 Nov, in 3 days.");
+	});
+
 	test("an ending Subscription adds when it ends", () => {
 		const box = statusBox(item({ status: "ending", endDate: "2026-12-31" }), F);
 		expect(box.text).toBe(
@@ -1226,5 +1231,36 @@ describe("expectedLines: how many lines the skeleton holds (BR-F05-40)", () => {
 		expect(chargeTimeline(netflix, charges, F)).toHaveLength(
 			expectedLines(netflix).count,
 		);
+	});
+});
+
+describe("chargeTimeline: the windows of the search (BR-F05-19)", () => {
+	const yearly = (changes: Parameters<typeof subscriptionItem>[1] = {}) =>
+		subscriptionItem("netflix", {
+			cadence: { unit: "month", every: 12 },
+			startDate: "2026-11-02",
+			chargesFrom: "2026-11-02",
+			nextDueOn: "2026-11-02",
+			...changes,
+		});
+
+	test("a yearly charge on the anniversary of today is the one after the first", () => {
+		const lines = chargeTimeline(yearly(), [], F);
+		expect(lines.map((line) => line.date)).toEqual(["2027-11-02", "2026-11-02"]);
+		expect(kinds(lines)).toEqual(["later", "next"]);
+	});
+
+	test("a due date exactly 120 months from today is still found", () => {
+		const lines = chargeTimeline(
+			yearly({
+				status: "paused",
+				pause: { from: "2026-11-01", until: "2036-11-02" },
+				nextDueOn: "2036-11-02",
+			}),
+			[],
+			F,
+		);
+		expect(lines[0]).toMatchObject({ kind: "next", date: "2036-11-02" });
+		expect(kinds(lines).filter((kind) => kind === "paused")).toHaveLength(10);
 	});
 });

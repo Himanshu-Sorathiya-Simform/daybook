@@ -81,10 +81,7 @@ export function CalendarGrid({
 						{week.days.map((day) => (
 							<td
 								key={day.date}
-								className={cn(
-									"min-w-0 pt-1.5 pr-1.5",
-									!day.inMonth && "opacity-45",
-								)}
+								className="min-w-0 pt-1.5 pr-1.5"
 							>
 								<div
 									className={cn(
@@ -96,7 +93,10 @@ export function CalendarGrid({
 									<span
 										className={cn(
 											"text-small flex h-5.5 items-center",
+											// A day of another month is dimmed with a lighter ink and weight, not
+											// with opacity, which would take its text below the contrast it needs.
 											day.today ? "font-bold"
+											: !day.inMonth ? "text-ink-3 font-normal"
 											: day.past ? "text-ink-3 font-medium"
 											: "text-ink-2 font-medium",
 										)}

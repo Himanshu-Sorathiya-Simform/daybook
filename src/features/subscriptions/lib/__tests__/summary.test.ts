@@ -142,6 +142,13 @@ describe("summaryFigures edge cases", () => {
 		expect(figures.chargedPercent).toBe(100);
 	});
 
+	test("a month with a single minor unit charged draws a full bar", () => {
+		const figures = only({
+			thisMonth: { chargedMinor: 1, toComeMinor: 0 },
+		});
+		expect(figures.chargedPercent).toBe(100);
+	});
+
 	test("a half-charged month draws half a bar", () => {
 		const figures = only({
 			thisMonth: { chargedMinor: 100, toComeMinor: 100 },

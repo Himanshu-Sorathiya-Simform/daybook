@@ -80,6 +80,22 @@ describe("the columns and the default sort (BR-F05-39)", () => {
 		]);
 	});
 
+	test("the figure columns are numeric and the others are not", () => {
+		const numeric = Object.fromEntries(
+			TABLE_COLUMNS.map((column) => [column.id, column.numeric]),
+		);
+		expect(numeric).toEqual({
+			name: false,
+			category: false,
+			price: true,
+			perMonth: true,
+			share: false,
+			perYear: true,
+			nextDue: false,
+			status: false,
+		});
+	});
+
 	test("text columns and Next due sort ascending first, figures descending first", () => {
 		const first = Object.fromEntries(
 			TABLE_COLUMNS.map((column) => [column.id, column.firstDirection]),

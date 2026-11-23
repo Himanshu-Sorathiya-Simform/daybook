@@ -46,6 +46,18 @@ describe("isFilterable (BR-F05-50)", () => {
 		expect(isFilterable(only, "entertainment")).toBe(false);
 	});
 
+	test("an ended Subscription does not, even with a next due date", () => {
+		const only = {
+			items: [
+				subscriptionItem("netflix", {
+					status: "ended",
+					nextDueOn: "2026-12-05",
+				}),
+			],
+		};
+		expect(isFilterable(only, "entertainment")).toBe(false);
+	});
+
 	test("one with no next due date does not either, as the summary leaves it out", () => {
 		const only = { items: [subscriptionItem("netflix", { nextDueOn: null })] };
 		expect(isFilterable(only, "entertainment")).toBe(false);

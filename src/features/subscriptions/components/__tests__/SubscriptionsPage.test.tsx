@@ -769,6 +769,7 @@ describe("the panel and the keys (BR-F05-40, BR-F05-45)", () => {
 			).toBeVisible();
 		});
 
+		// AC-F05-39
 		test("selecting a row shows it in the panel, with the charges it reads from Transactions", async () => {
 			media({ wide: true, docked: true });
 			const { user } = renderPage({ seed: golden });
@@ -783,6 +784,7 @@ describe("the panel and the keys (BR-F05-40, BR-F05-45)", () => {
 			).toBeVisible();
 		});
 
+		// AC-F05-39
 		test("Close details clears the selection and brings the summary back", async () => {
 			media({ wide: true, docked: true });
 			const { user } = renderPage({ seed: golden });
@@ -796,6 +798,7 @@ describe("the panel and the keys (BR-F05-40, BR-F05-45)", () => {
 			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
 		});
 
+		// AC-F05-39
 		test("Escape clears the selection", async () => {
 			media({ wide: true, docked: true });
 			const { user } = renderPage({ seed: golden });
@@ -839,6 +842,7 @@ describe("the panel and the keys (BR-F05-40, BR-F05-45)", () => {
 			).toBeVisible();
 		});
 
+		// AC-F05-39
 		test("Down selects the first row, then the next, and Up goes back", async () => {
 			media({ wide: true, docked: true });
 			const { user } = renderPage({ seed: golden });
@@ -855,6 +859,7 @@ describe("the panel and the keys (BR-F05-40, BR-F05-45)", () => {
 			).toBeVisible();
 		});
 
+		// AC-F05-39
 		test("Down walks the rows in the order shown and stops at the last", async () => {
 			media({ wide: true, docked: true });
 			const { user } = renderPage({ seed: golden });
@@ -939,6 +944,7 @@ describe("the panel and the keys (BR-F05-40, BR-F05-45)", () => {
 			expect(rowNamed("Netflix")).toBeVisible();
 		});
 
+		// AC-F05-39
 		test("pressing a row opens the drawer with it", async () => {
 			media({ wide: true });
 			const { user } = renderPage({ seed: golden });
@@ -949,6 +955,7 @@ describe("the panel and the keys (BR-F05-40, BR-F05-45)", () => {
 			expect(drawer).toHaveTextContent("Netflix");
 		});
 
+		// AC-F05-39
 		test("Close details closes it and clears the selection", async () => {
 			media({ wide: true });
 			const { user } = renderPage({ seed: golden });
@@ -960,6 +967,7 @@ describe("the panel and the keys (BR-F05-40, BR-F05-45)", () => {
 			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
 		});
 
+		// AC-F05-39
 		test("Escape closes it and clears the selection", async () => {
 			media({ wide: true });
 			const { user } = renderPage({ seed: golden });
@@ -970,6 +978,7 @@ describe("the panel and the keys (BR-F05-40, BR-F05-45)", () => {
 			expect(rowNamed("Netflix")).toHaveAttribute("aria-selected", "false");
 		});
 
+		// AC-F05-39
 		test("Down only moves focus: nothing is selected and no drawer opens", async () => {
 			media({ wide: true });
 			const { user } = renderPage({ seed: golden });
@@ -981,6 +990,7 @@ describe("the panel and the keys (BR-F05-40, BR-F05-45)", () => {
 			expect(screen.queryByRole("dialog")).toBeNull();
 		});
 
+		// AC-F05-39
 		test("while the drawer is open the arrow keys leave the list alone: focus stays in the drawer", async () => {
 			media({ wide: true });
 			const { user } = renderPage({ seed: golden });
@@ -1087,6 +1097,7 @@ describe("filtering by a category of the panel (BR-F05-50, D-622)", () => {
 		});
 	const chip = () => screen.queryByRole("grid", { name: "Showing" });
 
+	// AC-F05-39
 	test("pressing a category narrows the list to its Subscriptions, in every group", async () => {
 		media({ wide: true, docked: true });
 		const { user } = renderPage({ seed: golden });
@@ -1112,6 +1123,7 @@ describe("filtering by a category of the panel (BR-F05-50, D-622)", () => {
 		expect(summaryButton("Housing", false)).toBeVisible();
 	});
 
+	// AC-F05-39
 	test("the groups follow the filtered rows: Entertainment is Netflix soon and Amazon Prime later", async () => {
 		media({ wide: true, docked: true });
 		const { user } = renderPage({ seed: golden });
@@ -1121,6 +1133,7 @@ describe("filtering by a category of the panel (BR-F05-50, D-622)", () => {
 		expect(screen.queryByText(/Within 30 days/)).toBeNull();
 	});
 
+	// AC-F05-39
 	test("the summary at the top still counts every Subscription", async () => {
 		media({ wide: true, docked: true });
 		const { user } = renderPage({ seed: golden });
@@ -3274,6 +3287,7 @@ describe("the keys that act as the menu's items do (BR-F05-45, D-630)", () => {
 		expect(posts[0]?.body).toMatchObject({ dueOn: "2026-11-05" });
 	});
 
+	// AC-F05-52
 	test("P opens Pause, C opens Cancel", async () => {
 		const { user } = await select(golden);
 		await user.keyboard("p");
@@ -3299,6 +3313,7 @@ describe("the keys that act as the menu's items do (BR-F05-45, D-630)", () => {
 		},
 	);
 
+	// AC-F05-52
 	test("R does nothing for a Subscription that is running", async () => {
 		const { user } = await select(golden);
 		await user.keyboard("r");
@@ -3306,6 +3321,7 @@ describe("the keys that act as the menu's items do (BR-F05-45, D-630)", () => {
 		expect(screen.queryByRole("alertdialog")).toBeNull();
 	});
 
+	// AC-F05-52
 	test("R opens Resume for an ended Subscription, and S and P do nothing", async () => {
 		const ended = withNetflix({
 			status: "ended",
@@ -3322,6 +3338,7 @@ describe("the keys that act as the menu's items do (BR-F05-45, D-630)", () => {
 		).toBeVisible();
 	});
 
+	// AC-F05-52
 	test("R is Resume now for a paused one, and P changes the pause", async () => {
 		const paused = withNetflix({
 			status: "paused",
@@ -3346,6 +3363,7 @@ describe("the keys that act as the menu's items do (BR-F05-45, D-630)", () => {
 		).toBeVisible();
 	});
 
+	// AC-F05-52
 	test("on an ending one R keeps it going and C changes its end", async () => {
 		const ending = withNetflix({ status: "ending", endDate: "2026-12-31" });
 		const { user } = await select(ending);
@@ -3362,6 +3380,7 @@ describe("the keys that act as the menu's items do (BR-F05-45, D-630)", () => {
 		).toBeChecked();
 	});
 
+	// AC-F05-52
 	test("with nothing selected no key does anything", async () => {
 		wide();
 		const { user } = renderPage({ seed: golden });
@@ -3372,6 +3391,7 @@ describe("the keys that act as the menu's items do (BR-F05-45, D-630)", () => {
 		expect(screen.queryByRole("alertdialog")).toBeNull();
 	});
 
+	// AC-F05-52
 	test("while a dialog is open the keys leave it alone", async () => {
 		const { user } = await select(golden);
 		await user.keyboard("p");
@@ -3382,6 +3402,40 @@ describe("the keys that act as the menu's items do (BR-F05-45, D-630)", () => {
 		expect(screen.queryByRole("alertdialog")).toBeNull();
 	});
 
+	// AC-F05-52
+	test("while the conflict view is open the keys rest behind it, and nothing is sent", async () => {
+		const skips = route(
+			network,
+			"post",
+			`/api/subscriptions/${golden.items[0]!.id}/skips`,
+			() =>
+				refuse(409, "version_conflict", {
+					message: "m",
+					details: {
+						current: {
+							...golden.items[0],
+							currency: "INR",
+							version: 12,
+						},
+					},
+				}),
+		);
+		const { user } = await select(golden);
+		await user.keyboard("s");
+		await screen.findByRole("dialog", {
+			name: "This Subscription changed on another device",
+		});
+		await user.keyboard("s");
+		await user.keyboard("p");
+		await user.keyboard("c");
+		await user.keyboard("{Delete}");
+		await user.keyboard("e");
+		expect(screen.getAllByRole("dialog")).toHaveLength(1);
+		expect(screen.queryByRole("alertdialog")).toBeNull();
+		expect(skips).toHaveLength(1);
+	});
+
+	// AC-F05-52
 	test("in a text field a letter is typed, not a command", async () => {
 		const { user } = await select(golden);
 		const field = document.createElement("input");
@@ -3392,6 +3446,7 @@ describe("the keys that act as the menu's items do (BR-F05-45, D-630)", () => {
 		field.remove();
 	});
 
+	// AC-F05-52
 	test("they work below 1180 px with the drawer open", async () => {
 		media({ wide: true, docked: false });
 		const { user } = renderPage({ seed: golden });

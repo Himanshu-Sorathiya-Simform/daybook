@@ -313,3 +313,94 @@ test("the dialog's words (BR-F05-43)", () => {
 		"Netflix still counts in your monthly cost while it's paused. Paused charges are left out of the next 30 days.",
 	);
 });
+
+describe("pause edge cases the golden data hides (BR-F05-43)", () => {
+	const EXPIRED = subscriptionItem("netflix", {
+		pause: { from: "2026-08-05", until: "2026-10-05" },
+	});
+	/** A pause that starts on 5 December, after the first pausable date of 5 November. */
+	const LATER = subscriptionItem("netflix", {
+		status: "paused",
+		pause: { from: "2026-12-05", until: "2027-02-05" },
+	});
+
+	test("3 charges is disabled while 2 charges is open, when only three dates fit before the limit", () => {
+		const every8 = subscriptionItem("netflix", {
+			cadence: { unit: "month", every: 8 },
+			startDate: "2026-11-05",
+			chargesFrom: "2026-11-05",
+		});
+		expect(
+			pauseOptions(every8, TODAY).map((option) => [
+				option.value,
+				option.isDisabled,
+			]),
+		).toEqual([
+			["n1", false],
+			["n2", false],
+			["n3", true],
+			["date", false],
+		]);
+	});
+
+	test("a pause in force opens on its stored end date, not two months on", () => {
+		const longer = subscriptionItem("netflix", {
+			status: "paused",
+			pause: { from: "2026-10-05", until: "2027-03-05" },
+			nextDueOn: "2027-03-05",
+		});
+		expect(pauseStart(longer, TODAY)).toEqual({
+			choice: "date",
+			until: "2027-03-05",
+		});
+	});
+
+	test("a pause that has not started opens on its stored end date", () => {
+		expect(pauseStart(LATER, TODAY)).toEqual({
+			choice: "date",
+			until: "2027-02-05",
+		});
+	});
+
+	test("a pause that ended before today opens as a new one, two months after the first date", () => {
+		expect(pauseStart(EXPIRED, TODAY)).toEqual({
+			choice: "n2",
+			until: "2027-01-05",
+		});
+	});
+
+	test("a first date within two months of the limit opens on the limit", () => {
+		const late = subscriptionItem("netflix", {
+			cadence: { unit: "month", every: 24 },
+			startDate: "2026-10-20",
+			chargesFrom: "2026-10-20",
+		});
+		expect(pauseStart(late, TODAY)).toEqual({
+			choice: "date",
+			until: "2028-11-02",
+		});
+	});
+
+	test("a pause that has not started is replaced from the first pausable date, not its own start", () => {
+		const found = pauseView({
+			item: LATER,
+			values: { choice: "date", until: "2027-02-05" },
+			locale: IN,
+			changedAt: NOW,
+		});
+		expect(found.pause).toEqual({ from: "2026-11-05", until: "2027-02-05" });
+	});
+
+	test("the same end date with another start is a change to write", () => {
+		const found = pauseView({
+			item: LATER,
+			values: { choice: "date", until: "2027-02-05" },
+			locale: IN,
+			changedAt: NOW,
+		});
+		expect(found.body).toEqual({
+			changedAt: NOW,
+			pause: { from: "2026-11-05", until: "2027-02-05" },
+		});
+	});
+});

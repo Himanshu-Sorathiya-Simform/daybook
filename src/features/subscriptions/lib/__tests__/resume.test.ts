@@ -308,3 +308,31 @@ test("the dialog's words (BR-F05-42)", () => {
 	expect(RESUME_TEXT.changePrice).toBe("Change the price too");
 	expect(RESUME_TEXT.newAmount).toBe("New amount");
 });
+
+describe("the strip: what is left out and how far it looks (BR-F05-42)", () => {
+	test("a due date that already has a charge is not shown again", () => {
+		const found = view({ charges: [paid(ENDING, "2026-11-05")] }, ENDING);
+		const labels = found.strip
+			.filter((cell) => cell.kind === "new")
+			.map((cell) => cell.label);
+		expect(labels).toEqual(["5 Dec", "5 Jan 2027"]);
+	});
+
+	test("a yearly Subscription still shows its next two charges, a year apart", () => {
+		const prime = subscriptionItem("amazonPrime", {
+			status: "ended",
+			endDate: "2026-10-30",
+			nextDueOn: null,
+		});
+		const labels = view({ charges: [] }, prime)
+			.strip.filter((cell) => cell.kind === "new")
+			.map((cell) => cell.label);
+		expect(labels).toEqual(["12 Oct 2027", "12 Oct 2028"]);
+	});
+
+	test("a price typed in the dialog does not change the one the hint calls Was", () => {
+		expect(view({ newAmountMinor: 99900 }).priceHint).toBe(
+			"Was ₹649.00. Charges from today use it.",
+		);
+	});
+});

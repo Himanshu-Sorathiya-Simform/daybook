@@ -85,14 +85,19 @@ describe("CalendarGrid on golden, from a Monday week start (BR-F05-38)", () => {
 	test("26 to 31 Oct and 1 to 6 Dec are dimmed and hold no item, and 1 Dec reads 1 Dec", () => {
 		setup();
 		const cells = within(rows()[0]!).getAllByRole("cell");
+		// Dimmed by a lighter ink and weight, never by opacity, which takes text below the
+		// contrast it needs (axe, AC-F05-15).
+		const dimmed = (cell: HTMLElement) =>
+			cell.querySelector("span")!.className.includes("font-normal");
 		for (const cell of cells.slice(0, 6)) {
-			expect(cell).toHaveClass("opacity-45");
+			expect(dimmed(cell)).toBe(true);
+			expect(cell).not.toHaveClass("opacity-45");
 			expect(within(cell).queryByRole("button")).toBeNull();
 		}
 		const lastWeek = within(rows()[5]!).getAllByRole("cell");
 		expect(lastWeek[1]).toHaveTextContent("1 Dec");
-		expect(lastWeek[1]).toHaveClass("opacity-45");
-		expect(cells[6]).not.toHaveClass("opacity-45");
+		expect(dimmed(lastWeek[1]!)).toBe(true);
+		expect(dimmed(cells[6]!)).toBe(false);
 	});
 
 	test("today, 2 Nov, is in a filled circle and read as today", () => {

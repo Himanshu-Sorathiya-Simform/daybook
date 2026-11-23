@@ -211,24 +211,25 @@ export function editView({
 	};
 	const changeDate = locale.today;
 	const plan = planChange(data, stored, changeDate);
-	const none: EditView = {
-		body: null,
-		preview: false,
-		noteOnly: false,
-		nextDates: nextChargeDates(plan.next, {
-			from: shiftDays(changeDate, 1),
-			skipped: plan.skippedAfter,
-			count: 3,
-		}),
-		strip: [],
-		scheduleChanged: false,
-		values: null,
-		doubleCharge: null,
-		passed: null,
-		alsoPast: 0,
-		costLine: null,
-	};
-	if (!plan.isChange) return none;
+	if (!plan.isChange) {
+		return {
+			body: null,
+			preview: false,
+			noteOnly: false,
+			nextDates: nextChargeDates(plan.next, {
+				from: shiftDays(changeDate, 1),
+				skipped: plan.skippedAfter,
+				count: 3,
+			}),
+			strip: [],
+			scheduleChanged: false,
+			values: null,
+			doubleCharge: null,
+			passed: null,
+			alsoPast: 0,
+			costLine: null,
+		};
+	}
 
 	const through = linked
 		.filter((charge) => charge.dueOn <= changeDate)

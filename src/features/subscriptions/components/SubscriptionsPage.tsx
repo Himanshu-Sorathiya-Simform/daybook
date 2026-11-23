@@ -278,15 +278,17 @@ export function SubscriptionsPage({
 		);
 	const noticeAbove = noticeInPanel ? null : noticeNode;
 
+	// A dialog, or the conflict view of a refused write, takes the keys: the page behind rests.
+	const covered = dialog !== null || notices.conflict !== null;
 	useShortcut("E", () => selected !== null && open("edit", selected), {
-		enabled: selected !== null && dialog === null,
+		enabled: selected !== null && !covered,
 	});
 	// The other keys act as the selection's menu items do, and only where it offers them, so a
 	// press that finds none does nothing (D-630).
 	const selectedItem = list?.items.find((each) => each.id === selected) ?? null;
 	const keyed = (key: ShortcutKey) =>
 		selectedItem !== null
-		&& dialog === null
+		&& !covered
 		&& shortcutAction(key, selectedItem, locale) !== null;
 	const press = (key: ShortcutKey) => () => {
 		const action = selectedItem && shortcutAction(key, selectedItem, locale);
@@ -299,7 +301,7 @@ export function SubscriptionsPage({
 	useShortcut("Delete", press("Delete"), { enabled: keyed("Delete") });
 	useShortcut("Backspace", press("Delete"), { enabled: keyed("Delete") });
 	useShortcut("Escape", () => choose(null), {
-		enabled: selected !== null && dialog === null,
+		enabled: selected !== null && !covered,
 		// Escape in a text field, a menu or a dialog belongs to them.
 		ignoreInputs: true,
 		ignoreDefaultPrevented: true,

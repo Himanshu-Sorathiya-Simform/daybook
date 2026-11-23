@@ -26,7 +26,13 @@ import {
 	step2Through,
 	unskipIssue,
 } from "../rules";
-import type { Cadence, Chargeable, Pause } from "../schedule";
+import { shiftMonths } from "@/lib/time";
+import {
+	type Cadence,
+	type Chargeable,
+	chargeableDates,
+	type Pause,
+} from "../schedule";
 import { goldenSubscription, GOLDEN_TODAY } from "./golden";
 
 const MONTHLY: Cadence = { unit: "month", every: 1 };
@@ -393,6 +399,94 @@ describe("chargesFromAfterSchedule (BR-F05-11)", () => {
 				changeDate: "2028-02-28",
 			}),
 		).toBe("2028-02-29");
+	});
+});
+
+describe("nextChargeDates looks a few months at a time and stops early (AC-F05-16)", () => {
+	/** What it must equal: every chargeable date in the 120 months, minus the tombstones, cut
+	 * to `count`: the way it was first written. */
+	const everything = (all: string[], skipped: string[], count: number) => {
+		const taken = new Set(skipped);
+		return all.filter((date) => !taken.has(date)).slice(0, count);
+	};
+	const CASES: { name: string; subscription: Partial<Chargeable> }[] = [
+		{ name: "monthly", subscription: {} },
+		{ name: "weekly", subscription: { cadence: { unit: "week", every: 1 } } },
+		{
+			name: "every 2 weeks",
+			subscription: { cadence: { unit: "week", every: 2 } },
+		},
+		{ name: "yearly", subscription: { cadence: { unit: "month", every: 12 } } },
+		{
+			name: "every 24 months",
+			subscription: { cadence: { unit: "month", every: 24 } },
+		},
+		{
+			name: "started on the 31st",
+			subscription: { startDate: "2026-01-31", chargesFrom: "2026-01-31" },
+		},
+		{ name: "ending inside a window", subscription: { endDate: "2027-02-10" } },
+		{ name: "ended before it starts", subscription: { endDate: "2026-10-01" } },
+		{
+			name: "paused for two years",
+			subscription: { pause: { from: "2026-11-05", until: "2028-11-05" } },
+		},
+		{
+			name: "charged only from far ahead",
+			subscription: { chargesFrom: "2030-03-01" },
+		},
+	];
+	const FROMS = [
+		"2026-11-03",
+		"2026-11-05",
+		"2027-02-28",
+		"2029-12-31",
+		"2040-01-01",
+	];
+	for (const { name, subscription } of CASES) {
+		test(`${name} gives what the whole 120 months give, for every start and count`, () => {
+			const made = sub(subscription);
+			for (const from of FROMS) {
+				// The slow whole-range list, once for each start.
+				const all = chargeableDates(made, from, shiftMonths(from, 120));
+				for (const count of [0, 1, 3, 8, 200]) {
+					for (const skipped of [
+						[],
+						["2026-11-05", "2026-12-05", "2027-01-05"],
+					]) {
+						expect(
+							nextChargeDates(made, { from, skipped, count }),
+							`${from} count ${count} skipped ${skipped.length}`,
+						).toEqual(everything(all, skipped, count));
+					}
+				}
+			}
+		});
+	}
+
+	test("a date past the 120 months is never returned", () => {
+		const dates = nextChargeDates(
+			sub({ cadence: { unit: "month", every: 1 } }),
+			{
+				from: "2026-11-03",
+				count: 1000,
+			},
+		);
+		expect(dates).toHaveLength(120);
+		expect(dates.at(-1)).toBe("2036-10-05");
+	});
+
+	test("skipped dates beyond the first window are stepped over", () => {
+		const skipped = [
+			"2026-11-05",
+			"2026-12-05",
+			"2027-01-05",
+			"2027-02-05",
+			"2027-03-05",
+		];
+		expect(
+			nextChargeDates(sub(), { from: "2026-11-03", skipped, count: 2 }),
+		).toEqual(["2027-04-05", "2027-05-05"]);
 	});
 });
 

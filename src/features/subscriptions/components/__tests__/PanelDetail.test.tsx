@@ -334,6 +334,7 @@ describe("the charges (BR-F05-40, BR-F05-48, AC-F05-33)", () => {
 				.getByRole("status", { name: "Loading charges" })
 				.querySelectorAll(".py-2\\.5");
 
+		// AC-F05-39
 		test("as many lines as the timeline will have: Netflix's 2 charges and 2 to come make 4", () => {
 			setup(NETFLIX, waiting);
 			expect(placeholderLines()).toHaveLength(4);

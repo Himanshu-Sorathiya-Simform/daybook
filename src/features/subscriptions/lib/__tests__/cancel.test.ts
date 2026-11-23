@@ -381,3 +381,50 @@ describe("the dialog's words (BR-F05-41)", () => {
 		expect(CANCEL_TEXT.cancelAndDelete(3)).toBe("Cancel and delete 3 charges");
 	});
 });
+
+describe("the strip: where the charges still to come begin and end (BR-F05-41)", () => {
+	const ENDING = subscriptionItem("netflix", {
+		status: "ending",
+		endDate: "2026-12-31",
+	});
+	const newLabels = (found: ReturnType<typeof view>) =>
+		found.strip.filter((cell) => cell.kind === "new");
+
+	test("a charge due today is not listed among those still to come", () => {
+		const second = subscriptionItem("netflix", {
+			startDate: "2026-08-02",
+			chargesFrom: "2026-08-02",
+			nextDueOn: "2026-11-02",
+		});
+		const found = view({ choice: "later", later: "2027-02-02" }, second, [
+			paid(second, "2026-11-02"),
+		]);
+		expect(newLabels(found).map((cell) => cell.label)).toEqual([
+			"2 Dec",
+			"2 Jan 2027",
+		]);
+	});
+
+	test("a later end date lifts the stored end date out of the way", () => {
+		const found = view({ choice: "later", later: "2027-03-31" }, ENDING);
+		expect(newLabels(found)).toEqual([
+			{ kind: "new", label: "5 Nov", amount: "₹649.00" },
+			{ kind: "new", label: "5 Dec", amount: "₹649.00" },
+		]);
+	});
+
+	test("the charge after the end is found even two years on, for a 24-month cadence", () => {
+		const biennial = subscriptionItem("netflix", {
+			cadence: { unit: "month", every: 24 },
+			startDate: "2026-11-05",
+			chargesFrom: "2026-11-05",
+			nextDueOn: "2026-11-05",
+		});
+		const found = view({ choice: "later", later: "2026-11-10" }, biennial, []);
+		expect(found.strip.at(-1)).toEqual({
+			kind: "kept",
+			label: "5 Nov 2028 on",
+			note: "no charges",
+		});
+	});
+});

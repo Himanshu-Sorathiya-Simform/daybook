@@ -75,6 +75,10 @@ describe("a charge as a cell of a strip", () => {
 		});
 	});
 
+	test("has no note key when none is given", () => {
+		expect(chargeCell(found, "kept", FORMATS)).not.toHaveProperty("note");
+	});
+
 	test("carries a warning only when asked", () => {
 		expect(chargeCell(found, "off", FORMATS, "deleted", true)).toMatchObject({
 			warn: true,
