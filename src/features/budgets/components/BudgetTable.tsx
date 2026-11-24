@@ -28,6 +28,7 @@ import {
 } from "react-aria-components";
 
 import { CategoryTag } from "@/components/data/CategoryTag";
+import { RING_INSIDE, ROW_RING } from "@/components/data/tableRings";
 import { Money } from "@/components/data/Money";
 import { Section } from "@/components/surfaces/Section";
 import {
@@ -40,7 +41,7 @@ import { categoryLabel } from "@/lib/categories";
 import { cn } from "@/lib/cn";
 import { compareCodeUnits } from "@/lib/compare";
 import { formatMoney } from "@/lib/money";
-import { type RowArrows, useRowArrows } from "../hooks/useRowArrows";
+import { type RowArrows, useRowArrows } from "@/hooks/useRowArrows";
 import {
 	type Formats,
 	percentOf,
@@ -48,7 +49,7 @@ import {
 	TABLE_TEXT,
 	tableCaption,
 } from "../lib/labels";
-import { pickedIn, selectedIn } from "../lib/rows";
+import { categoryOf, pickedIn, selectedIn } from "../lib/rows";
 import type { BudgetMonthAnswer } from "../lib/types";
 import { BudgetsFilter } from "./BudgetsFilter";
 
@@ -135,19 +136,6 @@ const FIGURES = new Set([
 	"utilizationTenths",
 ]);
 
-/** A focus ring inside its own box, rounded, so the table's scroll box never clips it. The
- * base style's ring outside the box is turned off. */
-const RING_INSIDE =
-	"outline-none focus-visible:rounded-control focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus";
-
-/** A focused row's ring, drawn on its cells: top and bottom on each, and the ends on the
- * first and last, which round the row's corners. */
-const ROW_RING = [
-	"group-focus-visible:shadow-[inset_0_2px_var(--color-focus),inset_0_-2px_var(--color-focus)]",
-	"group-focus-visible:first:shadow-[inset_2px_0_var(--color-focus),inset_0_2px_var(--color-focus),inset_0_-2px_var(--color-focus)]",
-	"group-focus-visible:last:shadow-[inset_-2px_0_var(--color-focus),inset_0_2px_var(--color-focus),inset_0_-2px_var(--color-focus)]",
-];
-
 const cellClass = (id: string) =>
 	cn(
 		"px-2.5 py-2.75 whitespace-nowrap",
@@ -230,7 +218,14 @@ export function BudgetTable({
 		...rows.map((row) => `budget:${row.id}`),
 		...unbudgeted.map((row) => `unbudgeted:${row.category}`),
 	];
-	useRowArrows({ holder, ids, selected, onSelect, mode: arrows });
+	useRowArrows({
+		holder,
+		ids,
+		selected,
+		onSelect,
+		mode: arrows,
+		selectionOf: categoryOf,
+	});
 
 	const overall = {
 		limitMinor: view.overall.limitMinor,

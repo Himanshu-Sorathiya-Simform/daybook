@@ -43,7 +43,6 @@ export const PAGE_TEXT = {
 	thisMonth: "This month",
 	invalidLink: "Some filters in this link weren't valid and were removed.",
 	dismiss: "Dismiss",
-	undo: "Undo",
 	loadFailed: "Budgets could not be loaded.",
 	loadFailedBody: "Check your connection, then try again. Your Budgets are safe.",
 	retry: "Retry",

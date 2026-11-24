@@ -958,7 +958,9 @@ describe("Update view (BR-F03-68)", () => {
 	});
 
 	test("a signed-out answer shows nothing here: the app's banner answers it", async () => {
-		const { user } = renderBar(`?${CHECK_B}&type=expense&view=${FOOD.id}`);
+		const { user, queryClient } = renderBar(
+			`?${CHECK_B}&type=expense&view=${FOOD.id}`,
+		);
 		await loaded();
 		const edits = route(
 			network,
@@ -971,7 +973,8 @@ describe("Update view (BR-F03-68)", () => {
 		await waitFor(() =>
 			expect(button("Update view")).not.toHaveAttribute("aria-disabled"),
 		);
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+		await act(async () => {});
 		expect(document.querySelector("[data-sonner-toast]")).toBeNull();
 	});
 });

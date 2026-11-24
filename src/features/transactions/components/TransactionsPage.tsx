@@ -6,7 +6,6 @@ import { Banner } from "@/components/feedback/Banner";
 import { showToast } from "@/components/feedback/showToast";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useOnline } from "@/hooks/useOnline";
-import { useShortcut } from "@/hooks/useShortcut";
 import { cn } from "@/lib/cn";
 import { formatTime } from "@/lib/date-format";
 import type { WeekStart } from "@/lib/geo";
@@ -18,6 +17,7 @@ import {
 	useEntryDialogOpen,
 	useGoneAnswer,
 } from "../hooks/useEntryDialog";
+import { neighbourOf, useFocusAfterRemove } from "../hooks/useFocusAfterRemove";
 import { useSelectedTransaction } from "../hooks/useSelectedTransaction";
 import {
 	useDeleteDialogOpen,
@@ -26,11 +26,13 @@ import {
 	useTransactionDeletes,
 } from "../hooks/useTransactionDeletes";
 import { useTransactionSummary } from "../hooks/useTransactionSummary";
+import { useTransactionShortcuts } from "../hooks/useTransactionShortcuts";
 import { useTransactionsUrl } from "../hooks/useTransactionsUrl";
 import { ENTRY_TEXT } from "../lib/entry";
 import type { LabelLocale } from "../lib/labels";
 import type { TransactionAnswer } from "../lib/types";
 import { TRANSACTIONS_TEXT } from "../lib/messages";
+import { withCategoryToggled } from "../lib/panel";
 import { FilterBar } from "./FilterBar";
 import { HeaderTotals } from "./HeaderTotals";
 import { TransactionList } from "./TransactionList";
@@ -44,22 +46,6 @@ export type TransactionsPageProps = {
 	weekStart: WeekStart;
 	className?: string;
 };
-
-/** How many frames a focus move after a delete waits for the confirm to close. */
-const FOCUS_FRAMES = 30;
-
-/** The id of the row after `id` in the list as shown, else the one before: where focus goes
- * after a delete from the keyboard (BR-F03-73). */
-function neighbourOf(list: HTMLElement | null, id: string): string | null {
-	const keys = [
-		...(list?.querySelectorAll<HTMLElement>('[role="row"][data-key]') ?? []),
-	]
-		.map((row) => row.dataset["key"])
-		.filter((key): key is string => key !== undefined);
-	const at = keys.indexOf(id);
-	if (at === -1) return null;
-	return keys[at + 1] ?? keys[at - 1] ?? null;
-}
 
 /** From this width the panel docks beside the list (BR-F03-70); the `dock` breakpoint. */
 const DOCKED = "(min-width: 1180px)";
@@ -100,7 +86,7 @@ export function TransactionsPage({
 	const [viewDialog, setViewDialog] = useState<ViewDialog | null>(null);
 	const listArea = useRef<HTMLDivElement>(null);
 	// The row that takes focus once a delete from the keyboard is confirmed.
-	const [focusAfter, setFocusAfter] = useState<{ id: string } | null>(null);
+	const { focusRow } = useFocusAfterRemove(listArea);
 	// The server can't know the width: it renders the docked panel, which CSS hides below 1180 px.
 	const isDocked = useMediaQuery(DOCKED, true);
 	const selection = useSelectedTransaction({
@@ -126,38 +112,20 @@ export function TransactionsPage({
 		const next = byKeyboard ? neighbourOf(listArea.current, row.id) : null;
 		deletes.remove(row, {
 			onConfirmed: () => {
-				if (next !== null) setFocusAfter({ id: next });
+				if (next !== null) focusRow(next);
 			},
 		});
 	};
 	const remove = () => {
 		if (actionable) removeRow(shown, true);
 	};
-	useEffect(() => {
-		if (focusAfter === null) return;
-		// The confirm gives focus back as it closes, so wait until it has gone.
-		let tries = FOCUS_FRAMES;
-		let frame = 0;
-		const move = () => {
-			const target = listArea.current?.querySelector<HTMLElement>(
-				`[role="row"][data-key="${CSS.escape(focusAfter.id)}"]`,
-			);
-			if (target && !document.querySelector('[role="alertdialog"]')) {
-				target.focus();
-			} else if (--tries > 0) frame = requestAnimationFrame(move);
-		};
-		move();
-		return () => cancelAnimationFrame(frame);
-	}, [focusAfter]);
-	useShortcut("E", edit, { enabled: actionable });
-	useShortcut("D", duplicate, { enabled: actionable });
-	useShortcut("Delete", remove, { enabled: actionable });
-	useShortcut("Backspace", remove, { enabled: actionable });
-	useShortcut("Escape", () => url.select(null), {
-		enabled: url.txn !== null && !anyDialog,
-		// Escape in a text field, a menu or the drawer belongs to them.
-		ignoreInputs: true,
-		ignoreDefaultPrevented: true,
+	useTransactionShortcuts({
+		actionable,
+		canClear: url.txn !== null && !anyDialog,
+		onEdit: edit,
+		onDuplicate: duplicate,
+		onRemove: remove,
+		onClear: () => url.select(null),
 	});
 
 	useGoneAnswer(() => url.select(null));
@@ -277,6 +245,13 @@ export function TransactionsPage({
 				onEdit={(row) => entry.openEdit(row)}
 				onDuplicate={(row) => entry.openDuplicate(row)}
 				onDelete={removeRow}
+				activeCategories={url.filter.cat ?? []}
+				onCategory={(category) =>
+					url.setFilter(
+						withCategoryToggled(url.filter, category),
+						url.list,
+					)
+				}
 			/>
 		</div>
 	);

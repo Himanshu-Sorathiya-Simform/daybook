@@ -17,6 +17,7 @@ import {
 } from "vitest";
 
 import { renderInApp } from "@/components/app/__tests__/helpers";
+import { QUERY_ROOTS } from "@/lib/api/query-keys";
 import { isUuidV7 } from "@/lib/ids";
 import { ok, refuse, route } from "../../hooks/__tests__/helpers";
 import type { EntryLocale } from "../../lib/entry";
@@ -91,6 +92,15 @@ function renderDialog(props: Partial<EntryDialogProps> = {}) {
 }
 
 type User = ReturnType<typeof userEvent.setup>;
+
+/** Waits until nothing is in flight, so a request the code would have made has been made. */
+async function quiet(queryClient: { isFetching(): number; isMutating(): number }) {
+	await act(async () => {});
+	await waitFor(() => {
+		expect(queryClient.isMutating()).toBe(0);
+		expect(queryClient.isFetching()).toBe(0);
+	});
+}
 
 // The payee's open list, like any popover, hides the rest of the dialog from screen readers,
 // so the field helpers look past it; tests of what is shown query without them.
@@ -832,12 +842,12 @@ describe("Save (BR-F03-20, BR-F03-21)", () => {
 
 	test("Enter alone in a field does not save", async () => {
 		const sent = creates();
-		const { user } = renderDialog();
+		const { user, queryClient } = renderDialog();
 
 		await fillValid(user);
 		await user.click(amount());
 		await user.keyboard("{Enter}");
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 
 		expect(sent).toHaveLength(0);
 	});
@@ -861,10 +871,10 @@ describe("Save (BR-F03-20, BR-F03-21)", () => {
 
 	test("a closed dialog does not save on Ctrl Enter", async () => {
 		const sent = creates();
-		const { user } = renderDialog({ isOpen: false });
+		const { user, queryClient } = renderDialog({ isOpen: false });
 
 		await user.keyboard("{Control>}{Enter}{/Control}");
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 
 		expect(sent).toHaveLength(0);
 	});
@@ -1154,7 +1164,7 @@ describe("offline (D-241)", () => {
 		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
 		act(() => onlineManager.setOnline(false));
 		const sent = creates();
-		const { user } = renderDialog();
+		const { user, queryClient } = renderDialog();
 
 		expect(
 			screen.getByText("You are offline. Connect to save."),
@@ -1166,7 +1176,7 @@ describe("offline (D-241)", () => {
 		);
 		await fillValid(user);
 		await user.keyboard("{Control>}{Enter}{/Control}");
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 
 		expect(sent).toHaveLength(0);
 	});
@@ -1283,7 +1293,7 @@ describe("closing (BR-F03-49, D-551)", () => {
 
 	test("Ctrl Enter while the confirm is open does not save", async () => {
 		const sent = creates();
-		const { user } = renderDialog();
+		const { user, queryClient } = renderDialog();
 
 		await fillValid(user);
 		await user.keyboard("{Escape}");
@@ -1291,7 +1301,7 @@ describe("closing (BR-F03-49, D-551)", () => {
 		// Off its buttons, as after a click on its text; on a button, Enter presses it.
 		act(() => confirm.focus());
 		await user.keyboard("{Control>}{Enter}{/Control}");
-		await new Promise((resolve) => setTimeout(resolve, 200));
+		await quiet(queryClient);
 
 		expect(sent).toHaveLength(0);
 		expect(screen.getByRole("alertdialog")).toBeInTheDocument();
@@ -1689,6 +1699,42 @@ describe("editing a row (BR-F03-23, flow 7.3)", () => {
 		expect(onEdited).not.toHaveBeenCalled();
 	});
 
+	// F03 section 12: a row gone elsewhere refreshes Subscriptions only if it was a charge.
+	describe("a 404 on a row that is gone", () => {
+		const SUBSCRIPTIONS = [QUERY_ROOTS.subscriptions, "list"];
+		const CHARGE = row({
+			source: "subscription",
+			subscriptionId: "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c99",
+			subscription: {
+				id: "0192f0c4-7a1e-7c3b-9d2a-5b8e1f0a1c99",
+				name: "Netflix",
+			},
+			dueOn: "2026-10-19",
+		});
+
+		async function staleAfterGone(target: typeof ROW_24) {
+			edits(() => refuse(404, "not_found"));
+			const onGone = vi.fn();
+			const { user, queryClient } = renderDialog({
+				mode: { kind: "edit", row: target },
+				onGone,
+			});
+			queryClient.setQueryData(SUBSCRIPTIONS, { seeded: true });
+			await screen.findByRole("heading", { name: "Edit Transaction" });
+			await raiseAmount(user);
+			await waitFor(() => expect(onGone).toHaveBeenCalledWith(target.id));
+			return queryClient.getQueryState(SUBSCRIPTIONS)?.isInvalidated;
+		}
+
+		test("a charge refreshes Subscriptions", async () => {
+			expect(await staleAfterGone(CHARGE)).toBe(true);
+		});
+
+		test("a manual row leaves them alone", async () => {
+			expect(await staleAfterGone(ROW_24)).toBe(false);
+		});
+	});
+
 	test("offline, Save is disabled with the message", async () => {
 		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
 		renderDialog({ mode: { kind: "edit", row: ROW_24 } });
@@ -1965,23 +2011,58 @@ describe("editing a charge or a demo row (BR-F03-11, BR-F03-16)", () => {
 		).toHaveTextContent("Mon, 2 Nov");
 	});
 
-	test("a linked charge says what editing it does", async () => {
+	// AC-F03-77
+	test("a linked charge says what editing it does, and links to its Subscription", async () => {
+		const id = "0192f0c4-7a1e-7c3b-9d2a-000000000001";
 		renderDialog({
 			mode: {
 				kind: "edit",
 				row: {
 					...ROW_16,
-					subscriptionId: "0192f0c4-7a1e-7c3b-9d2a-000000000001",
+					subscriptionId: id,
+					subscription: { id, name: "Netflix" },
 				},
 			},
 		});
 		await screen.findByRole("heading", { name: "Edit Transaction" });
 
+		const link = screen.getByRole("link", { name: "Auto from Netflix" });
+		expect(link).toHaveAttribute("href", `/subscriptions?open=${id}`);
+		expect(link.parentElement).toHaveTextContent(
+			"Auto from Netflix. Its type, date and time are fixed; editing it stops the Subscription from changing this charge.",
+		);
+	});
+
+	// AC-F03-77, D-586
+	test("the link names the Subscription, not a payee the user has edited", async () => {
+		const id = "0192f0c4-7a1e-7c3b-9d2a-000000000001";
+		renderDialog({
+			mode: {
+				kind: "edit",
+				row: {
+					...ROW_16,
+					payee: "Netflix India",
+					subscriptionId: id,
+					subscription: { id, name: "Netflix" },
+				},
+			},
+		});
+		await screen.findByRole("heading", { name: "Edit Transaction" });
+		expect(
+			screen.getByRole("link", { name: "Auto from Netflix" }),
+		).toBeVisible();
+		expect(screen.queryByText(/Netflix India\./)).toBeNull();
+	});
+
+	test("an unlinked charge says it is from a deleted Subscription, with no link", async () => {
+		renderDialog({ mode: { kind: "edit", row: ROW_16 } });
+		await screen.findByRole("heading", { name: "Edit Transaction" });
 		expect(
 			screen.getByText(
-				"Auto from Netflix. Its type, date and time are fixed; editing it stops the Subscription from changing this charge.",
+				"From a deleted Subscription. Its type, date and time are fixed.",
 			),
-		).toBeInTheDocument();
+		).toBeVisible();
+		expect(screen.queryByRole("link", { name: /Auto from/ })).toBeNull();
 	});
 
 	test("a demo row keeps its Type and shows its date and time as text", async () => {

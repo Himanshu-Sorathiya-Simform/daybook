@@ -126,8 +126,13 @@ export function chargesFromAfterSchedule({
 	return startDate > changeDate ? startDate : shiftDays(changeDate, 1);
 }
 
+/** How far one step of `nextChargeDates` looks, in months. */
+const SEARCH_STEP_MONTHS = 3;
+
 /** The first `count` chargeable dates from `from` with no tombstone in `skipped`, searching
- * 120 months ahead: the "next charges" of a dialog's schedule line and strip. */
+ * 120 months ahead: the "next charges" of a dialog's schedule line and strip. It looks a few
+ * months at a time and stops once it has `count`, since each date costs a time-zone aware
+ * calculation and the dialog asks on every render (AC-F05-16). */
 export function nextChargeDates(
 	subscription: Chargeable,
 	{
@@ -137,9 +142,19 @@ export function nextChargeDates(
 	}: { from: string; skipped?: Iterable<string>; count: number },
 ): string[] {
 	const taken = new Set(skipped);
-	return chargeableDates(subscription, from, shiftMonths(from, 120))
-		.filter((date) => !taken.has(date))
-		.slice(0, count);
+	const limit = shiftMonths(from, 120);
+	const found: string[] = [];
+	let start = from;
+	while (found.length < count && start <= limit) {
+		if (subscription.endDate !== null && start > subscription.endDate) break;
+		const stepEnd = shiftDays(shiftMonths(start, SEARCH_STEP_MONTHS), -1);
+		const end = stepEnd < limit ? stepEnd : limit;
+		for (const date of chargeableDates(subscription, start, end)) {
+			if (!taken.has(date)) found.push(date);
+		}
+		start = shiftDays(end, 1);
+	}
+	return found.slice(0, count);
 }
 
 export type ScheduleChangeNote =

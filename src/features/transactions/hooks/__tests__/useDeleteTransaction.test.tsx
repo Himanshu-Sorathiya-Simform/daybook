@@ -25,7 +25,7 @@ type Result = { current: ReturnType<typeof useDeleteTransaction> };
 
 async function remove(
 	result: Result,
-	extra: { hint?: object; version?: number } = {},
+	extra: { hint?: object; version?: number; charge?: boolean } = {},
 ) {
 	await act(async () => {
 		await result.current
@@ -34,6 +34,7 @@ async function remove(
 				version: extra.version ?? 1,
 				idempotencyKey: KEY,
 				...(extra.hint ? { hint: extra.hint as never } : {}),
+				...(extra.charge === undefined ? {} : { charge: extra.charge }),
 			})
 			.catch(() => undefined);
 	});
@@ -83,6 +84,71 @@ describe("useDeleteTransaction (BR-F03-26)", () => {
 		expect(queryClient.getQueryState([QUERY_ROOTS.profile])?.isInvalidated).toBe(
 			true,
 		);
+	});
+
+	describe("a Subscription's charge (F03 section 12, BR-F03-17)", () => {
+		const SUBSCRIPTIONS = [QUERY_ROOTS.subscriptions, "list"];
+		const watch = () => {
+			const queryClient = testClient();
+			queryClient.setQueryData(SUBSCRIPTIONS, { seeded: true });
+			return queryClient;
+		};
+		const invalidated = (queryClient: ReturnType<typeof testClient>) =>
+			queryClient.getQueryState(SUBSCRIPTIONS)?.isInvalidated;
+
+		// AC-F03-77
+		test("its delete also refreshes Subscriptions, whose figures follow its tombstone", async () => {
+			route(network, "delete", PATH, gone);
+			const queryClient = watch();
+			const { result } = renderHookInApp(() => useDeleteTransaction(), {
+				queryClient,
+			});
+			await remove(result, { charge: true });
+			await waitFor(() => expect(invalidated(queryClient)).toBe(true));
+		});
+
+		test("a manual row's delete leaves Subscriptions alone", async () => {
+			route(network, "delete", PATH, gone);
+			const queryClient = watch();
+			const { result } = renderHookInApp(() => useDeleteTransaction(), {
+				queryClient,
+			});
+			await remove(result, { charge: false });
+			await waitFor(() => expect(result.current.isSuccess).toBe(true));
+			expect(invalidated(queryClient)).toBe(false);
+		});
+
+		test("so does a delete that says nothing about it", async () => {
+			route(network, "delete", PATH, gone);
+			const queryClient = watch();
+			const { result } = renderHookInApp(() => useDeleteTransaction(), {
+				queryClient,
+			});
+			await remove(result);
+			await waitFor(() => expect(result.current.isSuccess).toBe(true));
+			expect(invalidated(queryClient)).toBe(false);
+		});
+
+		test("a 404 on a charge counts as done and refreshes Subscriptions too", async () => {
+			route(network, "delete", PATH, () => refuse(404, "not_found"));
+			const queryClient = watch();
+			const { result } = renderHookInApp(() => useDeleteTransaction(), {
+				queryClient,
+			});
+			await remove(result, { charge: true });
+			await waitFor(() => expect(invalidated(queryClient)).toBe(true));
+		});
+
+		test("a refused delete of a charge refreshes nothing", async () => {
+			route(network, "delete", PATH, () => refuse(500, "internal"));
+			const queryClient = watch();
+			const { result } = renderHookInApp(() => useDeleteTransaction(), {
+				queryClient,
+			});
+			await remove(result, { charge: true });
+			expect(result.current.isError).toBe(true);
+			expect(invalidated(queryClient)).toBe(false);
+		});
 	});
 
 	// D-239, BR-F03-25

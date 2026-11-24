@@ -8,6 +8,7 @@ import {
 	categoryTiles,
 	changedFields,
 	chargeNotice,
+	chargeNoticeLink,
 	checkEntry,
 	counterOf,
 	createBody,
@@ -1175,21 +1176,73 @@ describe("changedFields (BR-F03-78)", () => {
 	});
 });
 
-describe("chargeNotice (BR-F03-48, BR-F03-16)", () => {
-	test("an unlinked charge, as every charge is at M1 (D-475)", () => {
-		expect(chargeNotice({ subscriptionId: null, payee: "Netflix" })).toBe(
-			"From a deleted Subscription. Its type, date and time are fixed.",
-		);
-	});
+describe("chargeNotice (BR-F03-48, BR-F03-16, D-586)", () => {
+	const LINKED = "0192f0c4-7a1e-7c3b-9d2a-000000000001";
+	const FIXED =
+		"Its type, date and time are fixed; editing it stops the Subscription from changing this charge.";
 
-	test("a linked charge names its payee", () => {
+	test("an unlinked charge reads From a deleted Subscription", () => {
 		expect(
 			chargeNotice({
-				subscriptionId: "0192f0c4-7a1e-7c3b-9d2a-000000000001",
+				subscriptionId: null,
+				subscription: null,
 				payee: "Netflix",
 			}),
-		).toBe(
-			"Auto from Netflix. Its type, date and time are fixed; editing it stops the Subscription from changing this charge.",
+		).toBe("From a deleted Subscription. Its type, date and time are fixed.");
+	});
+
+	test("a linked charge names its Subscription", () => {
+		expect(
+			chargeNotice({
+				subscriptionId: LINKED,
+				subscription: { id: LINKED, name: "Netflix" },
+				payee: "Netflix",
+			}),
+		).toBe(`Auto from Netflix. ${FIXED}`);
+	});
+
+	test("the name is the Subscription's, not the payee an edit has changed", () => {
+		expect(
+			chargeNotice({
+				subscriptionId: LINKED,
+				subscription: { id: LINKED, name: "Netflix" },
+				payee: "Netflix India",
+			}),
+		).toBe(`Auto from Netflix. ${FIXED}`);
+	});
+
+	test("with no Subscription name at hand it falls back to the payee, then to nothing", () => {
+		const base = { subscriptionId: LINKED, subscription: null };
+		expect(chargeNotice({ ...base, payee: "Netflix" })).toBe(
+			`Auto from Netflix. ${FIXED}`,
 		);
+		expect(chargeNotice({ ...base, payee: null })).toBe(`Auto from . ${FIXED}`);
+	});
+});
+
+describe("chargeNoticeLink (BR-F03-16, D-586)", () => {
+	const LINKED = "0192f0c4-7a1e-7c3b-9d2a-000000000001";
+
+	test("a linked charge links to its Subscription on the Subscriptions page", () => {
+		expect(
+			chargeNoticeLink({
+				subscriptionId: LINKED,
+				subscription: { id: LINKED, name: "Netflix" },
+				payee: "Netflix India",
+			}),
+		).toEqual({
+			text: "Auto from Netflix",
+			href: `/subscriptions?open=${LINKED}`,
+		});
+	});
+
+	test("an unlinked charge has no link", () => {
+		expect(
+			chargeNoticeLink({
+				subscriptionId: null,
+				subscription: null,
+				payee: "Netflix",
+			}),
+		).toBeNull();
 	});
 });

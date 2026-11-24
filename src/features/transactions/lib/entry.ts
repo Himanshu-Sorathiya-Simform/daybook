@@ -14,6 +14,7 @@ import {
 	type TransactionCreateInput,
 	type TransactionEditInput,
 } from "@/lib/transactions/schemas";
+import { subscriptionHref } from "./subscriptions";
 import { editWindowMessage } from "./messages";
 import type { TransactionAnswer } from "./types";
 import type { DialogField } from "./write-errors";
@@ -169,14 +170,28 @@ export function modeValues(
 	return startValues(locale.timezone, now);
 }
 
+/** The words that name a linked charge's Subscription: "Auto from Netflix", from the
+ * Subscription's name and not the payee, which an edit can change (BR-F03-16, D-586). */
+function autoFrom(row: Pick<TransactionAnswer, "subscription" | "payee">): string {
+	return `Auto from ${row.subscription?.name ?? row.payee ?? ""}`;
+}
+
 /** The notice in place of Type on a charge's edit (BR-F03-48, BR-F03-16): "Auto from Netflix. Its
- * type, date and time are fixed; …" while linked, the deleted-Subscription form once not. At M1
- * every charge is unlinked (D-475); the link to the Subscription arrives with F05. */
+ * type, date and time are fixed; …" while linked, the deleted-Subscription form once not. */
 export function chargeNotice(
-	row: Pick<TransactionAnswer, "subscriptionId" | "payee">,
+	row: Pick<TransactionAnswer, "subscriptionId" | "subscription" | "payee">,
 ): string {
 	if (row.subscriptionId === null) return ENTRY_TEXT.chargeUnlinked;
-	return `Auto from ${row.payee ?? ""}. ${ENTRY_TEXT.chargeLinked}`;
+	return `${autoFrom(row)}. ${ENTRY_TEXT.chargeLinked}`;
+}
+
+/** The link in a linked charge's notice: "Auto from Netflix", leading to the Subscription
+ * (BR-F03-16, D-586). `null` once the charge is unlinked, when the notice is plain text. */
+export function chargeNoticeLink(
+	row: Pick<TransactionAnswer, "subscriptionId" | "subscription" | "payee">,
+): { text: string; href: string } | null {
+	if (row.subscriptionId === null) return null;
+	return { text: autoFrom(row), href: subscriptionHref(row.subscriptionId) };
 }
 
 /** Whether a row's date and time are fixed (BR-F03-11, BR-F03-16): a charge's or a demo row's. */

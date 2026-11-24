@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { ApiRequestError } from "@/lib/api/client";
 import {
 	readBudgetDeleteError,
+	readBudgetDeleteRefusal,
 	readBudgetNoticeError,
 	readBudgetWriteError,
 } from "../write-errors";
@@ -265,6 +266,30 @@ describe("readBudgetWriteError (flows 7.1 to 7.4, section 8)", () => {
 		const bug = new TypeError("x is undefined");
 		expect(() => readBudgetWriteError(bug)).toThrow(bug);
 		expect(() => readBudgetWriteError("text")).toThrow();
+	});
+});
+
+describe("readBudgetDeleteRefusal (BR-F04-06)", () => {
+	test("an error that is not an API error is thrown on", () => {
+		expect(() => readBudgetDeleteRefusal(new Error("bug"))).toThrow("bug");
+	});
+
+	test("a refused delete is the dialog's own line, in the delete words", () => {
+		expect(readBudgetDeleteRefusal(NETWORK)).toEqual({
+			kind: "form",
+			message: DELETE_FAILED,
+		});
+	});
+
+	test("a 409 is the conflict view and a 401 is the app's, as for any write", () => {
+		expect(
+			readBudgetDeleteRefusal(
+				http(409, "version_conflict", { details: { current: CURRENT } }),
+			),
+		).toEqual({ kind: "conflict", current: CURRENT });
+		expect(readBudgetDeleteRefusal(http(401, "unauthenticated"))).toEqual({
+			kind: "handled",
+		});
 	});
 });
 

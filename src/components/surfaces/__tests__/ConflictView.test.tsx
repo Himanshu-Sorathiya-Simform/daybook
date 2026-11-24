@@ -2,7 +2,24 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 
-import { ConflictView, type ConflictViewProps } from "../ConflictView";
+import {
+	ConflictView,
+	type ConflictViewProps,
+	type ConflictViewText,
+} from "../ConflictView";
+
+const TEXT: ConflictViewText = {
+	title: "This item changed on another device",
+	intro: "Choose which version to keep.",
+	deleteIntro: "It changed after you chose to delete it.",
+	mine: "Yours",
+	theirs: "Saved now",
+	differs: "Differs",
+	keepMine: "Keep mine",
+	keepTheirs: "Keep theirs",
+	deleteAnyway: "Delete anyway",
+	keepIt: "Keep it",
+};
 
 const ROWS: ConflictViewProps["rows"] = [
 	{
@@ -29,14 +46,10 @@ function renderView(props: Partial<ConflictViewProps> = {}) {
 	};
 	render(
 		<ConflictView
-			title="This item changed on another device"
-			intro="Choose which version to keep."
+			text={TEXT}
+			rowHeading="Field"
 			isOpen
-			headings={{ row: "Field", mine: "Yours", theirs: "Saved now" }}
 			rows={ROWS}
-			differsLabel="Differs"
-			keepMineLabel="Keep mine"
-			keepTheirsLabel="Keep theirs"
 			{...handlers}
 			{...props}
 		/>,
@@ -101,14 +114,42 @@ describe("ConflictView", () => {
 		expect(onKeepMine).toHaveBeenCalledTimes(1);
 	});
 
-	test("takes the choices' words from its caller", () => {
-		renderView({ keepMineLabel: "Delete anyway", keepTheirsLabel: "Keep it" });
+	test("a delete reads its own intro, Delete anyway and Keep it", () => {
+		renderView({ isDelete: true });
+		expect(
+			within(dialog()).getByText("It changed after you chose to delete it."),
+		).toBeVisible();
+		expect(
+			within(dialog()).queryByText("Choose which version to keep."),
+		).toBeNull();
+		expect(
+			within(dialog()).queryByRole("button", { name: "Keep mine" }),
+		).toBeNull();
 		expect(
 			within(dialog()).getByRole("button", { name: "Delete anyway" }),
 		).toBeVisible();
 		expect(
 			within(dialog()).getByRole("button", { name: "Keep it" }),
 		).toBeVisible();
+	});
+
+	test("a delete heads the user's column with deletedMine when the text has one", () => {
+		renderView({
+			isDelete: true,
+			text: { ...TEXT, deletedMine: "As you deleted it" },
+		});
+		expect(
+			within(dialog())
+				.getAllByRole("columnheader")
+				.map((each) => each.textContent),
+		).toEqual(["Field", "As you deleted it", "Saved now"]);
+	});
+
+	test("deletedMine is ignored when it is not a delete", () => {
+		renderView({ text: { ...TEXT, deletedMine: "As you deleted it" } });
+		expect(within(dialog()).getAllByRole("columnheader")[1]).toHaveTextContent(
+			"Yours",
+		);
 	});
 
 	test("says what Keep mine saves when it is given a line", () => {

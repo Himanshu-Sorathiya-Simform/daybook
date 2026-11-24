@@ -101,3 +101,30 @@ test("globals.css imports every file in src/styles", () => {
 
 	for (const file of cssFiles) expect(globals).toContain(`../src/styles/${file}`);
 });
+
+describe("scrollbars (D-621)", () => {
+	test("the thumb and track are tokens that follow the colour tokens", () => {
+		const space = read("space.css");
+		expect(space).toMatch(/--scrollbar-thumb:\s*var\(--line-strong\)/);
+		expect(space).toMatch(/--scrollbar-track:\s*transparent/);
+	});
+
+	test("every scroller inherits the pair from :root", () => {
+		const base = read("base.css");
+		expect(base).toMatch(
+			/:root\s*\{[^}]*scrollbar-color:\s*var\(--scrollbar-thumb\)\s+var\(--scrollbar-track\)/,
+		);
+	});
+
+	test("the thin scrollbar is one utility, scrollbar-thin", () => {
+		const space = read("space.css");
+		expect(space).toMatch(
+			/@utility scrollbar-thin\s*\{[^}]*scrollbar-width:\s*thin/,
+		);
+	});
+
+	test("no file styles the WebKit scrollbar pseudo-elements, so one look holds everywhere", () => {
+		for (const file of cssFiles)
+			expect(read(file)).not.toContain("::-webkit-scrollbar");
+	});
+});

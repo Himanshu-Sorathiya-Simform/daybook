@@ -17,20 +17,35 @@ export type ConflictViewRow = {
 	theirs: ReactNode;
 };
 
-export type ConflictViewProps = {
+/** The words of a feature's conflict view. A delete swaps in its own intro, its own heading
+ * for the user's column when it has one, and "Delete anyway" and "Keep it". */
+export type ConflictViewText = {
 	title: string;
 	/** The line above the table. */
 	intro: string;
+	deleteIntro: string;
+	mine: string;
+	/** The heading of the user's column on a delete, when it differs from `mine`. */
+	deletedMine?: string;
+	theirs: string;
+	/** The word that marks a row that differs, so colour is never the only sign. */
+	differs: string;
+	keepMine: string;
+	keepTheirs: string;
+	deleteAnyway: string;
+	keepIt: string;
+};
+
+export type ConflictViewProps = {
+	text: ConflictViewText;
+	/** The heading of the first column: what a row is, a field or a month. */
+	rowHeading: string;
+	/** The view for a delete: its intro and "Delete anyway" and "Keep it". */
+	isDelete?: boolean;
 	isOpen: boolean;
 	/** Closing without a choice. */
 	onOpenChange: (isOpen: boolean) => void;
-	/** The column headings: what a row is, the user's version and the saved one. */
-	headings: { row: string; mine: string; theirs: string };
 	rows: readonly ConflictViewRow[];
-	/** The word that marks a row that differs, so colour is never the only sign. */
-	differsLabel: string;
-	keepMineLabel: string;
-	keepTheirsLabel: string;
 	onKeepMine: () => void;
 	onKeepTheirs: () => void;
 	/** What Keep mine saves, under the table. */
@@ -51,15 +66,12 @@ export type ConflictViewProps = {
  * the rows and the choices; this lays them out.
  */
 export function ConflictView({
-	title,
-	intro,
+	text,
+	rowHeading,
+	isDelete = false,
 	isOpen,
 	onOpenChange,
-	headings,
 	rows,
-	differsLabel,
-	keepMineLabel,
-	keepTheirsLabel,
 	onKeepMine,
 	onKeepTheirs,
 	keepMineLine,
@@ -68,9 +80,10 @@ export function ConflictView({
 	rowColumnClassName = "w-[30%]",
 	className,
 }: Readonly<ConflictViewProps>) {
+	const mineHeading = (isDelete && text.deletedMine) || text.mine;
 	return (
 		<Dialog
-			title={title}
+			title={text.title}
 			size="lg"
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
@@ -83,19 +96,21 @@ export function ConflictView({
 						isDisabled={isPending}
 						onPress={onKeepTheirs}
 					>
-						{keepTheirsLabel}
+						{isDelete ? text.keepIt : text.keepTheirs}
 					</Button>
 					<Button
 						isPending={isPending}
 						onPress={onKeepMine}
 					>
-						{keepMineLabel}
+						{isDelete ? text.deleteAnyway : text.keepMine}
 					</Button>
 				</>
 			}
 			{...(className ? { className } : {})}
 		>
-			<p className="text-body text-ink-2">{intro}</p>
+			<p className="text-body text-ink-2">
+				{isDelete ? text.deleteIntro : text.intro}
+			</p>
 			<table
 				className={cn(
 					"text-body w-full table-fixed border-collapse",
@@ -108,19 +123,19 @@ export function ConflictView({
 							scope="col"
 							className={cn("pb-1.5 font-normal", rowColumnClassName)}
 						>
-							{headings.row}
+							{rowHeading}
 						</th>
 						<th
 							scope="col"
 							className="pb-1.5 font-normal"
 						>
-							{headings.mine}
+							{mineHeading}
 						</th>
 						<th
 							scope="col"
 							className="pb-1.5 font-normal"
 						>
-							{headings.theirs}
+							{text.theirs}
 						</th>
 					</tr>
 				</thead>
@@ -141,7 +156,7 @@ export function ConflictView({
 								<span className="flex flex-wrap items-center gap-1.5">
 									{row.label}
 									{row.differs && (
-										<Badge tone="outline">{differsLabel}</Badge>
+										<Badge tone="outline">{text.differs}</Badge>
 									)}
 								</span>
 							</th>

@@ -1,11 +1,9 @@
 "use client";
 
-import { LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
 	GridList as AriaGridList,
 	GridListHeader as AriaGridListHeader,
-	GridListLoadMoreItem as AriaGridListLoadMoreItem,
 	GridListSection as AriaGridListSection,
 } from "react-aria-components";
 
@@ -57,14 +55,18 @@ export type TransactionListProps = {
 /** The number of skeleton rows while the first page loads. */
 const SKELETON_ROWS = 7;
 
+/** The next page starts loading when the end of the list is this far below the screen, a screen
+ * or two ahead, so the rows are there before the user arrives (BR-F03-30, D-620). */
+const NEXT_PAGE_MARGIN = "0px 0px 1000px 0px";
+
 /** How many frames a focus move waits for its row to reach the page. */
 const FOCUS_FRAMES = 10;
 
 /**
  * The Transactions list (BR-F03-29 to BR-F03-31, BR-F03-55 to BR-F03-57, D-36): a React Aria
  * GridList of the loaded pages, in sections under sticky group headers with their totals.
- * - **Paging:** the next page loads when the end scrolls into view, and from Load more, which
- *   shows while there is a next page (NFR-5). Pages trimmed from the top (`maxPages`) reload
+ * - **Paging:** the next page loads once the end is within 1,000 px of the screen, and from
+ *   Load more, which shows while there is a next page and shows the loading state (NFR-5). Pages trimmed from the top (`maxPages`) reload
  *   the same ways from above. Each load is announced politely (D-530).
  * - **States:** skeleton rows while the first page loads; "No Transactions yet." with no
  *   filter; "No Transactions match these filters." with Clear filters; and the error with
@@ -158,7 +160,7 @@ export function TransactionList({
 	// always counts as in view: it fired on every change and never on scrolling, so a page
 	// loaded at the top set off one at the end, which trimmed the top again.
 	useInView(top, hasPreviousPage, () => void loadEarlier(), data);
-	useInView(loadMore, hasNextPage, () => void loadNext(), data);
+	useInView(loadMore, hasNextPage, () => void loadNext(), data, NEXT_PAGE_MARGIN);
 
 	// Enter opens the selected row and Escape clears it (BR-F03-52). Both listen on the grid
 	// before the rows' own handlers, which take the keys for themselves: React Aria's row action
@@ -328,15 +330,6 @@ export function TransactionList({
 						</AriaGridListSection>
 					);
 				})}
-				<AriaGridListLoadMoreItem
-					isLoading={isFetchingNextPage}
-					className="flex h-12 items-center justify-center"
-				>
-					<LoaderCircle
-						aria-label="Loading more Transactions"
-						className="text-ink-3 size-4 animate-spin motion-reduce:animate-none"
-					/>
-				</AriaGridListLoadMoreItem>
 			</AriaGridList>
 			{hasNextPage && (
 				<div

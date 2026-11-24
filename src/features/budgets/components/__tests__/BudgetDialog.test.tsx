@@ -406,6 +406,17 @@ describe("Change limit (BR-F04-20)", () => {
 		expect(patches).toHaveLength(1);
 	});
 
+	// A browser submits on Enter in a field only for a form with a submit button of its own, so
+	// the footer's button names the form, which user-event does not play out.
+	test("the confirm button is the form's submit button, so Enter in a field saves", async () => {
+		const { user } = renderDialog("change", "food");
+		await user.clear(limitBox());
+		await user.type(limitBox(), "7000");
+		const confirm = button("Change from November") as HTMLButtonElement;
+		expect(confirm).toHaveAttribute("type", "submit");
+		expect(confirm.form).toBe(screen.getByRole("form"));
+	});
+
 	test("submitting does nothing when nothing would change", () => {
 		const patches = route(network, "patch", "/api/budgets/:id", () => ok({}));
 		const { onClose } = renderDialog("change", "food");

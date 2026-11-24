@@ -44,6 +44,12 @@ const network = setupServer(
 		await delay("infinite");
 		return HttpResponse.json({ data: meFor("u1") });
 	}),
+	// The boot catch-up the shell makes on mount (root 5.2): nothing was due.
+	http.post(url("/api/sync/catch-up"), () =>
+		HttpResponse.json({
+			data: { skipped: false, chargesCreated: 0, pricesUpdated: false },
+		}),
+	),
 );
 
 beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
@@ -501,5 +507,52 @@ describe("AppShell logout (D-502, D-515)", () => {
 		expect(navigate).toHaveBeenCalledExactlyOnceWith(
 			"/api/session/expired?reason=logout",
 		);
+	});
+});
+
+describe("AppShell boot catch-up (root 5.2, F05 flow 7.2)", () => {
+	/** Counts the shell's calls to the boot endpoint, answering `chargesCreated`. */
+	function bootCalls(chargesCreated = 0) {
+		const calls: string[] = [];
+		network.use(
+			http.post(url("/api/sync/catch-up"), async ({ request }) => {
+				calls.push(await request.text());
+				return HttpResponse.json({
+					data: { skipped: false, chargesCreated, pricesUpdated: false },
+				});
+			}),
+		);
+		return calls;
+	}
+
+	// AC-F05-03
+	test("calls the boot endpoint once when the app starts, with an empty body", async () => {
+		const calls = bootCalls();
+		await renderShell();
+		await waitFor(() => expect(calls).toEqual(["{}"]));
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(calls).toHaveLength(1);
+	});
+
+	test("does not call it again when the shell re-renders", async () => {
+		const calls = bootCalls();
+		const { user } = await renderShell();
+		await waitFor(() => expect(calls).toHaveLength(1));
+		// Opening the account menu re-renders the shell.
+		await openMenu(user);
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(calls).toHaveLength(1);
+	});
+
+	test("a failed call shows nothing and leaves the page in place", async () => {
+		network.use(
+			http.post(url("/api/sync/catch-up"), () => HttpResponse.error()),
+		);
+		await renderShell();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(
+			screen.getByRole("heading", { name: "Page body" }),
+		).toBeInTheDocument();
+		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 	});
 });

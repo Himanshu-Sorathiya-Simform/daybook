@@ -11,6 +11,7 @@ describe("QUERY_ROOTS (STATE-5)", () => {
 			payees: "payees",
 			transactionViews: "transactionViews",
 			budgets: "budgets",
+			subscriptions: "subscriptions",
 		});
 	});
 

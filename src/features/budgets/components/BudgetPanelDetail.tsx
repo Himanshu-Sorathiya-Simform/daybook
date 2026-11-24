@@ -31,7 +31,7 @@ import {
 	SUBJECT_LABELS,
 } from "../lib/panel";
 import { LastSixMonths } from "./LastSixMonths";
-import { LineSkeleton } from "./LineSkeleton";
+import { LineSkeleton } from "@/components/feedback/LineSkeleton";
 import { LimitHistory } from "./LimitHistory";
 import { WhereItWent } from "./WhereItWent";
 
@@ -218,7 +218,7 @@ export function BudgetPanelDetail({
 			aria-busy={subject === null}
 			className={cn("flex min-h-full flex-col gap-4.5", className)}
 		>
-			<div className="flex items-center">
+			<div className="bg-section sticky -top-5 z-10 -mt-5 flex items-center pt-5">
 				{subject ?
 					<h2 className="text-label text-ink-2 flex-1">
 						{SUBJECT_LABELS[subject.kind]}

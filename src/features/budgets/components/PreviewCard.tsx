@@ -10,7 +10,7 @@ import {
 	type PreviewContext,
 	unchangedText,
 } from "../lib/preview";
-import { LineSkeleton } from "./LineSkeleton";
+import { LineSkeleton } from "@/components/feedback/LineSkeleton";
 
 export type PreviewCardProps = {
 	month: PreviewMonth;

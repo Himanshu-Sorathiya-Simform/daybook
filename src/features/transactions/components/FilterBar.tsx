@@ -8,6 +8,7 @@ import type { WeekStart } from "@/lib/geo";
 import type { ListParams, TransactionFilter } from "@/lib/transactions/url";
 import { useFacets } from "../hooks/useFacets";
 import { useHistogram } from "../hooks/useHistogram";
+import { useSubscriptionNames } from "../hooks/useSubscriptionNames";
 import { activeChips, type FilterLocale, omitFields } from "../lib/filter-labels";
 import { AmountMenu } from "./AmountMenu";
 import { CategoryMenu } from "./CategoryMenu";
@@ -71,7 +72,15 @@ export function FilterBar({
 	});
 	const countsPending = countsOn && !isOffline && facets.isPending;
 	const counts = facets.data;
-	const chips = activeChips(filter, locale);
+	// A `sub` chip names its Subscription, read only while one is filtered (D-541).
+	const subscriptions = useSubscriptionNames(filter.sub !== undefined);
+	const chips = activeChips(
+		filter,
+		locale,
+		filter.sub === undefined ?
+			null
+		:	(subscriptions.data?.get(filter.sub) ?? null),
+	);
 
 	/** Follows which control is open, for what to load. A close that arrives after another
 	 * control opened leaves that one open; React Aria closes first, but nothing promises it. */

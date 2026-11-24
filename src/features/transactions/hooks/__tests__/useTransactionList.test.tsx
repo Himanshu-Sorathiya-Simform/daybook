@@ -252,7 +252,9 @@ describe("useTransactionList when groups reorder (BR-F03-57, AC-F03-37)", () => 
 		const { result } = renderList({ filter: {}, list: BY_CATEGORY });
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		await act(() => result.current.fetchNextPage());
-		await new Promise((resolve) => setTimeout(resolve, 30));
+		await waitFor(() => expect(result.current.data?.pages).toHaveLength(2));
+		await act(async () => {});
+		expect(result.current.isFetching).toBe(false);
 		expect(seen).toHaveLength(2);
 		expect(result.current.data?.pages).toHaveLength(2);
 	});
@@ -262,7 +264,9 @@ describe("useTransactionList when groups reorder (BR-F03-57, AC-F03-37)", () => 
 		const { result } = renderList({ filter: {}, list: BY_DAY });
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		await scrollDown(result, 2);
-		await new Promise((resolve) => setTimeout(resolve, 30));
+		await waitFor(() => expect(result.current.data?.pages).toHaveLength(3));
+		await act(async () => {});
+		expect(result.current.isFetching).toBe(false);
 		expect(seen).toHaveLength(3);
 	});
 });

@@ -44,7 +44,7 @@ test("no session gets 401, and no profile 403 profile_required", async () => {
 });
 
 // AC-F03-21, AC-F03-44, through HTTP; golden: section 5's category counts.
-test("lists the payees and categories, with no currency since they hold no money", async () => {
+test("lists the payees and categories, with each payee's last expense and the profile currency", async () => {
 	const { status, body } = await get("");
 	expect(status).toBe(200);
 	const data = (
@@ -57,9 +57,32 @@ test("lists the payees and categories, with no currency since they hold no money
 		lastUsedOn: "2026-11-01",
 		lastType: "expense",
 		lastCategory: "food",
+		lastExpense: { amountMinor: 42000, category: "food" },
 	});
 	expect(data.categories[0]).toEqual({ key: "food", count: 7 });
-	expect(data).not.toHaveProperty("currency");
+	// lastExpense holds money, so the answer carries the currency (API-6, D-451).
+	expect(data).toHaveProperty("currency", "INR");
+});
+
+// AC-F03-44, D-451: a payee with income only has no last expense, and Croma's is #17, not the
+// refund #18.
+test("lastExpense is null for income only, and skips a newer refund", async () => {
+	const { body } = await get("");
+	const items = (
+		body as {
+			data: {
+				items: { payee: string; lastExpense: unknown }[];
+			};
+		}
+	).data.items;
+	const last = (payee: string) =>
+		items.find((item) => item.payee === payee)?.lastExpense;
+	expect(last("Acme Corp")).toBeNull();
+	expect(last("Croma")).toEqual({ amountMinor: 450000, category: "shopping" });
+	expect(last("Netflix")).toEqual({
+		amountMinor: 64900,
+		category: "entertainment",
+	});
 });
 
 // AC-F03-44
@@ -74,8 +97,10 @@ test("q=apart answers Sunrise Apartments alone, without categories", async () =>
 					lastUsedOn: "2026-11-01",
 					lastType: "expense",
 					lastCategory: "housing",
+					lastExpense: { amountMinor: 1800000, category: "housing" },
 				},
 			],
+			currency: "INR",
 		},
 	});
 });

@@ -62,13 +62,18 @@ export type FacetCounts = {
 	source: Record<Source, number>;
 };
 
-/** One payee in the suggestions (BR-F03-44): its newest spelling, type and category. */
+/** A payee's newest expense (BR-F03-44, D-451): what F05's Add fills in. */
+export type LastExpense = { amountMinor: number; category: CategoryKey };
+
+/** One payee in the suggestions (BR-F03-44): its newest spelling, type and category, and its
+ * newest expense, or null when it has none. */
 export type PayeeItem = {
 	payee: string;
 	count: number;
 	lastUsedOn: string;
 	lastType: TxnType;
 	lastCategory: CategoryKey;
+	lastExpense: LastExpense | null;
 };
 
 /** The suggestions; `categories` only without a search (BR-F03-44, BR-F03-61). */
@@ -76,6 +81,10 @@ export type PayeeList = {
 	items: PayeeItem[];
 	categories?: { key: CategoryKey; count: number }[];
 };
+
+/** `GET /api/payees`: the suggestions with the profile currency, since `lastExpense` holds
+ * money (API-6). */
+export type PayeesAnswer = WithCurrency<PayeeList>;
 
 /** One payee's recent rows (BR-F03-62); the endpoint adds `currency`. */
 export type PayeeHistory = {

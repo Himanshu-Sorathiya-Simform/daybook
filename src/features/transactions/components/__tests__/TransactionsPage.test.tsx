@@ -8,7 +8,7 @@ import {
 	within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { HttpResponse } from "msw";
+import { delay, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { I18nProvider } from "react-aria-components";
 import { toast } from "sonner";
@@ -126,12 +126,20 @@ const CHECK_B = "?from=2026-10-01&to=2026-10-31&cat=food";
 const observers = new Set<{
 	callback: IntersectionObserverCallback;
 	targets: Element[];
+	options: IntersectionObserverInit | undefined;
 }>();
 let stays: ((target: Element) => boolean) | null = null;
 class FakeObserver {
-	private entry: { callback: IntersectionObserverCallback; targets: Element[] };
-	constructor(callback: IntersectionObserverCallback) {
-		this.entry = { callback, targets: [] };
+	private entry: {
+		callback: IntersectionObserverCallback;
+		targets: Element[];
+		options: IntersectionObserverInit | undefined;
+	};
+	constructor(
+		callback: IntersectionObserverCallback,
+		options?: IntersectionObserverInit,
+	) {
+		this.entry = { callback, targets: [], options };
 		observers.add(this.entry);
 	}
 	observe(target: Element) {
@@ -222,6 +230,15 @@ function renderPage(
 		</Url>,
 	);
 	return { ...view, lists, summaries, calls, user: userEvent.setup() };
+}
+
+/** Waits until nothing is in flight, so a request the page would have made has been made. */
+async function quiet(queryClient: { isFetching(): number; isMutating(): number }) {
+	await act(async () => {});
+	await waitFor(() => {
+		expect(queryClient.isMutating()).toBe(0);
+		expect(queryClient.isFetching()).toBe(0);
+	});
 }
 
 const grid = () => screen.findByRole("grid", { name: "Transactions" });
@@ -324,7 +341,7 @@ describe("the page (F03 section 6)", () => {
 		).toHaveLength(1);
 		expect(figure("Out")).toBe("₹6,220.00");
 		expect(rowNames()).toHaveLength(4);
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 		expect(lists).toEqual([]);
 		expect(summaries).toEqual([]);
 		expect(views).toEqual([]);
@@ -369,7 +386,7 @@ describe("the page (F03 section 6)", () => {
 				currency: "INR",
 			}),
 		);
-		const { calls, lists, summaries, user } = renderPage(CHECK_B);
+		const { calls, lists, summaries, user, queryClient } = renderPage(CHECK_B);
 		await grid();
 		await user.click(await screen.findByRole("radio", { name: "October food" }));
 
@@ -377,7 +394,7 @@ describe("the page (F03 section 6)", () => {
 			mode: "push",
 			href: `/transactions${CHECK_B}&view=${idOf(1)}`,
 		});
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 		expect(lists).toHaveLength(1);
 		expect(summaries).toHaveLength(1);
 	});
@@ -872,14 +889,16 @@ describe("loading more (BR-F03-30, D-530)", () => {
 	// AC-F03-22, BR-F03-30: a page loaded at the top sets off nothing at the end, so it is never
 	// trimmed straight away; the end loads only as it comes into view.
 	test("loading an earlier page asks for no next page", async () => {
-		const { lists, user } = renderPage("?sort=amount", { list: threePages() });
+		const { lists, user, queryClient } = renderPage("?sort=amount", {
+			list: threePages(),
+		});
 		await grid();
 		await user.click(screen.getByRole("button", { name: "Load more" }));
 		await waitFor(() => expect(rowNames()).toHaveLength(100));
 		const asked = lists.length;
 
 		scrollToTop();
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 
 		expect(
 			lists
@@ -954,12 +973,12 @@ describe("loading more (BR-F03-30, D-530)", () => {
 	});
 
 	test("a list that fits on one page shows no Load more and asks for nothing more at its end", async () => {
-		const { lists } = renderPage(CHECK_B);
+		const { lists, queryClient } = renderPage(CHECK_B);
 		await grid();
 
 		expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
 		scrollToEnd();
-		await new Promise((resolve) => setTimeout(resolve, 30));
+		await quiet(queryClient);
 		expect(lists).toHaveLength(1);
 	});
 
@@ -1008,6 +1027,63 @@ describe("loading more (BR-F03-30, D-530)", () => {
 		await waitFor(() => expect(rowNames()).toHaveLength(100));
 	});
 
+	// D-585: the Load more button holds the only spinner while a page loads.
+	test("shows one spinner while the next page loads, in the button", async () => {
+		let answer: () => void = () => {};
+		const waiting = new Promise<void>((resolve) => (answer = resolve));
+		const pages = threePages();
+		const { user } = renderPage("?sort=amount", {
+			list: async (request, index) => {
+				if (index === 1) await waiting;
+				return pages(request);
+			},
+		});
+		await grid();
+		expect(document.querySelectorAll(".animate-spin")).toHaveLength(0);
+
+		await user.click(screen.getByRole("button", { name: "Load more" }));
+		await waitFor(() =>
+			expect(
+				screen.getByRole("button", { name: "Load more" }),
+			).toHaveAttribute("aria-disabled", "true"),
+		);
+
+		const spinners = document.querySelectorAll(".animate-spin");
+		expect(spinners).toHaveLength(1);
+		expect(
+			screen.getByRole("button", { name: "Load more" }).contains(spinners[0]!),
+		).toBe(true);
+		expect(screen.queryByLabelText("Loading more Transactions")).toBeNull();
+		answer();
+		await waitFor(() => expect(rowNames()).toHaveLength(100));
+		expect(document.querySelectorAll(".animate-spin")).toHaveLength(0);
+	});
+
+	// D-620, AC-F03-64
+	test("the end of the list is watched 1,000 px before the screen, so the page loads before Load more is visible", async () => {
+		renderPage("?sort=amount", { list: threePages() });
+		await grid();
+
+		const endWatchers = [...observers].filter((each) =>
+			each.targets.some((target) => target.textContent === "Load more"),
+		);
+		expect(endWatchers).toHaveLength(1);
+		expect(endWatchers[0]?.options).toEqual({
+			rootMargin: "0px 0px 1000px 0px",
+		});
+	});
+
+	test("the top of the list keeps its own watcher with no margin", async () => {
+		renderPage("?sort=amount", { list: threePages() });
+		await grid();
+		const topWatchers = [...observers].filter((each) =>
+			each.targets.some((target) => target.textContent === "Load earlier"),
+		);
+		for (const watcher of topWatchers) {
+			expect(watcher.options).toEqual({ rootMargin: "0px" });
+		}
+	});
+
 	test("a page that fails to load announces nothing and Load more stays to try again", async () => {
 		let fail = true;
 		const pages = threePages();
@@ -1038,10 +1114,11 @@ describe("pages trimmed from the top (BR-F03-30, D-36)", () => {
 	function sevenPages() {
 		return ({ path }: { path: string }) => {
 			const cursor = pathOf(path).searchParams.get("cursor");
-			const n =
-				cursor === null ? 0
-				: cursor.startsWith("p") ? Number(cursor.slice(1))
-				: Number(cursor.slice(1)) - 1;
+			// A "p" cursor is the page itself, a "q" cursor the one before it.
+			let n = 0;
+			if (cursor !== null) {
+				n = Number(cursor.slice(1)) - (cursor.startsWith("p") ? 0 : 1);
+			}
 			return ok(
 				page({
 					items: [1, 2].map((i) =>
@@ -1410,7 +1487,7 @@ describe("focus after Load more (D-535)", () => {
 		heading.focus();
 
 		await act(() => queryClient.invalidateQueries());
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 
 		expect(heading).toHaveFocus();
 	});
@@ -1458,7 +1535,7 @@ describe("the URL and the data change under the page", () => {
 	test("a slow answer for a filter left behind never replaces the new one", async () => {
 		let answer: () => void = () => {};
 		const waiting = new Promise<void>((resolve) => (answer = resolve));
-		const { user } = renderPage("", {
+		const { user, queryClient } = renderPage("", {
 			list: async ({ path }) => {
 				if (!pathOf(path).searchParams.has("sort")) {
 					await waiting;
@@ -1486,7 +1563,7 @@ describe("the URL and the data change under the page", () => {
 		);
 
 		answer();
-		await new Promise((resolve) => setTimeout(resolve, 30));
+		await quiet(queryClient);
 		expect(rowNames()).toEqual([
 			"Acme Corp, Salary, Thu, 1 Oct · 10:05 am, +₹85,000.00",
 		]);
@@ -1781,10 +1858,10 @@ const requestOf = (seen: { path: string }) => {
 
 describe("filters (BR-F03-39, D-523)", () => {
 	test("a page load asks for no filter counts and no histogram", async () => {
-		const { facets, histograms } = renderFiltered(CHECK_B);
+		const { facets, histograms, queryClient } = renderFiltered(CHECK_B);
 		await grid();
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await quiet(queryClient);
 
 		expect(facets).toHaveLength(0);
 		expect(histograms).toHaveLength(0);
@@ -1831,7 +1908,7 @@ describe("filters (BR-F03-39, D-523)", () => {
 	});
 
 	test("closed controls never follow the filter; reopening asks for the new filter's counts", async () => {
-		const { user, facets, histograms } = renderFiltered(CHECK_B);
+		const { user, facets, histograms, queryClient } = renderFiltered(CHECK_B);
 		await grid();
 
 		await user.click(menu("Type"));
@@ -1842,7 +1919,7 @@ describe("filters (BR-F03-39, D-523)", () => {
 		await user.keyboard("{Escape}");
 		await user.click(screen.getByRole("button", { name: "Remove Food" }));
 		await waitFor(() => expect(menu("Category Any")).toBeInTheDocument());
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await quiet(queryClient);
 		expect(facets).toHaveLength(1);
 		expect(histograms).toHaveLength(1);
 
@@ -1856,12 +1933,12 @@ describe("filters (BR-F03-39, D-523)", () => {
 	});
 
 	test("the Amount control asks for no counts, as it shows none", async () => {
-		const { user, facets, histograms } = renderFiltered("");
+		const { user, facets, histograms, queryClient } = renderFiltered("");
 		await grid();
 
 		await user.click(menu("Amount"));
 		await screen.findByRole("slider", { name: /^Minimum amount/ });
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await quiet(queryClient);
 
 		expect(histograms).toHaveLength(1);
 		expect(facets).toHaveLength(0);
@@ -1881,8 +1958,10 @@ describe("filters (BR-F03-39, D-523)", () => {
 
 	test("while the counts load, each option holds a placeholder", async () => {
 		const { user } = renderPage("");
+		let release: () => void = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
 		route(network, "get", "/api/transactions/facets", async () => {
-			await new Promise((resolve) => setTimeout(resolve, 300));
+			await held;
 			return ok(CHECK_B_FACETS);
 		});
 		await grid();
@@ -1891,6 +1970,7 @@ describe("filters (BR-F03-39, D-523)", () => {
 		const dialog = await screen.findByRole("dialog", { name: "Type" });
 
 		expect(dialog.querySelectorAll("label .bg-track")).toHaveLength(3);
+		release();
 		expect(
 			await screen.findByRole("checkbox", { name: "Expense 4" }),
 		).toBeInTheDocument();
@@ -2015,6 +2095,86 @@ describe("filters (BR-F03-39, D-523)", () => {
 
 		expect(calls).toEqual([{ mode: "push", href: "/transactions?sort=amount" }]);
 		expect(searchBox()).toHaveValue("");
+	});
+
+	describe("a Subscription chip (D-541, AC-F03-77)", () => {
+		const NETFLIX = "0192f0c4-7a1e-7c3b-9d2a-000000000001";
+		const names = {
+			items: [
+				{ id: NETFLIX, name: "Netflix" },
+				{ id: "0192f0c4-7a1e-7c3b-9d2a-000000000002", name: "Cult Gym" },
+			],
+		};
+		const chips = () =>
+			within(screen.getByRole("grid", { name: "Active filters" }))
+				.getAllByRole("row")
+				.map((row) => row.textContent);
+
+		test("reads Netflix charges once /api/subscriptions answers, whatever other filters show", async () => {
+			const reads = route(network, "get", "/api/subscriptions", () =>
+				ok(names),
+			);
+			renderFiltered(`?sub=${NETFLIX}&cat=food`);
+			await grid();
+			await waitFor(() =>
+				expect(chips()).toEqual(["Food", "Netflix charges"]),
+			);
+			expect(reads).toHaveLength(1);
+		});
+
+		test("reads Subscription charges while the names load", async () => {
+			route(network, "get", "/api/subscriptions", async () => {
+				await delay("infinite");
+				return ok(names);
+			});
+			renderFiltered(`?sub=${NETFLIX}`);
+			await grid();
+			expect(chips()).toEqual(["Subscription charges"]);
+		});
+
+		test("reads Subscription charges when the read fails", async () => {
+			const reads = route(network, "get", "/api/subscriptions", () =>
+				refuse(500, "internal"),
+			);
+			renderFiltered(`?sub=${NETFLIX}`);
+			await grid();
+			await waitFor(() => expect(reads.length).toBeGreaterThan(0));
+			expect(chips()).toEqual(["Subscription charges"]);
+		});
+
+		test("reads Subscription charges for an id the list does not hold", async () => {
+			const reads = route(network, "get", "/api/subscriptions", () =>
+				ok(names),
+			);
+			renderFiltered("?sub=0192f0c4-7a1e-7c3b-9d2a-0000000000ff");
+			await grid();
+			await waitFor(() => expect(reads).toHaveLength(1));
+			expect(chips()).toEqual(["Subscription charges"]);
+		});
+
+		test("removing the chip drops only the sub filter", async () => {
+			route(network, "get", "/api/subscriptions", () => ok(names));
+			const { user, calls } = renderFiltered(`?sub=${NETFLIX}&cat=food`);
+			await grid();
+			await user.click(
+				await screen.findByRole("button", {
+					name: "Remove Netflix charges",
+				}),
+			);
+			expect(calls).toEqual([
+				{ mode: "push", href: "/transactions?cat=food" },
+			]);
+		});
+
+		test("a page with no sub filter never asks for the Subscriptions", async () => {
+			const reads = route(network, "get", "/api/subscriptions", () =>
+				ok(names),
+			);
+			const { queryClient } = renderFiltered(CHECK_B);
+			await grid();
+			await quiet(queryClient);
+			expect(reads).toHaveLength(0);
+		});
 	});
 
 	test("no filter shows no chips", async () => {
@@ -2489,7 +2649,7 @@ describe("adding (BR-F03-21, BR-F03-22, BR-F03-53, D-548)", () => {
 		await entry();
 		await user.keyboard("{Escape}");
 		await noEntry();
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await act(async () => {});
 
 		expect(
 			screen.queryByRole("dialog", { name: "New Transaction", hidden: true }),
@@ -2499,7 +2659,7 @@ describe("adding (BR-F03-21, BR-F03-22, BR-F03-53, D-548)", () => {
 	test("new given twice or empty opens nothing", async () => {
 		renderAdding("?new=1&new=1");
 		await grid();
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await act(async () => {});
 
 		expect(
 			screen.queryByRole("dialog", { name: "New Transaction", hidden: true }),
@@ -2644,6 +2804,74 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 				).getAllByRole("listitem"),
 			).toHaveLength(4);
 			expect(screen.queryByRole("dialog")).toBeNull();
+		});
+
+		// D-623
+		describe("a category of Out by category toggles the Category filter", () => {
+			const categoryButton = (name: string, pressed?: boolean) =>
+				within(panel()).getByRole("button", {
+					name,
+					...(pressed === undefined ? {} : { pressed }),
+				});
+
+			test("pressing one pushes cat for it, with a history entry, and keeps the other filters", async () => {
+				docked();
+				const { calls, user } = renderPanel(
+					"?from=2026-10-01&to=2026-10-31",
+				);
+				await grid();
+				await user.click(categoryButton("Food"));
+				expect(calls).toEqual([
+					{
+						mode: "push",
+						href: "/transactions?from=2026-10-01&to=2026-10-31&cat=food",
+					},
+				]);
+			});
+
+			test("pressing a second adds it beside the first, sorted", async () => {
+				docked();
+				const { calls, user } = renderPanel("?cat=shopping");
+				await grid();
+				await user.click(categoryButton("Food"));
+				expect(calls.at(-1)).toEqual({
+					mode: "push",
+					href: "/transactions?cat=food,shopping",
+				});
+			});
+
+			test("a category the filter holds reads as pressed, and pressing it takes it out", async () => {
+				docked();
+				const { calls, user } = renderPanel("?cat=food");
+				await grid();
+				await user.click(categoryButton("Food", true));
+				expect(calls.at(-1)).toEqual({
+					mode: "push",
+					href: "/transactions",
+				});
+			});
+
+			test("the list and the chip follow: the chip reads the category and removing it clears", async () => {
+				docked();
+				const { user } = renderPanel("");
+				await grid();
+				await user.click(categoryButton("Food"));
+				expect(
+					within(screen.getByRole("grid", { name: "Active filters" }))
+						.getAllByRole("row")
+						.map((r) => r.textContent),
+				).toEqual(["Food"]);
+			});
+
+			test("the list's own sort and grouping stay", async () => {
+				docked();
+				const { calls, user } = renderPanel("?sort=amount");
+				await grid();
+				await user.click(categoryButton("Food"));
+				expect(calls.at(-1)?.href).toBe(
+					"/transactions?cat=food&sort=amount",
+				);
+			});
 		});
 
 		test("a click selects the row, writes txn by replacing, and the panel shows it", async () => {
@@ -3056,12 +3284,16 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 				network,
 				"patch",
 				`/api/transactions/${m1(24).id}`,
-				({ body }, index) =>
-					index === 0 ?
-						refuse(409, "version_conflict", { details: { current: v2 } })
-					: index === 1 ?
-						refuse(409, "version_conflict", { details: { current: v3 } })
-					:	ok({ ...v3, ...(body as object), version: 4 }),
+				({ body }, index) => {
+					// Two conflicts in a row, each against a newer version, then the save.
+					const current = [v2, v3][index];
+					if (current) {
+						return refuse(409, "version_conflict", {
+							details: { current },
+						});
+					}
+					return ok({ ...v3, ...(body as object), version: 4 });
+				},
 			);
 			const { user } = renderPanel(`?txn=${m1(24).id}`);
 			await grid();
@@ -3528,8 +3760,8 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 				within(panel()).getByRole("button", { name: "Delete" }),
 			);
 			await confirm(user);
-			// Long enough for the focus move after a keyboard delete to have run.
-			await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+			// Let the effects that would move focus after a delete run.
+			await act(async () => {});
 
 			expect(document.activeElement?.getAttribute("role")).not.toBe("row");
 		});

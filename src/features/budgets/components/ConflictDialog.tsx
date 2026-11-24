@@ -42,15 +42,11 @@ export function ConflictDialog({
 }: Readonly<ConflictDialogProps>) {
 	return (
 		<ConflictView
-			title={CONFLICT_TEXT.title}
-			intro={isDelete ? CONFLICT_TEXT.deleteIntro : CONFLICT_TEXT.intro}
+			text={CONFLICT_TEXT}
+			rowHeading={CONFLICT_TEXT.month}
+			isDelete={isDelete}
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
-			headings={{
-				row: CONFLICT_TEXT.month,
-				mine: CONFLICT_TEXT.mine,
-				theirs: CONFLICT_TEXT.theirs,
-			}}
 			rows={rows.map((row) => ({
 				key: row.month,
 				label: row.label,
@@ -58,13 +54,6 @@ export function ConflictDialog({
 				mine: row.mine.join("\n"),
 				theirs: row.theirs.join("\n"),
 			}))}
-			differsLabel={CONFLICT_TEXT.differs}
-			keepMineLabel={
-				isDelete ? CONFLICT_TEXT.deleteAnyway : CONFLICT_TEXT.keepMine
-			}
-			keepTheirsLabel={
-				isDelete ? CONFLICT_TEXT.keepIt : CONFLICT_TEXT.keepTheirs
-			}
 			onKeepMine={onKeepMine}
 			onKeepTheirs={onKeepTheirs}
 			keepMineLine={keepMineLine}

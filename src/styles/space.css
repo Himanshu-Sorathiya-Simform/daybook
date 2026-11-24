@@ -40,6 +40,12 @@
 	--dur-base: 200ms; /* popovers, sheets */
 	--dur-layout: 260ms; /* dashboard reorder: position and size together */
 
+	/* Scrollbars: one look everywhere. The thumb and track read live colour tokens, so they
+	   follow light and dark; every scroller inherits them from :root (base.css). A panel or
+	   list that should scroll quietly adds `scrollbar-thin`. */
+	--scrollbar-thumb: var(--line-strong);
+	--scrollbar-track: transparent;
+
 	/* Focus: 2px ring, 2px offset, accent colour, on every interactive element */
 	--focus-ring: 2px solid var(--focus);
 	--focus-offset: 2px;
@@ -48,6 +54,12 @@
 .dark {
 	--elevation-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
 	--elevation-dialog: 0 24px 48px rgba(0, 0, 0, 0.55);
+}
+
+/* The thin scrollbar, for panels and lists inside the page: `scrollbar-thin`. The normal one is
+   every scroller's default, which base.css colours. */
+@utility scrollbar-thin {
+	scrollbar-width: thin;
 }
 
 @theme inline {

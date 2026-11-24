@@ -7,6 +7,8 @@ import {
 	detailDate,
 	detailRows,
 	detailSource,
+	detailSourceHref,
+	withCategoryToggled,
 	detailTitle,
 	historyLine,
 	historyTitle,
@@ -233,11 +235,40 @@ describe("detailSource (BR-F03-72)", () => {
 		expect(detailSource(ROW_16)).toBe("From a deleted Subscription");
 	});
 
-	test("a linked charge is auto from its payee", () => {
+	test("a linked charge is auto from its Subscription's name", () => {
 		expect(
 			detailSource({
 				...ROW_16,
 				subscriptionId: "0192f0c4-7a1e-7c3b-9d2a-000000000001",
+				subscription: {
+					id: "0192f0c4-7a1e-7c3b-9d2a-000000000001",
+					name: "Netflix",
+				},
+			}),
+		).toBe("Auto from Netflix");
+	});
+
+	// D-586
+	test("an edited payee does not change the name", () => {
+		expect(
+			detailSource({
+				...ROW_16,
+				payee: "Netflix India",
+				subscriptionId: "0192f0c4-7a1e-7c3b-9d2a-000000000001",
+				subscription: {
+					id: "0192f0c4-7a1e-7c3b-9d2a-000000000001",
+					name: "Netflix",
+				},
+			}),
+		).toBe("Auto from Netflix");
+	});
+
+	test("with no name from the server it falls back to the payee", () => {
+		expect(
+			detailSource({
+				...ROW_16,
+				subscriptionId: "0192f0c4-7a1e-7c3b-9d2a-000000000001",
+				subscription: null,
 			}),
 		).toBe("Auto from Netflix");
 	});
@@ -426,5 +457,88 @@ describe("newerRow (BR-F03-73)", () => {
 
 	test("is undefined when neither is", () => {
 		expect(newerRow(undefined, undefined)).toBeUndefined();
+	});
+});
+
+describe("detailSourceHref (BR-F03-16, D-586)", () => {
+	const ID = "0192f0c4-7a1e-7c3b-9d2a-000000000001";
+	const linked = { ...ROW_16, subscriptionId: ID };
+
+	test("a linked charge leads to its Subscription on the Subscriptions page", () => {
+		expect(detailSourceHref(linked)).toBe(`/subscriptions?open=${ID}`);
+	});
+
+	test.each([
+		["a manual row", row()],
+		["an unlinked charge", ROW_16],
+		["a demo charge", { ...linked, demo: true }],
+	])("%s has no link", (_name, input) => {
+		expect(detailSourceHref(input)).toBeNull();
+	});
+
+	test("the Source row carries the link, and no other row does", () => {
+		const rows = detailRows(linked, IN);
+		expect(rows.find((each) => each.term === "Source")?.href).toBe(
+			`/subscriptions?open=${ID}`,
+		);
+		expect(rows.filter((each) => each.href !== undefined)).toHaveLength(1);
+	});
+
+	test("an unlinked charge's Source row has no href key", () => {
+		const source = detailRows(ROW_16, IN).find((each) => each.term === "Source");
+		expect(source).toEqual({
+			term: "Source",
+			value: "From a deleted Subscription",
+		});
+	});
+});
+
+describe("withCategoryToggled (BR-F03-71, D-623)", () => {
+	test("adds the category to a filter that has none", () => {
+		expect(withCategoryToggled({}, "food")).toEqual({ cat: ["food"] });
+	});
+
+	test("adds it beside the categories already there, sorted and without repeats", () => {
+		expect(withCategoryToggled({ cat: ["shopping"] }, "food")).toEqual({
+			cat: ["food", "shopping"],
+		});
+		expect(withCategoryToggled({ cat: ["food", "travel"] }, "housing")).toEqual({
+			cat: ["food", "housing", "travel"],
+		});
+	});
+
+	test("takes it out when it is already there", () => {
+		expect(withCategoryToggled({ cat: ["food", "shopping"] }, "food")).toEqual({
+			cat: ["shopping"],
+		});
+	});
+
+	test("drops the list when the last category goes", () => {
+		const result = withCategoryToggled({ cat: ["food"] }, "food");
+		expect(result).toEqual({});
+		expect("cat" in result).toBe(false);
+	});
+
+	test("keeps every other field of the filter", () => {
+		const filter = {
+			from: "2026-10-01",
+			to: "2026-10-31",
+			type: ["expense" as const],
+			q: "swiggy",
+		};
+		expect(withCategoryToggled(filter, "food")).toEqual({
+			...filter,
+			cat: ["food"],
+		});
+		expect(withCategoryToggled({ ...filter, cat: ["food"] }, "food")).toEqual(
+			filter,
+		);
+	});
+
+	test("does not change what it is given", () => {
+		const filter = { cat: ["food" as const] };
+		withCategoryToggled(filter, "shopping");
+		withCategoryToggled(filter, "food");
+		expect(filter).toEqual({ cat: ["food"] });
 	});
 });

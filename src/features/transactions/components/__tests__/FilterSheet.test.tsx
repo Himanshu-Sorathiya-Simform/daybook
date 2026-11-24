@@ -10,11 +10,12 @@ import { renderInApp } from "@/components/app/__tests__/helpers";
 import type { TransactionFilter } from "@/lib/transactions/url";
 import { ok, refuse, route, type Seen } from "../../hooks/__tests__/helpers";
 import type { FilterLocale } from "../../lib/filter-labels";
-import { FilterSheet, type FilterSheetProps } from "../FilterSheet";
+import { DRAFT_COUNT_MS, FilterSheet, type FilterSheetProps } from "../FilterSheet";
 
 const network = setupServer();
 beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
 afterEach(() => {
+	vi.useRealTimers();
 	network.resetHandlers();
 	onlineManager.setOnline(true);
 	vi.restoreAllMocks();
@@ -91,7 +92,18 @@ function renderSheet(props: Partial<FilterSheetProps> = {}) {
 			<Harness />
 		</I18nProvider>,
 	);
-	return { ...view, summaries, histograms, onApply, user: userEvent.setup() };
+	return {
+		...view,
+		summaries,
+		histograms,
+		onApply,
+		user: userEvent.setup({
+			// A test that waits out the draft's delay turns the timers fake first.
+			advanceTimers: (ms) => {
+				if (vi.isFakeTimers()) vi.advanceTimersByTime(ms);
+			},
+		}),
+	};
 }
 
 const filters = (name: string | RegExp = /^Filters/) =>
@@ -132,9 +144,10 @@ describe("the Filters button (BR-F03-39)", () => {
 	});
 
 	test("asks for nothing until the sheet opens", async () => {
-		const { summaries, histograms } = renderSheet();
+		const { summaries, histograms, queryClient } = renderSheet();
 
-		await new Promise((resolve) => setTimeout(resolve, 400));
+		await act(async () => {});
+		expect(queryClient.isFetching()).toBe(0);
 
 		expect(summaries).toHaveLength(0);
 		expect(histograms).toHaveLength(0);
@@ -430,13 +443,14 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 	});
 
 	test("offline it reads Show Transactions, with no count", async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
 		const { user } = renderSheet();
 		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
 		window.dispatchEvent(new Event("offline"));
 		onlineManager.setOnline(false);
 
 		await open(user);
-		await new Promise((resolve) => setTimeout(resolve, 400));
+		await act(() => vi.advanceTimersByTimeAsync(DRAFT_COUNT_MS));
 
 		expect(show()).toHaveTextContent(/^Show Transactions$/);
 	});
@@ -488,7 +502,8 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 	});
 
 	test("the draft's histogram is asked once its changes settle, not per tap", async () => {
-		const { user, histograms } = renderSheet();
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		const { user, histograms, queryClient } = renderSheet();
 
 		await open(user);
 		await waitFor(() => expect(histograms).toHaveLength(1));
@@ -496,7 +511,8 @@ describe("the draft and Show (BR-F03-39, D-523)", () => {
 		await user.click(chip("Type", "Income"));
 		await user.click(chip("Category", "Food"));
 		await waitFor(() => expect(histograms).toHaveLength(2));
-		await new Promise((resolve) => setTimeout(resolve, 400));
+		await act(() => vi.advanceTimersByTimeAsync(DRAFT_COUNT_MS));
+		await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 
 		expect(histograms).toHaveLength(2);
 	});

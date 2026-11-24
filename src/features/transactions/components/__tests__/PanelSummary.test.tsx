@@ -1,5 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import type { LabelLocale } from "../../lib/labels";
 import { CHECK_A_SUMMARY } from "../../lib/__tests__/fixtures";
@@ -125,7 +125,7 @@ describe("PanelSummary (BR-F03-71)", () => {
 		expect(list).toHaveClass("grid");
 		for (const item of within(list).getAllByRole("listitem")) {
 			expect(item).toHaveClass("col-span-3", "grid-cols-subgrid");
-			expect(item.firstElementChild).toHaveClass(
+			expect(item.querySelector("button")!.firstElementChild).toHaveClass(
 				"whitespace-normal",
 				"min-w-0",
 			);
@@ -192,7 +192,7 @@ describe("PanelSummary (BR-F03-71)", () => {
 		expect(screen.getByText(HINT)).toBeInTheDocument();
 	});
 
-	test("while the summary loads: skeleton lines, nothing else", () => {
+	test("while the summary loads: the fixed words stay, and bars hold the figures' places", () => {
 		render(
 			<PanelSummary
 				summary={undefined}
@@ -201,10 +201,14 @@ describe("PanelSummary (BR-F03-71)", () => {
 			/>,
 		);
 
-		expect(
-			screen.getByRole("status", { name: "Loading the summary" }),
-		).toHaveAttribute("aria-busy", "true");
-		expect(screen.queryByText(HINT)).toBeNull();
+		const status = screen.getByRole("status", { name: "Loading the summary" });
+		expect(status).toHaveAttribute("aria-busy", "true");
+		expect(within(status).getByText("This list")).toBeVisible();
+		expect(within(status).getByText("Out by category")).toBeVisible();
+		expect(within(status).getByText("Top payees by Out")).toBeVisible();
+		expect(within(status).getByText(HINT)).toBeVisible();
+		expect(screen.queryByText(/Transactions$/)).toBeNull();
+		expect(screen.queryByRole("button")).toBeNull();
 	});
 
 	test("a failed summary leaves only the hint", () => {
@@ -219,5 +223,137 @@ describe("PanelSummary (BR-F03-71)", () => {
 		expect(screen.queryByText("This list")).toBeNull();
 		expect(screen.queryByRole("region")).toBeNull();
 		expect(screen.getByText(HINT)).toBeInTheDocument();
+	});
+});
+
+describe("the category buttons (BR-F03-71, D-623)", () => {
+	const click = async (name: string) =>
+		(await import("@testing-library/user-event")).default
+			.setup()
+			.click(screen.getByRole("button", { name }));
+
+	test("each category of Out by category is a button named by the category", () => {
+		render(
+			<PanelSummary
+				summary={CHECK_A_SUMMARY}
+				isPending={false}
+				locale={IN}
+			/>,
+		);
+		const buttons = within(
+			screen.getByRole("region", { name: "Out by category" }),
+		).getAllByRole("button");
+		expect(buttons).toHaveLength(5);
+		expect(buttons[0]).toHaveTextContent("Housing");
+		expect(buttons.map((b) => b.textContent)).toContain("Food");
+	});
+
+	test("pressing one asks to toggle that category", async () => {
+		const onCategory = vi.fn();
+		render(
+			<PanelSummary
+				summary={CHECK_A_SUMMARY}
+				isPending={false}
+				locale={IN}
+				onCategory={onCategory}
+			/>,
+		);
+		const first = within(
+			screen.getByRole("region", { name: "Out by category" }),
+		).getAllByRole("button")[0]!;
+		await click(first.textContent!);
+		expect(onCategory).toHaveBeenCalledOnce();
+		expect(typeof onCategory.mock.calls[0]![0]).toBe("string");
+	});
+
+	test("Enter and Space press it from the keyboard", async () => {
+		const user = (await import("@testing-library/user-event")).default.setup();
+		const onCategory = vi.fn();
+		render(
+			<PanelSummary
+				summary={CHECK_A_SUMMARY}
+				isPending={false}
+				locale={IN}
+				onCategory={onCategory}
+			/>,
+		);
+		const first = within(
+			screen.getByRole("region", { name: "Out by category" }),
+		).getAllByRole("button")[0]!;
+		first.focus();
+		await user.keyboard("{Enter}");
+		await user.keyboard(" ");
+		expect(onCategory).toHaveBeenCalledTimes(2);
+	});
+
+	test("a category the filter holds reads as pressed, the others not", () => {
+		render(
+			<PanelSummary
+				summary={CHECK_A_SUMMARY}
+				isPending={false}
+				locale={IN}
+				activeCategories={["food"]}
+			/>,
+		);
+		expect(
+			screen.getByRole("button", { name: "Food", pressed: true }),
+		).toBeVisible();
+		for (const other of within(
+			screen.getByRole("region", { name: "Out by category" }),
+		).getAllByRole("button")) {
+			if (other.textContent !== "Food")
+				expect(other).toHaveAttribute("aria-pressed", "false");
+		}
+	});
+
+	test("with no filter none is pressed", () => {
+		render(
+			<PanelSummary
+				summary={CHECK_A_SUMMARY}
+				isPending={false}
+				locale={IN}
+			/>,
+		);
+		for (const b of within(
+			screen.getByRole("region", { name: "Out by category" }),
+		).getAllByRole("button")) {
+			expect(b).toHaveAttribute("aria-pressed", "false");
+		}
+	});
+
+	test("a pressed row is highlighted, and every row shows a pointer and a hover", () => {
+		render(
+			<PanelSummary
+				summary={CHECK_A_SUMMARY}
+				isPending={false}
+				locale={IN}
+				activeCategories={["food"]}
+			/>,
+		);
+		const rows = within(
+			screen.getByRole("region", { name: "Out by category" }),
+		).getAllByRole("listitem");
+		const food = screen.getByRole("button", { name: "Food" }).closest("li")!;
+		for (const row of rows) {
+			expect(row).toHaveClass("cursor-pointer");
+			if (row !== food) expect(row).toHaveClass("hover:bg-soft");
+		}
+		expect(food).toHaveClass("bg-accent-soft");
+		expect(food).not.toHaveClass("hover:bg-soft");
+	});
+
+	test("without a handler a press does nothing and does not throw", async () => {
+		render(
+			<PanelSummary
+				summary={CHECK_A_SUMMARY}
+				isPending={false}
+				locale={IN}
+			/>,
+		);
+		const first = within(
+			screen.getByRole("region", { name: "Out by category" }),
+		).getAllByRole("button")[0]!;
+		await click(first.textContent!);
+		expect(screen.getByText("11 Transactions")).toBeVisible();
 	});
 });

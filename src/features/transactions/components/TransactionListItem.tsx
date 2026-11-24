@@ -29,7 +29,8 @@ export function TransactionListItem({
 			id={row.id}
 			textValue={rowName(shown, locale)}
 			className={cn(
-				"rounded-control focus-visible:focus-ring selected:bg-accent-soft -mx-2 cursor-default px-2 outline-none",
+				"rounded-control focus-visible:focus-ring hover:bg-soft selected:bg-accent-soft -mx-2 cursor-pointer px-2 outline-none",
+				"transition-colors duration-(--dur-fast) ease-out",
 				className,
 			)}
 		>

@@ -288,3 +288,47 @@ describe("disabled and following its props", () => {
 		expect(screen.getByRole("button", { name: "To Goal" })).toBeInTheDocument();
 	});
 });
+
+describe("a chip that cannot be chosen", () => {
+	const WITH_ONE_OFF = [
+		{ value: "a", label: "The next charge" },
+		{ value: "b", label: "2 charges", isDisabled: true },
+		{ value: "c", label: "3 charges" },
+	];
+
+	test("is disabled, and the others are not", () => {
+		renderChips({
+			options: WITH_ONE_OFF,
+			selectionMode: "single",
+			value: ["a"],
+		});
+		expect(screen.getByRole("radio", { name: "2 charges" })).toBeDisabled();
+		expect(screen.getByRole("radio", { name: "3 charges" })).toBeEnabled();
+	});
+
+	test("a press on it chooses nothing", async () => {
+		const { user, onChange } = renderChips({
+			options: WITH_ONE_OFF,
+			selectionMode: "single",
+			value: ["a"],
+		});
+		await user.click(screen.getByRole("radio", { name: "2 charges" }));
+		expect(onChange).not.toHaveBeenCalled();
+	});
+
+	test("the arrow keys pass over it", async () => {
+		const { user } = renderChips({
+			options: WITH_ONE_OFF,
+			selectionMode: "single",
+			value: ["a"],
+		});
+		screen.getByRole("radio", { name: "The next charge" }).focus();
+		await user.keyboard("{ArrowRight}");
+		expect(screen.getByRole("radio", { name: "3 charges" })).toHaveFocus();
+	});
+
+	test("with no flag a chip is enabled", () => {
+		renderChips({ options: TYPES, selectionMode: "single", value: ["expense"] });
+		expect(screen.getByRole("radio", { name: "Income" })).toBeEnabled();
+	});
+});

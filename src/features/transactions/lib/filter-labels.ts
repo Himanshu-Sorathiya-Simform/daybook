@@ -7,6 +7,7 @@ import { presetOf } from "@/lib/transactions/presets";
 import type { TransactionFilter } from "@/lib/transactions/url";
 
 import type { AmountBounds } from "./quick-ranges";
+import { subscriptionChipLabel } from "./subscriptions";
 
 /** What filter labels need from the profile: its today (TIME-5) and its formats. */
 export type FilterLocale = {
@@ -140,11 +141,12 @@ function withoutValue<K extends "type" | "cat">(
 
 /** Every active filter as a removable chip (BR-F03-39), in the order of the controls: the
  * date, each type, each category, the amount, the source, a Subscription or a Goal, and the
- * search. Until F05 and F06 bring their names, a Subscription's chip reads "Subscription
- * charges" and a Goal's "Goal" (D-541). */
+ * search. A Subscription's chip reads "Netflix charges" given the name `subscriptionName`, and
+ * "Subscription charges" without it; until F06 a Goal's reads "Goal" (D-541). */
 export function activeChips(
 	filter: TransactionFilter,
 	locale: FilterLocale,
+	subscriptionName?: string | null,
 ): ActiveChip[] {
 	const chips: ActiveChip[] = [];
 	const add = (id: string, label: string, without: TransactionFilter) =>
@@ -170,7 +172,11 @@ export function activeChips(
 		add("src", SOURCE_LABELS[filter.src], omitFields(filter, "src"));
 	}
 	if (filter.sub !== undefined) {
-		add("sub", SOURCE_LABELS.subscription, omitFields(filter, "sub"));
+		add(
+			"sub",
+			subscriptionChipLabel(subscriptionName),
+			omitFields(filter, "sub"),
+		);
 	}
 	if (filter.goal !== undefined) add("goal", "Goal", omitFields(filter, "goal"));
 	if (filter.q !== undefined) add("q", `“${filter.q}”`, omitFields(filter, "q"));

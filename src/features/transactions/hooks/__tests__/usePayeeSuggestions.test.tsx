@@ -1,7 +1,16 @@
 import { onlineManager } from "@tanstack/react-query";
 import { act, waitFor } from "@testing-library/react";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	test,
+	vi,
+} from "vitest";
 
 import {
 	GOLDEN_CATEGORIES,
@@ -14,7 +23,12 @@ import { ok, renderHookInApp, route } from "./helpers";
 
 const network = setupServer();
 beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
+beforeEach(() => {
+	// Fake timers that also tick with the clock, so waitFor and MSW still progress.
+	vi.useFakeTimers({ shouldAdvanceTime: true });
+});
 afterEach(() => {
+	vi.useRealTimers();
 	network.resetHandlers();
 	vi.restoreAllMocks();
 	// TanStack's online manager is one per module and heard the offline event; a test that went
@@ -39,17 +53,24 @@ const searches = (seen: { path: string }[]) =>
 
 const names = (items: { payee: string }[]) => items.map((item) => item.payee);
 
-/** Longer than the search delay, so a search that would fire has. */
-const settle = () =>
-	new Promise((resolve) => setTimeout(resolve, SEARCH_DELAY_MS + 100));
+let client: ReturnType<typeof renderHookInApp>["queryClient"] | undefined;
+
+/** Runs the search delay out, so a search that would fire has, then waits until no request
+ * is still in flight. */
+async function settle() {
+	await act(() => vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS));
+	await waitFor(() => expect(client?.isFetching()).toBe(0));
+}
 
 function renderSuggestions(text: string) {
-	return renderHookInApp(
+	const view = renderHookInApp(
 		({ value }: { value: string }) => usePayeeSuggestions(value),
 		{
 			initialProps: { value: text },
 		},
 	);
+	client = view.queryClient;
+	return view;
 }
 
 describe("usePayeeSuggestions while empty (BR-F03-45)", () => {

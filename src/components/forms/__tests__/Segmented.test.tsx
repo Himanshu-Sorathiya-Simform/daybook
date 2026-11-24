@@ -150,6 +150,42 @@ describe("structure", () => {
 		expect(screen.getAllByRole("radio")).toHaveLength(3);
 	});
 
+	// D-629
+	test("an option's own classes sit on that option alone, so CSS can hide it", () => {
+		render(
+			<Segmented
+				label="View"
+				value="list"
+				onChange={() => {}}
+				options={[
+					{ value: "list", label: "List" },
+					{ value: "table", label: "Table", className: "max-md:hidden" },
+				]}
+			/>,
+		);
+		const holder = (name: string) =>
+			screen.getByRole("radio", { name }).closest(".max-md\\:hidden");
+		expect(holder("Table")).not.toBeNull();
+		expect(holder("List")).toBeNull();
+	});
+
+	test("an option with a class is still chosen by its value", async () => {
+		const onChange = vi.fn();
+		render(
+			<Segmented
+				label="View"
+				value="list"
+				onChange={onChange}
+				options={[
+					{ value: "list", label: "List" },
+					{ value: "table", label: "Table", className: "max-md:hidden" },
+				]}
+			/>,
+		);
+		await userEvent.setup().click(screen.getByRole("radio", { name: "Table" }));
+		expect(onChange).toHaveBeenCalledExactlyOnceWith("table");
+	});
+
 	test("takes the caller's classes on the group", () => {
 		render(<Controlled className="ml-auto" />);
 

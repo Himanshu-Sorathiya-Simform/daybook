@@ -6,7 +6,6 @@ import type {
 	FacetCounts,
 	ListAnswer,
 	PayeeHistory,
-	PayeeList,
 	SummaryAnswer as Summarized,
 } from "@/lib/transactions/answers";
 
@@ -21,7 +20,7 @@ export type SummaryAnswer = Summarized;
 export type FacetsAnswer = FacetCounts;
 export type HistogramAnswer = WithCurrency<{ edges: number[]; counts: number[] }>;
 export type TransactionAnswer = WithCurrency<Transaction>;
-export type PayeesAnswer = PayeeList;
+export type { PayeesAnswer } from "@/lib/transactions/answers";
 export type PayeeHistoryAnswer = WithCurrency<PayeeHistory>;
 export type { ViewsAnswer } from "@/lib/transactions/answers";
 export type ViewAnswer = WithCurrency<SavedView>;

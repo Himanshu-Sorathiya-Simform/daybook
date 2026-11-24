@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
 	AMOUNT_COMMIT_MS,
@@ -10,6 +10,13 @@ import {
 } from "../AmountBlock";
 import type { FilterLocale } from "../../lib/filter-labels";
 import type { AmountBounds } from "../../lib/quick-ranges";
+
+// The timers tick with real time too, and a test that waits out the commit delay advances
+// them by hand.
+beforeEach(() => {
+	vi.useFakeTimers({ shouldAdvanceTime: true });
+});
+afterEach(() => vi.useRealTimers());
 
 const IN: FilterLocale = {
 	today: "2026-11-02",
@@ -32,7 +39,9 @@ type Options = Partial<AmountBlockProps> & { committed?: boolean };
 /** The block over bounds that, like the URL, take what it commits, unless `committed` is
  * false. */
 function renderBlock({ committed = true, ...props }: Options = {}) {
-	const user = userEvent.setup();
+	const user = userEvent.setup({
+		advanceTimers: vi.advanceTimersByTime.bind(vi),
+	});
 	const onChange = vi.fn();
 	let setBounds: (bounds: AmountBounds) => void = () => {};
 	function Harness() {
@@ -64,8 +73,7 @@ const low = () => screen.getByRole("slider", { name: /^Minimum amount/ });
 const high = () => screen.getByRole("slider", { name: /^Maximum amount/ });
 const min = () => screen.getByRole("textbox", { name: "Min" });
 const max = () => screen.getByRole("textbox", { name: "Max" });
-const pause = () =>
-	new Promise((resolve) => setTimeout(resolve, AMOUNT_COMMIT_MS + 50));
+const pause = () => act(() => vi.advanceTimersByTimeAsync(AMOUNT_COMMIT_MS));
 
 describe("the heading", () => {
 	test("reads Amount and the filter's count", () => {

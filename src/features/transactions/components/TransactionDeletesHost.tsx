@@ -3,9 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-import { TransactionRow } from "@/components/data/TransactionRow";
 import { dismissToast, showToast } from "@/components/feedback/showToast";
-import { ConfirmDialog } from "@/components/surfaces/ConfirmDialog";
 import { useMe } from "@/hooks/useMe";
 import { uuidV7 } from "@/lib/ids";
 import type { ProfileBlock } from "@/lib/profile";
@@ -20,12 +18,12 @@ import {
 	TransactionDeletesContext,
 } from "../hooks/useTransactionDeletes";
 import { conflictRows } from "../lib/conflict";
-import { rowDisplay } from "../lib/labels";
 import { TRANSACTIONS_TEXT } from "../lib/messages";
 import { refreshAfterTransactionWrite } from "../lib/refresh";
 import type { TransactionAnswer } from "../lib/types";
 import { readDeleteError } from "../lib/write-errors";
 import { ConflictDialog } from "./ConflictDialog";
+import { DeleteTransactionDialog } from "./DeleteTransactionDialog";
 
 export type TransactionDeletesHostProps = {
 	/** The profile as the server read it, for the conflict view's formats; `/api/me` takes over
@@ -97,6 +95,7 @@ export function TransactionDeletesHost({
 				version,
 				idempotencyKey: uuidV7(),
 				hint: hintOf(row),
+				charge: row.source === "subscription",
 			});
 		} catch (error) {
 			const outcome = readDeleteError(error);
@@ -190,27 +189,16 @@ export function TransactionDeletesHost({
 				>
 					{children}
 					{asking && (
-						<ConfirmDialog
-							title={TRANSACTIONS_TEXT.deleteTitle}
-							isOpen
-							onOpenChange={(open) => {
-								if (!open) setAsking(null);
-							}}
-							confirmLabel="Delete"
+						<DeleteTransactionDialog
+							row={asking.row}
+							locale={locale}
+							onClose={() => setAsking(null)}
 							onConfirm={() => {
 								setAsking(null);
 								asking.onConfirmed();
 								start(asking.row);
 							}}
-						>
-							<div className="flex flex-col gap-3">
-								<TransactionRow
-									{...rowDisplay(asking.row, "none", locale)}
-									className="border-line rounded-control border px-3"
-								/>
-								<p>{TRANSACTIONS_TEXT.deleteBody}</p>
-							</div>
-						</ConfirmDialog>
+						/>
 					)}
 					{conflict && (
 						<ConflictDialog

@@ -59,24 +59,75 @@ const item = (
 	lastUsedOn: string,
 	lastType: PayeeItem["lastType"],
 	lastCategory: PayeeItem["lastCategory"],
-): PayeeItem => ({ payee, count, lastUsedOn, lastType, lastCategory });
+	lastExpense: PayeeItem["lastExpense"],
+): PayeeItem => ({ payee, count, lastUsedOn, lastType, lastCategory, lastExpense });
+
+/** A payee's newest expense: its amount in minor units and its category. */
+const spent = (
+	amountMinor: number,
+	category: NonNullable<PayeeItem["lastExpense"]>["category"],
+) => ({ amountMinor, category });
 
 /** `/api/payees` on golden's M1 rows at 2026-11-02, in BR-F03-44's order: count, then last
- * use, then key (docs/03-golden-dataset.md). */
+ * use, then key (docs/03-golden-dataset.md). `lastExpense` is each payee's newest expense row
+ * (D-451): Croma's newest row is the refund #18, so its is #17; Acme Corp and Studio Nine have
+ * only income. */
 export const GOLDEN_PAYEES: PayeeItem[] = [
-	item("Swiggy", 4, "2026-11-01", "expense", "food"),
-	item("Sunrise Apartments", 3, "2026-11-01", "expense", "housing"),
-	item("BigBasket", 2, "2026-10-14", "expense", "food"),
-	item("Croma", 2, "2026-10-09", "refund", "shopping"),
-	item("Netflix", 2, "2026-10-05", "expense", "entertainment"),
-	item("Acme Corp", 2, "2026-10-01", "income", "salary"),
-	item("Amazon Prime", 1, "2026-10-12", "expense", "entertainment"),
-	item("Indian Oil", 1, "2026-10-11", "expense", "transportation"),
-	item("Zomato", 1, "2026-10-04", "expense", "food"),
-	item("Studio Nine", 1, "2026-09-25", "income", "freelance"),
-	item("Uber", 1, "2026-09-20", "expense", "transportation"),
-	item("Cult Gym", 1, "2026-09-10", "expense", "health"),
-	item("Myntra", 1, "2026-09-08", "expense", "shopping"),
+	item("Swiggy", 4, "2026-11-01", "expense", "food", spent(42000, "food")),
+	item(
+		"Sunrise Apartments",
+		3,
+		"2026-11-01",
+		"expense",
+		"housing",
+		spent(1800000, "housing"),
+	),
+	item("BigBasket", 2, "2026-10-14", "expense", "food", spent(290000, "food")),
+	item("Croma", 2, "2026-10-09", "refund", "shopping", spent(450000, "shopping")),
+	item(
+		"Netflix",
+		2,
+		"2026-10-05",
+		"expense",
+		"entertainment",
+		spent(64900, "entertainment"),
+	),
+	item("Acme Corp", 2, "2026-10-01", "income", "salary", null),
+	item(
+		"Amazon Prime",
+		1,
+		"2026-10-12",
+		"expense",
+		"entertainment",
+		spent(149900, "entertainment"),
+	),
+	item(
+		"Indian Oil",
+		1,
+		"2026-10-11",
+		"expense",
+		"transportation",
+		spent(180000, "transportation"),
+	),
+	item("Zomato", 1, "2026-10-04", "expense", "food", spent(230000, "food")),
+	item("Studio Nine", 1, "2026-09-25", "income", "freelance", null),
+	item(
+		"Uber",
+		1,
+		"2026-09-20",
+		"expense",
+		"transportation",
+		spent(45000, "transportation"),
+	),
+	item("Cult Gym", 1, "2026-09-10", "expense", "health", spent(150000, "health")),
+	item(
+		"Myntra",
+		1,
+		"2026-09-08",
+		"expense",
+		"shopping",
+		spent(240000, "shopping"),
+	),
 ];
 
 /** The golden category counts (F03 section 5). */
@@ -93,7 +144,7 @@ export const GOLDEN_CATEGORIES: NonNullable<PayeesAnswer["categories"]> = [
 
 /** A payee suggestion with made-up figures, for lists that only test matching. */
 export const named = (payee: string): PayeeItem =>
-	item(payee, 1, "2026-10-01", "expense", "food");
+	item(payee, 1, "2026-10-01", "expense", "food", spent(10000, "food"));
 
 const group = (
 	key: string,

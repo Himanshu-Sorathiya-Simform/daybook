@@ -69,7 +69,8 @@ describe("useBudgetMonth (F04 section 11)", () => {
 			queryClient,
 		});
 		expect(result.current.data?.month).toBe("2026-10");
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		// A stale query is fetching as soon as it mounts, so idle now means it was never going to.
+		expect(result.current.fetchStatus).toBe("idle");
 		expect(seen).toHaveLength(0);
 	});
 

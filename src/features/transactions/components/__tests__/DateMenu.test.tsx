@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { I18nProvider } from "react-aria-components";
@@ -9,9 +9,10 @@ import { DATE_COMMIT_MS } from "../CustomRange";
 import { type DateBounds, DateMenu, type DateMenuProps } from "../DateMenu";
 import type { FilterLocale } from "../../lib/filter-labels";
 
-// The golden clock (TST-3); only `Date`, so user-event's timers stay real.
+// The golden clock (TST-3); the timers tick with real time too, and a test that waits out the
+// commit delay advances them by hand.
 beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"] });
+	vi.useFakeTimers({ shouldAdvanceTime: true });
 	vi.setSystemTime(new Date("2026-11-02T06:30:00Z"));
 });
 afterEach(() => vi.useRealTimers());
@@ -34,7 +35,9 @@ const COUNTS = {
 };
 
 function renderMenu(props: Partial<DateMenuProps> = {}) {
-	const user = userEvent.setup();
+	const user = userEvent.setup({
+		advanceTimers: vi.advanceTimersByTime.bind(vi),
+	});
 	const onChange = vi.fn();
 	function Harness() {
 		const [filter, setFilter] = useState<TransactionFilter>(props.filter ?? {});
@@ -359,7 +362,7 @@ describe("Custom range (BR-F03-39, D-538)", () => {
 		await open(user);
 		await user.click(part("From", "day"));
 		await user.keyboard("25");
-		await new Promise((resolve) => setTimeout(resolve, DATE_COMMIT_MS + 50));
+		await act(() => vi.advanceTimersByTimeAsync(DATE_COMMIT_MS));
 
 		expect(onChange).not.toHaveBeenCalled();
 		expect(
@@ -419,7 +422,7 @@ describe("Custom range (BR-F03-39, D-538)", () => {
 		await user.click(day("14 October 2026"));
 		await user.click(day("16 October 2026"));
 		const calls = onChange.mock.calls.length;
-		await new Promise((resolve) => setTimeout(resolve, DATE_COMMIT_MS + 50));
+		await act(() => vi.advanceTimersByTimeAsync(DATE_COMMIT_MS));
 
 		// Nothing typed lands after the calendar's range, however slow the machine.
 		expect(onChange).toHaveBeenCalledTimes(calls);

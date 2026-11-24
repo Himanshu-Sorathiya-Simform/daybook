@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test } from "vitest";
 
@@ -138,6 +138,17 @@ describe("LastSixMonths (BR-F04-30)", () => {
 	test("an empty history draws nothing and does not fail", () => {
 		renderChart({ months: [] });
 		expect(chart().querySelectorAll("rect, line")).toHaveLength(0);
+	});
+
+	test("two presses before a redraw switch to the table and back", () => {
+		renderChart({ month: "2026-10" });
+		const toggle = screen.getByRole("button", { name: "View as table" });
+		act(() => {
+			fireEvent.click(toggle);
+			fireEvent.click(toggle);
+		});
+		expect(screen.queryByRole("table")).not.toBeInTheDocument();
+		expect(screen.getByRole("button", { name: "View as table" })).toBeVisible();
 	});
 
 	test("View as table shows Month, Limit, Spent and Used, and View as chart goes back", async () => {

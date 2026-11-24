@@ -1,4 +1,4 @@
-import { waitFor } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
@@ -44,7 +44,7 @@ describe("useHistogram (BR-F03-60, BR-F03-76)", () => {
 			() => ok(CHECK_B_HISTOGRAM),
 		);
 		renderHistogram({ filter: CHECK_B, enabled: false });
-		await new Promise((resolve) => setTimeout(resolve, 30));
+		await act(async () => {});
 		expect(seen).toEqual([]);
 	});
 
@@ -84,7 +84,7 @@ describe("useHistogram (BR-F03-60, BR-F03-76)", () => {
 			filter: { ...CHECK_B, minMinor: 40000, maxMinor: 79999 },
 			enabled: true,
 		});
-		await new Promise((resolve) => setTimeout(resolve, 30));
+		await act(async () => {});
 		expect(seen).toHaveLength(1);
 		expect(result.current.data?.edges).toHaveLength(11);
 	});
@@ -125,7 +125,7 @@ describe("useHistogram (BR-F03-60, BR-F03-76)", () => {
 
 			vi.setSystemTime(new Date("2026-11-02T06:30:29.000Z"));
 			rerender({ filter: CHECK_B, enabled: true });
-			await new Promise((resolve) => setTimeout(resolve, 30));
+			await act(async () => {});
 			expect(seen).toHaveLength(1);
 			rerender({ filter: CHECK_B, enabled: false });
 

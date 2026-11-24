@@ -4,7 +4,7 @@ import { formatMonth } from "@/lib/date-format";
 import type { Formats } from "../lib/labels";
 import { comparedWith, compareRows, PANEL_TEXT } from "../lib/panel";
 import type { BudgetMonthAnswer } from "../lib/types";
-import { LineSkeleton } from "./LineSkeleton";
+import { LineSkeleton } from "@/components/feedback/LineSkeleton";
 
 export type BudgetPanelSummaryProps = {
 	/** The month shown. */

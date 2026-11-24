@@ -1,21 +1,16 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-
 import { FormAlert } from "@/components/feedback/FormAlert";
 import { ConfirmDialog } from "@/components/surfaces/ConfirmDialog";
-import { useOnce } from "@/hooks/useOnce";
 import type { BudgetRecord } from "@/lib/budgets/view";
 import { uuidV7 } from "@/lib/ids";
+import { useBudgetWrite } from "../hooks/useBudgetWrite";
 import { useDeleteBudget } from "../hooks/useDeleteBudget";
 import { deleteBody, deleteHistory, deleteTitle, DIALOG_TEXT } from "../lib/dialog";
-import { conflictRows } from "../lib/conflict";
 import type { Formats } from "../lib/labels";
-import { refreshAfterBudgetWrite } from "../lib/refresh";
 import type { BudgetAnswer } from "../lib/types";
-import { readBudgetDeleteError } from "../lib/write-errors";
-import { ConflictDialog } from "./ConflictDialog";
+import { readBudgetDeleteRefusal } from "../lib/write-errors";
+import { DialogConflict } from "./DialogConflict";
 
 export type DeleteBudgetDialogProps = {
 	isOpen: boolean;
@@ -45,18 +40,16 @@ export function DeleteBudgetDialog({
 	className,
 }: Readonly<DeleteBudgetDialogProps>) {
 	const remove = useDeleteBudget();
-	const sending = useOnce();
-	const queryClient = useQueryClient();
-	const [failure, setFailure] = useState<string | null>(null);
 	// A 409: the Budget saved now, beside the one the user chose to delete (BR-F04-23).
-	const [conflict, setConflict] = useState<BudgetAnswer | null>(null);
+	const write = useBudgetWrite<BudgetAnswer>(onClose);
+	const { failure, conflict } = write;
 	const history = deleteHistory(record, formats);
 
 	/** Deletes at `version`: the record's, or after a conflict the saved one ("Delete anyway").
 	 * The Budget deleted, for the notice's Undo, is the one at that version. */
 	const confirm = async (version: number, deleted: BudgetRecord) => {
 		// A second press, Enter included, sends nothing while the delete is out (D-615).
-		const request = sending.run(() =>
+		const request = write.sending.run(() =>
 			remove.mutateAsync({
 				id: record.id,
 				version,
@@ -64,21 +57,17 @@ export function DeleteBudgetDialog({
 			}),
 		);
 		if (request === null) return;
-		setFailure(null);
+		write.reset();
 		try {
 			await request;
-			setConflict(null);
+			write.setConflict(null);
 			onDeleted?.(deleted);
 			onClose();
 		} catch (error) {
-			const outcome = readBudgetDeleteError(error);
-			if (outcome.kind === "conflict") {
-				setConflict(outcome.current);
-				return;
-			}
-			// Any other refusal closes the view and shows its line in the confirmation.
-			setConflict(null);
-			if (outcome.kind === "refused") setFailure(outcome.message);
+			await write.refuse(error, {
+				read: readBudgetDeleteRefusal,
+				conflictOf: (current) => current,
+			});
 		}
 	};
 
@@ -102,13 +91,13 @@ export function DeleteBudgetDialog({
 				</div>
 			</ConfirmDialog>
 			{conflict && (
-				<ConflictDialog
-					isOpen
+				<DialogConflict
+					yours={record}
+					current={conflict}
+					formats={formats}
 					isDelete
-					// It only ever reports closing.
-					onOpenChange={() => setConflict(null)}
-					rows={conflictRows(record, conflict, formats)}
 					isPending={remove.isPending}
+					onClose={write.closeConflict}
 					onKeepMine={() =>
 						void confirm(conflict.version, {
 							...record,
@@ -117,11 +106,7 @@ export function DeleteBudgetDialog({
 							overrides: conflict.overrides,
 						})
 					}
-					onKeepTheirs={() => {
-						setConflict(null);
-						void refreshAfterBudgetWrite(queryClient, "rules");
-						onClose();
-					}}
+					onKeepTheirs={write.keepTheirs}
 				/>
 			)}
 		</>

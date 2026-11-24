@@ -134,6 +134,15 @@ export function readBudgetDeleteError(error: unknown): BudgetDeleteOutcome {
 	};
 }
 
+/** A refused delete as the outcome of a write, so a dialog reads a refused Delete as it reads a
+ * refused Change limit: the confirmation's line is the dialog's own line. */
+export function readBudgetDeleteRefusal(error: unknown): BudgetWriteOutcome {
+	const outcome = readBudgetDeleteError(error);
+	return outcome.kind === "refused" ?
+			{ kind: "form", message: outcome.message }
+		:	outcome;
+}
+
 /** What a refused Undo or Remove means: neither has a dialog, so a refusal shows in the notice
  * (BR-F04-29). */
 export type BudgetNoticeOutcome =
