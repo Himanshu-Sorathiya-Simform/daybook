@@ -27,21 +27,21 @@ Added: correct money and time handling, per-user isolation enforced by the datab
 
 ## Features
 
-| Area                      | What the user gets                                                        | Milestone |
-| ------------------------- | ------------------------------------------------------------------------- | --------- |
-| Auth and account          | Email and password, sessions list, change password, export, reset, delete | M0, M1    |
-| Onboarding and settings   | Country, currency, timezone, week start, theme, dashboard layout          | M1        |
-| Transactions              | Fast entry, infinite list, filters in the URL, In / Out / To Goals totals | M1        |
-| Budgets                   | Monthly limits per category that carry forward, 80% and 100% alerts       | M2        |
-| Subscriptions             | Any recurring bill; past charges written into Transactions automatically  | M2        |
-| Goals                     | Contributions and withdrawals, 3 active Goals free, unlimited on Premium  | M2        |
-| Investments               | A seeded mock portfolio with daily prices, gains and time-weighted return | M3        |
-| Dashboard and Analytics   | Month dashboard of widgets; Analytics page with every chart               | M3        |
-| Daybook Premium           | Stripe Elements purchase, Customer Portal management, entitlements        | M4        |
-| Offline and PWA           | Installable, last-known data offline, queued writes, sync panel           | M5        |
-| Reports, Insights, Search | PDF and CSV reports, rule-based insights, command palette                 | M6        |
-| Learn                     | Articles, news and guides from Sanity, public and gated                   | M7        |
-| Extras                    | Push, app badge, bulk delete, data export, drag-and-drop layout and more  | M8        |
+| Area                      | What the user gets                                                                     | Milestone |
+| ------------------------- | -------------------------------------------------------------------------------------- | --------- |
+| Auth and account          | Email and password, sessions list, change password, export, reset, delete              | M0, M1    |
+| Onboarding and settings   | Country, currency, timezone, week start, theme                                         | M1        |
+| Transactions              | Fast entry, infinite list, filters in the URL, In / Out / To Goals totals              | M1        |
+| Budgets                   | Monthly limits per category that carry forward, 80% and 100% alerts                    | M2        |
+| Subscriptions             | Any recurring bill; past charges written into Transactions automatically               | M2        |
+| Goals                     | Contributions and withdrawals, 3 active Goals free, unlimited on Premium               | M2        |
+| Investments               | A seeded mock portfolio with daily prices, gains and time-weighted return              | M3        |
+| Dashboard and Analytics   | Month dashboard with a summary and saved widget views; Analytics page with every chart | M3        |
+| Daybook Premium           | Stripe Elements purchase, Customer Portal management, entitlements                     | M4        |
+| Offline and PWA           | Installable, last-known data offline, queued writes, sync panel                        | M5        |
+| Reports, Insights, Search | PDF and CSV reports, rule-based insights, command palette                              | M6        |
+| Learn                     | Articles, news and guides from Sanity, public and gated                                | M7        |
+| Extras                    | Push, app badge, bulk delete, data export, drag-and-drop layout and more               | M8        |
 
 ## Free and Premium
 

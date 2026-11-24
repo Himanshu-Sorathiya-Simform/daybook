@@ -84,3 +84,12 @@ export type CatchUpAnswer = {
 	chargesCreated: number;
 	pricesUpdated: boolean;
 };
+
+/** One renewal in F08's Coming up widget (BR-F08-14): the Subscription's next due date and its
+ * current amount. */
+export type NextRenewal = {
+	subscriptionId: string;
+	name: string;
+	dueOn: string;
+	amountMinor: number;
+};

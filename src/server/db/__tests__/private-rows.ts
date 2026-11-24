@@ -103,6 +103,21 @@ export const PRIVATE_ROWS: { [K in PrivateTable]: (userId: string) => Row } = {
 		group_by: "day",
 		version: 1,
 	}),
+	// F08 section 15's illustrated view: Budget watch, with Investments hidden.
+	dashboard_views: (userId) => ({
+		id: randomUUID(),
+		user_id: userId,
+		created_at: GOLDEN_NOW,
+		updated_at: GOLDEN_NOW,
+		name: "Budget watch",
+		widgets: JSON.stringify([
+			{ id: "budgets", size: 4, hidden: false },
+			{ id: "investments", size: 2, hidden: true },
+		]),
+		format_version: 1,
+		changed_at: GOLDEN_NOW,
+		version: 1,
+	}),
 	// The golden food Budget: 6,000.00 from 2026-09, then 5,000.00 from 2026-10.
 	budgets: (userId) => ({
 		id: randomUUID(),

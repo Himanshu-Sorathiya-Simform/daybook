@@ -94,7 +94,6 @@ These names are fixed. "Subscription" always means a recurring bill the user tra
 | `/learn`, `/learn/[slug]`  | Articles, news, guides                                                                                                               | Public (logged in until M7, D-514); gated tiers Stretch | Read posts cached                          |
 | `/settings/profile`        | Display name, country (fixed), currency (until finance data exists), timezone, week start                                            | Logged in                                               | Offline state                              |
 | `/settings/appearance`     | Theme (per device)                                                                                                                   | Logged in                                               | Yes                                        |
-| `/settings/dashboard`      | Show, hide and reorder widgets                                                                                                       | Logged in                                               | Writes queued                              |
 | `/settings/security`       | Change password, active sessions                                                                                                     | Logged in                                               | Offline state                              |
 | `/settings/data`           | Load or remove demo data, reset data, export (Stretch), delete account                                                               | Logged in                                               | Offline state                              |
 | `/settings/billing`        | Plan, upgrade with Stripe Elements, manage in Customer Portal                                                                        | Logged in                                               | Cached page; actions online only (P1, F12) |
@@ -425,22 +424,22 @@ The browser never touches the database. Every private read and write passes the 
 | Reports           | Client form, file download          | Report endpoint                                       | No                                                                              | Online only                                  |
 | Search            | Palette                             | Search endpoint                                       | No                                                                              | Online only                                  |
 | Learn             | Server components                   | Sanity                                                | Read posts, by the service worker                                               | n/a                                          |
-| Settings, billing | Server components with client forms | Profile, auth, billing endpoints                      | Profile through `/api/me`                                                       | Online only, except dashboard layout         |
+| Settings, billing | Server components with client forms | Profile, auth, billing endpoints                      | Profile through `/api/me`                                                       | Online only, except dashboard views          |
 
 ### 7.4 State ownership
 
-| State                                         | Owner                                                       |
-| --------------------------------------------- | ----------------------------------------------------------- |
-| Server data                                   | TanStack Query; allow-listed queries persisted to IndexedDB |
-| Profile, plan, capabilities                   | The `/api/me` query, persisted                              |
-| Form state                                    | TanStack Form, Zod shared with the server (D-616)           |
-| Committed filters and period                  | URL search params                                           |
-| Unsubmitted text (search drafts)              | Component state                                             |
-| UI chrome: palette, dialogs, layout edit mode | Zustand `ui` store                                          |
-| Sidebar width (full or icon rail)             | A cookie, per device (D-513)                                |
-| Sync status: counts, running, last error      | Zustand `sync` store, fed by the queue                      |
-| Theme                                         | next-themes, local storage, per device                      |
-| Dashboard layout                              | Server, per account, with a local-storage cache             |
+| State                                         | Owner                                                                                        |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Server data                                   | TanStack Query; allow-listed queries persisted to IndexedDB                                  |
+| Profile, plan, capabilities                   | The `/api/me` query, persisted                                                               |
+| Form state                                    | TanStack Form, Zod shared with the server (D-616)                                            |
+| Committed filters and period                  | URL search params                                                                            |
+| Unsubmitted text (search drafts)              | Component state                                                                              |
+| UI chrome: palette, dialogs, layout edit mode | Zustand `ui` store                                                                           |
+| Sidebar width (full or icon rail)             | A cookie, per device (D-513)                                                                 |
+| Sync status: counts, running, last error      | Zustand `sync` store, fed by the queue                                                       |
+| Theme                                         | next-themes, local storage, per device                                                       |
+| Dashboard views                               | Server, per account, with a local-storage cache; the view last used, per device, in a cookie |
 
 - **STATE-1** Zustand stores are created per request inside a provider and used only in client components. Server components never read them.
 - **STATE-2** Zustand never holds server data.
@@ -475,7 +474,7 @@ The browser never touches the database. Every private read and write passes the 
 - **OFF-1** The service worker never caches private API responses. Serwist's default `/api` rule is removed.
 - **OFF-2** Cached documents count as private. They are wiped on logout and on a user switch. RSC payloads are never cached (P1).
 - **OFF-3** Development builds do not cache; offline behavior is tested on a production build.
-- **OFF-4** Offline-writable: Transactions of every type, Budgets, Subscriptions, Goals and the dashboard layout. Everything else is online only and shows an offline state, never a silent failure.
+- **OFF-4** Offline-writable: Transactions of every type, Budgets, Subscriptions, Goals and the dashboard views. Everything else is online only and shows an offline state, never a silent failure.
 - **OFF-5** Write queue rules (detail in P1):
     - **Item fields:** id, idempotency key, user id, schema version, method, path, body, the row it was made against as the screen showed it (confirmed data with settling and earlier queued changes applied), entity type and id, base version, dependencies, status (`pending`, `inflight`, `conflict`, `rejected`, `blocked`), hold time, first-sent time, attempts, next attempt time, server failures, last error, created time; the queue itself can be paused; Subscription items also keep the deletion count their dialog showed (F05, BR-F05-15).
     - **Order:** replay in creation order.
@@ -492,7 +491,7 @@ The browser never touches the database. Every private read and write passes the 
     - Pending amounts appear as a separate annotation beside the confirmed number, and never trigger Budget alerts.
     - After a sync, the annotation stays until the affected queries have refetched.
 - **OFF-7** A rejected or conflicting item appears in the sync panel and on its row ("Not saved"). A rejected item offers Retry, Edit (for creates and edits) and Discard. A conflict offers Review, which shows both versions with Keep mine (resend against the current version) and Keep theirs (discard), and Discard (D-137, D-139; P1).
-- **OFF-8** The layout is not a write-queue item. A local copy with a `synced` flag holds it until the server accepts it. The server keeps the later `changedAt`, without a version check, so an old layout from a device that was offline never overwrites a newer one (F08, D-183, D-279).
+- **OFF-8** The dashboard views are not write-queue items. A local copy with a `synced` flag for each view holds it until the server accepts it. The server keeps the later `changedAt` of each view, without a version check, so an old edit from a device that was offline never overwrites a newer one, or brings back a deleted view (F08, D-183, D-279).
 
 ### 7.6 Catch-up jobs
 
@@ -813,7 +812,7 @@ Every spec is written before building starts (D-65). Building then follows the m
 | M0 Foundation          | Repo, CI, Neon roles, RLS, Better Auth, data access layer, `proxy.ts`, capability core, Sentry, SonarQube                                            | P2, P4, P3 (setup), F01      |
 | M1 Ledger              | Onboarding and profile, Transactions, list and filters, demo generator, scenario accounts                                                            | F02, F03, F15                |
 | M2 Planning            | Budgets, Subscriptions with catch-up, Goals                                                                                                          | F04, F05, F06                |
-| M3 Overview            | Investments and price catch-up, dashboard and layout, Analytics                                                                                      | F07, F08, F09                |
+| M3 Overview            | Investments and price catch-up, dashboard and its saved views, Analytics                                                                             | F07, F08, F09                |
 | M4 Premium             | Stripe Elements, webhook, reconcile, entitlements, gating, Customer Portal                                                                           | F12                          |
 | M5 Offline             | PWA, persisted cache, write queue, sync panel, update flow, logout marker                                                                            | P1                           |
 | M6 Outputs             | Reports, insights, command palette and search                                                                                                        | F10, F11, F13                |

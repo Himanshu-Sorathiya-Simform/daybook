@@ -512,7 +512,7 @@ Load and remove need a connection and an empty queue on this device (BR-F15-02, 
 
 **Modules:** `shared/demo` (the generator and personas), `server/system/seed` (scenario accounts), `seed/golden.ts` (the golden fixture).
 
-**Shared function.** `accountEmpty(tx, ctx)`: BR-F15-01's check, as one statement of `EXISTS` tests. The demo status endpoint and F08's dashboard use it.
+**Shared function.** `accountEmpty(tx)`: BR-F15-01's check, as one statement of `EXISTS` tests. The demo status endpoint and F08's dashboard use it.
 
 ## 12. Cross-feature effects
 

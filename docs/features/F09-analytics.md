@@ -278,7 +278,7 @@ The portfolio charts use F07's `/api/investments/series` and `/api/investments/s
 
 ## 12. Cross-feature effects
 
-- **F08:** reuses the categories and income-vs-expenses components, with the dashboard month as the range, and the shared chart rules.
+- **F08:** reuses the income-vs-expenses component, with the dashboard month as the range, and the shared chart rules. Its Premium Calendar heat map widget (F08, BR-F08-34) shows the heat map of the calendar year of the dashboard month, from `/api/analytics/heatmap`, behind the same gate and locked card.
 - **F11:** draws the same components on the print route, with the SVG renderer and no animation (D-124).
 - **Invalidation:** every confirmed write that changes Transactions (Subscription charges included), Budgets or Goals invalidates the whole `analytics` query prefix (D-295). The portfolio charts go stale once the UTC date passes their `asOfPriceDate` (F07, BR-F07-18).
 - **F12:** a plan change refetches `/api/me`, and gates open or close.

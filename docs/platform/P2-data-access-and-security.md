@@ -42,12 +42,12 @@ Every private read and write reaches Postgres through one path. A route-handler 
 
 **Table classes.** Every table in `app` belongs to exactly one class.
 
-| Class                   | Examples                                                                                                                  | `user_id` | RLS and policy                                         | Runtime may                         |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------ | ----------------------------------- |
-| Private                 | Transactions, Budgets, Subscriptions, tombstones, Goals, trades, profile, layout, dismissed insights, idempotency records | Yes       | Enabled, forced, `owner_isolation` and `system_access` | Read and write own rows             |
-| Private, system-written | Entitlements, plan status, capability overrides                                                                           | Yes       | Enabled, forced, `owner_isolation` and `system_access` | Read own rows only (no write grant) |
-| Reference               | Currencies, categories, mock assets, mock prices                                                                          | No        | None                                                   | Read                                |
-| System                  | Processed Stripe event ids, daily maintenance markers                                                                     | No        | None                                                   | Nothing                             |
+| Class                   | Examples                                                                                                                                                         | `user_id` | RLS and policy                                         | Runtime may                         |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------ | ----------------------------------- |
+| Private                 | Transactions, Budgets, Subscriptions, tombstones, Goals, trades, profile, dashboard views (with their deletion markers), dismissed insights, idempotency records | Yes       | Enabled, forced, `owner_isolation` and `system_access` | Read and write own rows             |
+| Private, system-written | Entitlements, plan status, capability overrides                                                                                                                  | Yes       | Enabled, forced, `owner_isolation` and `system_access` | Read own rows only (no write grant) |
+| Reference               | Currencies, categories, mock assets, mock prices                                                                                                                 | No        | None                                                   | Read                                |
+| System                  | Processed Stripe event ids, daily maintenance markers                                                                                                            | No        | None                                                   | Nothing                             |
 
 **Columns every private table must have.** These constrain the schema design; they are not the schema.
 

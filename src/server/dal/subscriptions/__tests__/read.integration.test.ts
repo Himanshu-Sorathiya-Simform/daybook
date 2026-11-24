@@ -548,23 +548,44 @@ describe("subscriptionCosts (BR-F05-17)", () => {
 	});
 });
 
-describe("subscriptionSummary (F08's widget)", () => {
+describe("subscriptionSummary (F08's Coming up widget)", () => {
 	const summary = (who: string) =>
 		asUser(who, (tx) => subscriptionSummary(tx, goldenContext(who)));
 
-	test("golden: the costs, and Netflix on 5 November at 649.00 as the next renewal", async () => {
+	// AC-F05-55
+	test("golden: the costs and the four renewals, one for each Subscription, in due order", async () => {
 		const { result, statements } = await summary(golden.userId);
 		expect(statements).toBe(1);
 		expect(result).toEqual({
 			yearlyMinor: 24328700,
 			monthlyMinor: 2027392,
 			count: 4,
-			nextRenewal: {
-				subscriptionId: golden.subscription("netflix"),
-				name: "Netflix",
-				dueOn: "2026-11-05",
-				amountMinor: 64900,
-			},
+			upcoming: [
+				{
+					subscriptionId: golden.subscription("netflix"),
+					name: "Netflix",
+					dueOn: "2026-11-05",
+					amountMinor: 64900,
+				},
+				{
+					subscriptionId: golden.subscription("cultGym"),
+					name: "Cult Gym",
+					dueOn: "2026-11-10",
+					amountMinor: 150000,
+				},
+				{
+					subscriptionId: golden.subscription("sunrise"),
+					name: "Sunrise Apartments",
+					dueOn: "2026-12-01",
+					amountMinor: 1800000,
+				},
+				{
+					subscriptionId: golden.subscription("amazonPrime"),
+					name: "Amazon Prime",
+					dueOn: "2027-10-12",
+					amountMinor: 149900,
+				},
+			],
 		});
 	});
 
@@ -572,27 +593,35 @@ describe("subscriptionSummary (F08's widget)", () => {
 		const { result } = await summary(
 			(variants["skipped"] as LoadedGolden).userId,
 		);
-		expect(result.nextRenewal).toMatchObject({
+		expect(result.upcoming[0]).toMatchObject({
 			name: "Cult Gym",
 			dueOn: "2026-11-10",
 			amountMinor: 150000,
 		});
+		// Netflix's next due date is now 5 December: it is still listed, after Sunrise's 1 December.
+		expect(result.upcoming.map((entry) => entry.name)).toEqual([
+			"Cult Gym",
+			"Sunrise Apartments",
+			"Netflix",
+			"Amazon Prime",
+		]);
 	});
 
 	test("a paused Netflix leaves Cult Gym as the next renewal, though it still counts in the cost", async () => {
 		const { result } = await summary(
 			(variants["paused"] as LoadedGolden).userId,
 		);
-		expect(result.nextRenewal).toMatchObject({ name: "Cult Gym" });
+		expect(result.upcoming[0]).toMatchObject({ name: "Cult Gym" });
 		expect(result.count).toBe(4);
 	});
 
 	test("two Subscriptions due the same day: the earlier name first, case aside", async () => {
 		const { result } = await summary((variants["ties"] as LoadedGolden).userId);
-		expect(result.nextRenewal).toMatchObject({
-			name: "A-sub",
-			dueOn: "2026-11-05",
-		});
+		expect(result.upcoming.map((entry) => entry.name)).toEqual([
+			"A-sub",
+			"b-sub",
+		]);
+		expect(result.upcoming[0]).toMatchObject({ dueOn: "2026-11-05" });
 		expect(result.count).toBe(2);
 	});
 
@@ -601,7 +630,7 @@ describe("subscriptionSummary (F08's widget)", () => {
 			yearlyMinor: 0,
 			monthlyMinor: 0,
 			count: 0,
-			nextRenewal: null,
+			upcoming: [],
 		});
 	});
 
@@ -618,8 +647,47 @@ describe("subscriptionSummary (F08's widget)", () => {
 			yearlyMinor: 0,
 			monthlyMinor: 0,
 			count: 0,
-			nextRenewal: null,
+			upcoming: [],
 		});
+	});
+
+	test("lists only four of five Subscriptions, the one due last left out", async () => {
+		const loaded = await goldenUser(owner, "sub-reads-five");
+		users.push(loaded.userId);
+		await addSubscription(owner, loaded.userId, {
+			name: "Fifth",
+			startDate: "2026-11-20",
+			chargesFrom: "2026-11-20",
+			lastChangeOn: "2026-11-02",
+		});
+		const { result } = await summary(loaded.userId);
+		expect(result.upcoming).toHaveLength(4);
+		expect(result.count).toBe(5);
+		expect(result.upcoming.map((entry) => entry.name)).not.toContain(
+			"Amazon Prime",
+		);
+	});
+
+	test("an ended Subscription is neither listed nor counted", async () => {
+		const loaded = await goldenUser(owner, "sub-reads-one-ended");
+		users.push(loaded.userId);
+		await ownerExec(
+			owner,
+			"UPDATE app.subscriptions SET end_date = '2026-10-31' WHERE id = $1",
+			[loaded.subscription("netflix")],
+		);
+		const { result } = await summary(loaded.userId);
+		expect(result.upcoming.map((entry) => entry.name)).toEqual([
+			"Cult Gym",
+			"Sunrise Apartments",
+			"Amazon Prime",
+		]);
+		expect(result.count).toBe(3);
+	});
+
+	test("never lists another user's Subscriptions", async () => {
+		const { result } = await summary(empty);
+		expect(result.upcoming).toEqual([]);
 	});
 });
 

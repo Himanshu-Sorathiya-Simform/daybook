@@ -133,7 +133,7 @@ People create a Daybook account with an email and password, log in and out on an
 
 - **BR-F01-20** Reset deletes every Transaction, saved Transactions view (F03, D-452), Budget, Subscription (with its tombstones), Goal and dismissed insight, in one write transaction. That transaction first locks the profile row with `SELECT ... FOR UPDATE` (SRV-7, D-213), so no catch-up run or demo load can interleave. It keeps:
     - the account and profile;
-    - the dashboard layout;
+    - the dashboard views;
     - the portfolio;
     - Premium;
     - idempotency records, so old queued requests cannot recreate deleted rows.
