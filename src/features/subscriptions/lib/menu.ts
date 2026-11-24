@@ -16,22 +16,6 @@ export type MenuAction =
 	| "viewCharges"
 	| "delete";
 
-/** The actions whose dialogs or writes exist so far. A later chunk adds its own as it builds
- * them, so the menu never offers a button that does nothing. */
-export const READY_ACTIONS: ReadonlySet<MenuAction> = new Set([
-	"resume",
-	"edit",
-	"skip",
-	"pause",
-	"resumeNow",
-	"changePause",
-	"cancel",
-	"changeEnd",
-	"keepGoing",
-	"viewCharges",
-	"delete",
-]);
-
 export type MenuItem = {
 	action: MenuAction;
 	label: string;
@@ -103,15 +87,6 @@ export function rowMenu(
 	return items;
 }
 
-/** The row menu with only the actions that are ready: `rowMenu` less what `ready` lacks. */
-export function readyMenu(
-	item: Pick<SubscriptionItem, "status" | "nextDueOn">,
-	f: Formats,
-	ready: ReadonlySet<MenuAction> = READY_ACTIONS,
-): MenuItem[] {
-	return rowMenu(item, f).filter((entry) => ready.has(entry.action));
-}
-
 /** The keys that act on a selected Subscription as its menu's items do (BR-F05-45, D-630),
  * besides E for Edit. */
 export type ShortcutKey = "S" | "P" | "R" | "C" | "Delete";
@@ -144,7 +119,7 @@ export function shortcutAction(
 	item: Pick<SubscriptionItem, "status" | "nextDueOn">,
 	f: Formats,
 ): MenuAction | null {
-	const offered = readyMenu(item, f).map((entry) => entry.action);
+	const offered = rowMenu(item, f).map((entry) => entry.action);
 	const keyed = KEYED.find((each) => each.key === key);
 	return offered.find((action) => keyed && action in keyed.actions) ?? null;
 }

@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { ApiRequestError } from "@/lib/api/client";
 import {
 	readSubscriptionDeleteError,
+	readSubscriptionDeleteRefusal,
 	readSubscriptionNoticeError,
 	readSubscriptionWriteError,
 } from "../write-errors";
@@ -318,6 +319,29 @@ describe("readSubscriptionWriteError (flows 7.1 to 7.8)", () => {
 			kind: "form",
 			message:
 				"This change conflicts with an earlier one. Discard it and try again.",
+		});
+	});
+});
+
+describe("readSubscriptionDeleteRefusal (BR-F05-44)", () => {
+	test("an error that is not an API error is thrown on", () => {
+		expect(() => readSubscriptionDeleteRefusal(new Error("bug"))).toThrow("bug");
+	});
+
+	test("a refused delete is the dialog's own line, in the delete words", () => {
+		expect(readSubscriptionDeleteRefusal(NETWORK)).toEqual({
+			kind: "form",
+			message: DELETE_FAILED,
+		});
+	});
+
+	test("a 409 is the conflict view and a 401 is the app's, as for any write", () => {
+		expect(readSubscriptionDeleteRefusal(conflict())).toEqual({
+			kind: "conflict",
+			current: CURRENT,
+		});
+		expect(readSubscriptionDeleteRefusal(http(401, "unauthenticated"))).toEqual({
+			kind: "handled",
 		});
 	});
 });

@@ -118,7 +118,7 @@ Examples in this spec write amounts without the currency symbol and months as `e
 - **BR-F04-14** `/budgets?month=YYYY-MM` shows one month, defaulting to the current month. A `month` that is invalid or outside the range (BR-F04-07) is dropped with the FIL-5 notice. The header holds, in order:
     1. **The title** "Budgets", with "as of 14:05" beside it when offline (section 10).
     2. **The month control:** Previous month and Next month buttons, disabled at the ends of the range, around the month's name ("October 2026"; the current month reads "November 2026 · to date"). The name opens a month grid: the year with Previous year and Next year, twelve months with those outside the range disabled, each in-range month showing its overall utilization ("81.0%") or nothing when it has no Budget (BR-F04-35), every month keeping a line for the figure so the names never move, with a skeleton bar in it while the year's figures load (D-577), the caption "Figures: overall use of the month's limits", and a This month button.
-    3. **"Show Budgets as":** List or Table, remembered on the device (`daybook.budgets.view`), also in a cookie of that name and with the window's last class (`daybook_wide`), which the server reads so a remembered Table is drawn at once (D-629).
+    3. **"Show Budgets as":** List or Table, remembered on the device (`daybook.budgets.view`), also in the cookie `daybook_view_budgets` and with the window's last class (`daybook_wide`), which the server reads so a remembered Table is drawn at once (D-629).
     4. **Add a Budget.**
 
     Below 768 px, the phone layout (D-512), Add a Budget is an icon button, List or Table leaves the header and the list shows (D-570), and the month control moves to its own row with 44 px targets.

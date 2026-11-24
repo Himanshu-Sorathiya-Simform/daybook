@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -152,6 +152,24 @@ describe("CalendarDays on golden, below 768 px (BR-F05-38)", () => {
 				}),
 			);
 		}
+		expect(
+			within(week("23 to 29 Nov")).getByText("Mon 23 to Sun 29"),
+		).toBeVisible();
+		expect(within(week("30 Nov")).getByText("Mon 30")).toBeVisible();
+	});
+
+	test("two presses before a redraw open both weeks", () => {
+		setup();
+		const show = (name: string) =>
+			within(week(name)).getByRole("button", {
+				name: "Nothing due · Show days",
+			});
+		const first = show("23 to 29 Nov");
+		const second = show("30 Nov");
+		act(() => {
+			fireEvent.click(first);
+			fireEvent.click(second);
+		});
 		expect(
 			within(week("23 to 29 Nov")).getByText("Mon 23 to Sun 29"),
 		).toBeVisible();

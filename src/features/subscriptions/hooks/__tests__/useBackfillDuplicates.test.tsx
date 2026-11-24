@@ -1,4 +1,4 @@
-import { waitFor } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
 import { http } from "msw";
 import { describe, expect, test } from "vitest";
 
@@ -49,8 +49,10 @@ const render = (args: Args, queryClient = clientFor()) =>
 		queryClient,
 	});
 
+/** An enabled query is fetching as soon as it mounts or its inputs change, inside the act of
+ * the render, so a query that is idle now was never going to fetch. */
 async function stayedIdle(result: { current: { fetchStatus: string } }) {
-	await new Promise((resolve) => setTimeout(resolve, 30));
+	await act(async () => {});
 	expect(result.current.fetchStatus).toBe("idle");
 }
 

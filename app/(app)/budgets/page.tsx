@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { BudgetsPage } from "@/features/budgets/components/BudgetsPage";
 import { budgetKeys } from "@/features/budgets/lib/keys";
 import { readMonthParam } from "@/features/budgets/lib/url";
-import { BUDGET_VIEWS, VIEW_KEY } from "@/features/budgets/lib/view";
+import { BUDGET_VIEWS, VIEW_COOKIE } from "@/features/budgets/lib/view";
 import { createQueryClient } from "@/lib/api/query-client";
 import { monthOf } from "@/lib/budgets/months";
 import { choiceOf, isWideValue, WIDE_COOKIE } from "@/lib/device-cookies";
@@ -47,7 +47,7 @@ export default async function Page({ searchParams }: PageProps<"/budgets">) {
 		<HydrationBoundary state={dehydrate(queryClient)}>
 			<BudgetsPage
 				initialView={choiceOf(
-					jar.get(VIEW_KEY)?.value,
+					jar.get(VIEW_COOKIE)?.value,
 					BUDGET_VIEWS,
 					"list",
 				)}

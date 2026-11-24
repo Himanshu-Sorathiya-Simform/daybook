@@ -6,9 +6,8 @@ import {
 	useForm,
 	useSelector,
 } from "@tanstack/react-form";
-import { useQueryClient } from "@tanstack/react-query";
 import { Info } from "lucide-react";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { Button } from "@/components/actions/Button";
 import { FormAlert } from "@/components/feedback/FormAlert";
@@ -16,53 +15,42 @@ import { FormNote } from "@/components/feedback/FormNote";
 import { OfflineNote } from "@/components/feedback/OfflineNote";
 import { AmountInput } from "@/components/forms/AmountInput";
 import { CategoryTiles } from "@/components/forms/CategoryTiles";
-import { ChoiceGroup } from "@/components/forms/ChoiceGroup";
 import { Dialog } from "@/components/surfaces/Dialog";
 import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
-import { useOnce } from "@/hooks/useOnce";
 import { useOnline } from "@/hooks/useOnline";
 import { formatAmountInput, parseAmount } from "@/lib/amount";
-import type { BudgetRules, ExpenseCategory } from "@/lib/budgets/model";
-import { type Month, monthOf, monthRange } from "@/lib/budgets/months";
-import { type BudgetChange, previewChange } from "@/lib/budgets/preview";
-import { BUDGET_MESSAGES, type BudgetEditInput } from "@/lib/budgets/schemas";
+import type { ExpenseCategory } from "@/lib/budgets/model";
+import { type Month, monthOf } from "@/lib/budgets/months";
 import type { BudgetRecord } from "@/lib/budgets/view";
 import { categoryLabel } from "@/lib/categories";
 import { uuidV7 } from "@/lib/ids";
 import { useBudgetHistory } from "../hooks/useBudgetHistory";
-import { useCreateBudget } from "../hooks/useCreateBudget";
-import { useEditBudget } from "../hooks/useEditBudget";
+import { useBudgetPreview } from "../hooks/useBudgetPreview";
+import { type BudgetDialogConflict, useBudgetSave } from "../hooks/useBudgetSave";
+import { useBudgetWrite } from "../hooks/useBudgetWrite";
 import {
 	addCategories,
 	buttonName,
 	DIALOG_TEXT,
 	type DialogKind,
-	type DialogPlan,
 	type DialogScope,
 	dialogTitle,
 	fieldMessages,
-	limitOf,
 	monthLabel,
-	nothingChanges,
-	oneMonthDetail,
 	planOf,
 	recordIn,
-	rulesAfter,
 	spentHint,
 	startLimit,
 	tileCaptions,
 } from "../lib/dialog";
 import { budgetExistsMessage } from "../lib/messages";
-import { figuresOf, historyWindow } from "../lib/preview";
-import { type ConflictChange, conflictRows, keepMineLine } from "../lib/conflict";
-import { type WriteNotice, writeNotice } from "../lib/notices";
-import { refreshAfterBudgetWrite } from "../lib/refresh";
+import type { WriteNotice } from "../lib/notices";
 import type { BudgetAnswer, BudgetMonthAnswer, BudgetsLocale } from "../lib/types";
-import { type BudgetField, readBudgetWriteError } from "../lib/write-errors";
-import { ChangeNotes } from "./ChangeNotes";
-import { ConflictDialog } from "./ConflictDialog";
+import type { BudgetField } from "../lib/write-errors";
+import { BudgetChangeSummary } from "./BudgetChangeSummary";
+import { DialogConflict } from "./DialogConflict";
+import { ForHowLongField } from "./ForHowLongField";
 import { MonthField } from "./MonthField";
-import { WhatChanges } from "./WhatChanges";
 
 export type BudgetDialogProps = {
 	isOpen: boolean;
@@ -88,8 +76,6 @@ type Subject = {
 	found: BudgetRecord | null;
 	notice: string | null;
 };
-
-const FOR_HOW_LONG: DialogScope[] = ["onward", "month"];
 
 /** The fields the user fills in: the form's values (D-169). The limit is the text as typed. */
 type BudgetFormValues = {
@@ -129,9 +115,6 @@ export function BudgetDialog({
 	// meets a 409 and the conflict view, not a silent overwrite (BR-F04-23).
 	const [view] = useState(latest);
 	const online = useOnline();
-	const queryClient = useQueryClient();
-	const create = useCreateBudget();
-	const edit = useEditBudget();
 	const current = monthOf(locale.today);
 	const [subject, setSubject] = useState<Subject>({
 		kind: openedAs,
@@ -154,21 +137,13 @@ export function BudgetDialog({
 			month: current,
 		};
 	});
-	const [server, setServer] = useState<Partial<Record<BudgetField, string>>>({});
-	const [failure, setFailure] = useState<string | null>(null);
 	// A 409: the Budget saved now beside the user's version, with the write to resend
 	// (BR-F04-23).
-	const [conflict, setConflict] = useState<{
-		current: BudgetAnswer;
-		body: BudgetEditInput;
-		yours: BudgetRules;
-		line: string;
-	} | null>(null);
+	const write = useBudgetWrite<BudgetDialogConflict>(onClose);
+	const { failure, server, conflict } = write;
 	const formRef = useRef<HTMLFormElement>(null);
+	const formId = useId();
 	const focusInvalid = useFocusFirstInvalid(formRef);
-	const busy = create.isPending || edit.isPending;
-	// A second press, Enter included, sends nothing while a write is out (D-575, D-615).
-	const sending = useOnce();
 
 	const form = useForm({
 		defaultValues: start,
@@ -222,144 +197,41 @@ export function BudgetDialog({
 	const unchanged = plan?.kind === "edit" && plan.unchanged;
 
 	// What changes (BR-F04-26): the change as typed, over the Budget record if there is one, with
-	// the spending of the months it lists. A category with no record always applies from a month.
-	const limit = limitOf(kind, typed);
-	const change: BudgetChange | null =
-		category !== null && limit !== undefined ?
-			{
-				scope: scope === "month" ? "month" : "from",
-				month,
-				limitMinor: limit,
-			}
-		:	null;
-	const window =
-		change && historyWindow(change, current, monthRange(current).last);
-	const spending = useBudgetHistory(
-		change ? category : null,
-		window?.to ?? current,
-		window?.months,
-	);
-	const figures = figuresOf(spending);
-	const spentIn = new Map(
-		spending.data?.months.map((each) => [each.month, each.spentMinor]),
-	);
-	const preview =
-		change
-		&& previewChange({
-			rules: record,
-			change,
-			spending: (each) => spentIn.get(each) ?? 0,
-			current,
-		});
+	// the spending of the months it lists.
+	const { limit, change, preview, figures } = useBudgetPreview({
+		kind,
+		category,
+		typed,
+		scope,
+		month,
+		record,
+		current,
+	});
 
 	/** Clears what the server said about a field once it changes. */
-	const changed = (field: BudgetField) => {
-		setServer((was) => {
-			const next = { ...was };
-			delete next[field];
-			return next;
-		});
-		setFailure(null);
-	};
+	const changed = write.clearField;
 
-	/** Sends the write for `ready` against `version`, over the Budget as it was, `before`, for
-	 * the notice's Undo. Keep mine resends it against the saved version. */
-	const submit = async (
-		ready: DialogPlan,
-		version: number,
-		before: BudgetRules | null,
-	) => {
-		const request = sending.run(() =>
-			ready.kind === "create" ?
-				create.mutateAsync({
-					body: ready.body,
-					idempotencyKey: uuidV7(),
-				})
-			:	edit.mutateAsync({
-					id: (record as BudgetRecord).id,
-					version,
-					body: ready.body,
-					idempotencyKey: uuidV7(),
-				}),
-		);
-		if (request === null) return;
-		setFailure(null);
-		setServer({});
-		try {
-			const saved = await request;
-			setConflict(null);
-			onSaved?.(
-				saved,
-				writeNotice({
-					scope,
-					month,
-					// A saved dialog has a valid limit, or is a stop.
-					limitMinor: limit as number | null,
-					before,
-					saved,
-					formats: locale,
-				}),
-			);
-			onClose();
-		} catch (error) {
-			const outcome = readBudgetWriteError(error);
-			if (outcome.kind === "conflict") {
-				// Only a change on a Budget record has a version to conflict on.
-				const edited = ready as Extract<DialogPlan, { kind: "edit" }>;
-				const change: ConflictChange = {
-					kind: "limit",
-					scope,
-					month,
-					limitMinor: limit as number | null,
-				};
-				setConflict({
-					current: outcome.current,
-					body: edited.body,
-					yours: rulesAfter(record as BudgetRules, change),
-					line: keepMineLine(change, locale),
-				});
-				return;
-			}
-			// Any other refusal closes the view and shows where the write started.
-			setConflict(null);
-			if (outcome.kind === "fields") {
-				setServer(outcome.fields);
-				setFailure(outcome.message);
-				focusInvalid();
-			} else if (outcome.kind === "exists") {
-				setSubject({
-					kind: "change",
-					found: outcome.current,
-					notice: budgetExistsMessage(
-						categoryLabel(outcome.current.category),
-					),
-				});
-				form.setFieldValue("scope", "onward");
-			} else if (outcome.kind === "gone") {
-				setFailure(outcome.message);
-				void refreshAfterBudgetWrite(queryClient, "count");
-			} else if (outcome.kind === "form") {
-				setFailure(outcome.message);
-			}
-		}
-	};
-
-	/** Save, once the fields check out. */
-	const save = async (entered: BudgetFormValues) => {
-		const planned = planFor(entered);
-		// Only a stop on a Budget record can be blocked.
-		if (planned?.kind === "edit" && planned.blocked) {
-			onDeleteInstead(record as BudgetRecord);
-			return;
-		}
-		// Fields without a message always make a plan; the button and Enter refuse one that
-		// changes nothing.
-		await submit(
-			planned as DialogPlan,
-			(record as BudgetRecord | null)?.version ?? 0,
-			record,
-		);
-	};
+	const { save, submit, busy, isEditing } = useBudgetSave({
+		write,
+		record,
+		scope,
+		month,
+		limit,
+		locale,
+		planFor,
+		onClose,
+		onSaved,
+		onDeleteInstead,
+		onExists: (found) => {
+			setSubject({
+				kind: "change",
+				found,
+				notice: budgetExistsMessage(categoryLabel(found.category)),
+			});
+			form.setFieldValue("scope", "onward");
+		},
+		onFieldsRefused: focusInvalid,
+	});
 
 	/** A field's message: the server's refusal of it, else the first of its own checks. */
 	const messageOf = (field: AnyFieldApi, key: BudgetField) =>
@@ -389,7 +261,10 @@ export function BudgetDialog({
 							variant={blocked ? "danger" : "primary"}
 							isDisabled={!online || unchanged}
 							isPending={busy}
-							onPress={() => void form.handleSubmit()}
+							// The footer sits outside the form, so the button names it: pressing it and
+							// Enter in a field both submit.
+							type="submit"
+							form={formId}
 						>
 							{blocked ?
 								DIALOG_TEXT.deleteInstead
@@ -399,6 +274,7 @@ export function BudgetDialog({
 				}
 			>
 				<form
+					id={formId}
 					ref={formRef}
 					noValidate
 					aria-label={title}
@@ -478,28 +354,13 @@ export function BudgetDialog({
 					{record && (
 						<form.Field name="scope">
 							{(field) => (
-								<ChoiceGroup
-									label={DIALOG_TEXT.forHowLong}
+								<ForHowLongField
 									value={field.state.value}
-									onChange={(next) =>
-										field.handleChange(next as DialogScope)
-									}
-									options={FOR_HOW_LONG.map((value) => ({
-										value,
-										label:
-											value === "onward" ?
-												DIALOG_TEXT.onward
-											:	DIALOG_TEXT.oneMonth,
-										description:
-											value === "onward" ?
-												DIALOG_TEXT.onwardDetail
-											:	oneMonthDetail(
-													record,
-													month,
-													current,
-													locale,
-												),
-									}))}
+									onChange={field.handleChange}
+									record={record}
+									month={month}
+									current={current}
+									formats={locale}
 									isDisabled={busy}
 								/>
 							)}
@@ -522,45 +383,28 @@ export function BudgetDialog({
 						)}
 					</form.Field>
 					{server.month && <FormAlert>{server.month}</FormAlert>}
-					{change && preview && !preview.blocked && category !== null && (
-						<WhatChanges
-							preview={preview}
-							change={change}
-							context={{ category, current, formats: locale }}
-							figures={figures}
-						/>
-					)}
-					{blocked && (
-						<FormAlert>
-							{BUDGET_MESSAGES.stopRemovesEveryMonth}
-						</FormAlert>
-					)}
-					{unchanged && category !== null && (
-						<p className="text-body text-ink-2">
-							{nothingChanges(category, scope, month, locale)}
-						</p>
-					)}
-					{!unchanged
-						&& change
-						&& preview
-						&& !preview.blocked
-						&& category !== null && (
-							<ChangeNotes
-								notes={preview.notes}
-								change={change}
-								context={{ category, current, formats: locale }}
-							/>
-						)}
+					<BudgetChangeSummary
+						category={category}
+						scope={scope}
+						month={month}
+						current={current}
+						formats={locale}
+						change={change}
+						preview={preview}
+						figures={figures}
+						blocked={blocked}
+						unchanged={unchanged}
+					/>
 				</form>
 			</Dialog>
 			{conflict && (
-				<ConflictDialog
-					isOpen
-					// It only ever reports closing.
-					onOpenChange={() => setConflict(null)}
-					rows={conflictRows(conflict.yours, conflict.current, locale)}
+				<DialogConflict
+					yours={conflict.yours}
+					current={conflict.current}
+					formats={locale}
 					keepMineLine={conflict.line}
-					isPending={edit.isPending}
+					isPending={isEditing}
+					onClose={write.closeConflict}
 					onKeepMine={() =>
 						void submit(
 							{
@@ -573,11 +417,7 @@ export function BudgetDialog({
 							conflict.current,
 						)
 					}
-					onKeepTheirs={() => {
-						setConflict(null);
-						void refreshAfterBudgetWrite(queryClient, "rules");
-						onClose();
-					}}
+					onKeepTheirs={write.keepTheirs}
 				/>
 			)}
 		</>

@@ -1,5 +1,5 @@
 import { type QueryClient, QueryObserver } from "@tanstack/react-query";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import { ME_KEY } from "@/lib/api/me";
 import { createQueryClient } from "@/lib/api/query-client";
@@ -166,7 +166,11 @@ describe("refreshAfterSubscriptionWrite (F05 section 12)", () => {
 		}).then(() => {
 			done = true;
 		});
-		await new Promise((resolve) => setTimeout(resolve, 30));
+		await vi.waitFor(() =>
+			expect(
+				queryClient.isFetching({ queryKey: subscriptionKeys.list() }),
+			).toBe(1),
+		);
 		expect(done).toBe(false);
 		release();
 		await pending;

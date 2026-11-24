@@ -1,8 +1,20 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { onlineManager } from "@tanstack/react-query";
+import { screen } from "@testing-library/react";
+import { setupServer } from "msw/node";
+import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
+import {
+	GOLDEN_BLOCK,
+	meFor,
+	renderInApp,
+} from "@/components/app/__tests__/helpers";
+import { ok, route } from "../../hooks/__tests__/helpers";
 import { fieldsOf } from "../../lib/conflict";
-import { subscriptionAnswer, subscriptionItem } from "../../lib/__tests__/fixtures";
+import {
+	listPage,
+	subscriptionAnswer,
+	subscriptionItem,
+} from "../../lib/__tests__/fixtures";
 import {
 	type OpenDialog,
 	SubscriptionDialogs,
@@ -10,27 +22,14 @@ import {
 } from "../SubscriptionDialogs";
 import { FORMATS } from "./rows";
 
-// Each dialog is tested on its own; here each is a stub that says it is open and for whom.
-vi.mock("../SubscriptionDialog", async () => ({
-	SubscriptionDialog: (await import("./stub-dialog")).stubDialog("subscription"),
-}));
-vi.mock("../CancelDialog", async () => ({
-	CancelDialog: (await import("./stub-dialog")).stubDialog("cancel"),
-}));
-vi.mock("../ResumeDialog", async () => ({
-	ResumeDialog: (await import("./stub-dialog")).stubDialog("resume"),
-}));
-vi.mock("../PauseDialog", async () => ({
-	PauseDialog: (await import("./stub-dialog")).stubDialog("pause"),
-}));
-vi.mock("../DeleteDialog", async () => ({
-	DeleteDialog: (await import("./stub-dialog")).stubDialog("delete"),
-}));
-vi.mock("../ConflictDialog", () => ({
-	ConflictDialog: (props: { keepMineLine: string }) => (
-		<p>conflict: {props.keepMineLine}</p>
-	),
-}));
+const network = setupServer();
+beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
+afterEach(() => {
+	network.resetHandlers();
+	onlineManager.setOnline(true);
+	vi.restoreAllMocks();
+});
+afterAll(() => network.close());
 
 const NETFLIX = subscriptionItem("netflix");
 const LOCALE = {
@@ -51,7 +50,11 @@ function setup(
 	dialog: OpenDialog | null,
 	notices: SubscriptionDialogsProps["notices"] = NO_CONFLICT,
 ) {
-	return render(
+	// What the dialogs read: the profile, the payees an Add lists and a Subscription's charges.
+	route(network, "get", "/api/me", () => ok(meFor("u1", GOLDEN_BLOCK)));
+	route(network, "get", "/api/payees", () => ok({ items: [], currency: "INR" }));
+	route(network, "get", "/api/transactions", () => ok(listPage([])));
+	return renderInApp(
 		<SubscriptionDialogs
 			dialog={dialog}
 			items={[NETFLIX]}
@@ -66,39 +69,48 @@ function setup(
 
 describe("the dialog the page has open", () => {
 	test("none open shows nothing", () => {
-		const view = setup(null);
-		expect(view.container).toBeEmptyDOMElement();
+		setup(null);
+		expect(screen.queryByRole("dialog")).toBeNull();
 	});
 
-	test("Add opens the Subscription dialog for nobody", () => {
+	test("Add opens the Subscription dialog for nobody", async () => {
 		setup({ kind: "add", item: null });
-		expect(screen.getByText("subscription for nobody")).toBeVisible();
+		expect(
+			await screen.findByRole("dialog", { name: "Add a Subscription" }),
+		).toBeVisible();
 	});
 
 	test.each([
-		["edit", "subscription"],
-		["cancel", "cancel"],
-		["resume", "resume"],
-		["pause", "pause"],
-		["delete", "delete"],
+		["edit", "Edit Netflix"],
+		["cancel", "Cancel Netflix?"],
+		["resume", "Resume Netflix?"],
+		["pause", "Pause Netflix"],
 	] as const)(
-		"%s opens the %s dialog for its Subscription, and only that one",
-		(kind, name) => {
+		"%s opens its dialog for its Subscription, and only that one",
+		async (kind, title) => {
 			setup({ kind, item: NETFLIX });
-			expect(screen.getByText(`${name} for Netflix`)).toBeVisible();
-			expect(screen.getAllByText(/ for /)).toHaveLength(1);
+			expect(await screen.findByRole("dialog", { name: title })).toBeVisible();
+			expect(screen.getAllByRole("dialog")).toHaveLength(1);
 		},
 	);
+
+	test("delete opens its confirmation for its Subscription", async () => {
+		setup({ kind: "delete", item: NETFLIX });
+		expect(
+			await screen.findByRole("alertdialog", { name: "Delete Netflix?" }),
+		).toBeVisible();
+	});
 
 	test.each(["cancel", "resume", "pause", "delete"] as const)(
 		"%s with no Subscription opens nothing",
 		(kind) => {
-			const view = setup({ kind, item: null });
-			expect(view.container).toBeEmptyDOMElement();
+			setup({ kind, item: null });
+			expect(screen.queryByRole("dialog")).toBeNull();
+			expect(screen.queryByRole("alertdialog")).toBeNull();
 		},
 	);
 
-	test("a conflict opens its view beside no dialog", () => {
+	test("a conflict opens its view beside no dialog", async () => {
 		setup(null, {
 			...NO_CONFLICT,
 			conflict: {
@@ -108,6 +120,12 @@ describe("the dialog the page has open", () => {
 				isDelete: false,
 			},
 		});
-		expect(screen.getByText("conflict: Keep mine puts it back.")).toBeVisible();
+		expect(
+			await screen.findByRole("dialog", {
+				name: "This Subscription changed on another device",
+			}),
+		).toBeVisible();
+		expect(screen.getAllByRole("dialog")).toHaveLength(1);
+		expect(screen.getByText("Keep mine puts it back.")).toBeVisible();
 	});
 });

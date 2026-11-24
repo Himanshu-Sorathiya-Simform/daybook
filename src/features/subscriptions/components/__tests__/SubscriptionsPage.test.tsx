@@ -36,7 +36,7 @@ import type {
 	SubscriptionList,
 	SubscriptionsLocale,
 } from "../../lib/types";
-import { VIEW_KEY } from "../../lib/view";
+import { VIEW_COOKIE, VIEW_KEY } from "../../lib/view";
 import type { Transaction } from "@/lib/transactions/model";
 import {
 	charge,
@@ -59,7 +59,7 @@ beforeEach(() => window.localStorage.clear());
 afterEach(() => {
 	// Sonner keeps its toasts in a module, so one test's toast would reach the next.
 	toast.dismiss();
-	resetPageTest(network, VIEW_KEY);
+	resetPageTest(network, VIEW_COOKIE);
 });
 afterAll(() => network.close());
 
@@ -935,11 +935,12 @@ describe("the panel and the keys (BR-F05-40, BR-F05-45)", () => {
 
 		test("nothing is asked for while nothing is selected", async () => {
 			media({ wide: true, docked: true });
-			renderPage({ seed: golden });
+			const { queryClient } = renderPage({ seed: golden });
 			const reads = route(network, "get", "/api/transactions", () =>
 				ok(listPage([])),
 			);
-			await new Promise((resolve) => setTimeout(resolve, 50));
+			// Everything the page asks for on opening has come back.
+			await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 			expect(reads).toHaveLength(0);
 		});
 	});
@@ -1926,7 +1927,7 @@ describe("what the server draws from the device's cookies (D-629)", () => {
 		media({ wide: true, docked: true });
 		const { user } = renderPage({ seed: golden });
 		await user.click(screen.getByRole("radio", { name: "Calendar" }));
-		expect(document.cookie).toContain(`${VIEW_KEY}=calendar`);
+		expect(document.cookie).toContain(`${VIEW_COOKIE}=calendar`);
 		expect(document.cookie).toContain("daybook_wide=wide");
 	});
 

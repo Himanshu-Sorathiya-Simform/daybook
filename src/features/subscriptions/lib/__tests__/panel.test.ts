@@ -11,12 +11,7 @@ import {
 	keysHint,
 	PANEL_TEXT,
 	paidSummary,
-	type PanelActionKey,
 	panelActions,
-	READY_PANEL,
-	readyPanelActions,
-	readyStatusActions,
-	type StatusAction,
 	statusBox,
 	TIMELINE_PREVIEW,
 	timelineToggle,
@@ -1053,18 +1048,7 @@ describe("panelActions (BR-F05-40)", () => {
 	});
 });
 
-describe("what the panel offers so far (READY_PANEL)", () => {
-	test("everything the panel can offer is built", () => {
-		expect(READY_PANEL.edit).toBe(true);
-		expect(READY_PANEL.undoSkip).toBe(true);
-		expect([...READY_PANEL.status].sort()).toEqual(
-			["change", "resume", "resumeNow", "skip"].sort(),
-		);
-		expect([...READY_PANEL.actions].sort()).toEqual(
-			["cancel", "delete", "edit", "pause", "resume"].sort(),
-		);
-	});
-
+describe("the panel's key hint", () => {
 	// AC-F05-52
 	test.each([
 		[
@@ -1098,52 +1082,6 @@ describe("what the panel offers so far (READY_PANEL)", () => {
 		expect(
 			keysHint(subscriptionItem("netflix", { nextDueOn: null }), F),
 		).not.toContain("S to skip");
-	});
-
-	test("the footer is the whole footer, whatever the status", () => {
-		for (const status of [
-			"active",
-			"ending",
-			"paused",
-			"upcoming",
-			"ended",
-		] as const) {
-			const item = subscriptionItem("netflix", { status });
-			expect(readyPanelActions(item, F)).toEqual(panelActions(item, F));
-		}
-	});
-
-	test("the footer keeps the full order for the buttons that are ready", () => {
-		const ready = new Set<PanelActionKey>(["edit", "delete", "cancel"]);
-		expect(
-			readyPanelActions(subscriptionItem("netflix"), F, ready).map(
-				(each) => each.action,
-			),
-		).toEqual(["edit", "cancel", "delete"]);
-	});
-
-	test("the footer with all ready is the whole footer", () => {
-		const item = subscriptionItem("netflix");
-		const all = new Set(panelActions(item, F).map((each) => each.action));
-		expect(readyPanelActions(item, F, all)).toEqual(panelActions(item, F));
-	});
-
-	test("the status box shows every button its status offers", () => {
-		expect(readyStatusActions(["skip"])).toEqual(["skip"]);
-		expect(readyStatusActions(["resumeNow", "change"])).toEqual([
-			"resumeNow",
-			"change",
-		]);
-		expect(readyStatusActions([])).toEqual([]);
-	});
-
-	test("the status box keeps the order of the buttons that are ready", () => {
-		const ready = new Set<StatusAction>(["change", "resumeNow"]);
-		expect(readyStatusActions(["resumeNow", "change"], ready)).toEqual([
-			"resumeNow",
-			"change",
-		]);
-		expect(readyStatusActions(["skip", "resume"], ready)).toEqual([]);
 	});
 });
 

@@ -241,7 +241,7 @@ export function LastSixMonths({
 				<Button
 					variant="ghost"
 					size="sm"
-					onPress={() => setAsTable(!asTable)}
+					onPress={() => setAsTable((was) => !was)}
 				>
 					{asTable ? PANEL_TEXT.viewAsChart : PANEL_TEXT.viewAsTable}
 				</Button>

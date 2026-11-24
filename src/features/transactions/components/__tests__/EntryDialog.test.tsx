@@ -93,6 +93,15 @@ function renderDialog(props: Partial<EntryDialogProps> = {}) {
 
 type User = ReturnType<typeof userEvent.setup>;
 
+/** Waits until nothing is in flight, so a request the code would have made has been made. */
+async function quiet(queryClient: { isFetching(): number; isMutating(): number }) {
+	await act(async () => {});
+	await waitFor(() => {
+		expect(queryClient.isMutating()).toBe(0);
+		expect(queryClient.isFetching()).toBe(0);
+	});
+}
+
 // The payee's open list, like any popover, hides the rest of the dialog from screen readers,
 // so the field helpers look past it; tests of what is shown query without them.
 const hidden = { hidden: true } as const;
@@ -833,12 +842,12 @@ describe("Save (BR-F03-20, BR-F03-21)", () => {
 
 	test("Enter alone in a field does not save", async () => {
 		const sent = creates();
-		const { user } = renderDialog();
+		const { user, queryClient } = renderDialog();
 
 		await fillValid(user);
 		await user.click(amount());
 		await user.keyboard("{Enter}");
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 
 		expect(sent).toHaveLength(0);
 	});
@@ -862,10 +871,10 @@ describe("Save (BR-F03-20, BR-F03-21)", () => {
 
 	test("a closed dialog does not save on Ctrl Enter", async () => {
 		const sent = creates();
-		const { user } = renderDialog({ isOpen: false });
+		const { user, queryClient } = renderDialog({ isOpen: false });
 
 		await user.keyboard("{Control>}{Enter}{/Control}");
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 
 		expect(sent).toHaveLength(0);
 	});
@@ -1155,7 +1164,7 @@ describe("offline (D-241)", () => {
 		vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
 		act(() => onlineManager.setOnline(false));
 		const sent = creates();
-		const { user } = renderDialog();
+		const { user, queryClient } = renderDialog();
 
 		expect(
 			screen.getByText("You are offline. Connect to save."),
@@ -1167,7 +1176,7 @@ describe("offline (D-241)", () => {
 		);
 		await fillValid(user);
 		await user.keyboard("{Control>}{Enter}{/Control}");
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 
 		expect(sent).toHaveLength(0);
 	});
@@ -1284,7 +1293,7 @@ describe("closing (BR-F03-49, D-551)", () => {
 
 	test("Ctrl Enter while the confirm is open does not save", async () => {
 		const sent = creates();
-		const { user } = renderDialog();
+		const { user, queryClient } = renderDialog();
 
 		await fillValid(user);
 		await user.keyboard("{Escape}");
@@ -1292,7 +1301,7 @@ describe("closing (BR-F03-49, D-551)", () => {
 		// Off its buttons, as after a click on its text; on a button, Enter presses it.
 		act(() => confirm.focus());
 		await user.keyboard("{Control>}{Enter}{/Control}");
-		await new Promise((resolve) => setTimeout(resolve, 200));
+		await quiet(queryClient);
 
 		expect(sent).toHaveLength(0);
 		expect(screen.getByRole("alertdialog")).toBeInTheDocument();

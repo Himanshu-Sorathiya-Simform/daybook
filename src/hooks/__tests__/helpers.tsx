@@ -262,8 +262,8 @@ export function media({ wide = false, docked = false }) {
 /** Clears what one page test leaves for the next: the view cookies, the network's handlers,
  * TanStack Query's online flag, fake timers, spies, unsaved choices, local storage and the
  * faked `matchMedia`. */
-export function resetPageTest(network: SetupServer, viewKey: string) {
-	for (const name of [viewKey, "daybook_wide"]) {
+export function resetPageTest(network: SetupServer, viewCookie: string) {
+	for (const name of [viewCookie, "daybook_wide"]) {
 		document.cookie = `${name}=; Max-Age=0; Path=/`;
 	}
 	network.resetHandlers();

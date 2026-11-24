@@ -26,8 +26,6 @@ const FOOD = {
 	],
 };
 
-const wait = () => new Promise((resolve) => setTimeout(resolve, 20));
-
 describe("useBudgetHistory (BR-F04-35)", () => {
 	test("reads the last 6 months by default", async () => {
 		const seen = route(network, "get", "/api/budgets/history", () => ok(FOOD));
@@ -55,7 +53,8 @@ describe("useBudgetHistory (BR-F04-35)", () => {
 	test("with no category chosen it asks for nothing", async () => {
 		const seen = route(network, "get", "/api/budgets/history", () => ok(FOOD));
 		const { result } = renderHookInApp(() => useBudgetHistory(null, "2026-11"));
-		await wait();
+		// An enabled query is fetching as soon as it mounts, so idle now is idle for good.
+		expect(result.current.fetchStatus).toBe("idle");
 		expect(seen).toHaveLength(0);
 		expect(result.current.data).toBeUndefined();
 		expect(result.current.fetchStatus).toBe("idle");
@@ -68,7 +67,8 @@ describe("useBudgetHistory (BR-F04-35)", () => {
 		const { result } = renderHookInApp(() => useBudgetHistory(null, "2026-11"), {
 			queryClient,
 		});
-		await wait();
+		// An enabled query is fetching as soon as it mounts, so idle now is idle for good.
+		expect(result.current.fetchStatus).toBe("idle");
 		expect(result.current.data).toBeUndefined();
 	});
 
@@ -84,7 +84,8 @@ describe("useBudgetHistory (BR-F04-35)", () => {
 				useBudgetHistory(category, "2026-10", 2),
 			{ initialProps: { category: null as ExpenseCategory | null } },
 		);
-		await wait();
+		// An enabled query is fetching as soon as it mounts, so idle now is idle for good.
+		expect(result.current.fetchStatus).toBe("idle");
 		expect(seen).toHaveLength(0);
 		rerender({ category: "transportation" });
 		await waitFor(() =>

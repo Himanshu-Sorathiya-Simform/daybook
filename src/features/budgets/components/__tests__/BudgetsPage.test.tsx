@@ -36,7 +36,7 @@ import {
 	media,
 	resetPageTest,
 } from "../../hooks/__tests__/helpers";
-import { VIEW_KEY } from "../../lib/view";
+import { VIEW_COOKIE, VIEW_KEY } from "../../lib/view";
 import { budgetKeys } from "../../lib/keys";
 import {
 	budgetAnswer,
@@ -67,7 +67,7 @@ beforeEach(() => {
 	});
 	route(network, "get", "/api/transactions/summary", () => ok(payeeSummary()));
 });
-afterEach(() => resetPageTest(network, VIEW_KEY));
+afterEach(() => resetPageTest(network, VIEW_COOKIE));
 afterAll(() => network.close());
 
 // The golden profile on the golden clock's day (TST-3).
@@ -423,7 +423,7 @@ describe("what the server draws from the device's cookies (D-629)", () => {
 		media({ wide: true, docked: true });
 		const { user } = renderPage("?month=2026-10");
 		await user.click(screen.getByRole("radio", { name: "Table" }));
-		expect(document.cookie).toContain(`${VIEW_KEY}=table`);
+		expect(document.cookie).toContain(`${VIEW_COOKIE}=table`);
 		expect(document.cookie).toContain("daybook_wide=wide");
 	});
 
@@ -677,13 +677,14 @@ describe("the page's states (section 6)", () => {
 	});
 
 	test("a month the server prefetched shows at once, with no request", async () => {
-		const { reads } = renderPage("?month=2026-10", {
+		const { reads, queryClient } = renderPage("?month=2026-10", {
 			seed: monthAnswer("2026-10"),
 		});
 		expect(
 			screen.queryByRole("status", { name: "Loading Budgets" }),
 		).not.toBeInTheDocument();
-		await new Promise((resolve) => setTimeout(resolve, 30));
+		// Everything the page asks for on opening has come back.
+		await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 		expect(reads).toHaveLength(0);
 	});
 

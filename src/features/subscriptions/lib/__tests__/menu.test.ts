@@ -1,15 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import type { Formats } from "../labels";
-import {
-	type MenuAction,
-	READY_ACTIONS,
-	readyMenu,
-	rowMenu,
-	shortcutAction,
-	shortcutHints,
-	type ShortcutKey,
-} from "../menu";
+import { rowMenu, shortcutAction, shortcutHints, type ShortcutKey } from "../menu";
 import { subscriptionItem } from "./fixtures";
 
 const F: Formats = {
@@ -248,61 +240,6 @@ describe("the Pause item and the 24-month limit (BR-F05-43)", () => {
 		expect(
 			actions(netflix({ status: "ending", nextDueOn: "2028-11-01" })),
 		).toContain("pause");
-	});
-});
-
-describe("readyMenu (the actions built so far)", () => {
-	test("every action of the menu is built", () => {
-		expect([...READY_ACTIONS].sort()).toEqual(
-			[
-				"resume",
-				"edit",
-				"skip",
-				"pause",
-				"resumeNow",
-				"changePause",
-				"cancel",
-				"changeEnd",
-				"keepGoing",
-				"viewCharges",
-				"delete",
-			].sort(),
-		);
-	});
-
-	test.each(["active", "upcoming", "paused", "ending", "ended"] as const)(
-		"a %s Subscription's menu is the whole menu",
-		(status) => {
-			const item = subscriptionItem("netflix", { status });
-			expect(readyMenu(item, F)).toEqual(rowMenu(item, F));
-		},
-	);
-
-	test("keeps the full order for the actions that are ready", () => {
-		const ready = new Set<MenuAction>(["edit", "delete", "viewCharges"]);
-		const item = subscriptionItem("netflix");
-		expect(readyMenu(item, F, ready).map((entry) => entry.action)).toEqual([
-			"edit",
-			"viewCharges",
-			"delete",
-		]);
-		expect(readyMenu(item, F, ready).at(-1)).toMatchObject({
-			danger: true,
-			separatorBefore: true,
-		});
-	});
-
-	test("with none ready the menu is empty", () => {
-		expect(readyMenu(subscriptionItem("netflix"), F, new Set())).toEqual([]);
-	});
-
-	test("with all ready it is the whole menu", () => {
-		const all = new Set(
-			rowMenu(subscriptionItem("netflix"), F).map((e) => e.action),
-		);
-		expect(readyMenu(subscriptionItem("netflix"), F, all)).toEqual(
-			rowMenu(subscriptionItem("netflix"), F),
-		);
 	});
 });
 

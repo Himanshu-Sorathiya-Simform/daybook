@@ -403,6 +403,25 @@ describe("the messages (BR-F05-24, section 8)", () => {
 		).toBeNull();
 	});
 
+	test("a custom number out of range says so as it is typed, before any Save", async () => {
+		const { user } = await openAdd(null);
+		await user.click(tile("Custom"));
+		const every = screen.getByRole("textbox", { name: "Every" });
+		await user.clear(every);
+		await user.type(every, "0");
+		expect(
+			screen.getByText("Enter how many months, from 1 to 24."),
+		).toBeVisible();
+		await user.clear(every);
+		await user.type(every, "6");
+		expect(
+			screen.getByText("Every 2 months, every 6 months, every 2 weeks…"),
+		).toBeVisible();
+		expect(
+			screen.queryByText("Enter how many months, from 1 to 24."),
+		).toBeNull();
+	});
+
 	test("a custom number in weeks says weeks, from 1 to 52", async () => {
 		const { user } = await openAdd(null);
 		await user.click(tile("Custom"));
@@ -566,6 +585,16 @@ describe("saving an Add (section 11)", () => {
 		fireEvent.submit(screen.getByRole("form"));
 		await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
 		expect(posts).toHaveLength(1);
+	});
+
+	// A browser submits on Enter in a field only when the form has a submit button of its own
+	// (the form has two text fields), which user-event does not play out for a button in the
+	// footer, so the test reads the wiring a browser follows.
+	test("the Add button is the form's submit button, so Enter in a field saves", async () => {
+		await openAdd(null);
+		const add = addButton() as HTMLButtonElement;
+		expect(add).toHaveAttribute("type", "submit");
+		expect(add.form).toBe(screen.getByRole("form"));
 	});
 
 	test("a note is sent with it", async () => {

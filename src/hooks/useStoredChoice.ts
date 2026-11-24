@@ -14,7 +14,7 @@ const unsaved = new Map<string, string>();
  * read, is `fallback`; where storage refuses writes, as in some private windows, the choice
  * still works and is kept for the tab until it reloads.
  *
- * The choice is also kept in a cookie named `key`, which the page's server render can read and
+ * The choice is also kept in a cookie, named `cookie` (by default `key`), which the page's server render can read and
  * give back as `serverChoice`, so a remembered view is drawn from the first paint and not after
  * the browser has read storage (D-629). With no `serverChoice` the server renders `fallback`.
  * Storage stays the truth: where it holds a choice the browser follows it, and where it holds
@@ -25,6 +25,7 @@ export function useStoredChoice<T extends string>(
 	allowed: readonly T[],
 	fallback: T,
 	serverChoice?: T,
+	cookie: string = key,
 ): [T, (choice: T) => void] {
 	const subscribe = useCallback(
 		(onChange: () => void) => {
@@ -56,8 +57,8 @@ export function useStoredChoice<T extends string>(
 	const choice = useSyncExternalStore(subscribe, read, () => unset);
 	// The cookie follows the choice, which also gives it to a device that chose before cookies.
 	useEffect(() => {
-		writeDeviceCookie(key, choice);
-	}, [key, choice]);
+		writeDeviceCookie(cookie, choice);
+	}, [cookie, choice]);
 	const setChoice = (next: T) => {
 		try {
 			window.localStorage.setItem(key, next);

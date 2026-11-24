@@ -9,8 +9,6 @@ export type ChargeTimelineProps = {
 	/** Whether every line shows, or the first 7. */
 	showAll: boolean;
 	onShowAllChange: (all: boolean) => void;
-	/** Whether a future skipped date offers Undo skip (it needs the Undo notices). */
-	canUndoSkip: boolean;
 	onUndoSkip: (dueOn: string) => void;
 	className?: string;
 };
@@ -25,7 +23,6 @@ export function ChargeTimeline({
 	lines,
 	showAll,
 	onShowAllChange,
-	canUndoSkip,
 	onUndoSkip,
 	className,
 }: Readonly<ChargeTimelineProps>) {
@@ -54,7 +51,7 @@ export function ChargeTimeline({
 						</span>
 						<span className="text-caption text-ink-3 col-span-full">
 							{line.caption}
-							{line.undoSkip && canUndoSkip && (
+							{line.undoSkip && (
 								<>
 									{" "}
 									<Button

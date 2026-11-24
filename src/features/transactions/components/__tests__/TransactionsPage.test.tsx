@@ -232,6 +232,15 @@ function renderPage(
 	return { ...view, lists, summaries, calls, user: userEvent.setup() };
 }
 
+/** Waits until nothing is in flight, so a request the page would have made has been made. */
+async function quiet(queryClient: { isFetching(): number; isMutating(): number }) {
+	await act(async () => {});
+	await waitFor(() => {
+		expect(queryClient.isMutating()).toBe(0);
+		expect(queryClient.isFetching()).toBe(0);
+	});
+}
+
 const grid = () => screen.findByRole("grid", { name: "Transactions" });
 /** The list's own polite live region, inside the list's section; the search box has one too. */
 const listLive = () =>
@@ -332,7 +341,7 @@ describe("the page (F03 section 6)", () => {
 		).toHaveLength(1);
 		expect(figure("Out")).toBe("₹6,220.00");
 		expect(rowNames()).toHaveLength(4);
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 		expect(lists).toEqual([]);
 		expect(summaries).toEqual([]);
 		expect(views).toEqual([]);
@@ -377,7 +386,7 @@ describe("the page (F03 section 6)", () => {
 				currency: "INR",
 			}),
 		);
-		const { calls, lists, summaries, user } = renderPage(CHECK_B);
+		const { calls, lists, summaries, user, queryClient } = renderPage(CHECK_B);
 		await grid();
 		await user.click(await screen.findByRole("radio", { name: "October food" }));
 
@@ -385,7 +394,7 @@ describe("the page (F03 section 6)", () => {
 			mode: "push",
 			href: `/transactions${CHECK_B}&view=${idOf(1)}`,
 		});
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 		expect(lists).toHaveLength(1);
 		expect(summaries).toHaveLength(1);
 	});
@@ -880,14 +889,16 @@ describe("loading more (BR-F03-30, D-530)", () => {
 	// AC-F03-22, BR-F03-30: a page loaded at the top sets off nothing at the end, so it is never
 	// trimmed straight away; the end loads only as it comes into view.
 	test("loading an earlier page asks for no next page", async () => {
-		const { lists, user } = renderPage("?sort=amount", { list: threePages() });
+		const { lists, user, queryClient } = renderPage("?sort=amount", {
+			list: threePages(),
+		});
 		await grid();
 		await user.click(screen.getByRole("button", { name: "Load more" }));
 		await waitFor(() => expect(rowNames()).toHaveLength(100));
 		const asked = lists.length;
 
 		scrollToTop();
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 
 		expect(
 			lists
@@ -962,12 +973,12 @@ describe("loading more (BR-F03-30, D-530)", () => {
 	});
 
 	test("a list that fits on one page shows no Load more and asks for nothing more at its end", async () => {
-		const { lists } = renderPage(CHECK_B);
+		const { lists, queryClient } = renderPage(CHECK_B);
 		await grid();
 
 		expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
 		scrollToEnd();
-		await new Promise((resolve) => setTimeout(resolve, 30));
+		await quiet(queryClient);
 		expect(lists).toHaveLength(1);
 	});
 
@@ -1103,10 +1114,11 @@ describe("pages trimmed from the top (BR-F03-30, D-36)", () => {
 	function sevenPages() {
 		return ({ path }: { path: string }) => {
 			const cursor = pathOf(path).searchParams.get("cursor");
-			const n =
-				cursor === null ? 0
-				: cursor.startsWith("p") ? Number(cursor.slice(1))
-				: Number(cursor.slice(1)) - 1;
+			// A "p" cursor is the page itself, a "q" cursor the one before it.
+			let n = 0;
+			if (cursor !== null) {
+				n = Number(cursor.slice(1)) - (cursor.startsWith("p") ? 0 : 1);
+			}
 			return ok(
 				page({
 					items: [1, 2].map((i) =>
@@ -1475,7 +1487,7 @@ describe("focus after Load more (D-535)", () => {
 		heading.focus();
 
 		await act(() => queryClient.invalidateQueries());
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await quiet(queryClient);
 
 		expect(heading).toHaveFocus();
 	});
@@ -1523,7 +1535,7 @@ describe("the URL and the data change under the page", () => {
 	test("a slow answer for a filter left behind never replaces the new one", async () => {
 		let answer: () => void = () => {};
 		const waiting = new Promise<void>((resolve) => (answer = resolve));
-		const { user } = renderPage("", {
+		const { user, queryClient } = renderPage("", {
 			list: async ({ path }) => {
 				if (!pathOf(path).searchParams.has("sort")) {
 					await waiting;
@@ -1551,7 +1563,7 @@ describe("the URL and the data change under the page", () => {
 		);
 
 		answer();
-		await new Promise((resolve) => setTimeout(resolve, 30));
+		await quiet(queryClient);
 		expect(rowNames()).toEqual([
 			"Acme Corp, Salary, Thu, 1 Oct · 10:05 am, +₹85,000.00",
 		]);
@@ -1846,10 +1858,10 @@ const requestOf = (seen: { path: string }) => {
 
 describe("filters (BR-F03-39, D-523)", () => {
 	test("a page load asks for no filter counts and no histogram", async () => {
-		const { facets, histograms } = renderFiltered(CHECK_B);
+		const { facets, histograms, queryClient } = renderFiltered(CHECK_B);
 		await grid();
 
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await quiet(queryClient);
 
 		expect(facets).toHaveLength(0);
 		expect(histograms).toHaveLength(0);
@@ -1896,7 +1908,7 @@ describe("filters (BR-F03-39, D-523)", () => {
 	});
 
 	test("closed controls never follow the filter; reopening asks for the new filter's counts", async () => {
-		const { user, facets, histograms } = renderFiltered(CHECK_B);
+		const { user, facets, histograms, queryClient } = renderFiltered(CHECK_B);
 		await grid();
 
 		await user.click(menu("Type"));
@@ -1907,7 +1919,7 @@ describe("filters (BR-F03-39, D-523)", () => {
 		await user.keyboard("{Escape}");
 		await user.click(screen.getByRole("button", { name: "Remove Food" }));
 		await waitFor(() => expect(menu("Category Any")).toBeInTheDocument());
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await quiet(queryClient);
 		expect(facets).toHaveLength(1);
 		expect(histograms).toHaveLength(1);
 
@@ -1921,12 +1933,12 @@ describe("filters (BR-F03-39, D-523)", () => {
 	});
 
 	test("the Amount control asks for no counts, as it shows none", async () => {
-		const { user, facets, histograms } = renderFiltered("");
+		const { user, facets, histograms, queryClient } = renderFiltered("");
 		await grid();
 
 		await user.click(menu("Amount"));
 		await screen.findByRole("slider", { name: /^Minimum amount/ });
-		await new Promise((resolve) => setTimeout(resolve, 100));
+		await quiet(queryClient);
 
 		expect(histograms).toHaveLength(1);
 		expect(facets).toHaveLength(0);
@@ -1946,8 +1958,10 @@ describe("filters (BR-F03-39, D-523)", () => {
 
 	test("while the counts load, each option holds a placeholder", async () => {
 		const { user } = renderPage("");
+		let release: () => void = () => {};
+		const held = new Promise<void>((resolve) => (release = resolve));
 		route(network, "get", "/api/transactions/facets", async () => {
-			await new Promise((resolve) => setTimeout(resolve, 300));
+			await held;
 			return ok(CHECK_B_FACETS);
 		});
 		await grid();
@@ -1956,6 +1970,7 @@ describe("filters (BR-F03-39, D-523)", () => {
 		const dialog = await screen.findByRole("dialog", { name: "Type" });
 
 		expect(dialog.querySelectorAll("label .bg-track")).toHaveLength(3);
+		release();
 		expect(
 			await screen.findByRole("checkbox", { name: "Expense 4" }),
 		).toBeInTheDocument();
@@ -2155,9 +2170,9 @@ describe("filters (BR-F03-39, D-523)", () => {
 			const reads = route(network, "get", "/api/subscriptions", () =>
 				ok(names),
 			);
-			renderFiltered(CHECK_B);
+			const { queryClient } = renderFiltered(CHECK_B);
 			await grid();
-			await new Promise((resolve) => setTimeout(resolve, 50));
+			await quiet(queryClient);
 			expect(reads).toHaveLength(0);
 		});
 	});
@@ -2634,7 +2649,7 @@ describe("adding (BR-F03-21, BR-F03-22, BR-F03-53, D-548)", () => {
 		await entry();
 		await user.keyboard("{Escape}");
 		await noEntry();
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await act(async () => {});
 
 		expect(
 			screen.queryByRole("dialog", { name: "New Transaction", hidden: true }),
@@ -2644,7 +2659,7 @@ describe("adding (BR-F03-21, BR-F03-22, BR-F03-53, D-548)", () => {
 	test("new given twice or empty opens nothing", async () => {
 		renderAdding("?new=1&new=1");
 		await grid();
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await act(async () => {});
 
 		expect(
 			screen.queryByRole("dialog", { name: "New Transaction", hidden: true }),
@@ -3269,12 +3284,16 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 				network,
 				"patch",
 				`/api/transactions/${m1(24).id}`,
-				({ body }, index) =>
-					index === 0 ?
-						refuse(409, "version_conflict", { details: { current: v2 } })
-					: index === 1 ?
-						refuse(409, "version_conflict", { details: { current: v3 } })
-					:	ok({ ...v3, ...(body as object), version: 4 }),
+				({ body }, index) => {
+					// Two conflicts in a row, each against a newer version, then the save.
+					const current = [v2, v3][index];
+					if (current) {
+						return refuse(409, "version_conflict", {
+							details: { current },
+						});
+					}
+					return ok({ ...v3, ...(body as object), version: 4 });
+				},
 			);
 			const { user } = renderPanel(`?txn=${m1(24).id}`);
 			await grid();
@@ -3741,8 +3760,8 @@ describe("the panel and selection (BR-F03-70 to BR-F03-73, D-554)", () => {
 				within(panel()).getByRole("button", { name: "Delete" }),
 			);
 			await confirm(user);
-			// Long enough for the focus move after a keyboard delete to have run.
-			await act(() => new Promise((resolve) => setTimeout(resolve, 100)));
+			// Let the effects that would move focus after a delete run.
+			await act(async () => {});
 
 			expect(document.activeElement?.getAttribute("role")).not.toBe("row");
 		});

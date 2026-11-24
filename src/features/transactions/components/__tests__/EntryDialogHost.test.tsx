@@ -467,7 +467,7 @@ describe("the profile (BR-F02-18)", () => {
 		network.resetHandlers();
 		const user = userEvent.setup();
 		serve({ ...GOLDEN_BLOCK, currency: "USD", numberLocale: "en-US-u-nu-latn" });
-		renderInApp(
+		const { queryClient } = renderInApp(
 			<I18nProvider locale="en-IN">
 				<TransactionDeletesHost profile={GOLDEN_BLOCK}>
 					<EntryDialogHost profile={GOLDEN_BLOCK}>
@@ -477,7 +477,8 @@ describe("the profile (BR-F02-18)", () => {
 			</I18nProvider>,
 		);
 		// Let /api/me answer before the dialog opens.
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+		await act(async () => {});
 
 		await user.click(screen.getByRole("button", { name: "Open" }));
 		const dialog = await opened();

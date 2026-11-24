@@ -21,7 +21,6 @@ function setup(
 		<ChargeTimeline
 			lines={lines}
 			showAll={false}
-			canUndoSkip={false}
 			{...handlers}
 			{...props}
 		/>,
@@ -100,24 +99,14 @@ describe("ChargeTimeline (BR-F05-40, AC-F05-37)", () => {
 				FORMATS,
 			);
 
-		test("is left out until the Undo notices exist", () => {
-			setup(skippedAhead());
-			expect(screen.getByText("You skipped it.")).toBeVisible();
-			expect(screen.queryByRole("button", { name: "Undo skip" })).toBeNull();
-		});
-
-		test("when allowed, a future skip offers it, and it names that date", async () => {
-			const { user, onUndoSkip } = setup(skippedAhead(), {
-				canUndoSkip: true,
-			});
+		test("a future skip offers it, and it names that date", async () => {
+			const { user, onUndoSkip } = setup(skippedAhead());
 			await user.click(screen.getByRole("button", { name: "Undo skip" }));
 			expect(onUndoSkip).toHaveBeenCalledExactlyOnceWith("2026-11-05");
 		});
 
 		test("a past deleted charge never offers it", () => {
-			setup(chargeTimeline(subscriptionItem("cultGym"), [], FORMATS), {
-				canUndoSkip: true,
-			});
+			setup(chargeTimeline(subscriptionItem("cultGym"), [], FORMATS));
 			expect(screen.queryByRole("button", { name: "Undo skip" })).toBeNull();
 		});
 	});
@@ -151,7 +140,6 @@ describe("ChargeTimeline (BR-F05-40, AC-F05-37)", () => {
 				<ChargeTimeline
 					lines={lines}
 					showAll
-					canUndoSkip={false}
 					onShowAllChange={onShowAllChange}
 					onUndoSkip={vi.fn()}
 				/>,

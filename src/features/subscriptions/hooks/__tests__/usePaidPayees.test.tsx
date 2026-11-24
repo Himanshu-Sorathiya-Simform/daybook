@@ -55,7 +55,7 @@ describe("usePaidPayees (BR-F05-24, D-451)", () => {
 	test("asks for nothing when it is not enabled, as an Edit's Name needs no payees", async () => {
 		const reads = route(network, "get", "/api/payees", () => ok(ANSWER));
 		const { result } = renderHookInApp(() => usePaidPayees({ enabled: false }));
-		await new Promise((resolve) => setTimeout(resolve, 30));
+		// An enabled query is fetching as soon as it mounts, so idle now is idle for good.
 		expect(result.current.fetchStatus).toBe("idle");
 		expect(result.current.data).toBeUndefined();
 		expect(reads).toHaveLength(0);

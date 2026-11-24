@@ -43,24 +43,6 @@ export const PANEL_TEXT = {
 	viewCharges: "View charges",
 } as const;
 
-/**
- * What the panel offers so far. Each later chunk turns on what it builds, so the panel never
- * shows a button, a link or a key that does nothing: the Edit key and "Add a note" with the
- * Edit dialog, the status box's buttons and the footer's with theirs, and Undo skip with the
- * Undo notices.
- */
-export const READY_PANEL: {
-	edit: boolean;
-	undoSkip: boolean;
-	status: ReadonlySet<StatusAction>;
-	actions: ReadonlySet<PanelActionKey>;
-} = {
-	edit: true,
-	undoSkip: true,
-	status: new Set(["skip", "resumeNow", "change", "resume"]),
-	actions: new Set(["edit", "pause", "resume", "cancel", "delete"]),
-};
-
 /** The hint at the foot of the panel, naming only the keys that act on the selection:
  * "E to edit · S to skip · P to pause · C to cancel · Delete to delete · Up and down arrows
  * move · Esc to close" (BR-F05-40, D-630). */
@@ -69,7 +51,7 @@ export function keysHint(
 	f: Formats,
 ): string {
 	return [
-		...(READY_PANEL.edit ? ["E to edit"] : []),
+		"E to edit",
 		...shortcutHints(item, f),
 		"Up and down arrows move",
 		"Esc to close",
@@ -472,21 +454,4 @@ export function panelActions(
 	}
 	actions.push({ action: "delete", label: "Delete", variant: "danger" });
 	return actions;
-}
-
-/** The footer's buttons that are ready: `panelActions` less what `ready` lacks. */
-export function readyPanelActions(
-	item: Pick<SubscriptionItem, "status" | "nextDueOn">,
-	f: Formats,
-	ready: ReadonlySet<PanelActionKey> = READY_PANEL.actions,
-): PanelAction[] {
-	return panelActions(item, f).filter((entry) => ready.has(entry.action));
-}
-
-/** The status box's buttons that are ready. */
-export function readyStatusActions(
-	actions: readonly StatusAction[],
-	ready: ReadonlySet<StatusAction> = READY_PANEL.status,
-): StatusAction[] {
-	return actions.filter((action) => ready.has(action));
 }

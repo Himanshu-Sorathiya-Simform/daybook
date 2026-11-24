@@ -6,20 +6,13 @@ import { Button } from "@/components/actions/Button";
 import { FormAlert } from "@/components/feedback/FormAlert";
 import { OfflineNote } from "@/components/feedback/OfflineNote";
 import { ConfirmDialog } from "@/components/surfaces/ConfirmDialog";
-import { useOnce } from "@/hooks/useOnce";
 import { useOnline } from "@/hooks/useOnline";
-import { uuidV7 } from "@/lib/ids";
-import type { SubscriptionDeleteInput } from "@/lib/subscriptions/schemas";
-import { useQueryClient } from "@tanstack/react-query";
-import { useDeleteSubscription } from "../hooks/useDeleteSubscription";
-import type { DialogConflict as DialogConflictState } from "../hooks/useWriteRefusal";
+import { useDeleteWrite } from "../hooks/useDeleteWrite";
 import { fieldsOf } from "../lib/conflict";
 import { chargesLine, DELETE_TEXT, offersCancel } from "../lib/delete";
 import { DIALOG_TEXT } from "../lib/dialog";
 import type { Confirmed } from "../lib/notices";
-import { refreshAfterSubscriptionWrite } from "../lib/refresh";
 import type { SubscriptionItem, SubscriptionsLocale } from "../lib/types";
-import { readSubscriptionDeleteError } from "../lib/write-errors";
 import { DialogConflict } from "./DialogConflict";
 
 export type DeleteDialogProps = {
@@ -55,49 +48,15 @@ export function DeleteDialog({
 	// The Subscription as it was when the dialog opened (BR-F05-34).
 	const [opened] = useState(item);
 	const online = useOnline();
-	const queryClient = useQueryClient();
-	const remove = useDeleteSubscription();
-	const sending = useOnce();
-	const [failure, setFailure] = useState<string | null>(null);
-	const [conflict, setConflict] = useState<DialogConflictState | null>(null);
+	const { remove, refusal, submit, conflictView } = useDeleteWrite({
+		onClose,
+		onDeleted,
+	});
 	const name = opened.name;
 
-	const confirm = () => send({ changedAt: new Date().toISOString() }, opened);
-
-	/** Sends the delete with `body` against `against`: the Subscription as opened, or after a
-	 * conflict as saved, with the first press's `changedAt`. */
-	const send = async (
-		body: SubscriptionDeleteInput,
-		against: SubscriptionItem,
-	) => {
-		const request = sending.run(() =>
-			remove.mutateAsync({
-				id: against.id,
-				version: against.version,
-				body,
-				idempotencyKey: uuidV7(),
-			}),
-		);
-		if (request === null) return;
-		setFailure(null);
-		try {
-			const saved = await request;
-			onDeleted?.({ kind: "delete", before: against, saved });
-			onClose();
-		} catch (error) {
-			const outcome = readSubscriptionDeleteError(error);
-			if (outcome.kind === "handled") return;
-			if (outcome.kind === "conflict") {
-				setConflict({
-					current: outcome.current,
-					request: { kind: "delete", id: against.id, body },
-				});
-				return;
-			}
-			setConflict(null);
-			setFailure(outcome.message);
-		}
-	};
+	// The first press's `changedAt` stays with the write through a conflict.
+	const confirm = () =>
+		void submit({ changedAt: new Date().toISOString() }, opened);
 
 	return (
 		<>
@@ -111,7 +70,7 @@ export function DeleteDialog({
 				tone="danger"
 				isConfirmDisabled={!online}
 				isPending={remove.isPending}
-				onConfirm={() => void confirm()}
+				onConfirm={confirm}
 			>
 				<div className="flex flex-col gap-2">
 					{!online && <OfflineNote>{DIALOG_TEXT.offline}</OfflineNote>}
@@ -134,30 +93,14 @@ export function DeleteDialog({
 							</>
 						)}
 					</p>
-					{failure && <FormAlert>{failure}</FormAlert>}
+					{refusal.failure && <FormAlert>{refusal.failure}</FormAlert>}
 				</div>
 			</ConfirmDialog>
-			{conflict && (
+			{conflictView && (
 				<DialogConflict
-					conflict={conflict}
+					{...conflictView}
 					origin={fieldsOf(opened)}
 					formats={locale}
-					isPending={remove.isPending}
-					onClose={() => setConflict(null)}
-					onKeepMine={() =>
-						void send(
-							conflict.request.body as SubscriptionDeleteInput,
-							conflict.current,
-						)
-					}
-					onKeepTheirs={() => {
-						setConflict(null);
-						void refreshAfterSubscriptionWrite(queryClient, {
-							count: false,
-							charges: false,
-						});
-						onClose();
-					}}
 				/>
 			)}
 		</>

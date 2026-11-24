@@ -52,12 +52,16 @@ export function useWriteRefusal(own: readonly SubscriptionField[]) {
 	};
 
 	/** Shows the refusal `error` is, and answers its outcome, so the dialog can move focus to a
-	 * field that has a message. `request` is what a 409 would send again; an Add has none. */
+	 * field that has a message. `request` is what a 409 would send again; an Add has none. `read` is how the write's refusals
+	 * are read, a delete's by its own. */
 	const refuse = async (
 		error: unknown,
 		request?: ChangeRequest,
+		read: (
+			error: unknown,
+		) => SubscriptionWriteOutcome = readSubscriptionWriteError,
 	): Promise<SubscriptionWriteOutcome> => {
-		const outcome = readSubscriptionWriteError(error);
+		const outcome = read(error);
 		if (outcome.kind === "handled") return outcome;
 		if (outcome.kind === "conflict") {
 			// Only a write against a version, never an Add, can meet one.

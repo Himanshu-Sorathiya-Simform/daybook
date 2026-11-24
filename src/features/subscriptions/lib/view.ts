@@ -1,6 +1,10 @@
 /** Where the device remembers List, Calendar or Table (BR-F05-21). */
 export const VIEW_KEY = "daybook.subscriptions.view";
 
+/** The cookie that gives the server the remembered view (D-629). It sits outside the `daybook.`
+ * prefix of the session cookies, which logout and expiry clear, so it is kept at logout. */
+export const VIEW_COOKIE = "daybook_view_subscriptions";
+
 /** The views the switch offers, List first, which is also the default. */
 export const SUBSCRIPTION_VIEWS = ["list", "calendar", "table"] as const;
 

@@ -21,7 +21,7 @@ import {
 } from "../lib/labels";
 import type { ListRow } from "../lib/groups";
 import { LIST_TEXT } from "../lib/messages";
-import { type MenuAction, READY_ACTIONS, readyMenu } from "../lib/menu";
+import { type MenuAction, rowMenu } from "../lib/menu";
 import { RowMenu } from "./RowMenu";
 
 export type SubscriptionRowProps = {
@@ -55,7 +55,7 @@ export function SubscriptionRow({
 	const hint = monthlyHint(item, formats);
 	const phoneLine = phoneDateLine(item, formats);
 	const ended = item.status === "ended";
-	const menu = readyMenu(item, formats);
+	const menu = rowMenu(item, formats);
 	return (
 		<AriaGridListItem
 			id={item.id}
@@ -103,7 +103,7 @@ export function SubscriptionRow({
 				{caption !== null && (
 					<span className="text-caption text-ink-3">{caption}</span>
 				)}
-				{ended && READY_ACTIONS.has("resume") && (
+				{ended && (
 					<Button
 						size="sm"
 						variant="row"

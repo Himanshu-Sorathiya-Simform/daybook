@@ -1,4 +1,4 @@
-import { act } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
 import { HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
@@ -148,8 +148,7 @@ describe("useCreateBudget (F04 section 11)", () => {
 					done = true;
 				});
 		});
-		await act(() => new Promise((resolve) => setTimeout(resolve, 30)));
-		expect(month.fetches()).toBe(1);
+		await waitFor(() => expect(month.fetches()).toBe(1));
 		expect(done).toBe(false);
 		expect(result.current.isPending).toBe(true);
 		await act(async () => {

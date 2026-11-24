@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { SubscriptionsPage } from "@/features/subscriptions/components/SubscriptionsPage";
 import { subscriptionKeys } from "@/features/subscriptions/lib/keys";
-import { SUBSCRIPTION_VIEWS, VIEW_KEY } from "@/features/subscriptions/lib/view";
+import { SUBSCRIPTION_VIEWS, VIEW_COOKIE } from "@/features/subscriptions/lib/view";
 import { createQueryClient } from "@/lib/api/query-client";
 import { choiceOf, isWideValue, WIDE_COOKIE } from "@/lib/device-cookies";
 import { profileBlock } from "@/lib/profile";
@@ -41,7 +41,7 @@ export default async function Page() {
 		<HydrationBoundary state={dehydrate(queryClient)}>
 			<SubscriptionsPage
 				initialView={choiceOf(
-					jar.get(VIEW_KEY)?.value,
+					jar.get(VIEW_COOKIE)?.value,
 					SUBSCRIPTION_VIEWS,
 					"list",
 				)}

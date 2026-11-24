@@ -17,7 +17,7 @@ const cookieOf = (key = KEY) =>
 		.find((entry) => entry.startsWith(`${key}=`))
 		?.split("=")[1];
 const clearCookies = () => {
-	for (const key of [KEY, "daybook.other.view"]) {
+	for (const key of [KEY, "daybook.other.view", "daybook_test_view"]) {
 		document.cookie = `${key}=; Max-Age=0; Path=/`;
 	}
 };
@@ -275,6 +275,22 @@ describe("the cookie and the server's choice (D-629)", () => {
 		});
 		expect(result.current[0]).toBe("table");
 		expect(cookieOf()).toBe("table");
+	});
+
+	test("a cookie of its own name holds the choice instead of one named by the key", () => {
+		const { result } = renderHook(() =>
+			useStoredChoice<View>(
+				KEY,
+				VIEWS,
+				"list",
+				undefined,
+				"daybook_test_view",
+			),
+		);
+		act(() => result.current[1]("table"));
+		expect(cookieOf("daybook_test_view")).toBe("table");
+		expect(cookieOf()).toBeUndefined();
+		expect(window.localStorage.getItem(KEY)).toBe("table");
 	});
 
 	test("each key has its own cookie", () => {

@@ -431,21 +431,22 @@ describe("delete with Undo (BR-F03-26)", () => {
 
 	test("closing the tab within the 5 seconds cancels the delete", async () => {
 		const sent = deletes(SWIGGY.id);
-		const { user } = renderHost();
+		const { user, queryClient } = renderHost();
 
 		await confirmDelete(user, "Swiggy");
 		await user.click(screen.getByRole("button", { name: "Close tab" }));
 		endWindow();
 
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		await act(() => vi.advanceTimersByTimeAsync(UNDO_MS));
+		expect(queryClient.isMutating()).toBe(0);
 		expect(sent).toEqual([]);
 	});
 });
 
 describe("after the window (BR-F03-26, D-239)", () => {
 	test("a 404 counts as done, with no message, and the row stays out", async () => {
-		deletes(SWIGGY.id, () => refuse(404, "not_found"));
-		const { user } = renderHost();
+		const sent = deletes(SWIGGY.id, () => refuse(404, "not_found"));
+		const { user, queryClient } = renderHost();
 
 		await confirmDelete(user, "Swiggy");
 		endWindow();
@@ -453,7 +454,9 @@ describe("after the window (BR-F03-26, D-239)", () => {
 		await waitFor(() =>
 			expect(screen.queryByText("Transaction deleted.")).toBeNull(),
 		);
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		await waitFor(() => expect(sent).toHaveLength(1));
+		await waitFor(() => expect(queryClient.isMutating()).toBe(0));
+		await act(async () => {});
 		expect(deletedIds()).toBe(SWIGGY.id);
 		expect(screen.queryByRole("dialog")).toBeNull();
 	});

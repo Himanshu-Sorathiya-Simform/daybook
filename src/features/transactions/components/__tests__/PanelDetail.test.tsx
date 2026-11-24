@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
@@ -282,24 +282,26 @@ describe("PanelDetail (BR-F03-72)", () => {
 
 	// AC-F03-57
 	test("a failed history request leaves the box out and the rest in place", async () => {
-		const { asked } = renderDetail(row(), {
+		const { asked, queryClient } = renderDetail(row(), {
 			answer: () => refuse(500, "internal"),
 		});
 
 		await waitFor(() => expect(asked).toHaveLength(1));
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+		await act(async () => {});
 		expect(screen.queryByRole("region")).toBeNull();
 		expect(details()["Type"]).toBe("Expense");
 		expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
 	});
 
 	test("a payee with no rows in 3 months has no box", async () => {
-		const { asked } = renderDetail(row(), {
+		const { asked, queryClient } = renderDetail(row(), {
 			answer: () => ok(history({ count: 0, outMinor: 0, usualDay: null })),
 		});
 
 		await waitFor(() => expect(asked).toHaveLength(1));
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+		await act(async () => {});
 		expect(screen.queryByRole("region")).toBeNull();
 	});
 
@@ -313,7 +315,7 @@ describe("PanelDetail (BR-F03-72)", () => {
 	test("a row whose payee the server would refuse asks for no history", async () => {
 		const { asked } = renderDetail(row({ payee: "  " }));
 
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		await act(async () => {});
 		expect(asked).toEqual([]);
 	});
 
@@ -362,7 +364,7 @@ describe("PanelDetail (BR-F03-72)", () => {
 		expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
 		expect(screen.queryByRole("button", { name: "Duplicate" })).toBeNull();
 		expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		await act(async () => {});
 		expect(asked).toEqual([]);
 	});
 

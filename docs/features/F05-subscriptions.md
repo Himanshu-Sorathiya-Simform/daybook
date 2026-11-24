@@ -209,7 +209,7 @@ A queued change therefore never reaches back past a change applied before it, an
 **The page and dialogs** (D-593)
 
 - **BR-F05-21** `/subscriptions` shows, top to bottom:
-    1. **The header:** the title "Subscriptions", with "as of 14:05" beside it when offline (section 10); "Show Subscriptions as" with List, Calendar and Table, remembered on the device (`daybook.subscriptions.view`), also in a cookie of that name and with the window's last class (`daybook_wide`), which the server reads so a remembered Calendar or Table is drawn at once (D-629); and Add a Subscription. Below 768 px, the phone layout (D-512), the Table option is hidden by CSS (a stored Table shows the list), and Add a Subscription is an icon button.
+    1. **The header:** the title "Subscriptions", with "as of 14:05" beside it when offline (section 10); "Show Subscriptions as" with List, Calendar and Table, remembered on the device (`daybook.subscriptions.view`), also in the cookie `daybook_view_subscriptions` and with the window's last class (`daybook_wide`), which the server reads so a remembered Calendar or Table is drawn at once (D-629); and Add a Subscription. Below 768 px, the phone layout (D-512), the Table option is hidden by CSS (a stored Table shows the list), and Add a Subscription is an icon button.
     2. **The summary**, when there is at least one Subscription:
         - "Monthly cost", the monthly total as a large figure, then "243,287.00 a year · 4 Subscriptions" ("1 Subscription" for one; the count is the Subscriptions with a next due date, BR-F05-17);
         - beside it (below it on narrow screens): the month's name and "20,149.00 in all"; a bar split between charged and still to come; "Charged 18,000.00" and "Still to come 2,149.00" (BR-F05-18);

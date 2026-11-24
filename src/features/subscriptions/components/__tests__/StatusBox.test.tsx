@@ -9,14 +9,13 @@ import { FORMATS } from "./rows";
 
 function setup(
 	item: Parameters<typeof statusBox>[0],
-	actions: Parameters<typeof StatusBox>[0]["actions"],
+	actions: readonly Parameters<typeof StatusBox>[0]["box"]["actions"][number][],
 ) {
 	const onAction = vi.fn();
-	const box = statusBox(item, FORMATS);
+	const box = { ...statusBox(item, FORMATS), actions: [...actions] };
 	render(
 		<StatusBox
 			box={box}
-			actions={actions}
 			onAction={onAction}
 		/>,
 	);

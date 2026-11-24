@@ -5,6 +5,7 @@ import { describe, expect, test, vi } from "vitest";
 import { apiFetch } from "@/lib/api/client";
 import type { ChangeRequest } from "../../lib/conflict";
 import { subscriptionAnswer } from "../../lib/__tests__/fixtures";
+import { readSubscriptionDeleteRefusal } from "../../lib/write-errors";
 import { refuse, renderHookInApp, route, testClient, testNetwork } from "./helpers";
 import { useWriteRefusal } from "../useWriteRefusal";
 
@@ -118,6 +119,17 @@ describe("a 422 (section 8)", () => {
 });
 
 describe("the other refusals", () => {
+	test("a write that reads its refusals its own way says it in its words", async () => {
+		const { result } = setup([]);
+		const error = await failure(() => refuse(500, "internal_error"));
+		await act(async () => {
+			await result.current.refuse(error, SENT, readSubscriptionDeleteRefusal);
+		});
+		expect(result.current.failure).toBe(
+			"The Subscription could not be deleted. Check your connection and try again.",
+		);
+	});
+
 	test("a failed request says it could not be saved", async () => {
 		const { result, refused } = setup();
 		const kind = await refused(

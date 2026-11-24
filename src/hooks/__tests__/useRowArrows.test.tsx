@@ -14,6 +14,7 @@ function Rows({
 	mode,
 	selectionOf,
 	keyOf = (id: string) => id,
+	noHolder = false,
 }: {
 	ids?: string[];
 	selected?: string | null;
@@ -21,10 +22,12 @@ function Rows({
 	mode?: RowArrows;
 	selectionOf?: (id: string) => string;
 	keyOf?: (id: string) => string;
+	/** Never gives the hook its holder, as before the ref callback has committed. */
+	noHolder?: boolean;
 }) {
 	const [holder, setHolder] = useState<HTMLDivElement | null>(null);
 	useRowArrows({
-		holder,
+		holder: noHolder ? null : holder,
 		ids: ids.map(keyOf),
 		selected,
 		onSelect,
@@ -150,6 +153,19 @@ describe("useRowArrows (BR-F04-32, BR-F05-45)", () => {
 		await user.click(screen.getByRole("textbox", { name: "Search" }));
 		await user.keyboard("{ArrowDown}{ArrowUp}");
 		expect(onSelect).not.toHaveBeenCalled();
+	});
+
+	test("without its holder yet, a text field keeps its arrow keys and nothing is stopped", async () => {
+		const { onSelect, user } = setup({ noHolder: true });
+		const search = screen.getByRole("textbox", { name: "Search" });
+		await user.click(search);
+		const stopped: boolean[] = [];
+		search.addEventListener("keydown", (event) =>
+			stopped.push(event.defaultPrevented),
+		);
+		await user.keyboard("{ArrowDown}{ArrowUp}");
+		expect(onSelect).not.toHaveBeenCalled();
+		expect(stopped).toEqual([false, false]);
 	});
 
 	test("selects what selectionOf makes of the row id, as Budgets select a category", async () => {

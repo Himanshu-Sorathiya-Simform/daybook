@@ -1,14 +1,15 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { I18nProvider } from "react-aria-components";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { DateRange } from "@/components/forms/RangeCalendar";
-import { CustomRange, type CustomRangeProps } from "../CustomRange";
+import { CustomRange, DATE_COMMIT_MS, type CustomRangeProps } from "../CustomRange";
 
-// The golden clock (TST-3); only `Date`, so user-event's timers stay real.
+// The golden clock (TST-3); the timers tick with real time too, and a test that waits out the
+// commit delay advances them by hand.
 beforeEach(() => {
-	vi.useFakeTimers({ toFake: ["Date"] });
+	vi.useFakeTimers({ shouldAdvanceTime: true });
 	vi.setSystemTime(new Date("2026-11-02T06:30:00Z"));
 });
 afterEach(() => vi.useRealTimers());
@@ -36,7 +37,7 @@ function renderRange(props: Partial<CustomRangeProps> = {}) {
 	const view = render(ui(props.value ?? null));
 	return {
 		onChange,
-		user: userEvent.setup(),
+		user: userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) }),
 		unmount: view.unmount,
 		setValue: (value: DateRange | null) => view.rerender(ui(value)),
 	};
@@ -87,7 +88,7 @@ describe("CustomRange (BR-F03-39, D-538, D-543)", () => {
 
 		await user.click(part("From", "day"));
 		await user.keyboard("05102026");
-		await new Promise((resolve) => setTimeout(resolve, 350));
+		await act(() => vi.advanceTimersByTimeAsync(DATE_COMMIT_MS));
 
 		expect(onChange).not.toHaveBeenCalled();
 	});
@@ -110,7 +111,7 @@ describe("CustomRange (BR-F03-39, D-538, D-543)", () => {
 
 		await user.click(part("To", "day"));
 		await user.keyboard("{ArrowUp}{ArrowDown}");
-		await new Promise((resolve) => setTimeout(resolve, 350));
+		await act(() => vi.advanceTimersByTimeAsync(DATE_COMMIT_MS));
 
 		expect(onChange).not.toHaveBeenCalled();
 	});

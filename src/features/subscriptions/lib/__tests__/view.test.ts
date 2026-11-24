@@ -1,10 +1,22 @@
 import { describe, expect, test } from "vitest";
 
-import { pageShape, shownView, SUBSCRIPTION_VIEWS, VIEW_KEY } from "../view";
+import {
+	pageShape,
+	shownView,
+	SUBSCRIPTION_VIEWS,
+	VIEW_COOKIE,
+	VIEW_KEY,
+} from "../view";
 
 describe("the view switch (BR-F05-21)", () => {
 	test("the key is daybook.subscriptions.view", () => {
 		expect(VIEW_KEY).toBe("daybook.subscriptions.view");
+	});
+
+	// D-629: the cookie is kept at logout, which clears every cookie named daybook.…
+	test("the cookie is daybook_view_subscriptions, outside the session cookies' prefix", () => {
+		expect(VIEW_COOKIE).toBe("daybook_view_subscriptions");
+		expect(VIEW_COOKIE.startsWith("daybook.")).toBe(false);
 	});
 
 	test("the views are List, Calendar and Table, List first", () => {

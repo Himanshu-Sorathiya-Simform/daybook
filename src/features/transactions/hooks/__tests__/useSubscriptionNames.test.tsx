@@ -1,4 +1,4 @@
-import { waitFor } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
 
@@ -29,7 +29,7 @@ describe("useSubscriptionNames (D-541)", () => {
 	test("asks nothing while disabled", async () => {
 		const reads = route(network, "get", "/api/subscriptions", () => ok(LIST));
 		const { result } = renderHookInApp(() => useSubscriptionNames(false));
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await act(async () => {});
 		expect(reads).toHaveLength(0);
 		expect(result.current.data).toBeUndefined();
 	});

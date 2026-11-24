@@ -81,10 +81,8 @@ const states = (
 	Object.fromEntries(
 		result.months.map((month) => {
 			const before = oldState(month, ctx.formats);
-			return [
-				month.month,
-				`${before === null ? "" : `${before} → `}${newState(month, ctx).text}`,
-			];
+			const was = before === null ? "" : `${before} → `;
+			return [month.month, `${was}${newState(month, ctx).text}`];
 		}),
 	);
 
@@ -144,11 +142,12 @@ describe("the texts of a long change: shopping at 4,000.00 from November 2023", 
 					(each) => each.month === group.first,
 				)!;
 				const before = oldState(first, IN);
+				const was = before === null ? "" : `${before} → `;
 				return [
 					groupText(group, IN),
 					limitText(group.oldLimitMinor, IN),
 					limitText(group.newLimitMinor, IN),
-					`${before === null ? "" : `${before} → `}${newState(first, shopping).text}`,
+					`${was}${newState(first, shopping).text}`,
 				];
 			}),
 		).toEqual([

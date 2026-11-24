@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode, Ref } from "react";
+import { type ReactNode, type Ref, useId } from "react";
 
 import { Button, type ButtonProps } from "@/components/actions/Button";
 import { FormAlert } from "@/components/feedback/FormAlert";
@@ -51,6 +51,7 @@ export function WriteDialog({
 	children,
 }: Readonly<WriteDialogProps>) {
 	const online = useOnline();
+	const formId = useId();
 	const canSave = online && isReady;
 	return (
 		<Dialog
@@ -75,7 +76,10 @@ export function WriteDialog({
 						variant={confirmVariant}
 						isDisabled={!canSave}
 						isPending={isPending}
-						onPress={onConfirm}
+						// The footer sits outside the form, so the button names it: pressing it and Enter
+						// in any field both submit.
+						type="submit"
+						form={formId}
 					>
 						{confirmLabel}
 					</Button>
@@ -83,6 +87,7 @@ export function WriteDialog({
 			}
 		>
 			<form
+				id={formId}
 				{...(formRef ? { ref: formRef } : {})}
 				noValidate
 				aria-label={title}

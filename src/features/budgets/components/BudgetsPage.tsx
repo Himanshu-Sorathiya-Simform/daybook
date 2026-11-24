@@ -9,13 +9,13 @@ import { Section } from "@/components/surfaces/Section";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useWideWindow } from "@/hooks/useWideWindow";
 import { useOnline } from "@/hooks/useOnline";
-import { useShortcut } from "@/hooks/useShortcut";
 import type { ExpenseCategory } from "@/lib/budgets/model";
-import type { BudgetRecord } from "@/lib/budgets/view";
 import { type Month, monthOf } from "@/lib/budgets/months";
 import { cn } from "@/lib/cn";
 import { formatMonth } from "@/lib/date-format";
 import { useBudgetMonth } from "../hooks/useBudgetMonth";
+import { useBudgetSelection } from "../hooks/useBudgetSelection";
+import { useBudgetShortcuts } from "../hooks/useBudgetShortcuts";
 import { useBudgetNotices } from "../hooks/useBudgetNotice";
 import { useBudgetsUrl } from "../hooks/useBudgetsUrl";
 import { useStoredChoice } from "@/hooks/useStoredChoice";
@@ -29,21 +29,23 @@ import {
 	offlineBody,
 	PAGE_TEXT,
 } from "../lib/messages";
-import { type DialogKind, recordIn } from "../lib/dialog";
-import { conflictRows } from "../lib/conflict";
+import { recordIn } from "../lib/dialog";
 import { deletionNotice } from "../lib/notices";
 import { selectionKeys, subjectOf } from "../lib/panel";
 import type { BudgetMonthAnswer, BudgetsLocale } from "../lib/types";
-import { BUDGET_VIEWS, type BudgetsView, VIEW_KEY } from "../lib/view";
-import { BudgetDialog } from "./BudgetDialog";
-import { ConflictDialog } from "./ConflictDialog";
-import { BudgetList } from "./BudgetList";
+import {
+	BUDGET_VIEWS,
+	type BudgetsView,
+	pageShape,
+	VIEW_COOKIE,
+	VIEW_KEY,
+} from "../lib/view";
+import { BudgetDialogs, type OpenDialog } from "./BudgetDialogs";
 import { BudgetPanel } from "./BudgetPanel";
 import { BudgetsHeader } from "./BudgetsHeader";
 import { BudgetsOverview } from "./BudgetsOverview";
 import { BudgetsSkeleton } from "./BudgetsSkeleton";
-import { BudgetTable } from "./BudgetTable";
-import { DeleteBudgetDialog } from "./DeleteBudgetDialog";
+import { BudgetsViews } from "./BudgetsViews";
 import { UndoNotice } from "@/components/feedback/UndoNotice";
 
 export type BudgetsPageProps = {
@@ -56,31 +58,8 @@ export type BudgetsPageProps = {
 	className?: string;
 };
 
-/** The dialog open over the page: Add, Change limit or Stop, or Delete's confirmation with the
- * Budget it deletes. `opened` starts each one afresh. */
-type OpenDialog =
-	| { kind: DialogKind; category: ExpenseCategory | null; opened: number }
-	| { kind: "delete"; record: BudgetRecord; opened: number };
-
 /** From here up the panel docks beside the list (BR-F04-30); the `dock` breakpoint. */
 const DOCKED = "(min-width: 1180px)";
-
-/** Whether `category` shows anywhere in the month: as a Budget, Not budgeted or Not active. */
-function shows(view: BudgetMonthAnswer, category: ExpenseCategory): boolean {
-	return [view.budgets, view.unbudgeted, view.inactive].some((group) =>
-		group.some((row) => row.category === category),
-	);
-}
-
-/** Whether a loaded month has no Budget, Not budgeted or Not active row: a new user's. */
-function showsNothing(view: BudgetMonthAnswer | undefined): boolean {
-	return (
-		view !== undefined
-		&& [view.budgets, view.unbudgeted, view.inactive].every(
-			(group) => group.length === 0,
-		)
-	);
-}
 
 /** What Up and Down do in the list: nothing while a dialog or the drawer is open (D-571,
  * D-573), select with the panel docked, else only move focus. */
@@ -126,6 +105,7 @@ export function BudgetsPage({
 		BUDGET_VIEWS,
 		"list",
 		initialView,
+		VIEW_COOKIE,
 	);
 	// The server knows the window class the device last had, from a cookie, and the browser
 	// corrects it where it was wrong (D-629).
@@ -134,7 +114,6 @@ export function BudgetsPage({
 	const docked = useMediaQuery(DOCKED, true);
 	const query = useBudgetMonth(url.month);
 	const [filter, setFilter] = useMonthFilter(url.month);
-	const [selected, setSelected] = useState<ExpenseCategory | null>(null);
 	// The table's sort belongs to the page, so it holds across months, a loading one included
 	// (BR-F04-18, D-570).
 	const [sorting, setSorting] = useState<SortingState>([]);
@@ -148,16 +127,7 @@ export function BudgetsPage({
 		formats: locale,
 	});
 
-	// A selection the new month does not show clears, React's pattern for state that follows
-	// what was read.
-	if (data && selected !== null && !shows(data, selected)) setSelected(null);
-
-	useShortcut("Escape", () => setSelected(null), {
-		enabled: selected !== null,
-		// Escape in a text field, a menu, the month grid or a dialog belongs to them.
-		ignoreInputs: true,
-		ignoreDefaultPrevented: true,
-	});
+	const { selected, choose } = useBudgetSelection(data);
 
 	const open = (next: OpenDialog) => {
 		setDialog(next);
@@ -181,10 +151,13 @@ export function BudgetsPage({
 		if (record) open({ kind: "delete", record, opened });
 	};
 
-	const offOther = !online && url.month !== current;
-	const failed = !data && (query.isError || query.fetchStatus === "paused");
-	const isNewUser = showsNothing(data);
-	const showPanel = !offOther && !failed && !isNewUser;
+	const { offOther, failed, showPanel } = pageShape({
+		isOnline: online,
+		month: url.month,
+		current,
+		data,
+		loadFailed: query.isError || query.fetchStatus === "paused",
+	});
 	const drawerOpen = showPanel && !docked && selected !== null;
 	// The conflict view of an Undo or a Remove is a dialog too, though the page opens it.
 	const isViewOpen = isDialogOpen || notices.conflict !== null;
@@ -196,14 +169,14 @@ export function BudgetsPage({
 		subject && !isViewOpen ?
 			selectionKeys(subject)
 		:	{ changeLimit: false, stop: false, remove: false };
-	// Each is on only while the selection has a record, which needs a selection.
-	const onSelected = (act: (category: ExpenseCategory) => void) => () => {
-		if (selected !== null) act(selected);
-	};
-	useShortcut("L", onSelected(onChangeLimit), { enabled: keys.changeLimit });
-	useShortcut("S", onSelected(onStop), { enabled: keys.stop });
-	useShortcut("Delete", onSelected(onDelete), { enabled: keys.remove });
-	useShortcut("Backspace", onSelected(onDelete), { enabled: keys.remove });
+	useBudgetShortcuts({
+		selected,
+		keys,
+		onChangeLimit,
+		onStop,
+		onDelete,
+		onClear: () => choose(null),
+	});
 	const asOf = asOfText(online, query.dataUpdatedAt, locale);
 
 	// The notice shows in the panel while the Budget it is about is selected, else above the list
@@ -234,7 +207,6 @@ export function BudgetsPage({
 
 	const month = (shown: BudgetMonthAnswer) => {
 		const hasBudgets = shown.budgets.length > 0;
-		const hasOthers = shown.unbudgeted.length > 0 || shown.inactive.length > 0;
 		const isCurrent = shown.month === current;
 		const today = isCurrent ? locale.today : null;
 		const todayShare = isCurrent ? dayOfMonth(locale.today).share : null;
@@ -260,34 +232,23 @@ export function BudgetsPage({
 					</Section>
 				}
 				{!inPanel && noticeNode}
-				{hasBudgets && wide && view === "table" ?
-					<BudgetTable
-						view={shown}
-						formats={locale}
-						filter={filter}
-						onFilterChange={setFilter}
-						sorting={sorting}
-						onSortingChange={setSorting}
-						selected={selected}
-						onSelect={setSelected}
-						arrows={arrows}
-					/>
-				:	(hasBudgets || hasOthers) && (
-						<BudgetList
-							view={shown}
-							formats={locale}
-							todayShare={todayShare}
-							filter={filter}
-							onFilterChange={setFilter}
-							selected={selected}
-							onSelect={setSelected}
-							arrows={arrows}
-							onAdd={onAdd}
-							onChangeLimit={onChangeLimit}
-							onDelete={onDelete}
-						/>
-					)
-				}
+				<BudgetsViews
+					view={view}
+					wide={wide}
+					shown={shown}
+					formats={locale}
+					filter={filter}
+					onFilterChange={setFilter}
+					selected={selected}
+					onSelect={choose}
+					arrows={arrows}
+					sorting={sorting}
+					onSortingChange={setSorting}
+					todayShare={todayShare}
+					onAdd={onAdd}
+					onChangeLimit={onChangeLimit}
+					onDelete={onDelete}
+				/>
 			</>
 		);
 	};
@@ -363,7 +324,7 @@ export function BudgetsPage({
 					view={data}
 					selected={selected}
 					formats={locale}
-					onClose={() => setSelected(null)}
+					onClose={() => choose(null)}
 					onAdd={onAdd}
 					onChangeLimit={onChangeLimit}
 					onStop={onStop}
@@ -373,56 +334,27 @@ export function BudgetsPage({
 					notice={inPanel ? noticeNode : null}
 				/>
 			)}
-			{notices.conflict && (
-				<ConflictDialog
-					isOpen
-					isDelete={notices.conflict.isDelete}
-					// It only ever reports closing.
-					onOpenChange={notices.closeConflict}
-					rows={conflictRows(
-						notices.conflict.yours,
-						notices.conflict.current,
-						locale,
-					)}
-					keepMineLine={notices.conflict.line ?? undefined}
-					isPending={notices.isUndoing || notices.isRemoving}
-					onKeepMine={notices.keepMine}
-					onKeepTheirs={notices.keepTheirs}
-				/>
-			)}
-			{dialog?.kind === "delete" && (
-				<DeleteBudgetDialog
-					key={dialog.opened}
-					isOpen={isDialogOpen}
-					record={dialog.record}
-					formats={locale}
-					onClose={() => setDialogOpen(false)}
-					onDeleted={(deleted) => {
-						notices.show(deletionNotice(deleted.category, deleted));
-						setSelected(null);
-					}}
-				/>
-			)}
-			{dialog && dialog.kind !== "delete" && data && (
-				<BudgetDialog
-					key={dialog.opened}
-					isOpen={isDialogOpen}
-					kind={dialog.kind}
-					category={dialog.category}
-					view={data}
-					locale={locale}
-					onClose={() => setDialogOpen(false)}
-					onSaved={(saved, written) => {
-						notices.show(written);
-						// The changed Budget is selected where its notice can show: docked, or with
-						// a selection already open (BR-F04-29).
-						if (docked || selected !== null) setSelected(saved.category);
-					}}
-					onDeleteInstead={(found) =>
-						open({ kind: "delete", record: found, opened })
-					}
-				/>
-			)}
+			<BudgetDialogs
+				dialog={dialog}
+				isOpen={isDialogOpen}
+				data={data}
+				locale={locale}
+				onClose={() => setDialogOpen(false)}
+				onDeleted={(deleted) => {
+					notices.show(deletionNotice(deleted.category, deleted));
+					choose(null);
+				}}
+				onSaved={(saved, written) => {
+					notices.show(written);
+					// The changed Budget is selected where its notice can show: docked, or with
+					// a selection already open (BR-F04-29).
+					if (docked || selected !== null) choose(saved.category);
+				}}
+				onDeleteInstead={(found) =>
+					open({ kind: "delete", record: found, opened })
+				}
+				notices={notices}
+			/>
 		</div>
 	);
 }

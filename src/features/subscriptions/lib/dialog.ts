@@ -31,6 +31,7 @@ import {
 	shortDate,
 } from "./labels";
 import type { SubscriptionItem, SubscriptionsLocale } from "./types";
+import type { SubscriptionField } from "./write-errors";
 
 /** Which dialog the page has open (BR-F05-24, BR-F05-41 to BR-F05-44). */
 export type DialogKind = "add" | "edit" | "cancel" | "resume" | "pause" | "delete";
@@ -110,6 +111,20 @@ export type DialogField =
 	"name" | "amount" | "cadence" | "category" | "startDate" | "note";
 
 export type DialogMessages = Partial<Record<DialogField, string>>;
+
+/** The server's field each dialog field answers to; a message for any other path is the
+ * dialog's own line. */
+export const SERVER_FIELD: Record<DialogField, SubscriptionField> = {
+	name: "name",
+	amount: "amountMinor",
+	cadence: "cadence",
+	category: "category",
+	startDate: "startDate",
+	note: "note",
+};
+
+/** The server's fields the dialog has a box for. */
+export const OWN_FIELDS: readonly SubscriptionField[] = Object.values(SERVER_FIELD);
 
 /** The values a dialog opens with: Add's are empty, monthly and today; Edit's are the
  * Subscription's own (BR-F05-24). A custom number and unit start at 2 months. */

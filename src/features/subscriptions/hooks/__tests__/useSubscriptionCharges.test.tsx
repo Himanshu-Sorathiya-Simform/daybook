@@ -38,7 +38,7 @@ describe("useSubscriptionCharges (BR-F05-40, BR-F05-48)", () => {
 			ok(listPage([])),
 		);
 		const { result } = renderHookInApp(() => useSubscriptionCharges(null));
-		await new Promise((resolve) => setTimeout(resolve, 30));
+		// An enabled query is fetching as soon as it mounts, so idle now is idle for good.
 		expect(seen).toHaveLength(0);
 		expect(result.current.fetchStatus).toBe("idle");
 		expect(result.current.data).toBeUndefined();
@@ -54,7 +54,7 @@ describe("useSubscriptionCharges (BR-F05-40, BR-F05-48)", () => {
 				initialProps: null as string | null,
 			},
 		);
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(result.current.fetchStatus).toBe("idle");
 		expect(seen).toHaveLength(0);
 		rerender(NETFLIX);
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));

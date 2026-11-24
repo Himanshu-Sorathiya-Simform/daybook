@@ -12,7 +12,6 @@ import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useWideWindow } from "@/hooks/useWideWindow";
 import { useOnline } from "@/hooks/useOnline";
 import type { RowArrows } from "@/hooks/useRowArrows";
-import { useShortcut } from "@/hooks/useShortcut";
 import { useStoredChoice } from "@/hooks/useStoredChoice";
 import { cn } from "@/lib/cn";
 import type { ExpenseCategory, MonthItem } from "@/lib/subscriptions/model";
@@ -22,12 +21,13 @@ import {
 	type SubscriptionNotices,
 	useSubscriptionNotice,
 } from "../hooks/useSubscriptionNotice";
+import { useSubscriptionSelection } from "../hooks/useSubscriptionSelection";
+import { useSubscriptionShortcuts } from "../hooks/useSubscriptionShortcuts";
 import { useSubscriptions } from "../hooks/useSubscriptions";
 import { CALENDAR_TEXT } from "../lib/calendar";
-import { filterByCategory, isFilterable } from "../lib/category-filter";
 import { chargesHref, type OpenTarget } from "../lib/deep-link";
 import type { DialogKind } from "../lib/dialog";
-import { type MenuAction, shortcutAction, type ShortcutKey } from "../lib/menu";
+import type { MenuAction } from "../lib/menu";
 import { asOfText, PAGE_TEXT } from "../lib/messages";
 import type { Confirmed } from "../lib/notices";
 import type { PanelActionKey, StatusAction } from "../lib/panel";
@@ -38,6 +38,7 @@ import {
 	shownView,
 	SUBSCRIPTION_VIEWS,
 	type SubscriptionsView,
+	VIEW_COOKIE,
 	VIEW_KEY,
 } from "../lib/view";
 import { type OpenDialog, SubscriptionDialogs } from "./SubscriptionDialogs";
@@ -109,6 +110,7 @@ export function SubscriptionsPage({
 		SUBSCRIPTION_VIEWS,
 		"list",
 		initialView,
+		VIEW_COOKIE,
 	);
 	// The server knows the window class the device last had, from a cookie, and the browser
 	// corrects it where it was wrong.
@@ -116,62 +118,35 @@ export function SubscriptionsPage({
 	const view = shownView(stored, isWide);
 	const list = query.data;
 	const router = useRouter();
-	const [picked, setPicked] = useState<string | null>(null);
-	// The charge a calendar item stood for: its Subscription and due date, which the panel's
-	// timeline marks while that Subscription stays selected (BR-F05-38).
-	const [marked, setMarked] = useState<{ id: string; date: string } | null>(null);
 	const [endedOpen, setEndedOpen] = useState(false);
 	const [endedAll, setEndedAll] = useState(false);
 	// The table's sort lives here, so it outlives the table while the view changes (D-570).
 	const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORTING);
-	const [filtered, setFiltered] = useState<ExpenseCategory | null>(null);
 	// The dialog while it is open, and the Subscription it is about: `null` for Add.
 	const [dialog, setDialog] = useState<OpenDialog | null>(null);
 	const notices = useSubscriptionNotice(locale);
 	const quick = useQuickWrites(locale, notices);
-	// A Subscription that is gone from the list is no longer selected, and stays unselected if
-	// it comes back (BR-F05-21). Set while rendering, React's pattern for state that follows
-	// what was read.
-	const gone =
-		list !== undefined
-		&& picked !== null
-		&& !list.items.some((item) => item.id === picked);
-	if (gone) {
-		setPicked(null);
-		setMarked(null);
-	}
-	const selected = gone ? null : picked;
-	const markedDue = marked?.date ?? null;
-	/** Selects a Subscription from the list, a link or the keyboard: no calendar date marked. */
-	const choose = (id: string | null) => {
-		setPicked(id);
-		setMarked(null);
-	};
-	// A category that has lost its last Subscription filters nothing any more and clears.
-	const stale =
-		filtered !== null && list !== undefined && !isFilterable(list, filtered);
-	if (stale) setFiltered(null);
-	const category = stale ? null : filtered;
-	const shown =
-		list && category !== null ? filterByCategory(list, category) : list;
+	const {
+		selected,
+		markedDue,
+		category,
+		shown,
+		choose,
+		reveal,
+		filterTo,
+		clearFilter,
+		markCharge,
+	} = useSubscriptionSelection(list);
 	useOpenParam(list?.items, (target: OpenTarget | null) => {
 		choose(target?.id ?? null);
 		// A deep link shows its row, so a filter that would hide it goes.
-		if (target) setFiltered(null);
+		if (target) clearFilter();
 		// An ended Subscription is selected with its group open and showing every row.
 		if (target?.ended) {
 			setEndedOpen(true);
 			setEndedAll(true);
 		}
 	});
-	/** A press on a category of the panel's summary: filter to it, or clear it when it already
-	 * is the filter (BR-F05-50). A selection the filter would hide clears with it. */
-	const filterTo = (next: ExpenseCategory) => {
-		const target = next === category ? null : next;
-		setFiltered(target);
-		const item = list?.items.find((each) => each.id === selected);
-		if (target !== null && item && item.category !== target) choose(null);
-	};
 	/** A press on a calendar item (BR-F05-38): its Subscription is selected and its date marked
 	 * in the timeline; a charge whose Subscription was deleted says so instead. A filter that
 	 * would hide the Subscription goes, as a deep link's does. */
@@ -180,18 +155,8 @@ export function SubscriptionsPage({
 			showToast(CALENDAR_TEXT.deletedCharge);
 			return;
 		}
-		const subscription = list?.items.find(
-			(each) => each.id === item.subscriptionId,
-		);
-		if (
-			subscription
-			&& category !== null
-			&& subscription.category !== category
-		) {
-			setFiltered(null);
-		}
-		setPicked(item.subscriptionId);
-		setMarked({ id: item.subscriptionId, date: item.date });
+		reveal(list?.items.find((each) => each.id === item.subscriptionId));
+		markCharge(item.subscriptionId, item.date);
 	};
 	/** Opens a dialog about a Subscription of the list. */
 	const open = (kind: Exclude<DialogKind, "add">, id: string) => {
@@ -203,9 +168,7 @@ export function SubscriptionsPage({
 	 * (BR-F05-33). */
 	const saved = (subscription: { id: string; category: ExpenseCategory }) => {
 		if (!docked && selected === null) return;
-		if (category !== null && subscription.category !== category) {
-			setFiltered(null);
-		}
+		reveal(subscription);
 		choose(subscription.id);
 	};
 	/** A write from a dialog is confirmed: its notice, and the selection (BR-F05-33). A delete
@@ -282,31 +245,13 @@ export function SubscriptionsPage({
 
 	// A dialog, or the conflict view of a refused write, takes the keys: the page behind rests.
 	const covered = dialog !== null || notices.conflict !== null;
-	useShortcut("E", () => selected !== null && open("edit", selected), {
-		enabled: selected !== null && !covered,
-	});
-	// The other keys act as the selection's menu items do, and only where it offers them, so a
-	// press that finds none does nothing (D-630).
-	const selectedItem = list?.items.find((each) => each.id === selected) ?? null;
-	const keyed = (key: ShortcutKey) =>
-		selectedItem !== null
-		&& !covered
-		&& shortcutAction(key, selectedItem, locale) !== null;
-	const press = (key: ShortcutKey) => () => {
-		const action = selectedItem && shortcutAction(key, selectedItem, locale);
-		if (selectedItem && action) act(action, selectedItem.id);
-	};
-	useShortcut("S", press("S"), { enabled: keyed("S") });
-	useShortcut("P", press("P"), { enabled: keyed("P") });
-	useShortcut("R", press("R"), { enabled: keyed("R") });
-	useShortcut("C", press("C"), { enabled: keyed("C") });
-	useShortcut("Delete", press("Delete"), { enabled: keyed("Delete") });
-	useShortcut("Backspace", press("Delete"), { enabled: keyed("Delete") });
-	useShortcut("Escape", () => choose(null), {
-		enabled: selected !== null && !covered,
-		// Escape in a text field, a menu or a dialog belongs to them.
-		ignoreInputs: true,
-		ignoreDefaultPrevented: true,
+	useSubscriptionShortcuts({
+		item: list?.items.find((each) => each.id === selected) ?? null,
+		covered,
+		locale,
+		onEdit: (id) => open("edit", id),
+		onAction: act,
+		onClear: () => choose(null),
 	});
 
 	const body = () => {
@@ -327,7 +272,7 @@ export function SubscriptionsPage({
 						onSelect={choose}
 						arrows={arrowsFor(drawerOpen, docked)}
 						category={category}
-						onClearCategory={() => setFiltered(null)}
+						onClearCategory={clearFilter}
 						endedOpen={endedOpen}
 						onEndedOpenChange={setEndedOpen}
 						endedAll={endedAll}

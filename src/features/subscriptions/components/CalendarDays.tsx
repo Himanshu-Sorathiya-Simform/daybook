@@ -115,7 +115,9 @@ export function CalendarDays({
 							size="sm"
 							variant="ghost"
 							className="text-ink-3 font-medium"
-							onPress={() => setOpened(new Set([...opened, week.key]))}
+							onPress={() =>
+								setOpened((prev) => new Set(prev).add(week.key))
+							}
 						>
 							{hint}
 						</Button>

@@ -6,8 +6,6 @@ import type { StatusAction, StatusBox as StatusBoxData } from "../lib/panel";
 
 export type StatusBoxProps = {
 	box: StatusBoxData;
-	/** The box's buttons that exist so far; the others are left out. */
-	actions: readonly StatusAction[];
 	onAction: (action: StatusAction) => void;
 	className?: string;
 };
@@ -21,12 +19,7 @@ const LABELS: Record<StatusAction, string> = {
 
 /** The box under the amount (BR-F05-40): what the Subscription is doing, with its date in bold,
  * and the buttons its status offers. */
-export function StatusBox({
-	box,
-	actions,
-	onAction,
-	className,
-}: Readonly<StatusBoxProps>) {
+export function StatusBox({ box, onAction, className }: Readonly<StatusBoxProps>) {
 	return (
 		<div
 			className={cn(
@@ -41,7 +34,7 @@ export function StatusBox({
 					:	<span key={part.text}>{part.text}</span>,
 				)}
 			</p>
-			{actions.map((action) => (
+			{box.actions.map((action) => (
 				<Button
 					key={action}
 					size="sm"

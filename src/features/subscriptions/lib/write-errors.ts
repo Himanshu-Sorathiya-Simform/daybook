@@ -151,6 +151,17 @@ export function readSubscriptionDeleteError(
 	};
 }
 
+/** A refused delete as the outcome of a write, so a dialog reads a refused Delete as it reads a
+ * refused Edit: the confirmation's line is the dialog's own line. */
+export function readSubscriptionDeleteRefusal(
+	error: unknown,
+): SubscriptionWriteOutcome {
+	const outcome = readSubscriptionDeleteError(error);
+	return outcome.kind === "refused" ?
+			{ kind: "form", message: outcome.message }
+		:	outcome;
+}
+
 /** What a refused Undo, Skip this one or Undo skip means: none has a dialog, so a refusal shows
  * in the notice (BR-F05-33). */
 export type SubscriptionNoticeOutcome =

@@ -1,11 +1,9 @@
-import { useOnce } from "@/hooks/useOnce";
 import { uuidV7 } from "@/lib/ids";
 import type { SubscriptionEditInput } from "@/lib/subscriptions/schemas";
 import type { Confirmed } from "../lib/notices";
-import type { SubscriptionItem } from "../lib/types";
 import type { SubscriptionField } from "../lib/write-errors";
 import { useChangeSubscription } from "./useChangeSubscription";
-import { type DialogConflict, useWriteRefusal } from "./useWriteRefusal";
+import { type DialogConflictView, useDialogWrite } from "./useDialogWrite";
 
 /** The dialog writes that change a Subscription with one `PATCH`. */
 export type EditKind = "edit" | "cancel" | "resume" | "pause";
@@ -22,20 +20,12 @@ export type EditWriteOptions = {
 };
 
 /** What the conflict view over the dialog needs, besides the dialog's own origin and formats. */
-export type EditConflictView = {
-	conflict: DialogConflict;
-	isPending: boolean;
-	onClose: () => void;
-	onKeepMine: () => void;
-	onKeepTheirs: () => void;
-};
+export type EditConflictView = DialogConflictView;
 
 /**
  * One dialog's `PATCH` (BR-F05-34): `submit` sends a body against the Subscription as opened, or
- * after a conflict as saved, with a new key per press and one write at a time (D-575). A
- * confirmed write reports itself and closes the dialog; a refusal lands in `refusal`. A 409
- * gives `conflictView`: Keep mine sends the same body against the saved version, Keep theirs
- * reads the page again and closes the dialog.
+ * after a conflict as saved, with a new key per press and one write at a time (D-575). The rest,
+ * a refusal's lines and the conflict view of a 409, is `useDialogWrite`'s.
  */
 export function useEditWrite({
 	kind,
@@ -45,55 +35,29 @@ export function useEditWrite({
 	onFieldsRefused,
 }: EditWriteOptions) {
 	const change = useChangeSubscription();
-	const refusal = useWriteRefusal(own);
-	const sending = useOnce();
-
-	const submit = async (
-		body: SubscriptionEditInput,
-		against: SubscriptionItem,
-	) => {
-		const request = sending.run(() =>
+	const write = useDialogWrite<
+		SubscriptionEditInput,
+		Awaited<ReturnType<typeof change.mutateAsync>>
+	>({
+		send: (body, against) =>
 			change.mutateAsync({
 				id: against.id,
 				version: against.version,
 				body,
 				idempotencyKey: uuidV7(),
 			}),
-		);
-		if (request === null) return;
-		refusal.reset();
-		try {
-			const saved = await request;
-			onSaved?.({ kind, before: against, saved, sent: body });
-			onClose();
-		} catch (error) {
-			const outcome = await refusal.refuse(error, {
-				kind: "change",
-				id: against.id,
-				body,
-			});
-			if (outcome.kind === "fields") onFieldsRefused?.();
-		}
-	};
-
-	const { conflict } = refusal;
-	const conflictView: EditConflictView | null =
-		conflict === null ? null : (
-			{
-				conflict,
-				isPending: change.isPending,
-				onClose: refusal.closeConflict,
-				onKeepMine: () =>
-					void submit(
-						conflict.request.body as SubscriptionEditInput,
-						conflict.current,
-					),
-				onKeepTheirs: () => {
-					void refusal.dropConflict();
-					onClose();
-				},
-			}
-		);
-
-	return { change, refusal, sending, submit, conflictView };
+		isPending: change.isPending,
+		confirmed: (saved, against, body) => ({
+			kind,
+			before: against,
+			saved,
+			sent: body,
+		}),
+		requestOf: (against, body) => ({ kind: "change", id: against.id, body }),
+		own,
+		onClose,
+		onSaved,
+		onFieldsRefused,
+	});
+	return { change, ...write };
 }

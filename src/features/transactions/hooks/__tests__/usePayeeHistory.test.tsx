@@ -1,4 +1,4 @@
-import { waitFor } from "@testing-library/react";
+import { act, waitFor } from "@testing-library/react";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vitest";
 
@@ -68,7 +68,7 @@ describe("usePayeeHistory (BR-F03-62, BR-F03-72)", () => {
 				ok(SWIGGY),
 			);
 			const { result } = renderHookInApp(() => usePayeeHistory(payee));
-			await new Promise((resolve) => setTimeout(resolve, 30));
+			await act(async () => {});
 			expect(seen).toEqual([]);
 			expect(result.current.fetchStatus).toBe("idle");
 		},

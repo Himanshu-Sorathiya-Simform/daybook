@@ -19,10 +19,8 @@ import {
 	PANEL_TEXT,
 	paidSummary,
 	type PanelActionKey,
+	panelActions,
 	type StatusAction,
-	READY_PANEL,
-	readyPanelActions,
-	readyStatusActions,
 	statusBox,
 	TIMELINE_PREVIEW,
 } from "../lib/panel";
@@ -56,8 +54,7 @@ export type PanelDetailProps = {
  * The panel with a Subscription selected (BR-F05-40), top to bottom: "Subscription" with Close
  * details; the name, category and badges; the amount with its cadence and the schedule line;
  * the box for its status; "Charges", its timeline read whole from Transactions (BR-F05-48),
- * with "Paid so far" and View charges; its note; and the hint. The buttons whose dialogs come
- * in later chunks are left out until then (`READY_PANEL`). The charges show skeleton lines
+ * with "Paid so far" and View charges; its note; and the hint. The charges show skeleton lines
  * while they load, and "Charges could not be loaded." with Retry when they fail, never part of
  * a set.
  */
@@ -82,7 +79,7 @@ export function PanelDetail({
 	const badges = rowBadges(item, formats);
 	const box = statusBox(item, formats);
 	const paid = paidSummary(item, formats);
-	const footer = readyPanelActions(item, formats);
+	const footer = panelActions(item, formats);
 	const lines =
 		charges.data ?
 			chargeTimeline(item, charges.data, formats, { selectedDue })
@@ -121,7 +118,6 @@ export function PanelDetail({
 					setShowAll(all);
 					setFoldedFor(all ? null : selectedDue);
 				}}
-				canUndoSkip={READY_PANEL.undoSkip}
 				onUndoSkip={onUndoSkip}
 			/>
 		);
@@ -177,7 +173,6 @@ export function PanelDetail({
 			</div>
 			<StatusBox
 				box={box}
-				actions={readyStatusActions(box.actions)}
 				onAction={onStatusAction}
 			/>
 			<section
@@ -204,16 +199,14 @@ export function PanelDetail({
 				)}
 			</section>
 			{item.note === null ?
-				READY_PANEL.edit && (
-					<Button
-						size="sm"
-						variant="row"
-						className="self-start"
-						onPress={() => onAction("edit")}
-					>
-						{PANEL_TEXT.addNote}
-					</Button>
-				)
+				<Button
+					size="sm"
+					variant="row"
+					className="self-start"
+					onPress={() => onAction("edit")}
+				>
+					{PANEL_TEXT.addNote}
+				</Button>
 			:	<section
 					aria-label={PANEL_TEXT.note}
 					className="flex flex-col gap-1"

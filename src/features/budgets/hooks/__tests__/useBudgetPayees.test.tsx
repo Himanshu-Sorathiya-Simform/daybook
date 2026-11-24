@@ -12,8 +12,6 @@ beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
 afterEach(() => network.resetHandlers());
 afterAll(() => network.close());
 
-const wait = () => new Promise((resolve) => setTimeout(resolve, 20));
-
 describe("useBudgetPayees (BR-F04-30)", () => {
 	test("reads F03's summary of the category's month by payee", async () => {
 		const seen = route(network, "get", "/api/transactions/summary", () =>
@@ -100,7 +98,8 @@ describe("useBudgetPayees (BR-F04-30)", () => {
 				queryClient,
 			},
 		);
-		await wait();
+		// An enabled query is fetching as soon as it mounts, so idle now is idle for good.
+		expect(result.current.fetchStatus).toBe("idle");
 		expect(seen).toHaveLength(0);
 		expect(result.current.data).toBeUndefined();
 	});

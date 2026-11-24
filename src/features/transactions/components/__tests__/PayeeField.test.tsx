@@ -1,5 +1,5 @@
 import { onlineManager } from "@tanstack/react-query";
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { setupServer } from "msw/node";
 import { StrictMode, useState } from "react";
@@ -12,12 +12,14 @@ import {
 	GOLDEN_PAYEES,
 	named,
 } from "../../lib/__tests__/fixtures";
+import { SEARCH_DELAY_MS } from "../../hooks/usePayeeSuggestions";
 import type { PayeeItem } from "../../lib/suggestions";
 import { PayeeField, type PayeeFieldProps } from "../PayeeField";
 
 const network = setupServer();
 beforeAll(() => network.listen({ onUnhandledFrame: "error" }));
 afterEach(() => {
+	vi.useRealTimers();
 	network.resetHandlers();
 	vi.restoreAllMocks();
 	onlineManager.setOnline(true);
@@ -198,10 +200,11 @@ describe("the suggestion list (BR-F03-45)", () => {
 
 	test("with no payees yet, focusing the empty field opens no list", async () => {
 		payees([]);
-		const { user } = renderField();
+		const { user, queryClient } = renderField();
 
 		await user.click(box());
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		await waitFor(() => expect(queryClient.isFetching()).toBe(0));
+		await act(async () => {});
 
 		expect(screen.queryByRole("listbox")).toBeNull();
 	});
@@ -350,6 +353,7 @@ describe("typing after a choice (BR-F03-12)", () => {
 
 describe("in React's Strict Mode, as the dev server runs it", () => {
 	test("Backspace after choosing a suggestion reopens the list without an error", async () => {
+		vi.useFakeTimers({ shouldAdvanceTime: true });
 		payees(GOLDEN_PAYEES, [named("Swiggy Instamart")]);
 		const errors: unknown[] = [];
 		const onError = (event: ErrorEvent) => {
@@ -370,18 +374,21 @@ describe("in React's Strict Mode, as the dev server runs it", () => {
 				/>
 			);
 		}
-		renderInApp(
+		const { queryClient } = renderInApp(
 			<StrictMode>
 				<Harness />
 			</StrictMode>,
 		);
-		const user = userEvent.setup();
+		const user = userEvent.setup({
+			advanceTimers: vi.advanceTimersByTime.bind(vi),
+		});
 
 		// Picked from Recent and frequent, with nothing typed first.
 		await user.click(box());
 		await user.click(await screen.findByRole("option", { name: /^Swiggy/ }));
 		await user.keyboard("{Backspace}");
-		await new Promise((resolve) => setTimeout(resolve, 600));
+		await act(() => vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS));
+		await waitFor(() => expect(queryClient.isFetching()).toBe(0));
 		window.removeEventListener("error", onError);
 
 		expect(errors).toEqual([]);

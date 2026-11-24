@@ -17,26 +17,23 @@ import { useFocusFirstInvalid } from "@/hooks/useFocusFirstInvalid";
 import { formatAmountInput, parseAmount } from "@/lib/amount";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { formatDayHeader } from "@/lib/date-format";
-import { uuidV7 } from "@/lib/ids";
 import type { ExpenseCategory } from "@/lib/subscriptions/model";
 import { startDateWindow } from "@/lib/subscriptions/schemas";
-import type { PayeeItem } from "@/lib/transactions/answers";
 import { useBackfillDuplicates } from "../hooks/useBackfillDuplicates";
-import { useEditWrite } from "../hooks/useEditWrite";
-import { useCreateSubscription } from "../hooks/useCreateSubscription";
 import { usePaidPayees } from "../hooks/usePaidPayees";
+import { type PayeeFill, usePayeeFill } from "../hooks/usePayeeFill";
 import { useSubscriptionCharges } from "../hooks/useSubscriptionCharges";
+import { useSubscriptionSave } from "../hooks/useSubscriptionSave";
 import {
 	addView,
-	createBody,
 	DIALOG_TEXT,
 	type DialogField,
 	type DialogValues,
 	duplicateNote,
 	editSchedule,
 	fieldMessages,
-	filledHint,
 	NOTE_MAX,
+	SERVER_FIELD,
 	startValues,
 	wasHints,
 	yesterday,
@@ -46,7 +43,6 @@ import { editView } from "../lib/edit-plan";
 import type { Confirmed } from "../lib/notices";
 import { payeeChoices } from "../lib/payees";
 import type { SubscriptionItem, SubscriptionsLocale } from "../lib/types";
-import type { SubscriptionField } from "../lib/write-errors";
 import { CadenceField } from "./CadenceField";
 import { ChargesRetry } from "./ChargesRetry";
 import { DialogConflict } from "./DialogConflict";
@@ -67,27 +63,6 @@ export type SubscriptionDialogProps = {
 	/** A confirmed write: the Subscription before it (an Edit), as the server saved it, and what
 	 * was sent. */
 	onSaved?: (confirmed: Confirmed) => void;
-};
-
-/** The server's field each dialog field answers to; a message for any other path is the
- * dialog's own line. */
-const SERVER_OF: Record<DialogField, SubscriptionField> = {
-	name: "name",
-	amount: "amountMinor",
-	cadence: "cadence",
-	category: "category",
-	startDate: "startDate",
-	note: "note",
-};
-const OWN_FIELDS = Object.values(SERVER_OF);
-
-/** A payee chosen from the list, and what it filled, so the hint goes once any of them
- * changes (BR-F05-24, D-594). */
-type Filled = {
-	payee: string;
-	category: ExpenseCategory;
-	amount: string;
-	amountMinor: number;
 };
 
 /** The note's character counter, shown from 400 characters. */
@@ -117,35 +92,27 @@ export function SubscriptionDialog({
 	// while it is open never moves the version a save is made against: another device's change
 	// then meets a 409, not a silent overwrite (BR-F05-34).
 	const [edited] = useState(item);
-	const create = useCreateSubscription();
-	const [id] = useState(() => uuidV7());
 	const [start] = useState(() => startValues(edited, locale));
 	const [noteOpen, setNoteOpen] = useState(start.note !== "");
 	// "Add a note" takes its own button away, so the note it opens takes focus, not the Name.
 	const [noteFocused, setNoteFocused] = useState(false);
-	const [filled, setFilled] = useState<Filled | null>(null);
 	// The time this dialog opened, only to give the edit schema a well-formed `changedAt` for
 	// the preview; each Save sends its own.
 	const [openedAt] = useState(() => new Date().toISOString());
 	const formRef = useRef<HTMLFormElement>(null);
 	const focusInvalid = useFocusFirstInvalid(formRef);
-	// A second press, Enter included, sends nothing while a write is out (D-575, D-615); Add
-	// and Edit share the one guard.
-	const {
-		change,
-		refusal,
-		sending,
-		submit: submitEdit,
-		conflictView,
-	} = useEditWrite({
-		kind: "edit",
-		own: OWN_FIELDS,
+	const adding = edited === null;
+	const charges = useSubscriptionCharges(edited?.id ?? null);
+	const { save, refusal, conflictView, busy } = useSubscriptionSave({
+		edited,
+		items,
+		locale,
+		charges: charges.data ?? [],
 		onClose,
 		onSaved,
 		onFieldsRefused: focusInvalid,
 	});
 	const { failure } = refusal;
-	const busy = create.isPending || change.isPending;
 
 	const form = useForm({
 		defaultValues: start,
@@ -165,8 +132,6 @@ export function SubscriptionDialog({
 	});
 	const values = useSelector(form.store, (state) => state.values);
 
-	const adding = edited === null;
-	const charges = useSubscriptionCharges(edited?.id ?? null);
 	const chargesReady = adding || charges.data !== undefined;
 	const chargesFailed =
 		!adding
@@ -190,6 +155,8 @@ export function SubscriptionDialog({
 		edited === null ?
 			add.schedule
 		:	view && editSchedule(values, view.nextDates, locale);
+	// A custom number out of range says so as it is typed, before the first Save (BR-F05-24).
+	const customMessage = values.preset === "custom" ? messages.cadence : undefined;
 	const was = edited === null ? {} : wasHints(edited, values, locale);
 	const nameHint = was.name === undefined ? {} : { hint: was.name };
 	const typed = parseAmount(values.amount, locale);
@@ -205,82 +172,22 @@ export function SubscriptionDialog({
 		to: yesterday(locale.today),
 	});
 	const duplicateDates = (duplicates.data ?? []).map((row) => row.occurredOn);
-	const filledNow =
-		(
-			filled !== null
-			&& values.name === filled.payee
-			&& values.category === filled.category
-			&& values.amount === filled.amount
-		) ?
-			filled
-		:	null;
-
 	/** Clears what the server said about a field once it changes. */
-	const changed = (field: DialogField) => refusal.clearField(SERVER_OF[field]);
+	const changed = (field: DialogField) => refusal.clearField(SERVER_FIELD[field]);
 
-	/** A payee was chosen: fill its category and the amount of its last expense (BR-F05-24). */
-	const choose = (payee: PayeeItem) => {
-		const { lastExpense } = payee;
-		if (lastExpense === null) return;
-		const category = lastExpense.category as ExpenseCategory;
-		const amount = formatAmountInput(lastExpense.amountMinor, locale);
-		form.setFieldValue("name", payee.payee);
-		form.setFieldValue("category", category);
-		form.setFieldValue("amount", amount);
-		setFilled({
-			payee: payee.payee,
-			category,
-			amount,
-			amountMinor: lastExpense.amountMinor,
-		});
+	/** A payee was chosen: its category and amount fill in, and what the server said of those
+	 * fields goes (BR-F05-24). */
+	const fill = (filling: PayeeFill) => {
+		form.setFieldValue("name", filling.name);
+		form.setFieldValue("category", filling.category);
+		form.setFieldValue("amount", filling.amount);
 		for (const field of ["name", "category", "amount"] as const) changed(field);
 	};
-
-	/** Save, once the fields check out. */
-	const save = async (entered: DialogValues) => {
-		if (edited === null) {
-			const body = createBody(entered, locale, {
-				id,
-				createdAt: new Date().toISOString(),
-				backfill:
-					addView(entered, locale).past !== null && entered.past === "yes",
-			});
-			if (body === null) return;
-			const request = sending.run(() =>
-				create.mutateAsync({ body, idempotencyKey: uuidV7() }),
-			);
-			if (request === null) return;
-			refusal.reset();
-			try {
-				const saved = await request;
-				onSaved?.({ kind: "add", saved, sent: body });
-				onClose();
-			} catch (error) {
-				const outcome = await refusal.refuse(error);
-				if (outcome.kind === "fields") focusInvalid();
-			}
-			return;
-		}
-		const next = editView({
-			item: edited,
-			items,
-			values: entered,
-			messages: {},
-			charges: charges.data ?? [],
-			locale,
-			changedAt: new Date().toISOString(),
-		});
-		// Nothing changed: Save only closes (BR-F05-24).
-		if (next?.body == null) {
-			onClose();
-			return;
-		}
-		await submitEdit(next.body, edited);
-	};
+	const payee = usePayeeFill({ values, locale, onFill: fill });
 
 	/** A field's message: the server's refusal of it, else the first of its own checks. */
 	const messageOf = (field: AnyFieldApi, key: DialogField) =>
-		refusal.fields[SERVER_OF[key]]
+		refusal.fields[SERVER_FIELD[key]]
 		?? (field.state.meta.errors as (string | undefined)[])[0];
 	const title =
 		edited === null ? DIALOG_TEXT.addTitle : DIALOG_TEXT.editTitle(edited.name);
@@ -310,16 +217,8 @@ export function SubscriptionDialog({
 									changed("name");
 								}}
 								choices={choices}
-								onChoose={choose}
-								hint={
-									filledNow ?
-										filledHint(
-											filledNow.payee,
-											filledNow,
-											locale,
-										)
-									:	undefined
-								}
+								onChoose={payee.choose}
+								hint={payee.hint}
 								error={messageOf(field, "name")}
 								isDisabled={busy}
 							/>
@@ -383,7 +282,7 @@ export function SubscriptionDialog({
 									form.setFieldValue("unit", unit);
 									changed("cadence");
 								}}
-								error={messageOf(field, "cadence")}
+								error={messageOf(field, "cadence") ?? customMessage}
 								was={was.cadence}
 								isDisabled={busy}
 							/>
