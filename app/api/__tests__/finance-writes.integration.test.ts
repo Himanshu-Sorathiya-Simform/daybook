@@ -35,6 +35,7 @@ import {
 import { POST as skipCharge } from "../subscriptions/[id]/skips/route";
 import { DELETE as unskipCharge } from "../subscriptions/[id]/skips/[dueOn]/route";
 import { POST as bootCatchUp } from "../sync/catch-up/route";
+import { PUT as putLayout } from "../layout/route";
 
 /** The route wrapper's refusals (API-2, API-3, BR-P2-17) on every F03 and F05 write: each of the
  * six Transaction and saved-view writes and the six Subscription writes refuses a foreign or
@@ -48,6 +49,7 @@ let viewId: string;
 let netflix: string;
 
 const VIEW_ID = () => uuidV7At(GOLDEN_NOW);
+const LAYOUT_VIEW_ID = uuidV7At(GOLDEN_NOW);
 
 beforeAll(async () => {
 	owner = new Client({
@@ -236,6 +238,26 @@ const WRITES: Write[] = [
 			}),
 	},
 	{
+		name: "PUT /api/layout",
+		send: (options) =>
+			call(putLayout, "/api/layout", {
+				method: "PUT",
+				body: {
+					formatVersion: 1,
+					views: [
+						{
+							id: LAYOUT_VIEW_ID,
+							name: "Budget watch",
+							widgets: [{ id: "budgets", size: 4, hidden: false }],
+							changedAt: GOLDEN_NOW,
+							deleted: false,
+						},
+					],
+				},
+				...options,
+			}),
+	},
+	{
 		name: "POST /api/sync/catch-up",
 		exemptKey: true,
 		send: (options) =>
@@ -272,9 +294,14 @@ async function state() {
 		 WHERE user_id = $1 AND subscription_id IS NOT NULL`,
 		[golden.userId],
 	);
+	const layout = await owner.query(
+		`SELECT id, name, version FROM app.dashboard_views WHERE user_id = $1 ORDER BY id`,
+		[golden.userId],
+	);
 	return {
 		...rows[0],
 		views: views.rows,
+		layout: layout.rows,
 		subscriptions: subscriptions.rows,
 		skips: skips.rows,
 		charges: charges.rows[0],
@@ -391,4 +418,7 @@ test("the same writes, with nothing refused, are accepted in turn", async () => 
 	expect((await write("DELETE /api/subscriptions/[id]").send(at(4))).status).toBe(
 		200,
 	);
+
+	// F08: the layout takes no If-Match, and the view it writes is the user's own.
+	expect((await write("PUT /api/layout").send({ cookie })).status).toBe(200);
 }, 180_000);

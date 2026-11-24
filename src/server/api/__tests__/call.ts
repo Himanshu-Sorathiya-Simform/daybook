@@ -20,7 +20,7 @@ export type CallOptions = {
 	params?: Record<string, string>;
 	/** `GET` by default. Any other method sends JSON from the app's origin with a fresh
 	 * `Idempotency-Key`, as the app's client does (BR-P2-17). */
-	method?: "GET" | "POST" | "PATCH" | "DELETE";
+	method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 	body?: unknown;
 	/** The body as text, sent as it is instead of `body`: JSON the helper would not write, such
 	 * as `null`, or a nesting too deep for `JSON.stringify`. */

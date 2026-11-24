@@ -86,7 +86,7 @@ The month summary is not a widget (D-632). It is always shown above the widgets,
 - **BR-F08-01** `/dashboard?month=YYYY-MM` shows one calendar month (D-108, D-110). The default is the current month.
     - **The picker:** previous and next arrows around the month's name, which opens the month menu (BR-F08-32), and "This month".
     - **Range:** from `earliestMonth` in the dashboard response to the current month. `earliestMonth` is the month of the earliest confirmed Transaction, or the current month when there is none. Future months are disabled.
-    - **Invalid values:** an invalid or out-of-range `month` is dropped with the FIL-5 notice. `GET /api/dashboard` answers 400 `validation_failed` for a `month` that is not `YYYY-MM`, is after the current month or is before 2000-01; a month before `earliestMonth` answers normally, with zero figures.
+    - **Invalid values:** an invalid or out-of-range `month` is dropped with the FIL-5 notice. `GET /api/dashboard` answers 400 `bad_request` naming `month` for a `month` that is not `YYYY-MM`, is after the current month or is before 2000-01; a month before `earliestMonth` answers normally, with zero figures.
     - **The current month:** labelled "to date" (PER-3), for example "November 2026 · to date".
 - **BR-F08-02** The dashboard has no other filter (D-110). Category and date-range filtering live on Transactions and Analytics.
 
