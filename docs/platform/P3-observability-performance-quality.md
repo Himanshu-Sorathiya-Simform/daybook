@@ -164,7 +164,7 @@ P2's startup validation (BR-P2-38) treats the Sentry variables, `SANITY_WRITE_TO
     - `/signup`, `/login`, `/onboarding`;
     - `/dashboard`, `/transactions` (and the entry dialog), `/budgets`, `/subscriptions`, `/goals`, `/goals/[id]`, `/investments`;
     - `/analytics` (with a View as table open), `/insights`, `/reports`, `/settings/billing`;
-    - `/settings/profile`, `/settings/appearance`, `/settings/security` and `/settings/dashboard`;
+    - `/settings/profile`, `/settings/appearance` and `/settings/security`;
     - the billing payment form, in an `@stripe` test, with Stripe's cross-origin iframe excluded from the scan, since Daybook cannot change it;
     - the command palette, the sync panel and the conflict view;
     - `/learn` and a post page.

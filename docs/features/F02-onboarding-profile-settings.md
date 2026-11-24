@@ -6,12 +6,12 @@ After sign-up, a short setup asks for four things: country, currency, time zone 
 
 Later, the user changes their name, time zone and week start in Settings. They can also change the currency while their account holds no finance data. Theme (light, dark or system) is picked per device and applied before the first paint. This spec also owns the settings shell and the user and profile parts of `/api/me`.
 
-| Item       | Value                                                                                                                                                                                                                                                                  |
-| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Milestone  | M1                                                                                                                                                                                                                                                                     |
-| Plan       | Free and Premium; no capability codes                                                                                                                                                                                                                                  |
-| Depends on | [F01](F01-auth-and-account.md) (sign-up, display name through `/update-user`), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md) (`/api/me`); F07 (portfolio seeding, from M3), F08 (dashboard settings page), F12 (billing page) |
-| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452, D-506, D-508, D-511, D-517, D-537, D-568                                                                                                                                     |
+| Item       | Value                                                                                                                                                                                                                                   |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Milestone  | M1                                                                                                                                                                                                                                      |
+| Plan       | Free and Premium; no capability codes                                                                                                                                                                                                   |
+| Depends on | [F01](F01-auth-and-account.md) (sign-up, display name through `/update-user`), [P2](../platform/P2-data-access-and-security.md), [P4](../platform/P4-capabilities.md) (`/api/me`); F07 (portfolio seeding, from M3), F12 (billing page) |
+| Decisions  | D-30, D-55, D-68, D-73 to D-76, D-104, D-147, D-152, D-208 to D-217, D-240, D-241, D-452, D-506, D-508, D-511, D-517, D-537, D-568                                                                                                      |
 
 ## 1. User stories
 
@@ -225,7 +225,7 @@ The display name is Better Auth's user `name` (F01). The email is shown read-onl
 
 **Settings shell**
 
-- **BR-F02-24** `/settings` redirects to `/settings/profile`. Every settings page shows the same section navigation: Profile, Appearance, Dashboard (F08), Security (F01), Data (F01, F15), Billing (F12). Settings pages need a profile (BR-F02-01).
+- **BR-F02-24** `/settings` redirects to `/settings/profile`. Every settings page shows the same section navigation: Profile, Appearance, Security (F01), Data (F01, F15), Billing (F12). Settings pages need a profile (BR-F02-01).
 
 **`/api/me` and `/api/profile`**
 
