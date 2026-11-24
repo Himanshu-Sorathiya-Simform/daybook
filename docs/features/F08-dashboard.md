@@ -38,7 +38,7 @@ Every figure comes from the same server functions as the Transactions list, the 
 
 **Widget registry** (`shared/dashboard/widgets.ts`, D-109). One entry per widget.
 
-- **Fields:** id, title, description, default size, default order, reserved height, the queries it reads, an optional capability, whether it is a finance widget (hidden by the onboarding panel), and a lazy loader.
+- **Fields:** id, title, default size, default order, reserved height, the queries it reads, an optional capability, whether it is a finance widget (hidden by the onboarding panel), and a lazy loader.
 - **Shared with:** views, lazy loading and gating all read this one definition.
 
 | Order | Id               | Title                | Size | Height | Finance | Reads                                    | From |
@@ -86,7 +86,7 @@ The month summary is not a widget (D-632). It is always shown above the widgets,
 - **BR-F08-01** `/dashboard?month=YYYY-MM` shows one calendar month (D-108, D-110). The default is the current month.
     - **The picker:** previous and next arrows around the month's name, which opens the month menu (BR-F08-32), and "This month".
     - **Range:** from `earliestMonth` in the dashboard response to the current month. `earliestMonth` is the month of the earliest confirmed Transaction, or the current month when there is none. Future months are disabled.
-    - **Invalid values:** an invalid or out-of-range `month` is dropped with the FIL-5 notice.
+    - **Invalid values:** an invalid or out-of-range `month` is dropped with the FIL-5 notice. `GET /api/dashboard` answers 400 `validation_failed` for a `month` that is not `YYYY-MM`, is after the current month or is before 2000-01; a month before `earliestMonth` answers normally, with zero figures.
     - **The current month:** labelled "to date" (PER-3), for example "November 2026 · to date".
 - **BR-F08-02** The dashboard has no other filter (D-110). Category and date-range filtering live on Transactions and Analytics.
 
@@ -238,7 +238,7 @@ The month summary is not a widget (D-632). It is always shown above the widgets,
 - **BR-F08-23** A `PUT` body, `{ formatVersion, views: [{ id, name, widgets, changedAt, deleted }] }`, is checked against its Zod shape first, and a body that fails gets 422 `validation_failed`:
     - `formatVersion`: an integer;
     - `views`: 1 to 10 entries;
-    - `id`: a UUID, never `overview`; one entry for each id;
+    - `id`: a UUIDv7 (ID-1), so never `overview`; one entry for each id;
     - `name`: 1 to 40 characters after trimming (a deleted view's name is not checked);
     - `widgets`: 0 to 50 entries of `{ id: a string of at most 64 characters, size: an integer, hidden: boolean }`; a deleted view's are ignored;
     - `changedAt`: an ISO 8601 instant;
