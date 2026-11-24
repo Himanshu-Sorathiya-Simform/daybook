@@ -4,7 +4,7 @@ export const WIDGET_SIZES = [2, 3, 4, 6] as const;
 export type WidgetSize = (typeof WIDGET_SIZES)[number];
 
 export function isWidgetSize(value: unknown): value is WidgetSize {
-	return WIDGET_SIZES.some((size) => size === value);
+	return (WIDGET_SIZES as readonly unknown[]).includes(value);
 }
 
 export type Widget = {

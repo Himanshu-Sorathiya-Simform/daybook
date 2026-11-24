@@ -78,8 +78,9 @@ export async function writeViews(
 	ctx: RequestContext,
 	writes: readonly ViewWrite[],
 ): Promise<{ views: DashboardView[]; results: ViewResult[] }> {
+	const lockKey = `${ctx.user.id}:dashboard.views`;
 	await tx.execute(
-		sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${ctx.user.id}:dashboard.views`}, 0))`,
+		sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
 	);
 	const { rows } = await tx.execute<{
 		id: string;

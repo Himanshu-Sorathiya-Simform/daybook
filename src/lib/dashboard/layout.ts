@@ -42,7 +42,7 @@ export function packRows(
 	let used = 0;
 	for (const entry of widgets) {
 		const size = columns === 1 ? WIDE_COLUMNS : entry.size;
-		const current = groups[groups.length - 1];
+		const current = groups.at(-1);
 		if (current && used + size <= WIDE_COLUMNS && columns !== 1) {
 			current.push(entry);
 			used += size;

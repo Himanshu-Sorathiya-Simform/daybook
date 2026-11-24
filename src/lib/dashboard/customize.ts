@@ -70,8 +70,9 @@ export type HideResult =
 /** Hides a visible widget. Hiding the last visible one is refused (BR-F08-24). An id that is
  * not visible gives `ok: false` with an empty message, so a caller never announces nothing. */
 export function hideWidget(widgets: readonly WidgetEntry[], id: string): HideResult {
-	const entry = widgets.find((each) => each.id === id && !each.hidden);
-	if (!entry) return { ok: false, message: "" };
+	if (!widgets.some((each) => each.id === id && !each.hidden)) {
+		return { ok: false, message: "" };
+	}
 	if (visibleCount(widgets) <= 1) {
 		return { ok: false, message: DASHBOARD_MESSAGES.keepOne };
 	}

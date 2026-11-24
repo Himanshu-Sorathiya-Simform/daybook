@@ -198,10 +198,11 @@ export function paceSentence(
 		formatMoney(minor, locale.currency, locale.numberLocale);
 	const difference = figures.currentMinor - figures.previousMinor;
 	const name = previousName(month, locale);
+	const direction = difference > 0 ? "more" : "less";
 	const tail =
 		difference === 0 ?
 			`the same as by the same day in ${name}`
-		:	`${money(Math.abs(difference))} ${difference > 0 ? "more" : "less"} than by the same day in ${name}`;
+		:	`${money(Math.abs(difference))} ${direction} than by the same day in ${name}`;
 	return `By day ${day} you had spent ${money(figures.currentMinor)}, ${tail}.`;
 }
 
@@ -286,6 +287,36 @@ export type SummaryFigures = {
 	rateTenths: number | null;
 };
 
+/** The note under Income: "No income yet", `null` without a previous month's income, or the
+ * comparison. */
+function incomeNote(
+	current: SummaryFigures,
+	previous: SummaryFigures,
+	previousMonth: Month,
+	locale: FigureLocale,
+): string | null {
+	if (current.incomeMinor === 0) return M.noIncomeYet;
+	if (previous.incomeMinor === 0) return null;
+	return amountNote(
+		current.incomeMinor,
+		previous.incomeMinor,
+		previousMonth,
+		locale,
+	);
+}
+
+/** The note under Savings rate: "No income yet", `null` without a previous rate, or the
+ * comparison. */
+function ratePoints(
+	current: SummaryFigures,
+	previous: SummaryFigures,
+	locale: FigureLocale,
+): string | null {
+	if (current.rateTenths === null) return M.noIncomeYet;
+	if (previous.rateTenths === null) return null;
+	return rateNote(current.rateTenths, previous.rateTenths, locale.numberLocale);
+}
+
 /**
  * The notes under Income, Net savings and Savings rate (BR-F08-08). Without income in the month
  * they read "No income yet" (income and rate) and "Below zero" (a negative net); a note that
@@ -300,22 +331,11 @@ export function summaryNotes(
 	const previousMonth = shiftMonth(month, -1);
 	const noIncome = current.incomeMinor === 0;
 	return {
-		income:
-			noIncome ? M.noIncomeYet
-			: previous.incomeMinor === 0 ? null
-			: amountNote(
-					current.incomeMinor,
-					previous.incomeMinor,
-					previousMonth,
-					locale,
-				),
+		income: incomeNote(current, previous, previousMonth, locale),
 		net:
 			noIncome && current.netMinor < 0 ?
 				M.belowZero
 			:	amountNote(current.netMinor, previous.netMinor, previousMonth, locale),
-		rate:
-			current.rateTenths === null ? M.noIncomeYet
-			: previous.rateTenths === null ? null
-			: rateNote(current.rateTenths, previous.rateTenths, locale.numberLocale),
+		rate: ratePoints(current, previous, locale),
 	};
 }
