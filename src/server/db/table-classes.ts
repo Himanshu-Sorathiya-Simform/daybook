@@ -23,6 +23,7 @@ export const TABLE_CLASSES = {
 	transactions: "private",
 	transaction_views: "private",
 	budgets: "private",
+	dashboard_views: "private",
 	daily_pass_markers: "system",
 } as const satisfies Record<string, TableClass>;
 

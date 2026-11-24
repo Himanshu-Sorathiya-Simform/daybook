@@ -182,3 +182,46 @@ describe("0008_subscriptions, the hand-written parts", () => {
 		}
 	});
 });
+
+describe("0009_dashboard_views, the hand-written parts", () => {
+	const sql = readFileSync(join(MIGRATIONS, "0009_dashboard_views.sql"), "utf8");
+	const statements = sql.split("--> statement-breakpoint");
+	const own = statements
+		.filter((candidate) => candidate.includes('"app"."dashboard_views"'))
+		.join("\n");
+
+	test("has RLS enabled and forced, the two policies and the two grants", () => {
+		const table = "dashboard_views";
+		expect(own).toContain(
+			`ALTER TABLE "app"."${table}" ENABLE ROW LEVEL SECURITY`,
+		);
+		expect(own).toContain(
+			`ALTER TABLE "app"."${table}" FORCE ROW LEVEL SECURITY`,
+		);
+		expect(own).toContain(
+			`CREATE POLICY owner_isolation ON "app"."${table}" FOR ALL TO daybook_runtime`,
+		);
+		expect(own).toContain(
+			`CREATE POLICY system_access ON "app"."${table}" FOR ALL TO daybook_system`,
+		);
+		expect(own).toContain(
+			`GRANT SELECT, INSERT, UPDATE, DELETE ON "app"."${table}" TO daybook_runtime`,
+		);
+		expect(own).toContain(
+			`GRANT SELECT, INSERT, UPDATE, DELETE ON "app"."${table}" TO daybook_system`,
+		);
+		expect(sql).not.toMatch(/GRANT ALL|TO PUBLIC|BYPASSRLS|SECURITY DEFINER/i);
+	});
+
+	test("every statement is split by a breakpoint, so none runs two statements at once", () => {
+		for (const candidate of statements) {
+			const code = candidate
+				.split("\n")
+				.filter((line) => !line.trim().startsWith("--"))
+				.join("\n");
+			expect(
+				code.split(";").filter((part) => part.trim() !== ""),
+			).toHaveLength(code.trim() === "" ? 0 : 1);
+		}
+	});
+});

@@ -4,6 +4,7 @@ import {
 	categories,
 	currencies,
 	dailyPassMarkers,
+	dashboardViews,
 	idempotencyRecords,
 	profile,
 	subscriptionSkips,
@@ -34,5 +35,6 @@ export const ALL_TABLES = [
 	transactions,
 	transactionViews,
 	budgets,
+	dashboardViews,
 	dailyPassMarkers,
 ] as const;

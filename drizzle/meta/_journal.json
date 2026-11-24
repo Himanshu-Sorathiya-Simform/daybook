@@ -64,6 +64,13 @@
       "when": 1794891149897,
       "tag": "0008_subscriptions",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795497703058,
+      "tag": "0009_dashboard_views",
+      "breakpoints": true
     }
   ]
 }

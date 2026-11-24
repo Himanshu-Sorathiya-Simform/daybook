@@ -402,6 +402,69 @@ export const transactionViews = appSchema.table(
 	],
 );
 
+/** The jsonpath every entry of a view's widgets must satisfy (see `dashboardViews`). */
+const WIDGET_PATH = `strict $[*] ? (@.type() == "object"
+	&& !exists(@.keyvalue() ? (@.key != "id" && @.key != "size" && @.key != "hidden"))
+	&& @.id.type() == "string"
+	&& @.id like_regex "^.{1,64}$"
+	&& @.size.type() == "number" && @.size.floor() == @.size
+	&& @.hidden.type() == "boolean")`;
+
+/**
+ * One saved Dashboard view (F08 section 3, D-635, D-636): its name and its ordered widgets
+ * `{ id, size, hidden }`, as one JSON array. `id` is the client's own UUIDv7, so a view made
+ * offline can be written later. `changed_at` is the client instant that decides which write
+ * wins (BR-F08-22); `version` counts writes but is never checked (OFF-8). A deleted view stays
+ * as a marker, with an empty name and no widgets, so a device that was offline cannot bring it
+ * back. The checks are backstops for the shared schemas' rules (D-467): the name's text rules,
+ * the shape of the entries and the 50-entry cap. Which widget ids and sizes are valid is the
+ * registry's to decide (BR-F08-20), and the limit of 5 live views is the data access layer's.
+ */
+export const dashboardViews = appSchema.table(
+	"dashboard_views",
+	{
+		...privateColumns(),
+		name: text("name").notNull(),
+		widgets: jsonb("widgets").notNull(),
+		formatVersion: integer("format_version").notNull(),
+		changedAt: instant("changed_at").notNull(),
+		deleted: boolean("deleted").notNull().default(false),
+		version: integer("version").notNull().default(1),
+	},
+	(t) => [
+		// The arbiter of the write's upsert, and the read's order: a user's views by id.
+		unique("dashboard_views_user_id_id_key").on(t.userId, t.id),
+		check(
+			"dashboard_views_name_text",
+			sql`(${t.deleted} AND ${t.name} = '')
+				OR (NOT ${t.deleted}
+					AND char_length(${t.name}) BETWEEN 1 AND 40
+					AND ${t.name} !~ ${sql.raw(String.raw`'[\x01-\x1f\x7f-\x9f]'`)}
+					AND ${t.name} IS NFC NORMALIZED)`,
+		),
+		check(
+			"dashboard_views_widgets_array",
+			sql`jsonb_typeof(${t.widgets}) = 'array'
+				AND (NOT ${t.deleted} OR ${t.widgets} = '[]'::jsonb)`,
+		),
+		check(
+			"dashboard_views_widgets_count",
+			sql`CASE WHEN jsonb_typeof(${t.widgets}) = 'array'
+				THEN jsonb_array_length(${t.widgets}) <= 50 ELSE true END`,
+		),
+		// Every entry an object with exactly `id` (text of 1 to 64 characters), `size` (a whole
+		// number) and `hidden` (true or false), as the budgets' entry check reads its entries.
+		check(
+			"dashboard_views_widgets_entries",
+			sql`CASE WHEN jsonb_typeof(${t.widgets}) = 'array'
+				THEN jsonb_array_length(jsonb_path_query_array(${t.widgets}, ${sql.raw(`'${WIDGET_PATH}'`)}::jsonpath,
+					'{}', true)) = jsonb_array_length(${t.widgets})
+				ELSE true END`,
+		),
+		check("dashboard_views_version_positive", sql`${t.version} >= 1`),
+	],
+);
+
 /**
  * A Budget list's entry check (D-563): every entry is an object with exactly `month` (or
  * `from`) and `limitMinor`, the month written `YYYY-MM`, and the limit `null` or a whole number
