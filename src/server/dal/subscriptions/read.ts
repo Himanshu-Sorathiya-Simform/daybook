@@ -2,6 +2,7 @@ import "server-only";
 import { type SQL, sql } from "drizzle-orm";
 import { firstDayOf, lastDayOf, monthOf } from "@/lib/budgets/months";
 import type {
+	NextRenewal,
 	SubscriptionItem,
 	SubscriptionList,
 } from "@/lib/subscriptions/answers";
@@ -138,22 +139,18 @@ export async function subscriptionCosts(
 	return costTotals(counted(await readItems(tx, ctx)));
 }
 
-export type NextRenewal = {
-	subscriptionId: string;
-	name: string;
-	dueOn: string;
-	amountMinor: number;
-};
+/** How many renewals `subscriptionSummary` lists: F08's Coming up widget (D-633). */
+export const RENEWALS_SHOWN = 4;
 
-/** `subscriptionCosts` and the next renewal, in one statement (F05 section 11): the earliest next
- * due date across the Subscriptions, ties by name then id, with its name and amount, or `null`.
- * F08's widget. */
+/** `subscriptionCosts` and the next renewals, in one statement (F05 section 11): the
+ * Subscriptions with the earliest next due dates, ties by name then id, one entry for each, at
+ * most `RENEWALS_SHOWN`, each with its name and amount, or none. F08's Coming up widget. */
 export async function subscriptionSummary(
 	tx: Tx,
 	ctx: ProfiledContext,
-): Promise<CostTotals & { nextRenewal: NextRenewal | null }> {
+): Promise<CostTotals & { upcoming: NextRenewal[] }> {
 	const reads = await readItems(tx, ctx);
-	const next = reads
+	const upcoming = reads
 		.filter(
 			(read): read is ReadItem & { item: { nextDueOn: string } } =>
 				read.item.nextDueOn !== null,
@@ -162,17 +159,13 @@ export async function subscriptionSummary(
 			(a, b) =>
 				compareCodeUnits(a.item.nextDueOn, b.item.nextDueOn)
 				|| compareByName(a.item, b.item),
-		)[0];
-	return {
-		...costTotals(counted(reads)),
-		nextRenewal:
-			next ?
-				{
-					subscriptionId: next.item.id,
-					name: next.item.name,
-					dueOn: next.item.nextDueOn,
-					amountMinor: next.item.amountMinor,
-				}
-			:	null,
-	};
+		)
+		.slice(0, RENEWALS_SHOWN)
+		.map(({ item }) => ({
+			subscriptionId: item.id,
+			name: item.name,
+			dueOn: item.nextDueOn,
+			amountMinor: item.amountMinor,
+		}));
+	return { ...costTotals(counted(reads)), upcoming };
 }

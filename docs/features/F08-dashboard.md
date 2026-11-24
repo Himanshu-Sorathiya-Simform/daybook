@@ -103,7 +103,7 @@ The month summary is not a widget (D-632). It is always shown above the widgets,
     What the response holds, beyond those functions' figures:
 
     - **The series:** `incomeExpenses` is the 12 months ending at M, with 0 for a month without rows; `months` is each month's Out from `earliestMonth` to the current month, for the month menu. Both come from one monthly grouping of `rollup`.
-    - **Budgets and renewals:** `budgets` carries F04's overall figure, its top 5, the state counts and the unbudgeted categories with spending; `subscriptions` carries F05's costs and its next 4 renewals.
+    - **Budgets and renewals:** `budgets` carries F04's overall figure, its top 5, the state counts, how many Budgets the month has (`count`) and the unbudgeted categories with spending; `recent` holds the 8 rows and their days' totals (`items` and `groups`); `subscriptions` carries F05's costs and its next 4 renewals.
 
     The dashboard, the Transactions list and the reports therefore cannot disagree (root success criterion 1, TST-2). Until F06 and F07 are built, `goals` is `[]`, `investments` is `null` and `accountEmpty` leaves Goals out; they add their statements to BR-F08-04's budget when they arrive (D-640).
 
@@ -457,7 +457,7 @@ The core is Free. The heat map widget renders through `<Gate>` (P4): with `analy
 
 ## 14. Acceptance criteria
 
-- **AC-F08-01** (integration) `GET /api/dashboard?month=2026-10` on golden returns every figure in section 5, including `daily` for October and September, `previous` income, net savings and rate, the Budget `summary` and `unbudgeted`, `upcoming` and `months`.
+- **AC-F08-01** (integration) `GET /api/dashboard?month=2026-10` on golden returns every figure in section 5, including `daily` for October and September, `previous` income, net savings and rate, the Budget `summary` and `unbudgeted`, `upcoming` and `months`. Until F06's migration lets the golden load carry its Goal rows (D-471), To Goals is 0.00 and Recent Transactions lists #25, #24 and #21 to #16.
 - **AC-F08-02** (integration) For October, the dashboard's spending, income and To Goals equal list check A's header (TST-2). From M6, they also equal the October report summary (F11).
 - **AC-F08-03** (client integration, M5) With P1 queued, November spending shows 18,420.00 with "+300.00 pending", P1 leads Recent Transactions with its badge, and the day strip draws 2 November's pending bar outlined.
 - **AC-F08-04** (unit) Normalization of a view:
@@ -546,6 +546,7 @@ Illustrative, `GET /api/dashboard?month=2026-10` on golden (shortened):
 			"state": "over"
 		},
 		"summary": { "over": 2, "atLimit": 1, "near": 1 },
+		"count": 4,
 		"top": [],
 		"unbudgeted": [{ "category": "housing", "outMinor": 1800000 }]
 	},
@@ -588,7 +589,7 @@ Illustrative, `GET /api/dashboard?month=2026-10` on golden (shortened):
 		"asOfPriceDate": "2026-10-31",
 		"series": [{ "date": "2026-10-01", "valueMinor": 100000 }]
 	},
-	"recent": []
+	"recent": { "items": [], "groups": [] }
 }
 ```
 
