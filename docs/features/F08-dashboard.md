@@ -86,7 +86,7 @@ The month summary is not a widget (D-632). It is always shown above the widgets,
 - **BR-F08-01** `/dashboard?month=YYYY-MM` shows one calendar month (D-108, D-110). The default is the current month.
     - **The picker:** previous and next arrows around the month's name, which opens the month menu (BR-F08-32), and "This month".
     - **Range:** from `earliestMonth` in the dashboard response to the current month. `earliestMonth` is the month of the earliest confirmed Transaction, or the current month when there is none. Future months are disabled.
-    - **Invalid values:** an invalid or out-of-range `month` is dropped with the FIL-5 notice. `GET /api/dashboard` answers 400 `bad_request` naming `month` for a `month` that is not `YYYY-MM`, is after the current month or is before 2000-01; a month before `earliestMonth` answers normally, with zero figures.
+    - **Invalid values:** an invalid or out-of-range `month` is dropped with the FIL-5 notice. An empty `month` counts as absent (D-458). `GET /api/dashboard` answers 400 `bad_request` naming `month` for a `month` that is not `YYYY-MM`, is after the current month or is before 2000-01; a month before `earliestMonth` answers normally, with zero figures.
     - **The current month:** labelled "to date" (PER-3), for example "November 2026 · to date".
 - **BR-F08-02** The dashboard has no other filter (D-110). Category and date-range filtering live on Transactions and Analytics.
 
@@ -228,7 +228,7 @@ The month summary is not a widget (D-632). It is always shown above the widgets,
         - **Two concurrent `PUT`s:** leave the later `changedAt` for each view, and a device offline for days cannot overwrite a newer edit, or bring back a view deleted since.
         - **A deletion:** is a write like any other, so an edit made after the delete (a later `changedAt`) brings the view back, and a delete made after an edit removes it. A tie goes to the later arrival, for a delete against an edit too.
         - **A marker for an id the server never stored:** is stored, and answers `applied: true`, so a late edit from another device with an earlier `changedAt` does not bring the view back.
-        - **Markers:** stay until the account is deleted. Each is a few bytes, and a user makes one only by deleting a view they made.
+        - **Markers:** only the 45 newest by `changedAt` are kept (D-636). When a request leaves more, the oldest are deleted in the same transaction, so a client cannot grow the table; live views are never deleted. With at most 5 live views, a user stores at most 50 rows. A device offline long enough to miss that is the only one that could bring a very old deleted view back.
     - **The clock:** a `changedAt` later than `ctx.now` is stored as `ctx.now`, so a device with a fast clock cannot win forever.
     - **Another user's id:** a view id that is another user's gets 409 `id_conflict` (ID-1) and nothing is written for that request; the other user's view is never read.
     - **The limit:** a write that would make a 6th live view, a marker brought back by a later edit included, is not stored. Within one request the deletions are applied first, then the other views in the order sent. Its result is `applied: false` with `reason: "limit"`, and the client drops that view and shows "You can save up to 5 views of your own."
@@ -278,7 +278,7 @@ The month summary is not a widget (D-632). It is always shown above the widgets,
     - **Scale:** days above the cap are cut with a gap and labelled with their value. The cap is 1.25 times the second-largest day's Out, a tie counting as two days, so one large day, such as the rent, does not flatten the rest. With fewer than 2 days of Out above 0 there is no cap and the scale is the largest day.
     - **The current month:** days after today have a faint baseline, and pending spending is drawn as in BR-F08-18.
     - **Selecting a day** opens the day popover below the strip; selecting it again closes it. Each bar is a button named "<day>: <amount>" or "<day>: nothing".
-    - **The hint:** with no day selected, "Select a day to see its Transactions." and, for a cut day, "<d> <Mon> is cut to fit", and for a refund day, "<d> <Mon> is a refund, below zero."
+    - **The hint:** with no day selected, "Select a day to see its Transactions." then, for each cut day, "<d> <Mon> is cut to fit.", then for each refund day, "<d> <Mon> is a refund, below zero.", oldest first, as one line: "Select a day to see its Transactions. 1 Oct is cut to fit. 9 Oct is a refund, below zero." for golden October.
 - **BR-F08-31** **The day popover** is a dialog named by its date, for example "Fri, 9 Oct".
     - **Content:** the day's In and Out ("Nothing recorded" without rows), its Transactions in F03's compact row (the first 4), read from `GET /api/transactions?from=<day>&to=<day>`, and the link "Open 9 Oct in Transactions" to `/transactions?from=<day>&to=<day>`.
     - **Keys:** Escape closes it; the left and right arrows, and its Previous day and Next day buttons, move to the neighboring day of M.
@@ -373,40 +373,41 @@ Every figure uses the owning feature's formula. Golden October, at the frozen cl
 
 ## 8. Validation and messages
 
-| Situation                  | Message shown                                                                                        |
-| -------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Invalid `month`            | Some filters in this link weren't valid and were removed.                                            |
-| Hiding the last widget     | Keep at least one widget on your dashboard.                                                          |
-| Reset                      | Reset your dashboard to the default layout?                                                          |
-| Reset done                 | Reset to the default layout.                                                                         |
-| Customize on Overview      | Overview is ours, so you are editing your own copy of it.                                            |
-| Too many views             | You can save up to 5 views of your own.                                                              |
-| Delete a view              | Delete “<name>”? This view is removed on every device. (Delete view, Cancel)                         |
-| View name empty            | Enter a name for this view.                                                                          |
-| View name too long         | Use 40 characters or fewer.                                                                          |
-| Layout save refused (422)  | Your dashboard layout couldn't be saved.                                                             |
-| Widget failure             | This could not be loaded.                                                                            |
-| Offline month not cached   | You're offline. This month isn't saved on this device.                                               |
-| Onboarding panel           | Welcome to Daybook. Add your first Transaction to see your month take shape.                         |
-| No renewals                | No upcoming renewals.                                                                                |
-| No Budgets                 | No Budgets for October 2026.                                                                         |
-| Month announcement         | October 2026                                                                                         |
-| Move announcement          | Budgets moved to position 2 of 8. (the count is the view's visible widgets)                          |
-| Size announcement          | Budgets is now ½ width. (Full width for 6)                                                           |
-| Hide and add announcements | Budgets hidden. Budgets added.                                                                       |
-| Day strip hint             | Select a day to see its Transactions.                                                                |
-| Month menu note            | Months before your first Transaction and future months can't be chosen.                              |
-| Not budgeted               | Not budgeted: Housing ₹18,000.00 (with "and N more" and "Add a Budget")                              |
-| All Budgets within limit   | All 4 within limit. (No Budgets: "No Budgets")                                                       |
-| Categories footnote        | Refunds exceeded spending                                                                            |
-| No spending                | No spending in October 2026.                                                                         |
-| Summary notes              | No income yet. Below zero. 7.8 points lower. ₹12,000.00 less than September.                         |
-| Cut and refund days        | <d> <Mon> is cut to fit. <d> <Mon> is a refund, below zero.                                          |
-| Day strip and popover      | <day>: <amount>. <day>: nothing. Nothing recorded.                                                   |
-| Pending group              | Waiting to sync                                                                                      |
-| Badge                      | Simulated                                                                                            |
-| Pace sentence              | By day 31 you had spent ₹31,168.00, ₹3,119.00 more than by the same day in September.                |
-| Sparkline label            | Portfolio value from ₹1,000.00 on 1 Oct to ₹1,980.00 on 31 Oct; lowest ₹1,000.00, highest ₹2,200.00. |
+| Situation                  | Message shown                                                                                                                          |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Invalid `month`            | Some filters in this link weren't valid and were removed.                                                                              |
+| Hiding the last widget     | Keep at least one widget on your dashboard.                                                                                            |
+| Reset                      | Reset your dashboard to the default layout?                                                                                            |
+| Reset done                 | Reset to the default layout.                                                                                                           |
+| Customize on Overview      | Overview is ours, so you are editing your own copy of it.                                                                              |
+| Too many views             | You can save up to 5 views of your own.                                                                                                |
+| Delete a view              | Delete “<name>”? This view is removed on every device. (Delete view, Cancel)                                                           |
+| View name empty            | Enter a name for this view.                                                                                                            |
+| View name too long         | Use 40 characters or fewer.                                                                                                            |
+| Layout save refused (422)  | Your dashboard layout couldn't be saved.                                                                                               |
+| Widget failure             | This could not be loaded.                                                                                                              |
+| Offline month not cached   | You're offline. This month isn't saved on this device.                                                                                 |
+| Onboarding panel           | Welcome to Daybook. Add your first Transaction to see your month take shape.                                                           |
+| No renewals                | No upcoming renewals.                                                                                                                  |
+| No Budgets                 | No Budgets for October 2026.                                                                                                           |
+| Month announcement         | October 2026                                                                                                                           |
+| Move announcement          | Budgets moved to position 2 of 8. (the count is the view's visible widgets)                                                            |
+| Size announcement          | Budgets is now ½ width. (Full width for 6)                                                                                             |
+| Hide and add announcements | Budgets hidden. Budgets added.                                                                                                         |
+| Day strip hint             | Select a day to see its Transactions.                                                                                                  |
+| Month menu note            | Months before your first Transaction and future months can't be chosen.                                                                |
+| Not budgeted               | Not budgeted: Housing ₹18,000.00 (with "and N more" and "Add a Budget")                                                                |
+| All Budgets within limit   | All 4 within limit. (No Budgets: "No Budgets")                                                                                         |
+| Categories footnote        | Refunds exceeded spending                                                                                                              |
+| No spending                | No spending in October 2026.                                                                                                           |
+| Summary notes              | No income yet. Below zero. 7.8 points lower. ₹12,000.00 less than September.                                                           |
+| Cut and refund days        | <d> <Mon> is cut to fit. <d> <Mon> is a refund, below zero.                                                                            |
+| Nothing changed            | The same as September (0.0%). The same as September. No change. By day 2 you had spent ₹10.00, the same as by the same day in October. |
+| Day strip and popover      | <day>: <amount>. <day>: nothing. Nothing recorded.                                                                                     |
+| Pending group              | Waiting to sync                                                                                                                        |
+| Badge                      | Simulated                                                                                                                              |
+| Pace sentence              | By day 31 you had spent ₹31,168.00, ₹3,119.00 more than by the same day in September.                                                  |
+| Sparkline label            | Portfolio value from ₹1,000.00 on 1 Oct to ₹1,980.00 on 31 Oct; lowest ₹1,000.00, highest ₹2,200.00.                                   |
 
 ## 9. Plan gating
 
@@ -426,6 +427,8 @@ The core is Free. The heat map widget renders through `<Gate>` (P4): with `analy
 | `/api/dashboard` | GET    | `month`                                                                 | Section 15                                                                                                                                                                        | 400, 401, 403 `profile_required`                     | Read                                                                                                    |
 | `/api/layout`    | GET    | none                                                                    | `{ views: [{ id, name, widgets, changedAt }] }`: the user's live views, normalized, oldest first; none stored gives `[]`. Overview is not in it                                   | 401, 403                                             | Read                                                                                                    |
 | `/api/layout`    | PUT    | `{ formatVersion, views: [{ id, name, widgets, changedAt, deleted }] }` | 200 `{ views, results: [{ id, applied, reason? }] }`: `views` as `GET` returns them after the write, one result for each sent view, `reason` `"limit"` when a 6th view is refused | 401, 403, 409 `id_conflict`, 422 `validation_failed` | `Idempotency-Key` required; no `If-Match` (OFF-8). A `changedAt` after `ctx.now` is stored as `ctx.now` |
+
+Both `/api/layout` methods skip the Subscription catch-up check (BR-P2-14): a layout is a preference, not finance data. `GET /api/dashboard` runs it.
 
 **Shared function.** `dashboardData(tx, ctx, month)`, which runs BR-F08-03's calls; `accountEmpty` is F15's. The Transactions behind a day come from `GET /api/transactions` (F03).
 

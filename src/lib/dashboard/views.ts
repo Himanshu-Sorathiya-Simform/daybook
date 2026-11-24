@@ -20,6 +20,9 @@ export const MAX_OWN_VIEWS = 5;
 export const VIEW_NAME_MAX = 40;
 export const MAX_VIEWS_PER_REQUEST = 10;
 export const MAX_WIDGET_ENTRIES = 50;
+/** Deletion markers kept for a user (D-636): the newest by change time. With at most 5 live views
+ * that bounds a user's stored views at 50, whatever a client sends. */
+export const MAX_MARKERS = 45;
 
 export type WidgetEntry = { id: WidgetId; size: WidgetSize; hidden: boolean };
 

@@ -2,6 +2,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import {
 	type DashboardView,
+	MAX_MARKERS,
 	MAX_OWN_VIEWS,
 	normalizeWidgets,
 	clampChangedAt,
@@ -66,6 +67,9 @@ type Stored = { changedAt: string; deleted: boolean };
  *    another connection answers `applied: false` too. A marker for an id never stored is
  *    stored, so a late edit from another device cannot bring the view back.
  * 6. An id that is another user's is 409 `id_conflict`.
+ * 7. Only the `MAX_MARKERS` newest deletion markers are kept: when a request leaves more, the
+ *    oldest by change time are deleted, so no client can grow the table (D-636). Live views are
+ *    never deleted.
  * Answers one result for each view sent, in the order sent, and the live views as `readViews`
  * returns them after the writes.
  */
@@ -119,6 +123,15 @@ export async function writeViews(
 		if (!written) continue;
 		stored.set(write.id, { changedAt, deleted: write.deleted });
 		live += (write.deleted ? 0 : 1) - (wasLive ? 1 : 0);
+	}
+
+	const markers = [...stored.values()].filter((each) => each.deleted).length;
+	if (markers > MAX_MARKERS) {
+		await tx.execute(
+			sql`DELETE FROM app.dashboard_views WHERE deleted AND id IN (
+					SELECT id FROM app.dashboard_views WHERE deleted
+					ORDER BY changed_at DESC, id DESC OFFSET ${MAX_MARKERS})`,
+		);
 	}
 
 	return {

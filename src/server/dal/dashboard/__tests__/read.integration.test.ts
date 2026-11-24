@@ -258,9 +258,10 @@ describe("golden October (F08 section 5)", () => {
 	});
 
 	// AC-F08-11
-	test("runs 5 statements, within the budget of 8", async () => {
+	// Five today: rollup, listTransactions, budgetMonth, subscriptionSummary and accountEmpty.
+	// F06's goalProgress and F07's two loadPortfolio statements bring it to the budget of 8 (D-640).
+	test("runs within the budget of 8 statements", async () => {
 		const { statements } = await month(golden, "2026-10");
-		expect(statements).toBe(5);
 		expect(statements).toBeLessThanOrEqual(8);
 	});
 
@@ -443,7 +444,7 @@ describe("a new account", () => {
 			investments: null,
 		});
 		expect(result.incomeExpenses).toHaveLength(12);
-		expect(statements).toBe(5);
+		expect(statements).toBeLessThanOrEqual(8);
 	});
 });
 

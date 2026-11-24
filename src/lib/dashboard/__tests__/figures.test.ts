@@ -12,6 +12,8 @@ import {
 	savingsRateTenths,
 	spendingComparison,
 	stripCap,
+	stripHint,
+	stripNotes,
 	summaryNotes,
 	topBudgets,
 } from "../figures";
@@ -238,6 +240,77 @@ describe("stripCap (BR-F08-30)", () => {
 	});
 });
 
+// AC-F08-19
+describe("stripNotes and stripHint (BR-F08-30)", () => {
+	const OCT_CAP = stripCap(OCTOBER_DAILY.map((entry) => entry.outMinor));
+
+	test("cut golden October's 1st, the rent, and mark the 9th as a refund", () => {
+		expect(stripNotes(OCTOBER_DAILY, "2026-10", OCT_CAP)).toEqual({
+			cut: ["2026-10-01"],
+			refunds: ["2026-10-09"],
+		});
+	});
+
+	test("read golden October as the strip's hint, in en-IN", () => {
+		expect(stripHint(OCTOBER_DAILY, "2026-10", L)).toBe(
+			"Select a day to see its Transactions. 1 Oct is cut to fit. 9 Oct is a refund, below zero.",
+		);
+	});
+
+	test("read September's hint: the rent is cut, no refund", () => {
+		expect(stripHint(SEPTEMBER_DAILY, "2026-09", L)).toBe(
+			"Select a day to see its Transactions. 1 Sept is cut to fit.",
+		);
+	});
+
+	test("cut nothing in November's single bar, and say only to select a day", () => {
+		expect(stripHint(NOVEMBER_DAILY, "2026-11", L)).toBe(
+			"Select a day to see its Transactions.",
+		);
+	});
+
+	test("read only the month asked for, though the list holds two", () => {
+		const both = [...SEPTEMBER_DAILY, ...OCTOBER_DAILY];
+		expect(stripNotes(both, "2026-10", OCT_CAP).cut).toEqual(["2026-10-01"]);
+		expect(stripHint(both, "2026-09", L)).toContain("1 Sept is cut to fit.");
+		expect(stripHint(both, "2026-09", L)).not.toContain("Oct");
+	});
+
+	test("a day exactly at the cap is not cut", () => {
+		const days = [
+			{ date: "2026-10-01", outMinor: 1000 },
+			{ date: "2026-10-02", outMinor: 1000 },
+			{ date: "2026-10-03", outMinor: 800 },
+		];
+		// The second-largest is 1000, so the cap is 1250 and nothing is above it.
+		expect(stripNotes(days, "2026-10", stripCap([1000, 1000, 800]))).toEqual({
+			cut: [],
+			refunds: [],
+		});
+	});
+
+	test("a null cap cuts nothing, and a refund is still marked", () => {
+		expect(
+			stripNotes([{ date: "2026-10-09", outMinor: -5 }], "2026-10", null),
+		).toEqual({ cut: [], refunds: ["2026-10-09"] });
+	});
+
+	test("lists several cut days and refund days, oldest first", () => {
+		const days = [
+			{ date: "2026-10-20", outMinor: 5000 },
+			{ date: "2026-10-03", outMinor: 5000 },
+			{ date: "2026-10-05", outMinor: 100 },
+			{ date: "2026-10-04", outMinor: 100 },
+			{ date: "2026-10-12", outMinor: -50 },
+			{ date: "2026-10-02", outMinor: -60 },
+		];
+		expect(stripNotes(days, "2026-10", 1000)).toEqual({
+			cut: ["2026-10-03", "2026-10-20"],
+			refunds: ["2026-10-02", "2026-10-12"],
+		});
+	});
+});
+
 describe("daysInMonth", () => {
 	test.each([
 		["2026-10", 31],
@@ -328,6 +401,17 @@ describe("paceAt (BR-F08-31)", () => {
 		expect(paceAt(daily, "2026-03", 28)).toEqual({
 			currentMinor: 0,
 			previousMinor: 5000,
+		});
+	});
+
+	test("is zero before the 1st, and holds the whole month's total past its end", () => {
+		expect(paceAt(DAILY, "2026-10", 0)).toEqual({
+			currentMinor: 0,
+			previousMinor: 0,
+		});
+		expect(paceAt(DAILY, "2026-10", 40)).toEqual({
+			currentMinor: 3116800,
+			previousMinor: 2804900,
 		});
 	});
 

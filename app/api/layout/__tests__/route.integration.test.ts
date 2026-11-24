@@ -1,4 +1,4 @@
-import { randomUUIDv7 } from "node:crypto";
+import { randomBytes, randomUUIDv7 } from "node:crypto";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
@@ -32,8 +32,11 @@ const NINE = "2026-11-02T03:30:00.000Z";
 const TEN = "2026-11-02T04:30:00.000Z";
 
 let counter = 0;
+/** A UUIDv7 that is new on every run, and rises with each call, so ids sort in the order they
+ * were made: a row a failed earlier run left behind can never share one. */
+const RUN = randomBytes(3).toString("hex");
 const nextId = () =>
-	`0199a000-0000-7000-8003-${String(++counter).padStart(12, "0")}`;
+	`0199a000-0000-7000-8003-${RUN}${String(++counter).padStart(6, "0")}`;
 
 beforeAll(async () => {
 	owner = await connectOwner();
@@ -367,6 +370,15 @@ describe("PUT /api/layout, a body that breaks a rule is 422 validation_failed wi
 		expect(status).toBe(422);
 		expect(error.code).toBe("validation_failed");
 		expect(Object.keys(error.fields)).toContain(field);
+	});
+
+	test("a change time of year 0000, which the database cannot hold, is 422 on changedAt", async () => {
+		const { status, error } = await refused(
+			body([view(nextId(), "A", "0000-01-01T00:00:00Z")]),
+		);
+		expect(status).toBe(422);
+		expect(error.code).toBe("validation_failed");
+		expect(Object.keys(error.fields)).toContain("views.0.changedAt");
 	});
 
 	test("a view sent twice names the second", async () => {

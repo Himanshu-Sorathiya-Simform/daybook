@@ -1,5 +1,6 @@
 import { type ExpenseCategory, categoryOrder } from "@/lib/budgets/model";
-import { formatMonth } from "@/lib/date-format";
+import { compareCodeUnits } from "@/lib/compare";
+import { formatDayMonth, formatMonth } from "@/lib/date-format";
 import { formatMoney, formatPercent, percentTenths } from "@/lib/money";
 import type { CurrencyCode } from "@/lib/currency";
 import { shiftMonth, type Month } from "@/lib/budgets/months";
@@ -84,6 +85,54 @@ export function stripCap(outs: readonly number[]): number | null {
 	const positive = outs.filter((out) => out > 0).sort((a, b) => b - a);
 	const second = positive[1];
 	return second === undefined ? null : second * 1.25;
+}
+
+/** The days of `month` the strip cuts, and the days it draws below zero (BR-F08-30): a day whose
+ * Out is above `cap`, and a day whose Out is below zero, a refund day. Oldest first. A `null`
+ * cap cuts nothing. */
+export function stripNotes(
+	daily: readonly DailyOut[],
+	month: Month,
+	cap: number | null,
+): { cut: string[]; refunds: string[] } {
+	const days = daily
+		.filter((entry) => entry.date.slice(0, 7) === month)
+		.sort((a, b) => compareCodeUnits(a.date, b.date));
+	return {
+		cut: days
+			.filter((entry) => cap !== null && entry.outMinor > cap)
+			.map((entry) => entry.date),
+		refunds: days
+			.filter((entry) => entry.outMinor < 0)
+			.map((entry) => entry.date),
+	};
+}
+
+/**
+ * The line under the day strip while no day is selected (BR-F08-30): "Select a day to see its
+ * Transactions.", then a sentence for each cut day, "1 Oct is cut to fit.", and for each refund
+ * day, "9 Oct is a refund, below zero.", cut days first, each group oldest first.
+ */
+export function stripHint(
+	daily: readonly DailyOut[],
+	month: Month,
+	locale: Pick<FigureLocale, "dateLocale">,
+): string {
+	const { cut, refunds } = stripNotes(
+		daily,
+		month,
+		stripCap(
+			daily
+				.filter((entry) => entry.date.slice(0, 7) === month)
+				.map((entry) => entry.outMinor),
+		),
+	);
+	const day = (date: string) => formatDayMonth(date, locale);
+	return [
+		M.selectDay,
+		...cut.map((date) => `${day(date)} is cut to fit.`),
+		...refunds.map((date) => `${day(date)} is a refund, below zero.`),
+	].join(" ");
 }
 
 /** How many days `month` has. */

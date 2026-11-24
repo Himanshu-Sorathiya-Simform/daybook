@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import type { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 
@@ -45,8 +46,11 @@ async function newUser(label: string): Promise<string> {
 }
 
 let counter = 0;
+/** A UUIDv7 that is new on every run, and rises with each call, so ids sort in the order they
+ * were made: a row a failed earlier run left behind can never share one. */
+const RUN = randomBytes(3).toString("hex");
 const nextId = () =>
-	`0199a000-0000-7000-8002-${String(++counter).padStart(12, "0")}`;
+	`0199a000-0000-7000-8002-${RUN}${String(++counter).padStart(6, "0")}`;
 
 const widgets = (...entries: [string, number, boolean][]) =>
 	entries.map(([id, size, hidden]) => ({
@@ -588,6 +592,55 @@ describe("the limit of 5 live views (D-635)", () => {
 		const results = answers.flatMap((answer) => answer.results);
 		expect(results.filter((each) => each.applied)).toHaveLength(1);
 		expect(results.filter((each) => each.reason === "limit")).toHaveLength(1);
+	});
+});
+
+describe("the deletion markers are bounded (D-636)", () => {
+	/** Ten markers per request, from `from`, one minute apart in change time. */
+	const markers = (from: number) =>
+		Array.from({ length: 10 }, (_, index) => {
+			const at = new Date(
+				Date.UTC(2026, 10, 2, 0, from + index),
+			).toISOString();
+			return marker(nextId(), at);
+		});
+
+	test("keeps the 45 newest markers and drops the oldest, whatever order they came in", async () => {
+		const who = await newUser("views-marker-cap");
+		const sent = [0, 10, 20, 30, 40].flatMap((from) => markers(from));
+		for (const batch of [0, 1, 2, 3, 4]) {
+			await commit(who, ...sent.slice(batch * 10, batch * 10 + 10));
+		}
+		const { rows } = await owner.query<{ id: string }>(
+			"SELECT id FROM app.dashboard_views WHERE user_id = $1 AND deleted ORDER BY changed_at",
+			[who],
+		);
+		expect(rows).toHaveLength(45);
+		expect(rows.map((row) => row.id)).toEqual(
+			sent.slice(5).map((write) => write.id),
+		);
+	});
+
+	test("never drops a live view, and counts only markers", async () => {
+		const who = await newUser("views-marker-cap-live");
+		const live5 = Array.from({ length: 5 }, (_, index) =>
+			live(nextId(), `Live ${index}`, TEN),
+		);
+		await commit(who, ...live5);
+		for (const from of [0, 10, 20, 30, 40]) await commit(who, ...markers(from));
+		const { rows } = await owner.query<{ deleted: boolean }>(
+			"SELECT deleted FROM app.dashboard_views WHERE user_id = $1",
+			[who],
+		);
+		expect(rows.filter((row) => !row.deleted)).toHaveLength(5);
+		expect(rows.filter((row) => row.deleted)).toHaveLength(45);
+	});
+
+	test("up to 45 markers cost no extra statement", async () => {
+		const who = await newUser("views-marker-cap-cheap");
+		await commit(who, ...markers(0));
+		const { statements } = await put(who, ...markers(10).slice(0, 1));
+		expect(statements).toBe(4);
 	});
 });
 
